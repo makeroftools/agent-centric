@@ -29,6 +29,7 @@ class FailureReason(StrEnum):
     STEP_LIMIT = "step_limit"
     VERIFICATION_FAILED = "verification_failed"
     UNKNOWN_AGENT = "unknown_agent"
+    HANDOFF_FAILED = "handoff_failed"
     INTERNAL = "internal"
 
 

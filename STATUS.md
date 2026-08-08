@@ -1,4 +1,4 @@
-# STATUS — Volley 001–006
+# STATUS — Volley 001–007
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -17,7 +17,10 @@ same control-plane authority as the rest of the system. For Volley 005,
 composition is entirely under deterministic Manager control: agents never gain
 the ability to spawn or directly invoke one another. For Volley 006, resource
 control became more precise (per-stage envelopes with composition accounting)
-without weakening any existing invariant.
+without weakening any existing invariant. For Volley 007, inter-stage data is
+no longer trusted implicitly: the verified output of a stage is validated
+against declared output/input schemas before it is handed off, closing a
+correctness gap and making inter-stage data contracts first-class.
 
 ---
 
@@ -459,6 +462,81 @@ envelope enforcement (step limit and timeout), parent-envelope inheritance,
 overall composition-limit enforcement, attributable consumption recording,
 stage-boundary envelope recording, accounting on abort, and preservation of
 verified hand-off/ordering.
+
+# Volley 007 — Schema-Constrained Stage Hand-off (delivered)
+
+### 22. Hand-off contract
+- `StageSpec` (`pipeline.v3`) may declare an `output_schema` and/or an
+  `input_schema`. The schema format is minimal and consistent with the existing
+  tool contract: a single expected type name (scalar payload) or a mapping of
+  field name -> expected type name (object payload).
+- `contracts/handoff.py` provides deterministic, side-effect-free validation
+  (`validate_handoff`, `is_valid_schema`) over a small, explicit type set
+  (`str`, `int`, `float`, `bool`, `dict`, `list`, `null`, `any`).
+- `pipeline.v1`/`pipeline.v2` reject hand-off schemas; `pipeline.v3` accepts
+  them. The change is purely additive.
+
+### 23. Manager enforcement
+- After a stage produces a verified result, the Manager validates the handed-off
+  payload against the producing stage's `output_schema` (if declared) and the
+  consuming stage's `input_schema` (if declared) before constructing the next
+  stage's input.
+- A validation failure aborts the composition with an explicit, audited
+  `HANDOFF_FAILED` failure; no data proceeds to the next stage.
+- On success, a durable `stage N hand-off validated` step records the hand-off
+  and the shape of the handed-off data (keys and value types), keeping the
+  trajectory inspectable without duplicating content.
+
+### 24. Backward compatibility / defaults
+- Stages that declare neither schema are validated under a documented
+  conservative default: the handed-off payload must be a mapping (the shape the
+  harness agents expect). A scalar output is wrapped into `{"text": ...}` per
+  the prior hand-off rule, so existing deterministic agents keep working
+  unchanged.
+- The default validation still records the handed-off shape in the trajectory.
+
+## Explicit non-goals honored (Volley 007)
+
+- Parallel composition
+- Agent-initiated delegation
+- Complex transformation or mapping logic between stages
+- Full JSON Schema ecosystem features beyond reliable structural validation
+- Changes to tool mediation beyond consistency requirements
+
+## Definition of Done — confirmed (Volley 007)
+
+1. ✅ Stage hand-off is schema-constrained under explicit rules.
+2. ✅ Invalid hand-off aborts with a durable, inspectable record.
+3. ✅ All prior invariants hold.
+4. ✅ New tests provide clear evidence of validation success/failure paths.
+5. ✅ This `STATUS.md` is accurate.
+
+## Contract versioning notes (Volley 007)
+
+- `pipeline.v2` → `pipeline.v3` (additive): adds optional per-stage
+  `output_schema` and `input_schema`. `pipeline.v1`/`pipeline.v2` reject hand-off
+  schemas; `pipeline.v3` accepts them.
+- New `FailureReason.HANDOFF_FAILED` for explicit, audited hand-off rejection.
+- Versioned contracts remain immutable and validated in `__post_init__`;
+  unsupported versions and malformed schemas are rejected.
+
+## Correctness evidence (Volley 007 state)
+
+Automated tests prove all invariants. All pass:
+
+```
+105 passed in 0.7s          # pytest (was 91)
+All checks passed!          # ruff
+Success: no issues found    # mypy (strict, 21 source files)
+```
+
+New `tests/test_handoff.py` (14 tests) proves the hand-off contract (valid and
+invalid schemas, `pipeline.v3` gating), valid hand-off success appearing in the
+durable trajectory, schema mismatch (output and input) aborting cleanly with a
+fully audited `HANDOFF_FAILED` record, that no schema-invalid data reaches a
+subsequent stage, the documented default behaviour for stages without schemas,
+and that ordering, verification, and resource accounting invariants remain
+intact.
 
 ## Out of scope / future volleys (not started)
 

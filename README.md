@@ -112,6 +112,24 @@ A task may request a Manager-orchestrated sequential pipeline via the optional
 - Exceeding a stage envelope or the overall envelope aborts the composition
   with a clear, audited failure.
 
+### Schema-constrained stage hand-off (`pipeline.v3`)
+
+- Each `StageSpec` may declare an `output_schema` and/or an `input_schema`.
+  The schema format is minimal and consistent with the tool contract: a single
+  expected type name (scalar payload) or a mapping of field name -> expected
+  type name (object payload).
+- After a stage produces a verified result, the Manager validates the handed-off
+  payload against the producing stage's `output_schema` (if declared) and the
+  consuming stage's `input_schema` (if declared) before constructing the next
+  stage's input. Data that flows between stages is never trusted implicitly.
+- A schema mismatch aborts the composition with an explicit, audited
+  `HANDOFF_FAILED` failure; no schema-invalid data proceeds to the next stage.
+- On success, a durable `stage N hand-off validated` step records the hand-off
+  and the shape of the handed-off data (keys and value types).
+- Stages that declare neither schema are validated under a documented
+  conservative default: the handed-off payload must be a mapping (the shape the
+  harness agents expect). Existing deterministic agents keep working unchanged.
+
 ## Mediated tool access
 
 Agents can only request external capabilities **through the Agent Manager**;

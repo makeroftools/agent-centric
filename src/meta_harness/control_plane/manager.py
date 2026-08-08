@@ -36,6 +36,7 @@ from ..agents.interface import (
     ToolRequest,
     ToolResult,
 )
+from ..contracts.handoff import HandoffSchema, validate_handoff
 from ..contracts.manifest import AgentComponentManifest
 from ..contracts.pipeline import StageSpec
 from ..contracts.result import Failure, FailureReason, VerifiedResult, VerifiedResultVersion
@@ -312,12 +313,31 @@ class AgentManager:
                     )
                 return stage_failure
 
-            # Hand off the verified output as the next stage's input (see prior
-            # volley's hand-off rule).
+            # Hand off the verified output as the next stage's input. The
+            # payload is validated against the producing stage's output_schema
+            # and the consuming stage's input_schema before it is accepted, so
+            # no schema-invalid data flows to a subsequent stage.
             if stage_index < len(pipeline.stages) - 1:
-                current_payload = stage_output
-                if not isinstance(current_payload, dict):
-                    current_payload = {"text": current_payload}
+                handed_off = stage_output
+                if not isinstance(handed_off, dict):
+                    handed_off = {"text": handed_off}
+                next_stage = pipeline.stages[stage_index + 1]
+                handoff_failure = self._validate_handoff(
+                    task, agent_name, trajectory_id, steps,
+                    stage, next_stage, handed_off, stage_index,
+                )
+                if handoff_failure is not None:
+                    # Abort the composition; record the stage's consumption
+                    # before returning the already-persisted failure.
+                    if not self._persist_stage_summary(
+                        task, agent_name, trajectory_id, steps, stage_accounts
+                    ):
+                        return self._record_failure(
+                            task, agent_name, trajectory_id, steps, FailureReason.INTERNAL,
+                            "Failed to persist pipeline resource accounting.",
+                        )
+                    return handoff_failure
+                current_payload = handed_off
             else:
                 current_payload = stage_output
 
@@ -408,6 +428,81 @@ class AgentManager:
             payload=payload,
             envelope=task.envelope,
         )
+
+    def _validate_handoff(
+        self,
+        task: TaskSpecification,
+        agent_name: str,
+        trajectory_id: str,
+        steps: list[StepRecord],
+        producing: StageSpec,
+        consuming: StageSpec,
+        payload: Any,
+        stage_index: int,
+    ) -> Outcome | None:
+        """Validate a stage's verified output before it is handed off.
+
+        The payload must satisfy the producing stage's ``output_schema`` (if
+        declared) and the consuming stage's ``input_schema`` (if declared). A
+        stage that declares neither schema is validated under the conservative
+        default: the payload must be a mapping (the shape the harness agents
+        expect). A validation failure aborts the composition with an explicit,
+        audited ``HANDOFF_FAILED`` failure and no data proceeds.
+
+        On success, a durable step records the validated hand-off and its shape.
+        Returns ``None`` on success, or the sealed failure outcome on abort.
+        """
+        checks: list[tuple[str, HandoffSchema]] = []
+        if producing.output_schema is not None:
+            checks.append((f"stage {stage_index} output_schema", producing.output_schema))
+        if consuming.input_schema is not None:
+            checks.append((f"stage {stage_index + 1} input_schema", consuming.input_schema))
+
+        if not checks:
+            # Conservative default: the handed-off payload must be a mapping.
+            checks.append(("default object shape", {"text": "any"}))
+
+        for label, schema in checks:
+            passed, message = validate_handoff(payload, schema)
+            if not passed:
+                return self._record_failure(
+                    task, agent_name, trajectory_id, steps, FailureReason.HANDOFF_FAILED,
+                    f"Hand-off from stage {stage_index} rejected by {label}: {message}",
+                )
+
+        record = StepRecord(
+            step_index=len(steps),
+            status=StepStatus.COMPLETED,
+            description=f"stage {stage_index} hand-off validated",
+            input={
+                "from_stage": stage_index,
+                "to_stage": stage_index + 1,
+                "shape": self._summarise_payload(payload),
+            },
+            output=None,
+            elapsed_seconds=0.0,
+        )
+        steps.append(record)
+        if self._store_append(trajectory_id, record) is not None:
+            return self._record_failure(
+                task, agent_name, trajectory_id, steps, FailureReason.INTERNAL,
+                "Failed to persist stage hand-off validation step.",
+            )
+        return None
+
+    @staticmethod
+    def _summarise_payload(payload: Any) -> dict[str, Any]:
+        """Return a JSON-serialisable shape summary of a handed-off payload.
+
+        Only the shape (keys and value types) is recorded, never the data
+        itself, keeping the trajectory inspectable without duplicating content.
+        """
+        if isinstance(payload, dict):
+            return {
+                "kind": "object",
+                "fields": {k: type(v).__name__ for k, v in payload.items()},
+            }
+        return {"kind": type(payload).__name__}
 
     def _execute_agent(
         self,
