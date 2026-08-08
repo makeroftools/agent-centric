@@ -1,4 +1,4 @@
-# STATUS — Volley 001–008
+# STATUS — Volley 001–009
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -24,7 +24,10 @@ correctness gap and making inter-stage data contracts first-class. For Volley
 008, a thin deterministic Policy owned by the control plane constrains which
 agents, capabilities, and tools a task or composition may use, evaluated and
 enforced by the Manager before any work begins — fail-closed, explicit, and
-never bypassable by an agent.
+never bypassable by an agent. For Volley 009, envelope exhaustion no longer
+merely fails after the fact: the Manager now cooperatively cancels the running
+agent, records the cancellation explicitly in the durable trajectory, and
+never returns an unverified success.
 
 ---
 
@@ -616,6 +619,81 @@ tools being rejected even when granted, `policy accepted` appearing in the
 durable trajectory, every stage of a composition being checked against the
 policy before any stage begins, and that the absence of a policy preserves
 current behaviour.
+
+# Volley 009 — Cooperative Cancellation & Envelope Exhaustion (delivered)
+
+### 29. Cancellation model
+- A minimal, explicit cooperative signal — the ``Cancelled`` dataclass in
+  ``agents/interface.py`` — is delivered to a running agent as the value of its
+  generator's ``yield`` when a stage or composition envelope is exhausted. The
+  agent may observe it and exit cleanly; it is purely advisory and cooperative.
+- The Manager remains the sole authority that decides when cancellation occurs.
+  The interface is typed so the ``send`` channel accepts a ``ToolResult`` or a
+  ``Cancelled`` signal.
+
+### 30. Envelope exhaustion behaviour
+- When a stage or composition envelope (steps or time) is exhausted, the
+  Manager now cancels the current agent rather than only failing after the
+  fact: it records a ``CANCELLED`` step, delivers the cooperative signal, and
+  then fails the run regardless of what the agent does (a non-cooperative agent
+  still ends fail-closed).
+- The failure reason is preserved as the existing distinct limit reasons
+  (``STEP_LIMIT`` / ``TIMEOUT``), the causal envelope-bound, while the
+  trajectory explicitly records the cancellation.
+
+### 31. Trajectory & semantics
+- A durable ``CANCELLED`` step (status ``cancelled``, description
+  ``agent cancelled``) records that cancellation was requested and that the
+  agent stopped.
+- No verified success is ever returned after cancellation. Partial work already
+  recorded remains in the trajectory; the outcome is an explicit failure.
+
+## Explicit non-goals honored (Volley 009)
+
+- Pre-emptive hard killing of threads/processes (cooperative first)
+- Parallel composition
+- Agent-initiated cancellation of other agents
+- Complex cancellation hierarchies or priorities
+- Distributed cancellation protocols
+
+## Definition of Done — confirmed (Volley 009)
+
+1. ✅ The Manager cooperatively cancels a running agent when an envelope is
+   exhausted.
+2. ✅ Cancellation is explicit, audited, and never yields an unverified success.
+3. ✅ All prior invariants hold.
+4. ✅ New tests provide clear evidence of the cancellation paths.
+5. ✅ This `STATUS.md` is accurate.
+
+## Contract versioning notes (Volley 009)
+
+- New ``Cancelled`` cooperative signal in the agent interface; the agent
+  generator's send channel now accepts ``ToolResult | None | Cancelled``.
+- New ``StepStatus.CANCELLED`` for recording cancellations in the trajectory.
+- New ``FailureReason.CANCELLED`` (available for explicit cancellation paths);
+  envelope-exhaustion failures keep their causal `STEP_LIMIT` / `TIMEOUT`
+  reasons.
+- No breakage to existing agents: the cooperative signal is advisory and
+  delivered only at the point the Manager has already decided to terminate.
+
+## Correctness evidence (Volley 009 state)
+
+Automated tests prove all invariants. All pass:
+
+```
+135 passed in 0.9s          # pytest (was 125)
+All checks passed!          # ruff
+Success: no issues found    # mypy (strict, 22 source files)
+```
+
+New `tests/test_cancellation.py` (10 tests) proves step-limit and timeout
+exhaustion cancel a cooperative agent with a durable `cancelled` record, that
+an agent which cooperates stops without producing a success outcome, that a
+non-cooperative agent is still terminated fail-closed, that cancellation never
+yields an unverified success, that a stage envelope exhaustion aborts a
+composition before later stages begin, that prior limit-failure semantics are
+unchanged, and that cancellation is deterministic and leaves partial work
+recorded.
 
 ## Out of scope / future volleys (not started)
 

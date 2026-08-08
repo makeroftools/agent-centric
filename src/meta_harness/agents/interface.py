@@ -76,6 +76,24 @@ class ToolResult:
 
 
 @dataclass(frozen=True)
+class Cancelled:
+    """A cooperative cancellation signal delivered to a running agent.
+
+    The Manager delivers this as the value of the generator's ``yield`` when a
+    stage or composition envelope is exhausted (or an explicit cancel is
+    required). An agent may observe it and exit cleanly; it is purely advisory
+    and cooperative. No verified success may be returned after cancellation: the
+    Manager records the cancellation and fails the run regardless of what the
+    agent does next.
+
+    Attributes:
+        reason: A human-readable explanation of why the Manager cancelled.
+    """
+
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
 class ToolContext:
     """The tools explicitly granted to the agent for this task.
 
@@ -103,9 +121,11 @@ class Agent(Protocol):
     records an explicit failure.
 
     The agent receives the task payload, the step budget, and the ``ToolContext``
-    of tools granted for this task.
+    of tools granted for this task. The Manager may send a ``Cancelled`` value
+    back into the generator when an envelope is exhausted; a cooperative agent
+    observes it and exits cleanly.
     """
 
     def __call__(
         self, payload: Any, step_budget: int, tools: ToolContext
-    ) -> Generator[AgentStep | ToolRequest, None, AgentResult]: ...
+    ) -> Generator[AgentStep | ToolRequest, ToolResult | None | Cancelled, AgentResult]: ...

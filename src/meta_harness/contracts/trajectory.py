@@ -27,6 +27,7 @@ class StepStatus(StrEnum):
     FAILED = "failed"
     TIMEOUT = "timeout"
     REJECTED = "rejected"
+    CANCELLED = "cancelled"
 
 
 @dataclass(frozen=True)

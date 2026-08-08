@@ -23,6 +23,7 @@ an explicit ``INTERNAL`` failure rather than returning an unrecorded result.
 
 from __future__ import annotations
 
+import contextlib
 import importlib
 import time
 from dataclasses import dataclass
@@ -32,6 +33,7 @@ from ..agents.interface import (
     Agent,
     AgentResult,
     AgentStep,
+    Cancelled,
     ToolContext,
     ToolRequest,
     ToolResult,
@@ -702,13 +704,51 @@ class AgentManager:
                 None,
             )
 
+        def _cancel(reason: FailureReason, message: str) -> tuple[Outcome | None, Any]:
+            """Cooperatively cancel the agent and fail explicitly.
+
+            Records the cancellation in the trajectory, delivers a ``Cancelled``
+            signal to the agent (cooperatively, so a well-behaved agent may
+            observe it and exit), then fails regardless of what the agent does.
+            A cancellation never produces an unverified success.
+            """
+            record = StepRecord(
+                step_index=len(steps),
+                status=StepStatus.CANCELLED,
+                description="agent cancelled",
+                input=None,
+                output=None,
+                error=message,
+                elapsed_seconds=0.0,
+            )
+            steps.append(record)
+            if self._store_append(trajectory_id, record) is not None:
+                return (
+                    self._record_failure(
+                        task, agent_name, trajectory_id, steps, FailureReason.INTERNAL,
+                        "Failed to persist agent cancellation step.",
+                    ),
+                    None,
+                )
+            # Deliver the cooperative signal without trusting its outcome.
+            try:
+                generator.send(Cancelled(reason=message))
+            except StopIteration:
+                pass  # the agent cooperated and exited cleanly
+            except Exception:  # noqa: BLE001 - cancellation is advisory only
+                pass  # a non-cooperative agent does not change the outcome
+            finally:
+                with contextlib.suppress(Exception):  # noqa: BLE001 - best-effort release
+                    generator.close()
+            return _fail(reason, message)
+
         try:
             while True:
                 # Overall (composition) timeout, enforced across the whole run.
                 if composition is not None:
                     comp_elapsed = time.monotonic() - composition.start
                     if comp_elapsed > composition.envelope.timeout_seconds:
-                        return _fail(
+                        return _cancel(
                             FailureReason.TIMEOUT,
                             f"Composition exceeded overall timeout of "
                             f"{composition.envelope.timeout_seconds}s.",
@@ -717,7 +757,7 @@ class AgentManager:
                 # Stage / single-agent timeout.
                 elapsed = time.monotonic() - stage_start
                 if elapsed > envelope.timeout_seconds:
-                    return _fail(
+                    return _cancel(
                         FailureReason.TIMEOUT,
                         f"Agent exceeded overall timeout of {envelope.timeout_seconds}s.",
                     )
@@ -727,7 +767,7 @@ class AgentManager:
                 if composition is not None:
                     comp_steps = len(steps) - composition.base_steps
                     if comp_steps >= composition.envelope.max_steps:
-                        return _fail(
+                        return _cancel(
                             FailureReason.STEP_LIMIT,
                             f"Composition exceeded step limit of "
                             f"{composition.envelope.max_steps}.",
@@ -735,7 +775,7 @@ class AgentManager:
 
                 # Per-stage step budget.
                 if stage_step >= envelope.max_steps:
-                    return _fail(
+                    return _cancel(
                         FailureReason.STEP_LIMIT,
                         f"Agent exceeded step limit of {envelope.max_steps}.",
                     )
@@ -762,7 +802,7 @@ class AgentManager:
                     envelope.max_step_seconds is not None
                     and step_elapsed > envelope.max_step_seconds
                 ):
-                    return _fail(
+                    return _cancel(
                         FailureReason.TIMEOUT,
                         f"Step {stage_step} exceeded per-step budget of "
                         f"{envelope.max_step_seconds}s.",

@@ -186,6 +186,24 @@ Trajectories are uniquely identified and fully reconstructible after process
 restart via `manager.load(trajectory_id)`. A trajectory with steps but no
 recorded outcome is reported as `interrupted` (detectable, never silent).
 
+## Cooperative cancellation & envelope exhaustion
+
+When a stage or composition envelope (steps or time) is exhausted, the Manager
+cooperatively cancels the running agent rather than only failing after the
+fact:
+
+- The Manager delivers a `Cancelled` signal into the running agent's generator;
+  a cooperative agent observes it and exits cleanly. No pre-emptive hard
+  killing of threads/processes is used.
+- The Manager remains the sole authority that decides when cancellation occurs.
+- A durable `cancelled` step (`agent cancelled`) records that cancellation was
+  requested and that the agent stopped.
+- The agent is never allowed to return a unverified success after cancellation:
+  the run fails with the causal `STEP_LIMIT` / `TIMEOUT` reason regardless of
+  what the agent does next (a non-cooperative agent still ends fail-closed).
+- Partial work already recorded remains in the trajectory; the outcome is an
+  explicit failure.
+
 ## Quick start
 
 ```sh
