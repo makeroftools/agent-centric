@@ -14,6 +14,8 @@ Version history:
 - task.v4: additive — adds an optional ``pipeline`` (a Manager-orchestrated
   sequential composition). A task specifies either the single-agent selectors
   (``agent_name``/``capability``) OR a ``pipeline``.
+- task.v5: additive — adds an optional ``policy`` (a thin governance rule)
+  that the Manager evaluates before execution begins.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from typing import Any
 
 from .capability import Capability
 from .pipeline import SequentialComposition
+from .policy import Policy
 
 
 class TaskSpecVersion(StrEnum):
@@ -33,6 +36,7 @@ class TaskSpecVersion(StrEnum):
     V2 = "task.v2"
     V3 = "task.v3"
     V4 = "task.v4"
+    V5 = "task.v5"
 
 
 @dataclass(frozen=True)
@@ -83,6 +87,9 @@ class TaskSpecification:
         pipeline: An optional Manager-orchestrated sequential composition. If
             set, it overrides the single-agent selectors and the stage-level
             tool grants.
+        policy: An optional thin governance rule. If set, the Manager evaluates
+            it before any agent is instantiated or any stage begins; a violation
+            aborts with an explicit, audited failure.
     """
 
     version: TaskSpecVersion
@@ -93,9 +100,15 @@ class TaskSpecification:
     envelope: ResourceEnvelope = field(default_factory=lambda: ResourceEnvelope(60.0, 100))
     granted_tools: tuple[str, ...] = field(default_factory=tuple)
     pipeline: SequentialComposition | None = None
+    policy: Policy | None = None
 
     def __post_init__(self) -> None:
-        if self.version not in (TaskSpecVersion.V2, TaskSpecVersion.V3, TaskSpecVersion.V4):
+        if self.version not in (
+            TaskSpecVersion.V2,
+            TaskSpecVersion.V3,
+            TaskSpecVersion.V4,
+            TaskSpecVersion.V5,
+        ):
             raise ValueError(f"Unsupported task spec version: {self.version!r}")
         if not self.task_id:
             raise ValueError("task_id must be non-empty.")

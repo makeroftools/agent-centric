@@ -39,6 +39,7 @@ from ..agents.interface import (
 from ..contracts.handoff import HandoffSchema, validate_handoff
 from ..contracts.manifest import AgentComponentManifest
 from ..contracts.pipeline import StageSpec
+from ..contracts.policy import Policy
 from ..contracts.result import Failure, FailureReason, VerifiedResult, VerifiedResultVersion
 from ..contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
 from ..contracts.tool import ToolDescriptor
@@ -171,6 +172,121 @@ class AgentManager:
                 descriptors.append(descriptor)
         return ToolContext(tools=tuple(descriptors))
 
+    def _evaluate_task_policy(
+        self,
+        task: TaskSpecification,
+        agent_name: str,
+        trajectory_id: str,
+        steps: list[StepRecord],
+        policy: Policy,
+    ) -> Outcome | None:
+        """Evaluate a task policy before any agent is instantiated or stage begins.
+
+        Checks the task's agent/capability selector and granted tools, plus (for
+        a pipeline) every stage's agent/capability and granted tools. On the
+        first violation the composition aborts with an explicit, audited
+        ``POLICY_VIOLATION`` failure and no restricted work runs. On success a
+        durable ``policy accepted`` step is recorded.
+
+        Returns ``None`` on acceptance, or the sealed failure outcome on
+        violation.
+        """
+        checks: list[tuple[str, str]] = []  # (kind, label)
+
+        if task.agent_name is not None:
+            decision = policy.check_agent(task.agent_name)
+            if not decision.allowed:
+                return self._policy_violation(
+                    task, agent_name, trajectory_id, steps, decision.reason or "agent denied"
+                )
+            checks.append(("agent", task.agent_name))
+        elif task.capability is not None:
+            decision = policy.check_capability(task.capability)
+            if not decision.allowed:
+                return self._policy_violation(
+                    task, agent_name, trajectory_id, steps, decision.reason or "capability denied"
+                )
+            checks.append(("capability", task.capability.name))
+
+        for tool in task.granted_tools:
+            decision = policy.check_tool(tool)
+            if not decision.allowed:
+                return self._policy_violation(
+                    task, agent_name, trajectory_id, steps, decision.reason or "tool denied"
+                )
+            checks.append(("tool", tool))
+
+        if task.pipeline is not None:
+            for stage in task.pipeline.stages:
+                if stage.agent_name is not None:
+                    decision = policy.check_agent(stage.agent_name)
+                    if not decision.allowed:
+                        return self._policy_violation(
+                            task, agent_name, trajectory_id, steps,
+                            decision.reason or "stage agent denied",
+                        )
+                    checks.append(("stage agent", stage.agent_name))
+                elif stage.capability is not None:
+                    decision = policy.check_capability(stage.capability)
+                    if not decision.allowed:
+                        return self._policy_violation(
+                            task, agent_name, trajectory_id, steps,
+                            decision.reason or "stage capability denied",
+                        )
+                    checks.append(("stage capability", stage.capability.name))
+                for tool in stage.granted_tools:
+                    decision = policy.check_tool(tool)
+                    if not decision.allowed:
+                        return self._policy_violation(
+                            task, agent_name, trajectory_id, steps,
+                            decision.reason or "stage tool denied",
+                        )
+                    checks.append(("stage tool", tool))
+
+        record = StepRecord(
+            step_index=len(steps),
+            status=StepStatus.COMPLETED,
+            description="policy accepted",
+            input={"constraints": checks},
+            output=None,
+            elapsed_seconds=0.0,
+        )
+        steps.append(record)
+        if self._store_append(trajectory_id, record) is not None:
+            return self._record_failure(
+                task, agent_name, trajectory_id, steps, FailureReason.INTERNAL,
+                "Failed to persist policy acceptance step.",
+            )
+        return None
+
+    def _policy_violation(
+        self,
+        task: TaskSpecification,
+        agent_name: str,
+        trajectory_id: str,
+        steps: list[StepRecord],
+        message: str,
+    ) -> Outcome:
+        """Record an explicit, audited policy-violation failure."""
+        record = StepRecord(
+            step_index=len(steps),
+            status=StepStatus.REJECTED,
+            description="policy rejected",
+            input=None,
+            output=None,
+            error=message,
+            elapsed_seconds=0.0,
+        )
+        steps.append(record)
+        if self._store_append(trajectory_id, record) is not None:
+            return self._record_failure(
+                task, agent_name, trajectory_id, steps, FailureReason.INTERNAL,
+                "Failed to persist policy rejection step.",
+            )
+        return self._record_failure(
+            task, agent_name, trajectory_id, steps, FailureReason.POLICY_VIOLATION, message
+        )
+
     def run(self, task: TaskSpecification) -> Outcome:
         """Execute a task under its resource envelope and return the sealed outcome.
 
@@ -204,6 +320,15 @@ class AgentManager:
             return self._build_internal_failure(
                 task, agent_name, f"Could not begin durable trajectory: {exc}"
             )
+
+        # Evaluate the task policy before any agent is instantiated. A violation
+        # aborts immediately with an explicit, audited failure and no work runs.
+        if task.policy is not None:
+            policy_failure = self._evaluate_task_policy(
+                task, agent_name, trajectory_id, steps, task.policy
+            )
+            if policy_failure is not None:
+                return policy_failure
 
         tool_context = self._build_tool_context(task)
         failure, output = self._execute_agent(
@@ -248,6 +373,15 @@ class AgentManager:
             return self._build_internal_failure(
                 task, agent_name, f"Could not begin durable trajectory: {exc}"
             )
+
+        # Evaluate the task policy before any stage begins. A violation aborts
+        # immediately with an explicit, audited failure and no work runs.
+        if task.policy is not None:
+            policy_failure = self._evaluate_task_policy(
+                task, agent_name, trajectory_id, steps, task.policy
+            )
+            if policy_failure is not None:
+                return policy_failure
 
         current_payload: Any = task.payload
         stage_accounts: list[dict[str, Any]] = []

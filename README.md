@@ -130,6 +130,24 @@ A task may request a Manager-orchestrated sequential pipeline via the optional
   conservative default: the handed-off payload must be a mapping (the shape the
   harness agents expect). Existing deterministic agents keep working unchanged.
 
+## Policy-based governance (`policy.v1`)
+
+A task or composition may carry a thin, deterministic `Policy` (`task.v5`) that
+constrains what it is allowed to do before execution begins:
+
+- Allow / deny specific agent names, exact capabilities, and tool names.
+- Evaluation is pure and deterministic with deny-overrides-allow semantics: an
+  item in a deny set is denied; otherwise a non-empty allow set restricts to its
+  members; otherwise it is allowed.
+- The Manager evaluates the policy **before any agent is instantiated or any
+  stage begins** — for single-agent tasks, every pipeline stage's
+  agent/capability and granted tools. A tool listed in `granted_tools` but
+  denied by policy is rejected.
+- On acceptance a durable `policy accepted` step is recorded; on rejection a
+  durable `policy rejected` step records the violated constraint and the task
+  fails closed with an explicit `POLICY_VIOLATION` failure. No restricted work
+  ever starts.
+
 ## Mediated tool access
 
 Agents can only request external capabilities **through the Agent Manager**;

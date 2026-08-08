@@ -1,4 +1,4 @@
-# STATUS — Volley 001–007
+# STATUS — Volley 001–008
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -20,7 +20,11 @@ control became more precise (per-stage envelopes with composition accounting)
 without weakening any existing invariant. For Volley 007, inter-stage data is
 no longer trusted implicitly: the verified output of a stage is validated
 against declared output/input schemas before it is handed off, closing a
-correctness gap and making inter-stage data contracts first-class.
+correctness gap and making inter-stage data contracts first-class. For Volley
+008, a thin deterministic Policy owned by the control plane constrains which
+agents, capabilities, and tools a task or composition may use, evaluated and
+enforced by the Manager before any work begins — fail-closed, explicit, and
+never bypassable by an agent.
 
 ---
 
@@ -537,6 +541,81 @@ fully audited `HANDOFF_FAILED` record, that no schema-invalid data reaches a
 subsequent stage, the documented default behaviour for stages without schemas,
 and that ordering, verification, and resource accounting invariants remain
 intact.
+
+# Volley 008 — Thin Policy Component (Deterministic Governance) (delivered)
+
+### 25. Policy contract
+- `contracts/policy.py` defines a versioned `Policy` (`policy.v1`) with a
+  deliberately small surface: allow/deny sets for agent names, exact
+  capabilities, and tool names. `PolicyDecision` carries `allowed` plus a
+  reason.
+- Evaluation is pure and deterministic with deny-overrides-allow semantics:
+  an item in a deny set is denied; otherwise a non-empty allow set restricts to
+  its members; otherwise the item is allowed.
+
+### 26. Attachment & evaluation
+- `TaskSpecification` (`task.v5`) may carry an optional `policy`.
+- The Manager evaluates the policy **before** any agent is instantiated or any
+  stage begins (immediately after the durable trajectory is begun), so a
+  violation produces an explicit, audited failure and no partial execution.
+
+### 27. Enforcement points
+- Agent / capability selection must pass policy (single-agent tasks and every
+  pipeline stage).
+- Tool grants must pass policy: a tool listed in `granted_tools` but denied by
+  policy is rejected before execution.
+- Sequential composition: every stage's agent/capability and granted tools must
+  satisfy the policy.
+
+### 28. Trajectory / audit
+- On acceptance, a durable `policy accepted` step records the checked
+  constraints.
+- On rejection, a durable `policy rejected` step records the constraint that
+  was violated, and the outcome fails closed with `POLICY_VIOLATION`.
+
+## Explicit non-goals honored (Volley 008)
+
+- Complex rule engines, priorities, or inheritance
+- Runtime / dynamic policy mutation by agents
+- Parallel composition
+- Identity, authentication, or multi-tenancy systems
+- Learned or probabilistic policies
+- External policy stores
+
+## Definition of Done — confirmed (Volley 008)
+
+1. ✅ Tasks and compositions can carry a thin policy the Manager enforces
+   before work begins.
+2. ✅ Violations are fail-closed, explicit, and fully audited.
+3. ✅ All prior invariants hold.
+4. ✅ New tests provide clear evidence of allow/deny paths for agents,
+   capabilities, and tools.
+5. ✅ This `STATUS.md` is accurate.
+
+## Contract versioning notes (Volley 008)
+
+- `task.v4` → `task.v5` (additive): adds optional `policy`.
+- New `FailureReason.POLICY_VIOLATION` for explicit, audited policy rejection.
+- Versioned contracts remain immutable and validated in `__post_init__`;
+  unsupported versions are rejected.
+
+## Correctness evidence (Volley 008 state)
+
+Automated tests prove all invariants. All pass:
+
+```
+125 passed in 0.7s          # pytest (was 105)
+All checks passed!          # ruff
+Success: no issues found    # mypy (strict, 22 source files)
+```
+
+New `tests/test_policy.py` (20 tests) proves the policy contract (including
+deny-overrides-allow), allowed work proceeding for agents, capabilities, and
+tools, denied agents/capabilities being rejected before any execution, denied
+tools being rejected even when granted, `policy accepted` appearing in the
+durable trajectory, every stage of a composition being checked against the
+policy before any stage begins, and that the absence of a policy preserves
+current behaviour.
 
 ## Out of scope / future volleys (not started)
 

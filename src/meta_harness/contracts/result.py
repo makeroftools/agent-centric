@@ -30,6 +30,7 @@ class FailureReason(StrEnum):
     VERIFICATION_FAILED = "verification_failed"
     UNKNOWN_AGENT = "unknown_agent"
     HANDOFF_FAILED = "handoff_failed"
+    POLICY_VIOLATION = "policy_violation"
     INTERNAL = "internal"
 
 
