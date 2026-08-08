@@ -25,8 +25,10 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import threading
 import time
-from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, replace
 from typing import Any, cast
 
 from ..agents.interface import (
@@ -91,6 +93,22 @@ class _ToolDelivery:
 
 
 @dataclass(frozen=True)
+class _StageFailure:
+    """A lightweight branch failure produced by a parallel stage worker.
+
+    Used when ``record_outcome=False`` so the Manager decides and records the
+    single terminal outcome after joining the parallel group.
+
+    Attributes:
+        reason: The machine-readable failure reason.
+        message: A human-readable explanation.
+    """
+
+    reason: FailureReason
+    message: str
+
+
+@dataclass(frozen=True)
 class _CompositionLimit:
     """Parent-envelope limits enforced across a whole pipeline composition.
 
@@ -121,6 +139,9 @@ class AgentManager:
         self._store: TrajectoryStore = store or InMemoryTrajectoryStore()
         self._tools = tools or ToolRegistry()
         self._run_seq = 0
+        # Serializes durable step appends so a parallel composition's trajectory
+        # stays coherent and append-only under concurrent stage threads.
+        self._step_lock = threading.Lock()
 
     def register(self, manifest: AgentComponentManifest) -> None:
         """Register an agent component from its manifest.
@@ -245,6 +266,33 @@ class AgentManager:
                         )
                     checks.append(("stage tool", tool))
 
+        if task.parallel is not None:
+            for stage in task.parallel.stages:
+                if stage.agent_name is not None:
+                    decision = policy.check_agent(stage.agent_name)
+                    if not decision.allowed:
+                        return self._policy_violation(
+                            task, agent_name, trajectory_id, steps,
+                            decision.reason or "stage agent denied",
+                        )
+                    checks.append(("parallel stage agent", stage.agent_name))
+                elif stage.capability is not None:
+                    decision = policy.check_capability(stage.capability)
+                    if not decision.allowed:
+                        return self._policy_violation(
+                            task, agent_name, trajectory_id, steps,
+                            decision.reason or "stage capability denied",
+                        )
+                    checks.append(("parallel stage capability", stage.capability.name))
+                for tool in stage.granted_tools:
+                    decision = policy.check_tool(tool)
+                    if not decision.allowed:
+                        return self._policy_violation(
+                            task, agent_name, trajectory_id, steps,
+                            decision.reason or "stage tool denied",
+                        )
+                    checks.append(("parallel stage tool", tool))
+
         record = StepRecord(
             step_index=len(steps),
             status=StepStatus.COMPLETED,
@@ -303,6 +351,8 @@ class AgentManager:
 
         if task.pipeline is not None:
             return self._run_pipeline(task, trajectory_id)
+        if task.parallel is not None:
+            return self._run_parallel(task, trajectory_id)
         return self._run_single(task, trajectory_id)
 
     def _run_single(self, task: TaskSpecification, trajectory_id: str) -> Outcome:
@@ -337,6 +387,7 @@ class AgentManager:
             task, agent_name, trajectory_id, envelope, tool_context, steps, start
         )
         if failure is not None:
+            assert not isinstance(failure, _StageFailure)  # not a parallel worker
             return failure
         # Persist the verified outcome before certifying the result.
         return self._record_success(
@@ -438,6 +489,7 @@ class AgentManager:
             )
 
             if stage_failure is not None:
+                assert not isinstance(stage_failure, _StageFailure)  # not a parallel worker
                 # Abort the composition; record the stage's consumption before
                 # returning the already-persisted failure.
                 if not self._persist_stage_summary(
@@ -527,6 +579,187 @@ class AgentManager:
         steps.append(summary)
         return self._store_append(trajectory_id, summary) is None
 
+    def _run_parallel(self, task: TaskSpecification, trajectory_id: str) -> Outcome:
+        """Execute a Manager-orchestrated parallel composition (fan-out / join).
+
+        Independent stages are dispatched to worker threads that share the same
+        append-only trajectory. A lock serialises durable step appends so step
+        indices stay globally ordered and reconstructible. The parent envelope
+        bounds the whole group; per-stage envelopes still apply. On any stage
+        failure, remaining running siblings are cooperatively cancelled via a
+        shared ``Event`` and the composition fails closed; no partial success is
+        returned. Only if every stage succeeds and verifies does the Manager
+        produce the deterministic join (an ordered list of stage outputs in
+        declared order).
+        """
+        parallel = task.parallel
+        assert parallel is not None
+
+        first_manifest = self._resolve_stage(parallel.stages[0])
+        if first_manifest is None:
+            return self._run_unknown_agent(task, trajectory_id)
+        agent_name = first_manifest.name
+
+        group_start = time.monotonic()
+        composition = _CompositionLimit(envelope=task.envelope, start=group_start)
+        steps: list[StepRecord] = []
+        cancel_event = threading.Event()
+
+        try:
+            self._store.begin(trajectory_id, task.task_id, agent_name)
+        except TrajectoryStoreError as exc:
+            return self._build_internal_failure(
+                task, agent_name, f"Could not begin durable trajectory: {exc}"
+            )
+
+        # Evaluate the task policy before any stage begins.
+        if task.policy is not None:
+            policy_failure = self._evaluate_task_policy(
+                task, agent_name, trajectory_id, steps, task.policy
+            )
+            if policy_failure is not None:
+                return policy_failure
+
+        # Record the parallel group begin marker.
+        group_begin = StepRecord(
+            step_index=len(steps),
+            status=StepStatus.STARTED,
+            description="parallel group begin",
+            input={
+                "stages": [self._stage_label(s) for s in parallel.stages],
+                "envelope": self._summarise_envelope(task.envelope),
+            },
+            output=None,
+            elapsed_seconds=0.0,
+        )
+        steps.append(group_begin)
+        if self._store_append(trajectory_id, group_begin) is not None:
+            return self._record_failure(
+                task, agent_name, trajectory_id, steps, FailureReason.INTERNAL,
+                "Failed to persist parallel group begin step.",
+            )
+
+        # Resolve every stage up front so unknown agents abort before any thread
+        # runs, and record a per-stage begin marker.
+        resolved: list[tuple[StageSpec, str]] = []
+        stage_starts: list[float] = []
+        stage_accounts: list[dict[str, Any]] = []
+        for stage_index, stage in enumerate(parallel.stages):
+            manifest = self._resolve_stage(stage)
+            if manifest is None:
+                return self._record_failure(
+                    task, agent_name, trajectory_id, steps, FailureReason.UNKNOWN_AGENT,
+                    f"Parallel stage {stage_index} references an unknown agent "
+                    f"({self._stage_label(stage)}).",
+                )
+            resolved.append((stage, manifest.name))
+            effective = stage.stage_envelope or task.envelope
+            marker = StepRecord(
+                step_index=len(steps),
+                status=StepStatus.STARTED,
+                description=f"parallel stage {stage_index} begin",
+                input={
+                    "stage": stage_index,
+                    "agent": self._stage_label(stage),
+                    "envelope": self._summarise_envelope(effective),
+                },
+                output=None,
+                elapsed_seconds=0.0,
+            )
+            steps.append(marker)
+            if self._store_append(trajectory_id, marker) is not None:
+                return self._record_failure(
+                    task, agent_name, trajectory_id, steps, FailureReason.INTERNAL,
+                    f"Failed to persist parallel stage {stage_index} begin step.",
+                )
+            stage_starts.append(time.monotonic())
+            stage_accounts.append({"agent": manifest.name, "stage": stage_index})
+
+        # Dispatch each stage to a worker thread.
+        with ThreadPoolExecutor(max_workers=len(resolved)) as executor:
+            futures = {}
+            for stage_index, (stage, stage_name) in enumerate(resolved):
+                effective = stage.stage_envelope or task.envelope
+                tool_context = self._build_tool_context_for_stage(stage)
+                stage_task = self._stage_task(task, task.payload)
+
+                def _worker(
+                    idx: int = stage_index,
+                    agent: str = stage_name,
+                    st: TaskSpecification = stage_task,
+                    eff: ResourceEnvelope = effective,
+                    tools: ToolContext = tool_context,
+                ) -> tuple[int, Any, Any]:
+                    failure, output = self._execute_agent(
+                        st, agent, trajectory_id, eff, tools, steps,
+                        stage_starts[idx], composition,
+                        stage_worker=True, cancel_event=cancel_event,
+                    )
+                    return idx, output, failure
+
+                futures[executor.submit(_worker)] = stage_index
+
+            # Wait for all stages; the first failure cancels siblings via the
+            # shared event, and every worker still returns (cooperatively).
+            results: dict[int, tuple[int, Any, Any]] = {}
+            for future, idx in futures.items():
+                if future.exception() is not None:
+                    # A worker raised unexpectedly (should not happen, since the
+                    # core converts failures to results); fail closed.
+                    cancel_event.set()
+                    results[idx] = (idx, None, _StageFailure(
+                        FailureReason.INTERNAL, f"Parallel worker raised: {future.exception()}"
+                    ))
+                else:
+                    results[idx] = future.result()
+
+        # Determine whether the composition succeeded.
+        failure = None
+        joined: list[Any] = []
+        for stage_index, (_stage, _stage_name) in enumerate(resolved):
+            idx, output, outcome = results[stage_index]
+            elapsed = time.monotonic() - stage_starts[idx]
+
+            if outcome is None:
+                # Success: verified output for this stage.
+                stage_accounts[idx]["elapsed_seconds"] = elapsed
+                joined.append((stage_index, _stage_name, output))
+            else:
+                # First failure decides the terminal outcome; later ones are
+                # siblings that were cancelled.
+                if failure is None:
+                    failure = outcome
+                    stage_accounts[idx]["elapsed_seconds"] = elapsed
+
+        # Record the parallel group end marker.
+        group_end = StepRecord(
+            step_index=len(steps),
+            status=StepStatus.COMPLETED,
+            description="parallel group end",
+            input=None,
+            output={"stages": stage_accounts},
+            elapsed_seconds=time.monotonic() - group_start,
+        )
+        steps.append(group_end)
+        if self._store_append(trajectory_id, group_end) is not None:
+            return self._record_failure(
+                task, agent_name, trajectory_id, steps, FailureReason.INTERNAL,
+                "Failed to persist parallel group end step.",
+            )
+
+        if failure is not None:
+            # No partial success is returned; record a single terminal failure.
+            return self._record_failure(
+                task, agent_name, trajectory_id, steps,
+                failure.reason, failure.message,
+            )
+
+        # Success: build the deterministic join and seal the verified result.
+        joined_result = {"stages": joined}
+        return self._record_success(
+            task, agent_name, trajectory_id, steps, joined_result
+        )
+
     def _stage_label(self, stage: StageSpec) -> str:
         """Human-readable label for a stage selector."""
         if stage.agent_name is not None:
@@ -558,7 +791,7 @@ class AgentManager:
         payload is what the verifier uses to re-derive the expected output.
         """
         return TaskSpecification(
-            version=TaskSpecVersion.V4,
+            version=TaskSpecVersion.V6,
             task_id=task.task_id,
             agent_name="placeholder",
             payload=payload,
@@ -650,33 +883,46 @@ class AgentManager:
         steps: list[StepRecord],
         stage_start: float,
         composition: _CompositionLimit | None = None,
-    ) -> tuple[Outcome | None, Any]:
+        stage_worker: bool = False,
+        cancel_event: threading.Event | None = None,
+    ) -> tuple[Outcome | None | _StageFailure, Any]:
         """Drive a single agent to completion, recording steps and verifying.
 
-        This is the shared execution core used by both single-agent tasks and
-        each pipeline stage. It appends to the shared ``steps`` list so that a
-        pipeline produces one coherent trajectory. Step indices are absolute
-        (across the whole run) so records stay reconstructible, while the
-        *enforced* step budget is counted per-stage so stage envelopes apply
-        regardless of absolute position.
+        This is the shared execution core used by single-agent tasks, each
+        sequential (pipeline) stage, and each parallel stage. It appends to the
+        shared ``steps`` list so a composition produces one coherent trajectory.
+        Step indices are absolute (across the whole run) so records stay
+        reconstructible, while the *enforced* step budget is counted per-stage so
+        stage envelopes apply regardless of absolute position.
 
         ``envelope`` is the effective limit for this particular run: the task
         envelope for a single-agent task, or the stage's effective envelope for a
-        pipeline stage. ``composition`` (optional) enforces the parent task
-        envelope across the whole pipeline.
+        pipeline / parallel stage. ``composition`` (optional) enforces the parent
+        task envelope across the whole composition.
 
-        Returns ``(None, verified_output)`` on success, or ``(failure, None)``
-        when the run failed (the failure outcome is already durably recorded).
-        The caller is responsible for recording the final success outcome, so a
-        pipeline records it exactly once at the end.
+        ``stage_worker`` is True when running inside a parallel worker thread. In
+        that mode a failure is *not* recorded as a terminal outcome (the joiner
+        decides and records the single terminal outcome after cancelling
+        siblings); instead a lightweight ``_StageFailure`` is returned.
+
+        ``cancel_event`` (parallel only) is set by the joiner when a sibling has
+        failed. The worker observes it and cooperatively cancels itself so no
+        later stage keeps running after another stage has failed.
+
+        Returns ``(None, verified_output)`` on success, or ``(reason, None)`` on
+        failure where ``reason`` is either a fully-recorded ``Outcome`` (default)
+        or a ``_StageFailure`` (in ``stage_worker`` mode). The caller is
+        responsible for recording the final success outcome exactly once.
         """
         try:
             manifest = self._registry.get_by_name(agent_name)
             if manifest is None:
                 return (
-                    self._record_failure(
-                        task, agent_name, trajectory_id, steps, FailureReason.UNKNOWN_AGENT,
+                    self._deferred_or_recorded_failure(
+                        task, agent_name, trajectory_id, steps,
+                        FailureReason.UNKNOWN_AGENT,
                         f"No agent registered with name {agent_name!r}.",
+                        stage_worker,
                     ),
                     None,
                 )
@@ -684,8 +930,9 @@ class AgentManager:
         except Exception as exc:  # noqa: BLE001 - converted to explicit failure
             message = f"Failed to instantiate agent: {exc}"
             return (
-                self._record_failure(
-                    task, agent_name, trajectory_id, steps, FailureReason.INTERNAL, message
+                self._deferred_or_recorded_failure(
+                    task, agent_name, trajectory_id, steps,
+                    FailureReason.INTERNAL, message, stage_worker,
                 ),
                 None,
             )
@@ -696,15 +943,15 @@ class AgentManager:
         produced_output = False
         sent: Any = None
 
-        def _fail(reason: FailureReason, message: str) -> tuple[Outcome | None, Any]:
+        def _fail(reason: FailureReason, message: str) -> tuple[Outcome | _StageFailure, Any]:
             return (
-                self._record_failure(
-                    task, agent_name, trajectory_id, steps, reason, message
+                self._deferred_or_recorded_failure(
+                    task, agent_name, trajectory_id, steps, reason, message, stage_worker
                 ),
                 None,
             )
 
-        def _cancel(reason: FailureReason, message: str) -> tuple[Outcome | None, Any]:
+        def _cancel(reason: FailureReason, message: str) -> tuple[Outcome | _StageFailure, Any]:
             """Cooperatively cancel the agent and fail explicitly.
 
             Records the cancellation in the trajectory, delivers a ``Cancelled``
@@ -721,15 +968,12 @@ class AgentManager:
                 error=message,
                 elapsed_seconds=0.0,
             )
-            steps.append(record)
-            if self._store_append(trajectory_id, record) is not None:
-                return (
-                    self._record_failure(
-                        task, agent_name, trajectory_id, steps, FailureReason.INTERNAL,
-                        "Failed to persist agent cancellation step.",
-                    ),
-                    None,
-                )
+            if self._append_step_locked(trajectory_id, steps, record) is not None:
+                return self._deferred_or_recorded_failure(
+                    task, agent_name, trajectory_id, steps,
+                    FailureReason.INTERNAL,
+                    "Failed to persist agent cancellation step.", stage_worker,
+                ), None
             # Deliver the cooperative signal without trusting its outcome.
             try:
                 generator.send(Cancelled(reason=message))
@@ -744,6 +988,14 @@ class AgentManager:
 
         try:
             while True:
+                # Cooperative cancellation requested by the joiner (a sibling
+                # failed): stop this stage too.
+                if cancel_event is not None and cancel_event.is_set():
+                    return _cancel(
+                        FailureReason.CANCELLED,
+                        "Parallel composition aborted because a sibling stage failed.",
+                    )
+
                 # Overall (composition) timeout, enforced across the whole run.
                 if composition is not None:
                     comp_elapsed = time.monotonic() - composition.start
@@ -815,7 +1067,15 @@ class AgentManager:
                         step_index, item, step_elapsed,
                     )
                     if outcome is not None:
-                        return outcome, None
+                        if not stage_worker:
+                            return outcome, None
+                        # Defer a persistence failure to the joiner.
+                        failure = outcome.failure
+                        message = failure.message if failure else "Failed to persist step."
+                        return self._deferred_or_recorded_failure(
+                            task, agent_name, trajectory_id, steps,
+                            FailureReason.INTERNAL, message, stage_worker,
+                        ), None
                     stage_step += 1
                     sent = None
                 elif isinstance(item, ToolRequest):
@@ -856,6 +1116,29 @@ class AgentManager:
         # Success: return the verified output; the caller records the outcome.
         return None, final_output
 
+    def _deferred_or_recorded_failure(
+        self,
+        task: TaskSpecification,
+        agent_name: str,
+        trajectory_id: str,
+        steps: list[StepRecord],
+        reason: FailureReason,
+        message: str,
+        stage_worker: bool,
+    ) -> Outcome | _StageFailure:
+        """Return a recorded ``Outcome`` or a deferred ``_StageFailure``.
+
+        When ``stage_worker`` is False (single-agent / sequential stage) the
+        failure outcome is durably recorded here, matching prior behaviour. When
+        True (parallel worker) the terminal outcome is deferred so the parallel
+        joiner records exactly one terminal outcome after cancelling siblings.
+        """
+        if not stage_worker:
+            return self._record_failure(
+                task, agent_name, trajectory_id, steps, reason, message
+            )
+        return _StageFailure(reason=reason, message=message)
+
     # -- step and tool mediation helpers ----------------------------------------
 
     def _persist_step(
@@ -880,13 +1163,10 @@ class AgentManager:
             output=agent_step.detail,
             elapsed_seconds=elapsed,
         )
-        steps.append(record)
-        try:
-            self._store.append_step(trajectory_id, record)
-        except TrajectoryStoreError as exc:
+        if self._append_step_locked(trajectory_id, steps, record) is not None:
             return self._record_failure(
                 task, agent_name, trajectory_id, steps, FailureReason.INTERNAL,
-                f"Failed to persist step {step_index}: {exc}",
+                f"Failed to persist step {step_index}.",
             )
         return None
 
@@ -921,8 +1201,7 @@ class AgentManager:
                 output=None,
                 error="tool not granted to this agent",
             )
-            steps.append(rejected)
-            if self._store_append(trajectory_id, rejected) is not None:
+            if self._append_step_locked(trajectory_id, steps, rejected) is not None:
                 return None
             return _ToolDelivery(
                 tool_result=ToolResult(success=False, error="tool not granted to this agent"),
@@ -938,8 +1217,7 @@ class AgentManager:
             output=None,
             elapsed_seconds=0.0,
         )
-        steps.append(request_record)
-        if self._store_append(trajectory_id, request_record) is not None:
+        if self._append_step_locked(trajectory_id, steps, request_record) is not None:
             return None
 
         # Execute via the Manager-controlled ToolRegistry (or record a failure).
@@ -955,8 +1233,7 @@ class AgentManager:
                 error=str(exc),
                 elapsed_seconds=0.0,
             )
-            steps.append(failure_record)
-            if self._store_append(trajectory_id, failure_record) is not None:
+            if self._append_step_locked(trajectory_id, steps, failure_record) is not None:
                 return None
             return _ToolDelivery(
                 tool_result=ToolResult(success=False, error=str(exc)),
@@ -971,8 +1248,7 @@ class AgentManager:
             output=output,
             elapsed_seconds=0.0,
         )
-        steps.append(result_record)
-        if self._store_append(trajectory_id, result_record) is not None:
+        if self._append_step_locked(trajectory_id, steps, result_record) is not None:
             return None
         return _ToolDelivery(
             tool_result=ToolResult(success=True, output=output),
@@ -986,6 +1262,23 @@ class AgentManager:
             return None
         except TrajectoryStoreError as exc:
             return exc
+
+    def _append_step_locked(
+        self, trajectory_id: str, steps: list[StepRecord], record: StepRecord
+    ) -> TrajectoryStoreError | None:
+        """Append a step to memory and the durable store atomically under a lock.
+
+        Assigns the step index under the lock from the current list length so a
+        parallel composition's trajectory stays globally ordered and
+        reconstructible, even when multiple stage threads append concurrently.
+
+        Returns the store error on failure (the record is still held in memory
+        by the caller's local list), or None on success.
+        """
+        with self._step_lock:
+            record = replace(record, step_index=len(steps))
+            steps.append(record)
+            return self._store_append(trajectory_id, record)
 
     # -- durable outcome helpers ------------------------------------------------
 

@@ -1,4 +1,4 @@
-# STATUS — Volley 001–009
+# STATUS — Volley 001–010
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -27,7 +27,12 @@ enforced by the Manager before any work begins — fail-closed, explicit, and
 never bypassable by an agent. For Volley 009, envelope exhaustion no longer
 merely fails after the fact: the Manager now cooperatively cancels the running
 agent, records the cancellation explicitly in the durable trajectory, and
-never returns an unverified success.
+never returns an unverified success. For Volley 010, the first parallel
+composition (fan-out / join) was introduced: independent stages run
+concurrently under full governance, any failure cancels siblings and fails
+closed with a complete audit record, and success yields a deterministic join
+— without weakening isolation, verification, auditability, or fail-closed
+behaviour.
 
 ---
 
@@ -695,9 +700,91 @@ composition before later stages begin, that prior limit-failure semantics are
 unchanged, and that cancellation is deterministic and leaves partial work
 recorded.
 
+# Volley 010 — Manager-Orchestrated Parallel Composition (Fan-out / Join) (delivered)
+
+### 32. Parallel composition model
+- `contracts/parallel.py` defines a versioned `ParallelComposition`
+  (`parallel.v1`): an ordered, non-empty set of independent `StageSpec` stages
+  that may run concurrently. Each stage reuses the full sequential-stage
+  capabilities (selection, tool grants, optional per-stage envelope, optional
+  output/input schemas).
+- `TaskSpecification` (`task.v6`) may carry exactly one of a single-agent
+  selector, a sequential `pipeline`, or a `parallel` composition (validated
+  mutually exclusive).
+
+### 33. Manager orchestration
+- The Manager resolves every stage up front (unknown agents abort before any
+  thread runs), records a `parallel group begin` marker and a per-stage
+  `parallel stage N begin` marker, then dispatches each stage to a worker
+  thread sharing the same append-only trajectory.
+- A lock serialises durable step appends so step indices stay globally ordered
+  and reconstructible even under concurrent stage threads.
+- Policy, per-stage envelopes, tool mediation, and the mandatory verification
+  gate all apply per stage exactly as for sequential stages.
+
+### 34. Failure semantics & join
+- On any stage failure (verification, policy, envelope exhaustion, cancellation,
+  unknown agent, or internal), the Manager sets a shared cancel `Event` so
+  remaining running siblings cooperatively cancel, then fails closed with a
+  single terminal failure. No partial success is returned.
+- Only if every stage succeeds and verifies does the Manager produce the
+  deterministic join: an ordered list of `(stage_index, agent, output)` entries
+  in declared stage order.
+
+### 35. Trajectory continuity
+- One coherent, durable, reconstructible trajectory for the whole composition,
+  with explicit `parallel group begin`, per-stage, and `parallel group end`
+  markers. Step indices are contiguous and ordered.
+
+## Explicit non-goals honored (Volley 010)
+
+- Dynamic fan-out size based on runtime data
+- Partial success / best-effort join modes
+- Agent-to-agent messaging or coordination
+- Complex reduction functions beyond a simple deterministic join
+- Distributed execution across machines
+- Critical Path Method (still deferred)
+
+## Definition of Done — confirmed (Volley 010)
+
+1. ✅ The Manager executes a parallel composition under full governance.
+2. ✅ Success yields a deterministic join; any failure cancels siblings and
+   fails closed with a complete audit record.
+3. ✅ All prior invariants hold.
+4. ✅ New tests provide clear evidence of the success and failure paths.
+5. ✅ This `STATUS.md` is accurate.
+
+## Contract versioning notes (Volley 010)
+
+- `task.v5` → `task.v6` (additive): adds optional `parallel`. A task carries
+  exactly one of single-agent selector, `pipeline`, or `parallel`.
+- New `contracts/parallel.py` (`parallel.v1`).
+- Concurrency uses worker threads for agent computation only; all governance
+  (selection, policy, envelopes, tool mediation, verification, join) remains in
+  the deterministic control plane. Step appends are serialised under a lock for
+  a coherent, reconstructible trajectory.
+
+## Correctness evidence (Volley 010 state)
+
+Automated tests prove all invariants. All pass:
+
+```
+149 passed in 6.0s          # pytest (was 135)
+All checks passed!          # ruff
+Success: no issues found    # mypy (strict, 23 source files)
+```
+
+New `tests/test_parallel.py` (14 tests) proves the parallel contract
+(empty/conflicting compositions rejected), all stages running and succeeding
+with a deterministic join and full trajectory, the join preserving declared
+order, one stage failure aborting the composition and cancelling siblings with
+an audited failure and no success outcome, no partial success, unknown agents
+aborting before any thread runs, policy and per-stage envelopes and
+verification and tool mediation applying per stage, and the trajectory being
+coherent, durable, and reconstructible.
+
 ## Out of scope / future volleys (not started)
 
-- Concurrent / parallel agent execution
 - Agent-initiated spawning or delegation
 - Cyclic or dynamic workflows
 - Durable workflow engines / FBP networks

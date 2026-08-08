@@ -76,6 +76,8 @@ so it can evolve without silently breaking the correctness model:
   Manager-orchestrated sequential pipeline of agent stages, selected by name or
   capability. In `pipeline.v2`, each stage may declare its own resource
   envelope.
+- `ParallelComposition` (`parallel.v1`) — a Manager-orchestrated parallel
+  fan-out of independent stages followed by a deterministic join.
 - `Trajectory` (`trajectory.v1`) — ordered, reconstructible audit record of
   every step.
 - `VerifiedResult` (`result.v1`) / `Failure` — the only two terminal states.
@@ -147,6 +149,31 @@ constrains what it is allowed to do before execution begins:
   durable `policy rejected` step records the violated constraint and the task
   fails closed with an explicit `POLICY_VIOLATION` failure. No restricted work
   ever starts.
+
+## Parallel composition (fan-out / join) (`parallel.v1`)
+
+A task may request a Manager-orchestrated parallel composition via the optional
+`parallel` field (`task.v6`), mutually exclusive with a single agent or a
+sequential `pipeline`:
+
+- Independent stages run concurrently in worker threads; the Manager alone
+  controls spawning, resource envelopes, cancellation of siblings on failure,
+  verification of each branch, and the final join. Agents never gain the ability
+  to invoke or coordinate with one another directly.
+- Each parallel stage reuses the full `StageSpec` capabilities: exact selection
+  (name or capability), tool grants, optional per-stage envelope, and optional
+  output/input schemas. Policy, envelopes, tool mediation, and the verification
+  gate all apply per stage.
+- **Failure semantics (conservative):** if any stage fails verification, policy,
+  envelope exhaustion, or cancellation, the Manager cooperatively cancels
+  remaining running siblings and aborts the composition. No partial success is
+  returned.
+- **Join rule (minimal):** only if every stage succeeds and verifies does the
+  Manager produce a deterministic join — an ordered list of
+  `(stage_index, agent, output)` entries in declared stage order.
+- One coherent, durable trajectory records `parallel group begin`, per-stage,
+  and `parallel group end` markers. Step appends are serialised under a lock so
+  the trajectory stays ordered and reconstructible.
 
 ## Mediated tool access
 

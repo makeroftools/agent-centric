@@ -16,6 +16,9 @@ Version history:
   (``agent_name``/``capability``) OR a ``pipeline``.
 - task.v5: additive — adds an optional ``policy`` (a thin governance rule)
   that the Manager evaluates before execution begins.
+- task.v6: additive — adds an optional ``parallel`` (a Manager-orchestrated
+  parallel composition). A task specifies exactly one of: single-agent
+  selectors, a ``pipeline`` (sequential), or a ``parallel`` composition.
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ from enum import StrEnum
 from typing import Any
 
 from .capability import Capability
+from .parallel import ParallelComposition
 from .pipeline import SequentialComposition
 from .policy import Policy
 
@@ -37,6 +41,7 @@ class TaskSpecVersion(StrEnum):
     V3 = "task.v3"
     V4 = "task.v4"
     V5 = "task.v5"
+    V6 = "task.v6"
 
 
 @dataclass(frozen=True)
@@ -87,6 +92,8 @@ class TaskSpecification:
         pipeline: An optional Manager-orchestrated sequential composition. If
             set, it overrides the single-agent selectors and the stage-level
             tool grants.
+        parallel: An optional Manager-orchestrated parallel composition. If
+            set, it overrides both the single-agent selectors and ``pipeline``.
         policy: An optional thin governance rule. If set, the Manager evaluates
             it before any agent is instantiated or any stage begins; a violation
             aborts with an explicit, audited failure.
@@ -100,6 +107,7 @@ class TaskSpecification:
     envelope: ResourceEnvelope = field(default_factory=lambda: ResourceEnvelope(60.0, 100))
     granted_tools: tuple[str, ...] = field(default_factory=tuple)
     pipeline: SequentialComposition | None = None
+    parallel: ParallelComposition | None = None
     policy: Policy | None = None
 
     def __post_init__(self) -> None:
@@ -108,15 +116,21 @@ class TaskSpecification:
             TaskSpecVersion.V3,
             TaskSpecVersion.V4,
             TaskSpecVersion.V5,
+            TaskSpecVersion.V6,
         ):
             raise ValueError(f"Unsupported task spec version: {self.version!r}")
         if not self.task_id:
             raise ValueError("task_id must be non-empty.")
-        if self.pipeline is not None:
-            # A pipeline task uses the stage selectors, not the single-agent ones.
+        if self.pipeline is not None or self.parallel is not None:
+            # A composition task uses the stage selectors, not the single-agent
+            # ones, and is exactly one of sequential or parallel.
             if self.agent_name is not None or self.capability is not None:
                 raise ValueError(
-                    "A pipeline task must not also set agent_name or capability."
+                    "A composition task must not also set agent_name or capability."
+                )
+            if self.pipeline is not None and self.parallel is not None:
+                raise ValueError(
+                    "A task must not set both pipeline and parallel compositions."
                 )
         else:
             if (self.agent_name is None) == (self.capability is None):
