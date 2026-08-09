@@ -117,14 +117,19 @@ def _manager(tmp_path: Path) -> AgentManager:
 def bills_tool_descriptor(name: str):
     from meta_harness.control_plane.tools import (
         BILLS_CALENDAR_DESCRIPTOR,
+        BILLS_REGISTRY_MARK_PAID_DESCRIPTOR,
+        BILLS_REGISTRY_MARK_STATUS_DESCRIPTOR,
         BILLS_REGISTRY_READ_DESCRIPTOR,
+        BILLS_REGISTRY_UPSERT_DESCRIPTOR,
     )
 
-    if name == "bills_registry_read":
-        return BILLS_REGISTRY_READ_DESCRIPTOR
-    if name == "bills_calendar":
-        return BILLS_CALENDAR_DESCRIPTOR
-    raise AssertionError(f"unknown bills tool {name!r}")
+    return {
+        "bills_registry_read": BILLS_REGISTRY_READ_DESCRIPTOR,
+        "bills_calendar": BILLS_CALENDAR_DESCRIPTOR,
+        "bills_registry_upsert": BILLS_REGISTRY_UPSERT_DESCRIPTOR,
+        "bills_registry_mark_paid": BILLS_REGISTRY_MARK_PAID_DESCRIPTOR,
+        "bills_registry_mark_status": BILLS_REGISTRY_MARK_STATUS_DESCRIPTOR,
+    }[name]
 
 
 def _task(

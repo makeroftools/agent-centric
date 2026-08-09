@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..contracts.bill import Bill, BillTotal
-from ..contracts.bills_registry import BillsRegistry
+from ..contracts.bills_registry import BillsRegistry, BillStatus, RegistryBill
 from ..contracts.email import EmailList, EmailMessage, MessageSummary
 from ..contracts.task import TaskSpecification
 from ..contracts.workspace import WorkspaceEntryKind
@@ -307,6 +307,53 @@ def verify_bills_registry_output(task: TaskSpecification, output: Any) -> Verifi
                 False, "Output agenda does not match the recomputed calendar."
             )
         return VerificationResult(True, "Output matches the recomputed calendar.")
+
+    if operation == "upsert":
+        bill = payload.get("bill")
+        if not isinstance(bill, dict):
+            return VerificationResult(False, "Payload is missing a valid 'bill'.")
+        from .bills_registry import upsert_bill
+
+        try:
+            _, expected_upsert = upsert_bill(registry, RegistryBill.from_mapping(bill))
+        except ValueError as exc:
+            return VerificationResult(False, f"Cannot recompute upsert: {exc}")
+        if output != expected_upsert.as_mapping():
+            return VerificationResult(
+                False, "Output does not match the recomputed upsert."
+            )
+        return VerificationResult(True, "Output matches the recomputed upsert.")
+
+    if operation in ("mark_paid", "mark_status"):
+        bill_id = payload.get("bill_id")
+        if not isinstance(bill_id, str) or not bill_id:
+            return VerificationResult(False, "Payload is missing a valid 'bill_id'.")
+        if operation == "mark_paid":
+            target_status = BillStatus.PAID
+        else:
+            raw_status = payload.get("status")
+            if not isinstance(raw_status, str):
+                return VerificationResult(False, "Payload is missing a valid 'status'.")
+            try:
+                target_status = BillStatus(raw_status)
+            except ValueError as exc:
+                return VerificationResult(False, f"Invalid status: {exc}")
+        from .bills_registry import update_bill_status
+
+        try:
+            _, expected_status = update_bill_status(registry, bill_id, target_status)
+        except (ValueError, TypeError) as exc:
+            return VerificationResult(False, f"Cannot recompute status update: {exc}")
+        expected_result = expected_status.as_mapping()
+        # For the explicit mark_paid path the operation observed must be mark_paid;
+        # verify against the payload operation for match.
+        if operation == "mark_paid":
+            expected_result["operation"] = "mark_paid"
+        if output != expected_result:
+            return VerificationResult(
+                False, "Output does not match the recomputed status update."
+            )
+        return VerificationResult(True, "Output matches the recomputed status update.")
 
     return VerificationResult(False, f"Unknown bills-registry operation {operation!r}.")
 

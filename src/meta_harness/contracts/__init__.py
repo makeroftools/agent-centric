@@ -12,6 +12,7 @@ from .bills_registry import (
     BillsRegistryVersion,
     BillStatus,
     CalendarProjection,
+    MaintainResult,
     RegistryBill,
 )
 from .capability import Capability
@@ -128,6 +129,7 @@ __all__ = [
     "RegistryBill",
     "AgendaEntry",
     "CalendarProjection",
+    "MaintainResult",
     "AcceptResult",
     "BillDraft",
     "DraftProposals",

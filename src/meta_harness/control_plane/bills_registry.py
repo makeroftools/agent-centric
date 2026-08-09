@@ -27,6 +27,8 @@ from ..contracts.bills_registry import (
     BillsRegistry,
     BillStatus,
     CalendarProjection,
+    MaintainResult,
+    RegistryBill,
 )
 from ..contracts.workspace import WorkspaceLayout
 from .tools import ToolExecutionError
@@ -124,6 +126,115 @@ def project_calendar(
     )
 
 
+def upsert_bill(
+    registry: BillsRegistry, bill: RegistryBill
+) -> tuple[BillsRegistry, MaintainResult]:
+    """Insert or replace a bill by id with fully validated fields (pure).
+
+    If no bill carries ``bill.id``, the bill is appended as a new record; if one
+    already exists, it is replaced in place (order preserved). The merged
+    registry is validated at construction, so an invalid bill or a mutation that
+    would break invariants (e.g. duplicate ids) fails closed. This is a pure
+    upsert — it never implicitly accepts drafts and never projects a calendar on
+    its own.
+
+    Returns:
+        ``(merged_registry, MaintainResult)`` where ``created`` reports whether
+        the upsert inserted a new record.
+
+    Raises:
+        ValueError: If the bill is invalid or the merged registry would be invalid.
+    """
+    existing_ids = {b.id for b in registry.bills}
+    created = bill.id not in existing_ids
+    if created:
+        merged = BillsRegistry(
+            version=registry.version,
+            bills=registry.bills + (bill,),
+            description=registry.description,
+        )
+    else:
+        new_bills = tuple(bill if b.id == bill.id else b for b in registry.bills)
+        merged = BillsRegistry(
+            version=registry.version,
+            bills=new_bills,
+            description=registry.description,
+        )
+    return merged, MaintainResult(
+        operation="upsert",
+        bill_id=bill.id,
+        created=created,
+        bill=bill,
+    )
+
+
+_OP_FOR_STATUS = {
+    BillStatus.PAID: "mark_paid",
+    BillStatus.SKIPPED: "mark_status",
+    BillStatus.DUE: "mark_status",
+}
+
+
+def _set_status(
+    registry: BillsRegistry, bill_id: str, status: BillStatus
+) -> tuple[BillsRegistry, MaintainResult]:
+    """Set a bill's status by id (pure), failing closed on a missing id.
+
+    Raises:
+        ValueError: If ``bill_id`` does not exist in the registry.
+    """
+    matched: RegistryBill | None = None
+    new_bills: list[RegistryBill] = []
+    for current in registry.bills:
+        if current.id == bill_id:
+            matched = RegistryBill(
+                id=current.id,
+                vendor=current.vendor,
+                amount_cents=current.amount_cents,
+                due_date=current.due_date,
+                status=status,
+                category=current.category,
+            )
+            new_bills.append(matched)
+        else:
+            new_bills.append(current)
+    if matched is None:
+        raise ValueError(f"Unknown bill id {bill_id!r}.")
+    merged = BillsRegistry(
+        version=registry.version,
+        bills=tuple(new_bills),
+        description=registry.description,
+    )
+    return merged, MaintainResult(
+        operation=_OP_FOR_STATUS[status],
+        bill_id=bill_id,
+        created=False,
+        bill=matched,
+    )
+
+
+def update_bill_status(
+    registry: BillsRegistry, bill_id: str, status: BillStatus
+) -> tuple[BillsRegistry, MaintainResult]:
+    """Set a bill's status by id via one shared code path (pure).
+
+    ``mark_paid`` is a status set to ``paid``; ``mark_status`` accepts any valid
+    status (due / paid / skipped). Both reuse ``_set_status`` so the required
+    mark-paid path and the optional v1 mark-status practice stay one code path.
+
+    Raises:
+        ValueError: If the bill id is unknown or the status is invalid.
+    """
+    if not isinstance(status, BillStatus):
+        try:
+            status = BillStatus(status)
+        except ValueError:
+            raise ValueError(
+                f"Bill status must be one of due/paid/skipped, got {status!r}."
+            ) from None
+    return _set_status(registry, bill_id, status)
+
+
 class BillsOps:
     """Binds registry read + calendar projection to a Workspace.
 
@@ -170,10 +281,61 @@ class BillsOps:
             raise ToolExecutionError(str(exc)) from exc
         return projection.as_mapping()
 
+    def _persist(self, registry: BillsRegistry) -> dict[str, Any]:
+        """Write a merged registry back through the allowlisted path."""
+        mapping = registry.as_mapping()
+        try:
+            self._workspace.write_workspace_file(
+                BILLS_REGISTRY_PATH,
+                json.dumps(mapping, sort_keys=True),
+            )
+        except WorkspaceError as exc:
+            raise ToolExecutionError(str(exc)) from exc
+        return mapping
+
+    def upsert(self, bill: dict[str, Any]) -> dict[str, Any]:
+        """Insert or replace a bill by id (explicit, grant-gated).
+
+        Reads + validates the current registry, upserts the bill (pure), writes
+        the merged registry back through the allowlisted path, and returns the
+        ``MaintainResult``. Any invalid bill, malformed registry, or registry
+        write failure fails closed (no partial mutation).
+        """
+        try:
+            registry = load_registry(self._read_registry_content())
+            merged, result = upsert_bill(registry, RegistryBill.from_mapping(bill))
+            self._persist(merged)
+        except ValueError as exc:
+            raise ToolExecutionError(str(exc)) from exc
+        return result.as_mapping()
+
+    def mark_paid(self, bill_id: str) -> dict[str, Any]:
+        """Set a bill's status to ``paid`` for a given id (fail closed if missing)."""
+        try:
+            registry = load_registry(self._read_registry_content())
+            merged, result = update_bill_status(registry, bill_id, BillStatus.PAID)
+            self._persist(merged)
+        except ValueError as exc:
+            raise ToolExecutionError(str(exc)) from exc
+        return result.as_mapping()
+
+    def mark_status(self, bill_id: str, status: str) -> dict[str, Any]:
+        """Set a bill's status to ``due``/``paid``/``skipped`` (shared path)."""
+        try:
+            registry = load_registry(self._read_registry_content())
+            merged, result = update_bill_status(registry, bill_id, BillStatus(status))
+            self._persist(merged)
+        except ValueError as exc:
+            raise ToolExecutionError(str(exc)) from exc
+        return result.as_mapping()
+
 
 def bills_tool_impls(ops: BillsOps) -> dict[str, Callable[..., Any]]:
     """Return the mediated bills-registry tool implementations bound to ``ops``."""
     return {
         "bills_registry_read": ops.load,
         "bills_calendar": ops.calendar,
+        "bills_registry_upsert": ops.upsert,
+        "bills_registry_mark_paid": ops.mark_paid,
+        "bills_registry_mark_status": ops.mark_status,
     }

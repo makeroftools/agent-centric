@@ -1,4 +1,4 @@
-# STATUS — Volley 001–027
+# STATUS — Volley 001–028
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -1868,6 +1868,49 @@ proposals for the existing human accept gate. No OCR, no cloud APIs, no network.
   draft into the registry. All prior invariants hold.
 
 ## Pause point — Volley 027 delivered (report pending)
+
+# Volley 028 — Bills Registry Maintenance (Upsert + Mark Paid) (delivered)
+
+### 100. Governed registry maintenance: upsert + status updates
+
+Adds explicit, mediated, verified maintenance operations on the canonical
+``bills/registry.json`` so humans/agents can maintain vendors and status without
+breaking calendar invariants. Mutations remain explicit, read-modify-write through
+the allowlisted path with a validated merged registry, integer cents and valid ISO
+dates only, and the Manager remains sole authority.
+
+- Pure logic in ``control_plane/bills_registry.py``: ``upsert_bill`` (insert or
+  replace by id, order preserved, ``MaintainResult.created`` reports insert vs
+  replace) and ``update_bill_status`` (shared ``_set_status`` code path for
+  ``mark_paid`` / ``mark_status``, failing closed on an unknown id).
+- New ``contracts.bills_registry.MaintainResult`` — report-only result echoing
+  the operation, bill id, whether it was created, and the resulting bill.
+- Mediated tools (``bills_registry_upsert``, ``bills_registry_mark_paid``,
+  ``bills_registry_mark_status``) on the existing ``bills_registry`` agent via a
+  new capability ``bills.maintain.v1`` — reuses the existing agent, no parallel
+  god-agent. Writes only the allowlisted registry path; never implicitly accepts
+  intake drafts.
+- Verification: the ``bills_registry`` verifier recomputes the expected
+  upsert / status update from the payload registry and compares — an invalid,
+  disallowed, or failed mutation is never a verified success.
+- Calendar stays correct after maintenance: paid bills are excluded by default
+  and outstanding totals recompute (tested).
+
+## Correctness evidence (Volley 028 state)
+
+- ``uv run pytest`` -> **415 passed** (398 prior + 17 new maintenance tests).
+- ``uv run ruff check .`` -> All checks passed.
+- ``uv run mypy`` -> Success: no issues found in 54 source files.
+- New tests prove: upsert inserts a new bill and replaces an existing one in
+  place; invalid upsert fails closed with no partial mutation; mark_paid sets
+  status and fails closed on an unknown id; mark_status shares the code path and
+  rejects invalid statuses; calendar is correct after maintenance; upsert /
+  mark-paid under grant verify and fail closed ungranted; policy can deny
+  maintenance; the verifier rejects a wrong mutation output; maintenance never
+  touches drafts. The CLI demo ``demo-bills-mark-paid`` runs VERIFIED. All prior
+  invariants hold.
+
+## Pause point — Volley 028 delivered (report pending)
 
 ## Out of scope / future volleys (not started)
 

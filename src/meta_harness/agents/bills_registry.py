@@ -1,14 +1,21 @@
-"""A deterministic bills-registry + calendar agenda agent (Volley 025).
+"""A deterministic bills-registry + calendar agenda agent (Volley 025 / 028).
 
 This agent performs a single deterministic operation on the canonical local
-bills registry in the allowlisted workspace: either ``load`` (read + validate
-the registry) or ``calendar`` (project an ordered agenda for a date window). It
-operates entirely through the Manager's mediated ``bills_registry_read`` /
-``bills_calendar`` tools (only if explicitly granted), and returns a structured,
+bills registry in the allowlisted workspace: ``load`` (read + validate the
+registry), ``calendar`` (project an ordered agenda for a date window), or a
+governed maintenance operation ``upsert`` / ``mark_paid`` / ``mark_status``
+(explicit registry mutations). It operates entirely through the Manager's
+mediated tools (only if explicitly granted), and returns a structured,
 deterministic result that the verification gate recomputes independently.
 
+Registry mutations are explicit, mediated, and verified: an upsert or status
+update writes only through the allowlisted ``bills/registry.json`` path with a
+validated merged registry, and never implicitly accepts intake drafts. Calendar
+stays correct when projected after maintenance (the verifier recomputes the
+merge, so a disallowed or failed mutation is never a verified success).
+
 No model is involved: due dates and amounts are read from registry data and
-projected deterministically — never invented.
+projected/mutated deterministically — never invented.
 """
 
 from __future__ import annotations
@@ -69,6 +76,43 @@ class BillsRegistryAgent:
             )
             return (yield from self._finish_tool(sent, "bills_calendar"))
 
+        if operation == "upsert":
+            bill = payload.get("bill")
+            if not isinstance(bill, dict):
+                raise TypeError("BillsRegistryAgent payload['bill'] must be a mapping.")
+            if not tools.available("bills_registry_upsert"):
+                yield AgentStep(description="tool bills_registry_upsert not granted")
+                return AgentResult(output=None)
+            sent = yield ToolRequest(
+                name="bills_registry_upsert", args={"bill": bill}
+            )
+            return (yield from self._finish_tool(sent, "bills_registry_upsert"))
+
+        if operation in ("mark_paid", "mark_status"):
+            bill_id = payload.get("bill_id")
+            if not isinstance(bill_id, str) or not bill_id:
+                raise TypeError(
+                    "BillsRegistryAgent payload['bill_id'] must be a non-empty string."
+                )
+            tool = (
+                "bills_registry_mark_paid"
+                if operation == "mark_paid"
+                else "bills_registry_mark_status"
+            )
+            if not tools.available(tool):
+                yield AgentStep(description=f"tool {tool} not granted")
+                return AgentResult(output=None)
+            args: dict[str, Any] = {"bill_id": bill_id}
+            if operation == "mark_status":
+                status = payload.get("status")
+                if not isinstance(status, str) or not status:
+                    raise TypeError(
+                        "BillsRegistryAgent payload['status'] must be a non-empty string."
+                    )
+                args["status"] = status
+            sent = yield ToolRequest(name=tool, args=args)
+            return (yield from self._finish_tool(sent, tool))
+
         raise TypeError(f"BillsRegistryAgent does not support operation {operation!r}.")
 
     @staticmethod
@@ -105,6 +149,9 @@ def _safe_detail(output: dict[str, Any]) -> dict[str, Any]:
             result[key] = output[key]
     if "bills" in output:
         result["bill_count"] = len(output["bills"])
+    for key in ("operation", "bill_id", "created"):
+        if key in output:
+            result[key] = output[key]
     return result
 
 

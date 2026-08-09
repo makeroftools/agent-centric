@@ -269,3 +269,48 @@ class CalendarProjection:
             "entries": [e.as_mapping() for e in self.entries],
             "total_outstanding_cents": self.total_outstanding_cents,
         }
+
+
+@dataclass(frozen=True)
+class MaintainResult:
+    """The outcome of an explicit registry maintenance operation (Volley 028).
+
+    Report-only: which operation ran, on which bill, whether an upsert created a
+    new record, and the resulting bill record. Only an explicit, grant-gated
+    maintenance operation may produce this; it never implicitly accepts drafts
+    and never runs unsupervised.
+
+    Attributes:
+        operation: ``upsert``, ``mark_paid``, or ``mark_status``.
+        bill_id: The bill id the operation applied to.
+        created: True if an ``upsert`` inserted a new bill (False for the
+            status-update operations and for a replacement upsert).
+        bill: The resulting bill record after the operation.
+    """
+
+    operation: str
+    bill_id: str
+    created: bool
+    bill: RegistryBill
+
+    def __post_init__(self) -> None:
+        if self.operation not in ("upsert", "mark_paid", "mark_status"):
+            raise ValueError(
+                "Supported operations are upsert/mark_paid/mark_status, "
+                f"got {self.operation!r}."
+            )
+        if not isinstance(self.bill_id, str) or not self.bill_id:
+            raise ValueError("MaintainResult bill_id must be a non-empty string.")
+        if not isinstance(self.created, bool):
+            raise ValueError("MaintainResult created must be a bool.")
+        if not isinstance(self.bill, RegistryBill):
+            raise ValueError("MaintainResult bill must be a RegistryBill.")
+
+    def as_mapping(self) -> dict[str, Any]:
+        """Return the result as a plain mapping (JSON-serialisable)."""
+        return {
+            "operation": self.operation,
+            "bill_id": self.bill_id,
+            "created": self.created,
+            "bill": self.bill.as_mapping(),
+        }

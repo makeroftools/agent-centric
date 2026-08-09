@@ -35,7 +35,10 @@ from meta_harness.control_plane.email_tools import EmailTools, email_tool_impls
 from meta_harness.control_plane.intake import IntakeOps, ensure_intake_layout, intake_tool_impls
 from meta_harness.control_plane.tools import (
     BILLS_CALENDAR_DESCRIPTOR,
+    BILLS_REGISTRY_MARK_PAID_DESCRIPTOR,
+    BILLS_REGISTRY_MARK_STATUS_DESCRIPTOR,
     BILLS_REGISTRY_READ_DESCRIPTOR,
+    BILLS_REGISTRY_UPSERT_DESCRIPTOR,
     EMAIL_FETCH_DESCRIPTOR,
     EMAIL_LIST_DESCRIPTOR,
     INBOX_INVENTORY_DESCRIPTOR,
@@ -110,11 +113,12 @@ _BILLS_REGISTRY_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="bills_registry",
     entry_point="meta_harness.agents.bills_registry:create_bills_registry_agent",
-    description="Reads the bills registry and projects a deterministic agenda.",
+    description="Reads the bills registry, projects a deterministic agenda, and maintains bills.",
     declared_capabilities=frozenset(
         {
             Capability(name="bills.registry", version="1"),
             Capability(name="bills.calendar", version="1"),
+            Capability(name="bills.maintain", version="1"),
         }
     ),
 )
@@ -281,6 +285,18 @@ def _demo_tasks() -> tuple[TaskSpecification, ...]:
         ),
         TaskSpecification(
             version=TaskSpecVersion.V5,
+            task_id="demo-bills-mark-paid",
+            agent_name="bills_registry",
+            payload={
+                "operation": "mark_paid",
+                "registry": _DEMO_REGISTRY,
+                "bill_id": "b3",
+            },
+            envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
+            granted_tools=("bills_registry_mark_paid",),
+        ),
+        TaskSpecification(
+            version=TaskSpecVersion.V5,
             task_id="demo-intake",
             agent_name="intake",
             payload={"operation": "drafts"},
@@ -301,11 +317,13 @@ def _email_tool_descriptor(name: str) -> ToolDescriptor:
 
 def _bills_tool_descriptor(name: str) -> ToolDescriptor:
     """Return the ToolDescriptor for a bills-registry tool name."""
-    if name == "bills_registry_read":
-        return BILLS_REGISTRY_READ_DESCRIPTOR
-    if name == "bills_calendar":
-        return BILLS_CALENDAR_DESCRIPTOR
-    raise AssertionError(f"unknown bills-registry tool {name!r}")
+    return {
+        "bills_registry_read": BILLS_REGISTRY_READ_DESCRIPTOR,
+        "bills_calendar": BILLS_CALENDAR_DESCRIPTOR,
+        "bills_registry_upsert": BILLS_REGISTRY_UPSERT_DESCRIPTOR,
+        "bills_registry_mark_paid": BILLS_REGISTRY_MARK_PAID_DESCRIPTOR,
+        "bills_registry_mark_status": BILLS_REGISTRY_MARK_STATUS_DESCRIPTOR,
+    }[name]
 
 def _intake_tool_descriptor(name: str) -> ToolDescriptor:
     """Return the ToolDescriptor for an intake tool name."""

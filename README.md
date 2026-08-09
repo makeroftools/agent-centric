@@ -38,20 +38,20 @@ governs every decision in this repository.
 
 ---
 
-## What v0.27 includes
+## What v0.28 includes
 
 | Area | What's implemented |
 | --- | --- |
 | **Manager** | Deterministic `AgentManager`: register, select (by name or capability), run, summarise, replay. |
-| **Contracts** | Versioned, strongly-typed contracts for tasks, results, trajectories, tools, pipelines, parallel, policy, model, summary, replay, critical path, bills, workspace, email, and bills-registry. |
+| **Contracts** | Versioned, strongly-typed contracts for tasks, results, trajectories, tools, pipelines, parallel, policy, model, summary, replay, critical path, bills, workspace, email, intake, and bills-registry (incl. registry maintenance). |
 | **Registry** | In-process, deterministic agent registry with capability-based selection. |
-| **Tools** | Local tools (`to_upper`, `add`, `bill_total`) plus a Manager-mediated **MCP adapter**, **allowlisted workspace tools**, **read-only email tools**, and **bills-registry tools**; grants and policy enforced by the Manager. |
+| **Tools** | Local tools (`to_upper`, `add`, `bill_total`) plus a Manager-mediated **MCP adapter**, **allowlisted workspace tools**, **read-only email tools**, and **bills-registry tools** (read / calendar / **upsert / mark-paid / mark-status maintenance**); grants and policy enforced by the Manager. |
 | **Model path** | Mediated `llm_complete` tool; deterministic stub by default; an optional, hardened real-provider path. |
 | **Composition** | Sequential pipelines, parallel fan-out/join, and nested sequential-as-parallel — all Manager-orchestrated. |
 | **Governance** | Policy (allow/deny), hard resource envelopes, cooperative cancellation, per-step budgets. |
 | **Isolation** | Optional subprocess execution; silent-hang bounded, forced-kill recorded, no zombies. |
 | **Observability** | Deterministic trajectory summary, replay verification, and read-only critical-path (CPM) analysis. |
-| **Specialty agents** | A **bills** agent, a **workspace** agent, a **read-only email** agent, a **bills-registry + calendar** agent (deterministic agenda projection), and a **dump-intake** agent (inventory + unverified drafts + explicit accept). |
+| **Specialty agents** | A **bills** agent, a **workspace** agent, a **read-only email** agent, an **intake** agent (inventory + unverified drafts + explicit accept), and a **bills-registry** agent (deterministic agenda projection + governed registry maintenance). |
 | **Operator CLI** | `meta-harness` with `run`, `summarise`, and `replay-verify`. |
 | **Editor bridge** | Thin ACP adapter (`meta-harness-acp`) so Meta-Harness runs as an External Agent in Zed. |
 
@@ -404,10 +404,11 @@ The registry lives at `bills/registry.json` (an allowlisted path,
 `bills_registry.v1`): each record has `id`, `vendor`, `amount_cents` (integer
 cents), an ISO `due_date`, and optional `status` (`due`/`paid`/`skipped`) and
 `category`. Projection is purely deterministic — no model is involved. By
+paid`). By
 default only unpaid bills (`due`/`skipped`) appear; `include_paid=True` also
 includes `paid`. Entries are ordered by due date then bill id, with a total
 outstanding sum. Recurrence is omitted in v1 (documented as future);
-mark-paid/upsert are deferred to a later volley.
+maintenance (upsert / mark-paid) is delivered in Volley 028 above.
 
 Example registry:
 
@@ -455,6 +456,37 @@ task = TaskSpecification(
 
 outcome = manager.run(task)
 print(outcome.result.output if outcome.result else outcome.failure)  # total=3000
+```
+
+### Registry maintenance (Volley 028): upsert + mark paid
+
+The same `bills_registry` agent (capability `bills.maintain.v1`) also performs
+**explicit, mediated, verified** registry mutations through governed tools:
+
+- `bills_registry_upsert` (add or replace a bill by `id` with fully validated
+  vendor / amount in integer cents / ISO due date / optional status & category).
+- `bills_registry_mark_paid` (set `status=paid` for a given id; fails closed on
+  a missing id).
+- `bills_registry_mark_status` (shared status code path for `due`/`paid`/
+  `skipped`).
+
+How it stays safe:
+
+- Mutations persist **only** through the allowlisted `bills/registry.json` path
+  after validation, and the merged registry must still validate (integer cents
+  and valid dates only).
+- Maintenance **never** implicitly accepts intake drafts and never auto-pulls
+  from drafts; it operates only on the registry.
+- The verifier recomputes the expected upsert / status update from the payload
+  and the pre-mutation registry, so a disallowed, invalid, or failed mutation is
+  never a verified success.
+- The calendar projection stays correct when run after maintenance (paid bills
+  are excluded by default; outstanding totals recompute).
+
+```python
+# operation: "upsert" | "mark_paid" | "mark_status"   (capability bills.maintain.v1)
+# upsert requires the bills_registry_upsert tool grant; status updates require
+# the matching mark_paid / mark_status grant.
 ```
 
 ---

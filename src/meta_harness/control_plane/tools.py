@@ -188,6 +188,33 @@ INTAKE_ACCEPT_DESCRIPTOR = ToolDescriptor(
     execution_semantics="explicit write, least-privilege, human-in-the-loop",
 )
 
+BILLS_REGISTRY_UPSERT_DESCRIPTOR = ToolDescriptor(
+    version=ToolVersion.V1,
+    name="bills_registry_upsert",
+    description="Insert or replace a validated bill in the registry by id.",
+    input_schema={"bill": "mapping"},
+    output_schema="mapping",
+    execution_semantics="explicit write, allowlisted, validated, least-privilege",
+)
+
+BILLS_REGISTRY_MARK_PAID_DESCRIPTOR = ToolDescriptor(
+    version=ToolVersion.V1,
+    name="bills_registry_mark_paid",
+    description="Set a bill's status to paid for a given id (fail closed if missing).",
+    input_schema={"bill_id": "str"},
+    output_schema="mapping",
+    execution_semantics="explicit write, allowlisted, validated, least-privilege",
+)
+
+BILLS_REGISTRY_MARK_STATUS_DESCRIPTOR = ToolDescriptor(
+    version=ToolVersion.V1,
+    name="bills_registry_mark_status",
+    description="Set a bill's status to due/paid/skipped for a given id.",
+    input_schema={"bill_id": "str", "status": "str"},
+    output_schema="mapping",
+    execution_semantics="explicit write, allowlisted, validated, least-privilege",
+)
+
 
 class ToolRegistry:
     """Deterministic registry and executor of concrete tools.

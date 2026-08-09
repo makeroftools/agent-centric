@@ -70,4 +70,4 @@ guaranteed surface and may change.
 ## Versioning
 
 The package is versioned as a kernel milestone aligned with volley depth:
-**0.27.0** (27 volleys delivered). The scheme is documented in `STATUS.md`.
+**0.28.0** (28 volleys delivered). The scheme is documented in `STATUS.md`.
