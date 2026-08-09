@@ -10,6 +10,7 @@ from meta_harness.control_plane.manager import AgentManager
 
 COUNTER_CAPABILITY = Capability(name="count", version="1")
 REVERSE_CAPABILITY = Capability(name="reverse", version="1")
+MODEL_CAPABILITY = Capability(name="llm", version="1")
 
 COUNTER_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
@@ -33,6 +34,14 @@ CASE_TOOL_MANIFEST = AgentComponentManifest(
     entry_point="meta_harness.agents.case_tool:create_case_tool_agent",
     description="Uppercases a string via a mediated tool.",
     declared_capabilities=frozenset(),
+)
+
+MODEL_MANIFEST = AgentComponentManifest(
+    version=AgentManifestVersion.V2,
+    name="model",
+    entry_point="meta_harness.agents.model_agent:create_model_agent",
+    description="Answers a constrained prompt via a mediated language model.",
+    declared_capabilities=frozenset({MODEL_CAPABILITY}),
 )
 
 

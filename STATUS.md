@@ -1,4 +1,4 @@
-# STATUS — Volley 001–011
+# STATUS — Volley 001–012
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -37,7 +37,14 @@ critical-path (CPM) analysis is a deterministic, read-only observational aid
 owned by the control plane — it identifies the longest dependency chain and
 per-stage slack over a composition and, optionally, recorded consumption from
 a completed trajectory, but it is explicitly observational only at this stage
-and does not alter scheduling, execution, or resource enforcement.
+and does not alter scheduling, execution, or resource enforcement. For Volley
+012, the first model-mediated agent was introduced: a language-model call is
+now an untrusted, stochastic step governed by the same invariants as every
+other action — it is mediated through a Manager-owned tool, only usable when
+explicitly granted, bounded by resource envelopes, subject to policy, recorded
+in the durable trajectory, and never sufficient on its own for a verified
+result. Model output is explicitly untrusted until it passes the mandatory
+verification gate.
 
 ---
 
@@ -848,6 +855,75 @@ stage (parallel and sequential) edge cases, the `recorded_steps` override
 flipping the critical path, deterministic results for identical inputs, no
 input mutation, side-effect-free purity, and `TypeError` on unsupported plans.
 
+# Volley 012 — First Model-Mediated Agent (delivered)
+
+### 39. Versioned model-provider contract
+
+- `ModelProviderVersion.V1 = "model.v1"`
+- `ModelProvider` — a thin, swappable interface: prompt in, text out, plus
+  optional token metadata. It is the *only* place a language model is invoked,
+  and it is reached exclusively through the Manager-mediated `llm_complete`
+  tool.
+- `ModelResponse(text, estimated_tokens=None)` and `ModelProviderError` (an
+  explicit, auditable failure).
+- A model call is an untrusted, stochastic step: nothing in the contract
+  implies trust. Model output alone is never a verified result.
+
+### 40. Providers (stub + optional real)
+
+- `StubModelProvider` — deterministic, scripted responses; the only provider
+  the test suite uses. No network access or API key is ever required.
+- `FailingStubModelProvider` — always raises `ModelProviderError`, to prove a
+  provider failure is explicit and fails closed.
+- `OptionalRealModelProvider` — a thin adapter behind the same interface,
+  **disabled by default** and never required to run the tests.
+
+### 41. Mediated model tool
+
+- `llm_complete` is a normal mediated tool registered with the `ToolRegistry`.
+  It is only registered (and thus only grantable) when an explicit
+  `ModelProvider` is supplied — model use is opt-in and fail-closed.
+- An agent may call the model only if `llm_complete` is explicitly granted in
+  the task envelope. Every request and response (or failure) appears as
+  ordered steps in the durable trajectory.
+
+### 42. Concrete model-using agent
+
+- `ModelAgent` (`agents/model_agent.py`) answers a constrained prompt via the
+  mediated `llm_complete` tool. It is minimal, and its verification rule is
+  explicit and testable against the stub provider.
+- The Manager's mandatory verification gate still applies: the agent's output
+  must match the expected response. An ungranted or failed model call (agent
+  returns `UNVERIFIED`) is rejected by the gate.
+
+### 43. Governance invariants (hold for stochastic steps)
+
+- Resource envelopes (steps/time) still apply and can cancel the agent.
+- Policy can allow/deny the model tool, the model agent, and its capability.
+- The final verification gate still applies; model output alone is never
+  sufficient for success.
+- Failures (provider error, timeout, policy, verification) are explicit and
+  audited; the trajectory remains reconstructible.
+
+## Correctness evidence (Volley 012 state)
+
+Automated tests prove all invariants. All pass:
+
+```
+180 passed in 6.0s          # pytest (was 161)
+All checks passed!          # ruff
+Success: no issues found    # mypy (strict, 28 source files)
+```
+
+New `tests/test_model_agent.py` (19 tests) proves the provider contract and
+stub determinism, the `llm_complete` tool being absent without a provider and
+present with one, the model tool being unusable unless granted, request and
+response (and ungranted-request rejection) being recorded in the trajectory,
+envelope exhaustion cancelling the model agent, policy denying the model tool /
+agent / capability, verification failure after model use failing closed,
+provider failure being explicit and fail-closed, and deterministic replayable
+trajectories under the stub provider.
+
 ## Out of scope / future volleys (not started)
 
 - Agent-initiated spawning or delegation
@@ -860,6 +936,9 @@ input mutation, side-effect-free purity, and `TypeError` on unsupported plans.
 - Dynamic re-allocation of budgets at runtime
 - Complex economic or priority-based scheduling
 - External messaging
-- Additional agents and verifiers
+- Streaming model responses and multi-turn conversational memory
+- Tool-calling loops inside the model provider itself
+- RAG, embeddings, or external knowledge bases
+- Production provider credential management
 - MCP/A2A integration
 - Distribution, networking, and cloud concerns

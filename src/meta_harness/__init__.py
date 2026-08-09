@@ -16,6 +16,10 @@ from .contracts import (
     CriticalPathStage,
     Failure,
     FailureReason,
+    ModelProvider,
+    ModelProviderError,
+    ModelProviderVersion,
+    ModelResponse,
     ParallelComposition,
     ParallelVersion,
     PipelineVersion,
@@ -44,6 +48,11 @@ from .control_plane import (
     ToolRegistry,
     analyse_critical_path,
 )
+from .providers import (
+    FailingStubModelProvider,
+    OptionalRealModelProvider,
+    StubModelProvider,
+)
 
 __all__ = [
     "AgentManager",
@@ -63,6 +72,13 @@ __all__ = [
     "CriticalPathStage",
     "Failure",
     "FailureReason",
+    "ModelProvider",
+    "ModelProviderError",
+    "ModelProviderVersion",
+    "ModelResponse",
+    "StubModelProvider",
+    "FailingStubModelProvider",
+    "OptionalRealModelProvider",
     "analyse_critical_path",
     "ParallelComposition",
     "ParallelVersion",

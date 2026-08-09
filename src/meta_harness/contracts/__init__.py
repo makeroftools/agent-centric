@@ -9,6 +9,12 @@ from .capability import Capability
 from .critical_path import CpmMetric, CpmVersion, CriticalPathResult, CriticalPathStage
 from .handoff import HandoffSchema, is_valid_schema, validate_handoff
 from .manifest import AgentComponentManifest, AgentManifestVersion
+from .model import (
+    ModelProvider,
+    ModelProviderError,
+    ModelProviderVersion,
+    ModelResponse,
+)
 from .parallel import ParallelComposition, ParallelVersion
 from .pipeline import PipelineVersion, SequentialComposition, StageSpec
 from .policy import Policy, PolicyDecision, PolicyVersion
@@ -31,6 +37,10 @@ __all__ = [
     "HandoffSchema",
     "is_valid_schema",
     "validate_handoff",
+    "ModelProvider",
+    "ModelProviderError",
+    "ModelProviderVersion",
+    "ModelResponse",
     "AgentComponentManifest",
     "AgentManifestVersion",
     "ParallelComposition",

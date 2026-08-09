@@ -94,6 +94,41 @@ def verify_case_tool_output(task: TaskSpecification, output: Any) -> Verificatio
     return VerificationResult(False, "Output does not match the expected uppercased string.")
 
 
+def verify_model_output(task: TaskSpecification, output: Any) -> VerificationResult:
+    """Verify a ModelAgent output against the expected prompt response.
+
+    The payload carries the expected response (``expected``) alongside the
+    prompt. This is a real, independent check that the model's output (via the
+    mediated ``llm_complete`` tool) matches the expected text. An ungranted or
+    failed model call (agent returns ``UNVERIFIED``) is therefore rejected here,
+    proving model output alone is never a verified success.
+    """
+    payload = task.payload
+    if not isinstance(payload, dict):
+        return VerificationResult(False, "Payload is not a mapping.")
+    expected = payload.get("expected")
+    if not isinstance(expected, str):
+        return VerificationResult(False, "Payload is malformed for model verification.")
+    if output == expected:
+        return VerificationResult(True, "Output matches the expected model response.")
+    return VerificationResult(False, "Output does not match the expected model response.")
+
+
+def verify_unguarded_model_output(task: TaskSpecification, output: Any) -> VerificationResult:
+    """Verify an UnguardedModelAgent output (passthrough of the prompt).
+
+    This agent always returns its input unchanged; the interesting behaviour we
+    test is the Manager's grant enforcement for the ``llm_complete`` tool, not
+    the output itself.
+    """
+    payload = task.payload
+    if not isinstance(payload, str):
+        return VerificationResult(False, "Payload must be a string.")
+    if output == payload:
+        return VerificationResult(True, "Output matches the passthrough input.")
+    return VerificationResult(False, "Output does not match the input.")
+
+
 def verify_unguarded_tool_output(task: TaskSpecification, output: Any) -> VerificationResult:
     """Verify an UnguardedToolAgent output (passthrough of the input text).
 
@@ -115,6 +150,8 @@ DEFAULT_VERIFIERS: dict[str, Verifier] = {
     "reverse": verify_reverse_output,
     "case_tool": verify_case_tool_output,
     "unguarded_tool": verify_unguarded_tool_output,
+    "unguarded_model": verify_unguarded_model_output,
+    "model": verify_model_output,
 }
 
 

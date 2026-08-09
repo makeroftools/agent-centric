@@ -52,9 +52,14 @@ src/meta_harness/
     pipeline.py        Sequential composition (pipeline) contract
     parallel.py        Parallel composition (fan-out / join) contract
     critical_path.py   CPM result contract (versioned)
+    model.py           Model-provider contract (versioned)
     tool.py            ToolDescriptor (versioned tool contract)
   control_plane/
     critical_path.py   Read-only critical-path analysis (pure function)
+  providers/
+    __init__.py        Stub + optional real model providers
+  agents/
+    model_agent.py     Concrete model-using agent (mediated llm_complete)
 tests/                 Invariant tests (control plane, registry, contracts, store)
 examples/demo.py       End-to-end demonstration
 ```
@@ -82,6 +87,9 @@ so it can evolve without silently breaking the correctness model:
   envelope.
 - `ParallelComposition` (`parallel.v1`) — a Manager-orchestrated parallel
   fan-out of independent stages followed by a deterministic join.
+- `ModelProvider` (`model.v1`) — the thin, versioned model-provider interface
+  (prompt in, text out, optional token metadata), reached only through the
+  mediated `llm_complete` tool.
 - `Trajectory` (`trajectory.v1`) — ordered, reconstructible audit record of
   every step.
 - `VerifiedResult` (`result.v1`) / `Failure` — the only two terminal states.
@@ -198,6 +206,29 @@ declared, else parent); `recorded_steps` overrides per stage.
 - CPM is **purely observational**: it never mutates tasks, envelopes,
   schedules, or resource accounting, and never alters scheduling, execution, or
   resource enforcement.
+
+## Model-mediated agents (`model.v1`)
+
+A language-model call is an untrusted, stochastic step, governed by the same
+invariants as every other action. The first model-using agent (`ModelAgent`)
+answers a constrained prompt through a Manager-mediated tool:
+
+- **Provider abstraction:** `ModelProvider` (`model.v1`) is a thin, swappable
+  interface (prompt in, text out, optional token metadata). `StubModelProvider`
+  is deterministic and is the only provider the tests use — no network access
+  or API key is ever required. `OptionalRealModelProvider` is a thin adapter,
+  disabled by default.
+- **Mediated tool:** `llm_complete` is a normal mediated tool registered with
+  the `ToolRegistry`. It is only registered (and thus only grantable) when an
+  explicit `ModelProvider` is supplied, so model use is opt-in and fail-closed.
+  An agent may call the model only if the tool is explicitly granted in the
+  task envelope.
+- **Recording:** every model request and response (or failure) appears as
+  ordered steps in the durable trajectory.
+- **Governance:** resource envelopes (steps/time) still apply and can cancel the
+  agent; policy can allow/deny the model tool, agent, and capability; and the
+  mandatory verification gate still applies — **model output alone is never a
+  verified result**. An ungranted or failed model call fails closed.
 
 ## Mediated tool access
 

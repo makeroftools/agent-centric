@@ -116,6 +116,25 @@ class UnguardedToolAgent:
         return AgentResult(output=payload)
 
 
+class UnguardedModelAgent:
+    """Agent that blindly requests the ``llm_complete`` tool.
+
+    Used to prove the *Manager* (not the agent) enforces the grant for model
+    calls: an ungranted ``llm_complete`` request is rejected by the control
+    plane, recorded, and handed back to the agent as a failed ToolResult.
+    """
+
+    def __call__(
+        self, payload: Any, step_budget: int, tools: ToolContext
+    ) -> Generator[AgentStep | ToolRequest, None, AgentResult]:
+        sent: Any = yield ToolRequest(name="llm_complete", args={"prompt": payload})
+        yield AgentStep(
+            description="received model tool result",
+            detail={"success": getattr(sent, "success", None)},
+        )
+        return AgentResult(output=payload)
+
+
 def create_cooperative_cancel() -> CooperativeCancellingAgent:
     return CooperativeCancellingAgent()
 
@@ -142,6 +161,10 @@ def create_slow_step() -> SlowStepAgent:
 
 def create_unguarded_tool() -> UnguardedToolAgent:
     return UnguardedToolAgent()
+
+
+def create_unguarded_model() -> UnguardedModelAgent:
+    return UnguardedModelAgent()
 
 
 COOPERATIVE_CANCEL_MANIFEST = AgentComponentManifest(
@@ -191,4 +214,11 @@ UNGUARDED_TOOL_AGENT_MANIFEST = AgentComponentManifest(
     name="unguarded_tool",
     entry_point="tests.fake_agent:create_unguarded_tool",
     description="Agent that blindly requests a tool regardless of grant.",
+)
+
+UNGUARDED_MODEL_AGENT_MANIFEST = AgentComponentManifest(
+    version=AgentManifestVersion.V2,
+    name="unguarded_model",
+    entry_point="tests.fake_agent:create_unguarded_model",
+    description="Agent that blindly requests the llm_complete tool regardless of grant.",
 )
