@@ -25,6 +25,8 @@ from meta_harness.providers import (
     FailingStubModelProvider,
     OptionalRealModelProvider,
     StubModelProvider,
+    build_real_model_provider,
+    redact_secrets,
 )
 from tests.conftest import MODEL_CAPABILITY, MODEL_MANIFEST
 
@@ -78,13 +80,88 @@ class TestModelProviderContract:
             p("anything")
 
     def test_optional_real_provider_adapter(self) -> None:
-        p = OptionalRealModelProvider(lambda prompt: f"echo:{prompt}")
+        p = OptionalRealModelProvider(lambda prompt: f"echo:{prompt}", enabled=True)
         assert p("x").text == "echo:x"
 
     def test_optional_real_provider_rejects_non_string(self) -> None:
-        p = OptionalRealModelProvider(lambda prompt: 42)  # type: ignore[arg-type]
+        p = OptionalRealModelProvider(lambda prompt: 42, enabled=True)  # type: ignore[arg-type]
         with pytest.raises(ModelProviderError):
             p("x")
+
+    def test_real_provider_disabled_by_default(self) -> None:
+        """A real provider is disabled by default and fails closed on call."""
+        p = OptionalRealModelProvider(lambda prompt: f"echo:{prompt}")  # no opt-in
+        with pytest.raises(ModelProviderError):
+            p("x")
+
+    def test_real_provider_missing_endpoint_fails_closed(self) -> None:
+        """Requesting a real provider without an endpoint is a clear error."""
+        with pytest.raises(ModelProviderError, match="endpoint"):
+            build_real_model_provider(endpoint=None, api_key="sk-test")
+
+    def test_real_provider_missing_credentials_fails_closed(self) -> None:
+        """Requesting a real provider without credentials is a clear error."""
+        with pytest.raises(ModelProviderError, match="credentials"):
+            build_real_model_provider(
+                endpoint="https://example.test", http_client=lambda e, h, p: p
+            )
+
+    def test_real_provider_no_http_client_fails_closed_on_call(self) -> None:
+        """A provider built without a transport never reaches the network."""
+        p = build_real_model_provider(
+            endpoint="https://example.test", api_key="sk-secret"
+        )
+        with pytest.raises(ModelProviderError, match="No HTTP transport"):
+            p("hi")
+
+    def test_real_provider_http_error_maps_fail_closed(self) -> None:
+        """An HTTP/API error is mapped to an explicit ModelProviderError."""
+
+        def http_client(
+            endpoint: str, headers: dict[str, str], payload: str
+        ) -> str:
+            raise RuntimeError("upstream 503")
+
+        p = build_real_model_provider(
+            endpoint="https://example.test",
+            api_key="sk-secret",
+            http_client=http_client,
+        )
+        with pytest.raises(ModelProviderError, match="upstream 503"):
+            p("hi")
+
+    def test_real_provider_timeout_is_fail_closed(self) -> None:
+        """A slow real provider is bounded and fails closed on timeout."""
+        import time
+
+        def slow(_prompt: str) -> str:
+            time.sleep(0.5)
+            return "late"
+
+        p = OptionalRealModelProvider(slow, enabled=True, timeout_seconds=0.05)
+        with pytest.raises(ModelProviderError, match="timed out"):
+            p("hi")
+
+    def test_real_provider_redacts_secrets_from_errors(self) -> None:
+        """Secrets are redacted from provider error messages."""
+
+        def http_client(
+            endpoint: str, headers: dict[str, str], payload: str
+        ) -> str:
+            raise RuntimeError("request failed with key sk-supersecret")
+
+        p = build_real_model_provider(
+            endpoint="https://example.test",
+            api_key="sk-supersecret",
+            http_client=http_client,
+        )
+        with pytest.raises(ModelProviderError) as excinfo:
+            p("hi")
+        assert "sk-supersecret" not in str(excinfo.value)
+        assert "[REDACTED]" in str(excinfo.value)
+
+    def test_redact_secrets_scrubs_provided_values(self) -> None:
+        assert redact_secrets("key=abc123", ("abc123",)) == "key=[REDACTED]"
 
 
 class TestModelToolRegistry:

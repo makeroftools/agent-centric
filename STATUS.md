@@ -1,4 +1,4 @@
-# STATUS — Volley 001–019
+# STATUS — Volley 001–020
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -1380,13 +1380,52 @@ stub-tested model path, composition (single / sequential / parallel / nested),
 isolation, cancellation, envelopes, durable trajectories, summary, replay,
 read-only CPM, and an operator CLI.
 
-- **No volley in flight.** The pause is now extended: implementation is stopped
-  and enhancements are deferred to demonstrated demand.
+- The pause was **lifted for Volley 020 only** (optional real model-provider
+  hardening, below) once a concrete, use-driven enhancement was named; the
+  kernel remains otherwise frozen and the standing no-push instruction holds.
 - **Push:** the standing instruction is to **not push**; local ``main`` is ahead
   of ``origin/main`` and unpushed.
-- **Resumption:** Volley 020 will not be opened unless a concrete enhancement
-  driven by use is named (still scoped to adapters/backends per ``KERNEL.md``;
-  no expansion of composition or messaging unless explicitly directed).
+- **Resumption:** further volleys will not be opened unless a concrete
+  enhancement driven by use is named (still scoped to adapters/backends per
+  ``KERNEL.md``; no expansion of composition or messaging unless explicitly
+  directed).
+
+# Volley 020 — Optional Real Model Provider Hardening (delivered)
+
+### 72. Explicit opt-in, fail-closed configuration
+
+``OptionalRealModelProvider`` is **disabled by default**: invoking a provider
+built without opt-in raises an explicit ``ModelProviderError``. The
+``build_real_model_provider`` factory validates configuration fail-closed:
+requesting a real provider without an ``endpoint`` or without credentials
+(``api_key`` / ``auth_header``) raises a clear error. A provider built without
+an injected ``http_client`` never reaches the network (it fails closed on call).
+
+### 73. Behavioural bounds & error mapping
+
+Real calls are bounded by a timeout and mapped into the existing tool/envelope
+failure paths: a timeout or HTTP/API error surfaces as an explicit
+``ModelProviderError`` (never a verified success), and the Manager records it
+as a normal mediated-tool failure. Trajectory content handling is unchanged.
+
+### 74. Secret redaction
+
+``redact_secrets`` scrubs concrete credential values from anything the real
+provider raises, and the wrapper redacts its ``secret_values`` before any error
+message can surface — so secrets never leak into logs or trajectories. No
+secrets are stored in the repo or recorded.
+
+## Correctness evidence (Volley 020 state)
+
+- ``uv run pytest`` → **262 passed** (254 prior + 8 new real-provider tests).
+- ``uv run ruff check .`` → All checks passed.
+- ``uv run mypy`` → Success: no issues found in 37 source files.
+- New tests prove: real provider disabled by default; missing endpoint and
+  missing credentials fail closed; a provider without a transport never reaches
+the network; HTTP/API errors and timeouts map fail-closed; secrets are redacted
+from error messages.
+- All prior invariants hold: CI uses the deterministic stub only (no network);
+  the full control-plane suite passes unchanged.
 
 ## Out of scope / future volleys (not started)
 

@@ -73,6 +73,8 @@ from .providers import (
     FailingStubModelProvider,
     OptionalRealModelProvider,
     StubModelProvider,
+    build_real_model_provider,
+    redact_secrets,
 )
 
 __all__ = [
@@ -110,6 +112,8 @@ __all__ = [
     "StubModelProvider",
     "FailingStubModelProvider",
     "OptionalRealModelProvider",
+    "build_real_model_provider",
+    "redact_secrets",
     "analyse_critical_path",
     "ParallelComposition",
     "ParallelVersion",

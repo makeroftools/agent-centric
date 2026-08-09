@@ -285,6 +285,33 @@ answers a constrained prompt through a Manager-mediated tool:
   mandatory verification gate still applies — **model output alone is never a
   verified result**. An ungranted or failed model call fails closed.
 
+#### Enabling a real provider locally (optional)
+
+Real providers are **optional and disabled by default**; the stub is the only
+provider tests and default operation use (no network, no credentials). To
+enable a real provider deliberately:
+
+```python
+from meta_harness import build_real_model_provider
+
+provider = build_real_model_provider(
+    endpoint="https://api.example/v1/completions",
+    api_key="<from-your-env-or-secret-store>",  # keep secrets out of the repo
+    # inject http_client=... to actually reach the network; without it the
+    # provider fails closed on call rather than making an accidental request.
+)
+from meta_harness import ToolRegistry
+registry = ToolRegistry(model_provider=provider)
+```
+
+- `build_real_model_provider` fails closed if the endpoint or credentials are
+  missing (clear error), bounds calls with a timeout, and maps HTTP/API/timeout
+  errors to an explicit `ModelProviderError` (never a verified success).
+- Secrets are redacted from anything the real provider raises; keep them out of
+  prompts and trajectories.
+- **Verification is still mandatory.** A real provider's output is as untrusted
+  as the stub's: it only counts once it passes the final verification gate.
+
 ## Mediated tool access
 
 Agents can only request external capabilities **through the Agent Manager**;
