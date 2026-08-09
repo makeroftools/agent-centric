@@ -227,11 +227,53 @@ task step budget. Enforcement stays entirely in the Manager.
 
 ---
 
+## Use from Zed (ACP)
+
+Meta-Harness can appear as an **External Agent** in Zed via the Agent Client
+Protocol (ACP). The adapter (`meta_harness.acp`) is a client-facing transport
+only: every prompt is routed through the Manager, and no ACP path can produce a
+verified success that bypasses it.
+
+Add an agent server to Zed's `settings.json` (Zed → Settings → Agents):
+
+```json
+{
+  "agent_servers": {
+    "Meta-Harness": {
+      "type": "custom",
+      "command": "uv",
+      "args": ["run", "meta-harness-acp"]
+    }
+  }
+}
+```
+
+Or launch it directly (e.g. for the Agent Panel thread):
+
+```sh
+uv run meta-harness-acp     # or: uv run python -m meta_harness.acp
+```
+
+What works in v1:
+
+- **initialize** — honest, minimal capabilities (all optional features disabled).
+- **session/new** — a new session id; one process owns one Manager.
+- **session/prompt** — a prompt maps to a deterministic demo task (`reverse`,
+  `upper`, `counter`, or the stub `model`) run by the Manager; the verified
+  result (or a clear fail-closed failure) and trajectory id are streamed back.
+- **session/cancel** — tracked per session. Mid-run cancellation of the
+  synchronous Manager run is not pre-emptible in v1 (documented limitation).
+
+No filesystem, shell, or arbitrary tool access is exposed from the ACP layer —
+only what the Manager grants for that task.
+
+---
+
 ## Versioning / preliminary-release status
 
 The package is versioned as a kernel milestone aligned with volley depth:
-**`0.20.0`** (20 volleys delivered). This is a **preliminary release** — the
-v0.20 kernel is complete but APIs may evolve before a stable 1.0. See
+**`0.21.0`** (21 volleys delivered). This is a **preliminary release** — the
+v0.21 kernel is complete but APIs may evolve before a stable 1.0. See
 [`KERNEL.md`](KERNEL.md) for the versioning scheme and freeze boundaries.
 
 ---

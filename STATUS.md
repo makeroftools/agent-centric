@@ -1,4 +1,4 @@
-# STATUS — Volley 001–020
+# STATUS — Volley 001–021
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -1440,6 +1440,43 @@ with additive hardening and no volley in flight.
 - **Resumption:** Volley 021 will not be opened unless a concrete, use-driven
   need appears (still scoped to adapters/backends per ``KERNEL.md``; no
   expansion of composition or messaging unless explicitly directed).
+
+# Volley 021 — Thin ACP Adapter (Zed ↔ AgentManager) (delivered)
+
+### 75. ACP adapter boundary
+
+A thin ACP transport (``meta_harness.acp``) exposes Meta-Harness as an External
+Agent in Zed. It uses the official ``agent-client-protocol`` Python SDK and
+talks ACP over stdio (``initialize`` / ``session/new`` / ``session/prompt`` /
+``session/cancel``). ACP is an edge transport only: the Agent Manager remains
+the sole authority for policy, tool mediation, envelopes, verification, and
+audit. No ACP path can produce a verified success that bypasses the Manager.
+
+### 76. Manager-mediated prompt path
+
+One process owns one Manager (built once, reused across sessions). A user prompt
+is mapped to a deterministic demo ``TaskSpecification`` (``reverse``,
+``upper``/case_tool, ``counter``, or stub ``model``), run through
+``AgentManager.run(...)``, and the verified result (or a clear fail-closed
+failure message) is streamed back as agent text with the trajectory id.
+Cancellation is tracked per session; mid-run cancellation of the synchronous
+run is documented as a v1 limitation.
+
+### 77. Zed wiring & no-Zed CI
+
+Configured via ``settings.json`` ``agent_servers`` launching ``meta-harness-acp``
+(or ``python -m meta_harness.acp``). CI tests drive the adapter over the SDK's
+in-memory transport with raw JSON-RPC — no Zed, no subprocess, no network.
+
+## Correctness evidence (Volley 021 state)
+
+- ``uv run pytest`` → **267 passed** (262 prior + 5 new ACP adapter tests).
+- ``uv run ruff check .`` → All checks passed.
+- ``uv run mypy`` → Success: no issues found in 38 source files.
+- New tests prove: a prompt maps to a governed run and streams the verified
+  result; the ``upper`` tool path round-trips; a fail-closed outcome is reported
+  explicitly (never a verified success); a cancelled session refuses a prompt;
+  the Manager/demo agents are built once and reused. All prior invariants hold.
 
 ## Out of scope / future volleys (not started)
 
