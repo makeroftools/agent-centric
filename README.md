@@ -70,6 +70,30 @@ tests/                 Invariant tests (control plane, registry, contracts, stor
 examples/demo.py       End-to-end demonstration
 ```
 
+## Operator CLI
+
+The package ships a minimal, local-only, fail-closed operator CLI over the
+public surface (installed as `meta-harness`):
+
+```sh
+meta-harness run                 # run the deterministic demo task set
+meta-harness summarise <id>      # print a trajectory's deterministic summary
+meta-harness replay-verify <id>  # re-run a demo task and verify equivalence
+```
+
+- `--store <dir>` selects the durable trajectory store (default
+  `examples/.trajectories`) and must precede the subcommand.
+- `run` executes five deterministic demo tasks (`demo-counter`, `demo-reverse`,
+  `demo-tool`, `demo-model`, `demo-pipeline`) using only built-in agents and the
+  stub model provider, printing each outcome and its durable trajectory id.
+- `summarise` and `replay-verify` fail closed: a missing trajectory id (or a
+  non-demo trajectory for `replay-verify`) exits non-zero with a clear stderr
+  message.
+
+It never starts a network service and never reads credentials. The same surface
+is reachable via `python -m meta_harness`. See `KERNEL.md` for the v0 freeze
+note.
+
 ## Core contracts (versioned)
 
 Every contract is immutable, strongly typed, and carries an explicit version
@@ -398,6 +422,7 @@ uv run pytest                 # run the control-plane invariant tests
 uv run ruff check .           # lint
 uv run mypy                   # type check the source package
 uv run python examples/demo.py
+uv run meta-harness run          # operator CLI demo task set
 ```
 
 ## Correctness guarantees

@@ -1,4 +1,4 @@
-# STATUS — Volley 001–016
+# STATUS — Volley 001–017
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -78,7 +78,16 @@ coherent trajectory with explicit ``pipeline stage N begin`` / ``parallel group
 begin`` / ``parallel stage N begin`` / ``parallel group end`` markers, and does
 not weaken isolation, verification, policy, cancellation, accounting, or
 auditability. A failure inside a nested group aborts the outer sequence and
-cancels siblings exactly as a top-level parallel failure does.
+cancels siblings exactly as a top-level parallel failure does. For Volley 017,
+the kernel was stabilised as a coherent v0 surface: a deliberate public API is
+exported and documented, the package is versioned as a kernel milestone
+(0.16.0, aligned with volley depth), a minimal local-only operator CLI provides
+``run`` / ``summarise`` / ``replay-verify`` and fails closed with clear exit
+codes, and a short kernel freeze note (``KERNEL.md``) records what the v0 kernel
+guarantees, what is intentionally out of scope, and that further work should
+prefer adapters and backends over changing Manager semantics. No execution
+invariants changed; this volley prioritises clarity, stability, and operator
+usability.
 
 ---
 
@@ -1188,7 +1197,66 @@ observational only; CPM-driven scheduling stays out of scope.
 - The nested trajectory is durable and reconstructible; summary attributes
   agents correctly; replay passes under the documented multiset rule.
 
+# Volley 017 — Kernel Stabilisation & Public Surface Freeze Candidate (delivered)
+
+### 61. Public API surface
+
+The public surface is explicit and documented. ``meta_harness`` exports the
+deliberate surface: ``AgentManager``, the core contracts (task, pipeline,
+parallel, policy, result, trajectory, summary, replay, critical-path, model,
+manifest, capability, tool), the execution backends (``InProcessBackend`` /
+``SubprocessBackend``), the trajectory stores, ``summarise`` / ``replay`` /
+``verify_replay``, and ``analyse_critical_path`` (CPM) as an optional
+observational aid. Sub-package ``__init__`` files define ``__all__`` and avoid
+leaking internal helpers (e.g. ``_StageFailure``, ``_CompositionLimit``, and the
+Manager's private methods are not exported). ``py.typed`` marks the package as
+type-annotated.
+
+### 62. Package metadata & versioning
+
+The package is versioned as a kernel milestone aligned with volley depth:
+**0.16.0** (16 volleys delivered). The scheme is documented in ``KERNEL.md``.
+Project metadata is accurate and minimal: name, description, Python requirement
+(``>=3.13``), and a ``meta-harness`` console entry point wired to the CLI.
+
+### 63. Minimal operator CLI
+
+A local-only, fail-closed CLI (``meta-harness``, also ``python -m
+meta_harness``) provides three commands over the public surface:
+
+- ``run`` — execute the deterministic demo task set against a file-backed store
+  and print each outcome and its durable trajectory id.
+- ``summarise <trajectory_id>`` — load a durable trajectory and print its
+  deterministic summary.
+- ``replay-verify <trajectory_id>`` — re-run the demo task that produced the
+  stored trajectory and verify the fresh trajectory is equivalent.
+
+It never starts a network service, never reads credentials, and exits with a
+non-zero status on any failure (fail-closed), with clear messages on stderr.
+
+### 64. Kernel freeze note
+
+``KERNEL.md`` records the v0 freeze boundaries: what the kernel guarantees
+(correctness first, deterministic control plane, composition, full auditability,
+fail-closed, observational aids, local-first), what is intentionally out of
+scope (messaging fabric, MCP/A2A, Rust core, deep workflow graphs, multi-tenancy,
+UI, CPM-driven scheduling), and that further work should prefer adapters and
+backends over changing Manager semantics.
+
+## Correctness evidence (Volley 017 state)
+
+- ``uv run pytest`` → **243 passed** (236 prior + 7 new CLI smoke tests).
+- ``uv run ruff check .`` → All checks passed.
+- ``uv run mypy`` → Success: no issues found in 36 source files.
+- ``meta-harness run`` runs the full deterministic demo set and persists five
+  durable trajectories; ``summarise`` and ``replay-verify`` work against them.
+- Missing trajectories and non-demo tasks fail closed with a non-zero exit code
+  and a clear message.
+- No execution invariants changed; all prior tests continue to pass.
+
 ## Out of scope / future volleys (not started)
+
+See ``KERNEL.md`` for the authoritative v0 freeze boundaries. Highlights:
 
 - Agent-initiated spawning or delegation
 - Cyclic or dynamic workflows
