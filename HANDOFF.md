@@ -4,12 +4,11 @@
 handoff.
 
 ## Current git state — clean and synced
-- **Branch:** `main`; **working tree clean**; **ahead of `origin/main` by 1 commit** (Volley 025).
-- **HEAD:** `feat(volley-025): bills registry + calendar agenda` (Volleys 022–024 were pushed last round).
-- **Version:** **0.26.0** (kernel milestone aligned with volley depth: 26 volleys delivered).
-- **Pushed:** Volleys 022, 023, 024 are on `origin/main` (pushed for backup on direction).
-  Volley 025 is local-only. The standing `do NOT push` rule holds; pushes happen
-  only on explicit instruction.
+- **Branch:** `main`; **working tree clean**; **in sync with `origin/main`**.
+- **HEAD:** `50a3445` = `feat(volley-026): dump intake - inbox inventory + unverified bill drafts + human accept`.
+- **Version:** **0.27.0** (kernel milestone aligned with volley depth: 27 volleys delivered).
+- **Pushed:** Volleys 022–026 are on `origin/main`. The standing `do NOT push`
+  rule holds; pushes happen only on explicit instruction.
 
 ## What Meta-Harness is
 A deterministic, local-first, in-process control plane for governed, verifiable
@@ -22,7 +21,7 @@ Governing docs: `PRINCIPLES.md` (non-negotiable rules), `KERNEL.md` (v0 freeze
 note), `STATUS.md` (volley-by-volley history + correctness evidence),
 `README.md` (GitHub frontpage, now enriched with a working Zed ACP quickstart).
 
-## What v0.26 includes (Volleys 001–026)
+## What v0.27 includes (Volleys 001–027)
 - Deterministic `AgentManager`: register, select (name/capability), run,
   summarise, replay.
 - Versioned contracts; capability registry; local tools (`to_upper`, `add`,
@@ -50,6 +49,16 @@ note), `STATUS.md` (volley-by-volley history + correctness evidence),
   local bills registry (`bills/registry.json`, allowlisted) plus a deterministic
   calendar/agenda projection (`bills.registry.v1` / `bills.calendar.v1`), no
   model, recompute verification. Recurrence omitted (future).
+- **Dump-intake agent** (`agents/intake.py`, `contracts/intake.py`,
+  `control_plane/intake.py`): allowlisted `inbox/` drop zone, deterministic
+  inventory, **unverified** bill drafts, and an explicit grant-gated accept that
+  persists only human-approved rows into the registry. No silent financial
+  commits.
+- **PDF → unverified draft (Volley 027)** (`control_plane/pdf_text.py` +
+  `Workspace.read_bytes`): dependency-free, offline embedded-text extraction
+  from simple PDFs (Flate or raw, `Tj`/`TJ`). Extracted vendor/amount/due date
+  are parsed only into an unverified `BillDraft`; a PDF with no usable embedded
+  text fails closed (no draft invented). No OCR, no cloud APIs, no network.
 - Operator CLI `meta-harness` (run/summarise/replay-verify) + **ACP adapter**
   `meta-harness-acp` (Zed external agent).
 
@@ -65,31 +74,35 @@ only — prefer adapters/backends over changing Manager semantics.**
   full auditability; local-first.
 - **Model and MCP outputs are untrusted until verified.**
 - **Real providers are opt-in**; CI/stubs are the default (no network in CI).
+- **Extracted PDF facts stay unverified until human accept** — no silent
+  registry writes from PDF parsing; no unsupervised calendar from PDFs.
 - Migration/follow-up: if you change public types, respect the freeze note in
   `KERNEL.md`.
 
 ## Architecture quick map
 - `src/meta_harness/contracts/` — versioned contracts (incl. `bill.py`,
-  `workspace.py`, `email.py`, `bills_registry.py`).
+  `workspace.py`, `email.py`, `bills_registry.py`, `intake.py`).
 - `src/meta_harness/agents/` — thin interface + built-in agents (counter,
-  reverse, case_tool, model_agent, bills, workspace, email, bills_registry).
+  reverse, case_tool, model_agent, bills, workspace, email, bills_registry,
+  intake).
 - `src/meta_harness/control_plane/` — `manager.py`, `registry.py`, `tools.py`,
   `verifier.py`, `trajectory_store.py`, `execution.py`, `worker.py`,
   `summary.py`, `replay.py`, `critical_path.py`, `mcp_tools.py`,
-  `workspace.py`, `email_tools.py`, `bills_registry.py`.
+  `workspace.py`, `email_tools.py`, `bills_registry.py`, `intake.py`,
+  `pdf_text.py`.
 - `src/meta_harness/providers/` — stub / failing stub / optional real provider
   + `email.py` (fake + optional real IMAP gateway).
 - `src/meta_harness/acp.py` — thin ACP adapter (uses official
   `agent-client-protocol` SDK, runtime dep `agent-client-protocol>=0.12.0`).
 - `src/meta_harness/cli.py` + `__main__.py` — operator CLI.
-- `tests/` — invariant tests across every volley (370 total).
+- `tests/` — invariant tests across every volley (398 total).
 
 ## Tooling / validation commands
 ```sh
 uv sync --extra dev
-uv run pytest        # 370 passed (as of handoff)
+uv run pytest        # 398 passed (as of handoff)
 uv run ruff check .  # clean
-uv run mypy src      # clean, 50 source files
+uv run mypy src      # clean, 54 source files
 ```
 - Entry points: `meta-harness` (operator CLI), `meta-harness-acp` (ACP agent).
   Both smoke-verified.
@@ -97,25 +110,26 @@ uv run mypy src      # clean, 50 source files
   `printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}\n' | timeout 15 uv run meta-harness-acp`.
 
 ## Validation status (last full run)
-- `pytest` → **370 passed**; `ruff` clean; `mypy` clean (50 files).
+- `pytest` → **398 passed**; `ruff` clean; `mypy` clean (54 files).
 
 ## Where we are / next steps
-- Kernel is **complete at v0.26** in code. Volley 022 is **accepted**; Volley 023
-  (workspace) has its completion report submitted and awaits Architect acceptance;
-  Volley 024 (read-only email) and Volley 025 (bills registry + calendar) are
-  implemented with reports awaiting review. Volleys 022–024 were pushed for
-  backup; Volley 025 is local-only and unpushed.
+- Kernel is **complete at v0.27** in code. Volley 026 (dump intake) and Volley 027
+  (PDF → unverified drafts) are implemented and validated. Volleys 022–026 were
+  pushed for backup; Volley 027 is local-only and unpushed.
 - **Known v1 limits** (documented, not bugs): ACP is edge-transport only (not
   full coding-agent parity: no diffs/slash-commands/nested subagents);
   `session/cancel` is per-session but mid-run Manager cancellation is not
   pre-emptible; demo prompt routing is fixed (`reverse` default, `upper`,
   `counter`, stub `model`). Read-only email v1 supports list/fetch only (no
-  send/delete/move).
+  send/delete/move). PDF intake v1 handles only simple embedded-text PDFs; no
+  OCR, no scanned-image PDFs, no auto-accept, no unsupervised calendar from
+  PDFs.
 - **Roadmap posture:** use first, enhance on demand. The planned sequence
   **bills (022) → workspace (023) → read-only email (024) → bills registry +
-  calendar (025)** is now implemented. Each stays Manager-mediated, policy-bound,
-  verified, and audited. Follow-up (candidate, not started): mark-paid/upsert
-  (deferred beyond v1), recurrence, or email bill ingest.
+  calendar (025) → dump intake (026) → PDF drafts (027)** is now implemented.
+  Each stays Manager-mediated, policy-bound, verified, and audited. Follow-up
+  (candidate, not started): mark-paid/upsert (deferred beyond v1), recurrence,
+  or email→draft ingest.
 
 ## Ground rules for the new thread
 - Mission-critical: **correctness first, deterministic control plane,

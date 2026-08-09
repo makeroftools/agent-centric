@@ -38,7 +38,7 @@ governs every decision in this repository.
 
 ---
 
-## What v0.26 includes
+## What v0.27 includes
 
 | Area | What's implemented |
 | --- | --- |
@@ -51,7 +51,7 @@ governs every decision in this repository.
 | **Governance** | Policy (allow/deny), hard resource envelopes, cooperative cancellation, per-step budgets. |
 | **Isolation** | Optional subprocess execution; silent-hang bounded, forced-kill recorded, no zombies. |
 | **Observability** | Deterministic trajectory summary, replay verification, and read-only critical-path (CPM) analysis. |
-| **Specialty agents** | A **bills** agent, a **workspace** agent, a **read-only email** agent, and a **bills-registry + calendar** agent (deterministic agenda projection). |
+| **Specialty agents** | A **bills** agent, a **workspace** agent, a **read-only email** agent, a **bills-registry + calendar** agent (deterministic agenda projection), and a **dump-intake** agent (inventory + unverified drafts + explicit accept). |
 | **Operator CLI** | `meta-harness` with `run`, `summarise`, and `replay-verify`. |
 | **Editor bridge** | Thin ACP adapter (`meta-harness-acp`) so Meta-Harness runs as an External Agent in Zed. |
 
@@ -591,13 +591,24 @@ closed and never produces a verified result.
 
 ---
 
-## Dump intake (Volley 026)
+## Dump intake (Volley 026 / 027)
 
 Drop files in an allowlisted `inbox/`, get a deterministic inventory, produce
-**unverified** bill drafts (structured `.json`/`.csv` + simple `.txt`), and
-explicitly **accept** only the rows you approve into the bills registry. No
-silent financial commits: inventory and drafts never touch the registry; accept
-is a separate, grant-gated operation. PDF/OCR and recurrence are deferred.
+**unverified** bill drafts, and explicitly **accept** only the rows you approve
+into the bills registry. No silent financial commits: inventory and drafts never
+touch the registry; accept is a separate, grant-gated operation.
+
+- **Structured sources (Volley 026):** `.json`/`.csv` + simple `.txt` key-value
+  fragments.
+- **PDF documents (Volley 027):** embedded-text extraction from simple PDFs
+  (dependency-free, offline, fixture-testable). Extracted vendor / amount / due
+  date are parsed **only into an unverified `BillDraft`**; a PDF with no usable
+  embedded text fails closed (no draft is invented). No OCR, no cloud APIs, no
+  network.
+- **Limits:** there is **no unsupervised calendar from PDFs** — extracted facts
+  stay unverified until a human accepts them, and only the accepted registry
+  drives the calendar. PDFs that are scanned images (no embedded text) are not
+  parsed.
 
 ```python
 # capability: intake.inventory.v1 / intake.draft_bills.v1 / intake.accept_bills.v1

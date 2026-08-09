@@ -22,6 +22,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -29,6 +30,7 @@ from ..contracts.bills_registry import BillsRegistry
 from ..contracts.intake import AcceptResult, BillDraft, DraftProposals, InboxEntry, InboxInventory
 from ..contracts.workspace import WorkspaceLayout
 from .bills_registry import BILLS_REGISTRY_PATH, ensure_bills_layout, load_registry
+from .pdf_text import extract_text as extract_pdf_text
 from .tools import ToolExecutionError
 from .workspace import Workspace, WorkspaceError
 
@@ -40,7 +42,7 @@ INBOX_PREFIX = "inbox/"
 DRAFTS_PATH = "bills/drafts.json"
 
 # Supported structured intake source suffixes (minimal, testable, offline).
-_SUPPORTED_SUFFIXES = (".json", ".csv", ".txt")
+_SUPPORTED_SUFFIXES = (".json", ".csv", ".txt", ".pdf")
 
 
 def ensure_intake_layout(layout: WorkspaceLayout) -> WorkspaceLayout:
@@ -155,6 +157,86 @@ def _extract_from_txt(source_path: str, content: str) -> BillDraft:
     )
 
 
+_AMOUNT_RE = re.compile(
+    r"\b(?:total|amount)\s*[:$]?\s*([0-9]+(?:\.[0-9]{1,2})?)\b",
+    re.IGNORECASE,
+)
+_DUE_RE = re.compile(
+    r"\b(?:due date|due|pay by)\s*[:]?\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\b",
+    re.IGNORECASE,
+)
+
+
+def _parse_money(value: str) -> int | None:
+    """Parse an inline ``12.34`` or ``1234`` figure into integer cents.
+
+    Returns None if the value cannot be converted cleanly (do not invent).
+    """
+    v = value.strip()
+    if v.count(".") == 1:
+        whole, _, frac = v.partition(".")
+        if frac and len(frac) <= 2 and whole.isdigit() and frac.isdigit():
+            return int(whole) * 100 + int(frac.ljust(2, "0"))
+        return None
+    if v.isdigit():
+        return int(v)
+    return None
+
+
+def _extract_from_pdf(source_path: str, content: bytes) -> BillDraft:
+    """Extract a draft from PDF embedded text (conservative, fail-closed).
+
+    We parse simple heuristics (vendor / amount / due date) from the embedded
+    text only **into an unverified BillDraft**. If no usable text or a weak
+    parse leaves any required field missing, we fail closed (raise ValueError)
+    rather than inventing amounts or due dates; the caller surfaces this as a
+    ``ToolExecutionError`` and no draft is produced.
+    """
+    text = extract_pdf_text(content)
+    notes: list[str] = []
+    if not text:
+        notes.append("no embedded text found; no fields extracted")
+    vendor = ""
+    amount_cents: int | None = None
+    due_date = ""
+    if text:
+        m = _AMOUNT_RE.search(text)
+        if m:
+            amount_cents = _parse_money(m.group(1))
+            if amount_cents is None:
+                notes.append("amount present but unparseable; left empty")
+        dm = _DUE_RE.search(text)
+        if dm:
+            due_date = dm.group(1)
+        # A very light vendor heuristic: a short phrase after "vendor" /
+        # "from" / "billed to", bounded to a few words and stopping at a comma
+        # or line end. Conservative; may be empty (then we fail closed).
+        vm = re.search(
+            r"\b(vendor|from|billed to)\s*[:\-]?\s*"
+            r"([A-Za-z0-9&.'\-]+(?:\s+(?!total|amount|due|date)[A-Za-z0-9&.'\-]+){0,3})",
+            text,
+            re.IGNORECASE,
+        )
+        if vm:
+            vendor = vm.group(2).strip()
+        if amount_cents is None and not due_date:
+            notes.append("no trustworthy amount/date; partial draft")
+    return BillDraft.from_mapping(
+        {
+            "draft_id": source_path,
+            "vendor": vendor,
+            "amount_cents": amount_cents,
+            "due_date": due_date,
+            "source_path": source_path,
+            "notes": (
+                "extracted from PDF text; " + "; ".join(notes)
+                if notes
+                else "extracted from PDF text"
+            ),
+        }
+    )
+
+
 def extract_drafts(workspace: Workspace, prefix: str = INBOX_PREFIX) -> dict[str, Any]:
     """Extract unverified draft proposals from the allowlisted inbox.
 
@@ -170,18 +252,29 @@ def extract_drafts(workspace: Workspace, prefix: str = INBOX_PREFIX) -> dict[str
     for rel in sorted(listing):
         if not any(rel.endswith(suffix) for suffix in _SUPPORTED_SUFFIXES):
             continue
+        if rel.endswith(".pdf"):
+            try:
+                pdf_bytes = workspace.read_bytes(rel)
+            except WorkspaceError as exc:
+                raise ToolExecutionError(str(exc)) from exc
+            try:
+                drafts.append(_extract_from_pdf(rel, pdf_bytes))
+            except ValueError as exc:
+                raise ToolExecutionError(str(exc)) from exc
+            continue
         try:
             entry = workspace.read_workspace_file(rel)
         except WorkspaceError as exc:
             raise ToolExecutionError(str(exc)) from exc
-        assert entry.content is not None
+        text = entry.content
+        assert text is not None
         try:
             if rel.endswith(".json"):
-                drafts.append(_extract_from_json(rel, entry.content))
+                drafts.append(_extract_from_json(rel, text))
             elif rel.endswith(".csv"):
-                drafts.append(_extract_from_csv(rel, entry.content))
+                drafts.append(_extract_from_csv(rel, text))
             else:
-                drafts.append(_extract_from_txt(rel, entry.content))
+                drafts.append(_extract_from_txt(rel, text))
         except ValueError as exc:
             raise ToolExecutionError(str(exc)) from exc
     return DraftProposals(drafts=tuple(drafts)).as_mapping()

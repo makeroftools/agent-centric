@@ -97,6 +97,27 @@ class Workspace:
                 result[rel] = WorkspaceEntryKind.DIRECTORY.value
         return result
 
+    def read_bytes(self, relative_path: str) -> bytes:
+        """Return the raw bytes of an allowed file (e.g. a PDF).
+
+        Rejects any path not on the allowlist and any non-file. Used by the
+        intake pipeline for binary documents; does not broaden the allowlist.
+
+        Raises:
+            WorkspaceError: If the path is not allowed, is not a file, or cannot
+                be read.
+        """
+        self._require_allowed(relative_path)
+        path = self._resolve(relative_path)
+        if not path.is_file():
+            raise WorkspaceError(f"Workspace file {relative_path!r} does not exist.")
+        try:
+            return path.read_bytes()
+        except OSError as exc:
+            raise WorkspaceError(
+                f"Could not read workspace file {relative_path!r}: {exc}"
+            ) from exc
+
     def read_workspace_file(self, relative_path: str) -> WorkspaceEntry:
         """Read an allowed file (exact allowlist or under a prefix), rejecting others.
 

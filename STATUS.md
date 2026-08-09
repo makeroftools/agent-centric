@@ -1,4 +1,4 @@
-# STATUS — Volley 001–026
+# STATUS — Volley 001–027
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -1829,6 +1829,45 @@ by the accepted registry.
   invariants hold.
 
 ## Pause point — Volley 026 delivered (report pending)
+
+# Volley 027 — PDF → Unverified Bill Drafts (delivered)
+
+### 99. Document intake from PDF embedded text (fail-closed, offline)
+
+Extends the Volley 026 dump-intake pipeline to accept PDF documents dropped in
+the allowlisted ``inbox/``. A dependency-free, offline extractor reads embedded
+text from *simple* PDFs (``Tj``/``TJ`` operators, Flate-compressed or raw) and
+feeds the same conservative heuristics, producing **unverified** ``BillDraft``
+proposals for the existing human accept gate. No OCR, no cloud APIs, no network.
+
+- ``control_plane/pdf_text.py`` (new): minimal, stdlib-only (``zlib``/``re``)
+  embedded-text extractor. **Fail-closed**: returns ``""`` when no parseable
+  embedded text is present, so the caller can avoid inventing facts.
+- ``control_plane/workspace.py``: added ``Workspace.read_bytes`` — a
+  prefix-honoring binary read, because ``read_workspace_file`` decodes UTF-8 and
+  would choke on binary PDFs.
+- ``control_plane/intake.py``: ``.pdf`` added to supported suffixes; a
+  ``_extract_from_pdf`` heuristic parses vendor / amount / due date **only into
+  an unverified ``BillDraft``**. Weak or absent text fails closed (no draft is
+  invented); a malformed supported file surfaces as a ``ToolExecutionError``.
+- Accept path unchanged: ``intake_accept`` remains the single, grant-gated
+  operation that persists only explicitly approved rows. Inventory/drafts never
+  mutate the registry. Calendar remains driven only by the accepted registry —
+  there is **no unsupervised calendar from PDFs**.
+
+## Correctness evidence (Volley 027 state)
+
+- ``uv run pytest`` -> **398 passed** (389 prior + 9 new PDF intake tests).
+- ``uv run ruff check .`` -> All checks passed.
+- ``uv run mypy`` -> Success: no issues found in 54 source files.
+- New tests prove: the extractor reads compressed and raw embedded text and
+  returns ``""`` on garbage; a PDF with clear text yields an unverified draft
+  with parsed vendor/amount/due date; a PDF with no usable text fails closed;
+  garbage bytes fail closed; amount parses into integer cents; inventory/drafts
+  never mutate the registry; and accept is still required to persist a PDF
+  draft into the registry. All prior invariants hold.
+
+## Pause point — Volley 027 delivered (report pending)
 
 ## Out of scope / future volleys (not started)
 
