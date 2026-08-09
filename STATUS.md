@@ -1427,6 +1427,20 @@ from error messages.
 - All prior invariants hold: CI uses the deterministic stub only (no network);
   the full control-plane suite passes unchanged.
 
+## Pause point — Volley 020 accepted
+
+Volley 020 was accepted; the optional real-provider path is hardened (explicit
+opt-in, fail-closed on config/transport/timeout, secrets redacted). This is a
+small **post-kernel hardening** step: the kernel-complete v0.20 baseline stands
+with additive hardening and no volley in flight.
+
+- **Baseline:** kernel-complete v0.20 + optional real-provider hardening.
+- **Push:** the standing instruction is to **not push**; local ``main`` is ahead
+  of ``origin/main`` and unpushed.
+- **Resumption:** Volley 021 will not be opened unless a concrete, use-driven
+  need appears (still scoped to adapters/backends per ``KERNEL.md``; no
+  expansion of composition or messaging unless explicitly directed).
+
 ## Out of scope / future volleys (not started)
 
 See ``KERNEL.md`` for the authoritative v0 freeze boundaries. Highlights:
