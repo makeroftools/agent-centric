@@ -19,6 +19,16 @@ from .parallel import ParallelComposition, ParallelVersion
 from .pipeline import PipelineVersion, SequentialComposition, StageSpec
 from .policy import Policy, PolicyDecision, PolicyVersion
 from .result import Failure, FailureReason, VerifiedResult, VerifiedResultVersion
+from .summary import (
+    ModelSummary,
+    PolicySummary,
+    RunState,
+    StageKind,
+    StageSummary,
+    SummaryVersion,
+    ToolSummary,
+    TrajectorySummary,
+)
 from .task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
 from .tool import ToolDescriptor, ToolVersion
 from .trajectory import (
@@ -64,4 +74,12 @@ __all__ = [
     "FailureReason",
     "VerifiedResult",
     "VerifiedResultVersion",
+    "TrajectorySummary",
+    "SummaryVersion",
+    "RunState",
+    "StageKind",
+    "StageSummary",
+    "ToolSummary",
+    "ModelSummary",
+    "PolicySummary",
 ]

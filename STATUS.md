@@ -1,4 +1,4 @@
-# STATUS — Volley 001–013
+# STATUS — Volley 001–014
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -51,7 +51,14 @@ envelopes, trajectory recording, verification, and cancellation — remains in t
 Manager. This isolation is strictly additive and does **not** relax verification
 or mediation: a child crash, non-zero exit, or protocol violation is always an
 explicit, audited, fail-closed failure and never a verified success. The
-in-process backend remains the default and is unchanged for unit tests.
+in-process backend remains the default and is unchanged for unit tests. For
+Volley 014, a deterministic, immutable trajectory summary is now available to
+operators: it projects a durable trajectory into a minimal, stable summary
+(identity, outcome, agents/stages, tool and model calls, resource consumption,
+policy decision, cancellations) without ever mutating the audit log or altering
+execution. The summary is computed on demand, is side-effect free, and is
+strictly additive — it does not relax verification, mediation, or any
+control-plane invariant.
 
 ---
 
@@ -982,6 +989,53 @@ the child as a last resort, recording the cancellation honestly.
   reconstructible, matching the in-process backend.
 - Child crash and protocol-violation tests fail closed with an audited
   ``AGENT_ERROR``; policy is still enforced before any isolated work begins.
+
+# Volley 014 — Trajectory Summary & Operator Inspection API (delivered)
+
+### 49. Versioned summary contract
+
+A new immutable, versioned contract (:mod:`meta_harness.contracts.summary`,
+``summary.v1``) captures a minimal, stable operator view of a run:
+``TrajectorySummary`` (trajectory id, task identity, terminal state, failure
+reason/message, verified output, agents, stage kind, per-stage summaries, tool
+summaries, model summary, step count, approximate time, policy decision,
+cancellation count). Nested ``StageSummary`` / ``ToolSummary`` / ``ModelSummary``
+/ ``PolicySummary`` records keep the surface small and typed.
+
+### 50. Pure summary builder
+
+:mod:`meta_harness.control_plane.summary` provides pure, side-effect-free
+functions (``summarise_trajectory`` / ``summarise_stored``) that project a
+loaded trajectory into a summary. They never read or write the trajectory store
+and are deterministic for the same trajectory content. Tool and model calls are
+derived from the Manager's stable, recorded description scheme; stage structure
+is derived from the recorded stage-boundary markers.
+
+### 51. Manager / store integration
+
+``AgentManager.summarise(trajectory_id)`` loads a durable trajectory by id and
+returns its summary (or ``None`` if absent). Summaries are computed on demand
+and are not persisted by default, keeping the append-only audit log untouched.
+
+### 52. Read-only, additive
+
+Summaries never mutate stored trajectories or control-plane behaviour. They are
+strictly additive: verification, mediation, envelopes, policy, and fail-closed
+semantics are unchanged.
+
+## Correctness evidence (Volley 014 state)
+
+- ``uv run pytest`` → **206 passed** (190 prior + 16 new summary tests).
+- ``uv run ruff check .`` → All checks passed.
+- ``uv run mypy`` → Success: no issues found in 32 source files.
+- Successful single-agent, sequential, and parallel runs produce accurate
+  summaries (state, agents, stages, tool/model counts).
+- Failure, policy-rejection, cancellation, and tool-rejection paths are
+  reflected correctly (failure reason, policy decision, cancellation count,
+  rejected tool counts).
+- Summaries are deterministic and do not modify stored trajectory data;
+  missing optional fields (no policy, no model, no parallel) are handled
+  cleanly.
 
 ## Out of scope / future volleys (not started)
 

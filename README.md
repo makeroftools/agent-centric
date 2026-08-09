@@ -44,6 +44,7 @@ src/meta_harness/
       trajectory_store.py Durable, append-only trajectory store
       execution.py       Agent session + execution backends (in-process/subprocess)
       worker.py          Subprocess worker entry (runs only the agent loop)
+      summary.py         Deterministic, side-effect-free trajectory summary builder
   agents/
     interface.py       Thin agent interface (Agent protocol)
     counter.py         Concrete agent (character counter)
@@ -56,6 +57,7 @@ src/meta_harness/
     critical_path.py   CPM result contract (versioned)
     model.py           Model-provider contract (versioned)
     tool.py            ToolDescriptor (versioned tool contract)
+    summary.py         Trajectory Summary contract (versioned)
   control_plane/
     critical_path.py   Read-only critical-path analysis (pure function)
   providers/
@@ -313,6 +315,29 @@ m = AgentManager(backend=SubprocessBackend())
   last resort.
 - The in-process backend remains the default and is unchanged for unit tests.
 
+## Trajectory summary & operator inspection
+
+A deterministic, immutable summary of any durable trajectory is available on
+`AgentManager.summarise(trajectory_id)` (or the pure `summarise_stored` /
+`summarise_trajectory` functions):
+
+```python
+summary = manager.summarise(trajectory_id)
+summary.state          # RunState.VERIFIED / FAILED / INTERRUPTED
+summary.stage_kind     # StageKind.SINGLE / SEQUENTIAL / PARALLEL
+summary.tools          # per-tool grant + request/success/failure/rejected counts
+summary.models         # llm_complete call counts, if any
+summary.policy         # accepted/rejected decision, if a policy was attached
+summary.cancellations  # count of recorded cancelled steps
+```
+
+- Summaries are computed on demand and are **never persisted** by default; the
+  append-only audit log is never mutated.
+- The builder is a pure, side-effect-free function: it is deterministic for the
+  same trajectory content and never reads or writes the store.
+- It is strictly additive and read-only with respect to execution: it does not
+  alter scheduling, resource enforcement, verification, or mediation.
+
 ## Quick start
 
 ```sh
@@ -399,6 +424,16 @@ The subprocess tests (`tests/test_subprocess.py`) demonstrate that:
 - Envelope exhaustion and cooperative cancellation work across the boundary,
   including terminating a non-cooperative child as a last resort.
 - Policy is still enforced before any isolated work begins.
+
+The summary tests (`tests/test_summary.py`) demonstrate that:
+
+- Successful single-agent, sequential, and parallel runs produce accurate
+  summaries (state, agents, stages, tool/model counts).
+- Failure, policy-rejection, cancellation, and tool-rejection paths are
+  reflected correctly.
+- Summaries are deterministic and never modify stored trajectory data.
+- Missing optional fields (no policy, no model, no parallel) are handled
+  cleanly.
 
 ## License
 

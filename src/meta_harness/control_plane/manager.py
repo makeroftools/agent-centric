@@ -41,6 +41,7 @@ from ..contracts.manifest import AgentComponentManifest
 from ..contracts.pipeline import StageSpec
 from ..contracts.policy import Policy
 from ..contracts.result import Failure, FailureReason, VerifiedResult, VerifiedResultVersion
+from ..contracts.summary import TrajectorySummary
 from ..contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
 from ..contracts.tool import ToolDescriptor
 from ..contracts.trajectory import StepRecord, StepStatus, Trajectory, TrajectoryVersion
@@ -50,6 +51,7 @@ from .execution import (
     InProcessBackend,
 )
 from .registry import Registry
+from .summary import summarise_stored
 from .tools import ToolExecutionError, ToolRegistry
 from .trajectory_store import (
     InMemoryTrajectoryStore,
@@ -163,6 +165,19 @@ class AgentManager:
     def contains(self, trajectory_id: str) -> bool:
         """Return True if a trajectory with the given id is durably stored."""
         return self._store.contains(trajectory_id)
+
+    def summarise(self, trajectory_id: str) -> TrajectorySummary | None:
+        """Load a durable trajectory by id and return its deterministic summary.
+
+        This is a read-only, on-demand inspection API. It never mutates the
+        trajectory store or any control-plane state; summaries are computed
+        fresh from the stored audit record. Returns ``None`` if no trajectory
+        with the given id is stored.
+        """
+        stored = self._store.load(trajectory_id)
+        if stored is None:
+            return None
+        return summarise_stored(stored)
 
     def _resolve(self, task: TaskSpecification) -> AgentComponentManifest | None:
         """Resolve the agent manifest for a task by name or capability."""
