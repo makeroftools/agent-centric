@@ -2,7 +2,7 @@
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
-**Status:** Freeze candidate — the kernel is stabilised as a coherent v0 surface.
+**Status:** Kernel-complete — the minimalist working v0.19 kernel is declared complete (Volleys 001–019 accepted).
 
 This note records what the v0 kernel guarantees, what is intentionally out of
 scope, and how future work should proceed. It is the short architecture/status

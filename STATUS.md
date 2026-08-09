@@ -1369,7 +1369,24 @@ deny an MCP tool before any work runs; server/tool error, timeout, and an
 unavailable server are all audited and fail-closed; the adapter boundary raises
 explicit ``McpProtocolError``/``McpTimeoutError``.
 - All prior invariants hold: local tools and the full control-plane suite pass
-unchanged.
+  unchanged.
+
+## Kernel complete — minimalist working v0.19 (pause)
+
+Volleys 001–019 are accepted. The minimalist working kernel is declared
+**complete**: a deterministic, governed, verifiable agent harness covering the
+Manager, versioned contracts, registry, policy, tools (local + MCP), a
+stub-tested model path, composition (single / sequential / parallel / nested),
+isolation, cancellation, envelopes, durable trajectories, summary, replay,
+read-only CPM, and an operator CLI.
+
+- **No volley in flight.** The pause is now extended: implementation is stopped
+  and enhancements are deferred to demonstrated demand.
+- **Push:** the standing instruction is to **not push**; local ``main`` is ahead
+  of ``origin/main`` and unpushed.
+- **Resumption:** Volley 020 will not be opened unless a concrete enhancement
+  driven by use is named (still scoped to adapters/backends per ``KERNEL.md``;
+  no expansion of composition or messaging unless explicitly directed).
 
 ## Out of scope / future volleys (not started)
 
