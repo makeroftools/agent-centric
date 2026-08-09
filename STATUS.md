@@ -1478,6 +1478,20 @@ in-memory transport with raw JSON-RPC — no Zed, no subprocess, no network.
   explicitly (never a verified success); a cancelled session refuses a prompt;
   the Manager/demo agents are built once and reused. All prior invariants hold.
 
+## Pause point — Volley 021 accepted
+
+Volley 021 was accepted; Meta-Harness is usable from Zed as an External Agent
+via the documented ``agent_servers`` / ``meta-harness-acp`` entry point. No
+volley is in flight.
+
+- **Status:** v0.21 baseline (thin ACP adapter, edge transport only).
+- **Push:** the standing instruction is to **not push**; local ``main`` is ahead
+  of ``origin/main`` and unpushed.
+- **Known v1 limits:** demo task mapping and cancel-during-run constraints (as
+documented) — not full coding-agent parity.
+- **Resumption:** further volleys will not be opened until a concrete use
+drives the next need (scoped to adapters/backends per ``KERNEL.md``).
+
 ## Out of scope / future volleys (not started)
 
 See ``KERNEL.md`` for the authoritative v0 freeze boundaries. Highlights:
