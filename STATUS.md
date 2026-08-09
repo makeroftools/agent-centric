@@ -1316,6 +1316,25 @@ tests).
   fail-closed; success matches the in-process backend; no verified success after
   any isolation failure; prior trajectories are never mutated.
 
+## Pause point — Volley 018 accepted
+
+Volley 018 was accepted by the architect as a completed isolation milestone.
+This is a deliberate **pause point**; no volley is in flight.
+
+- **Kernel:** local ``main`` includes Volleys 001–018; isolation hardening is
+  complete.
+- **Push:** the standing instruction is to **not push**; local ``main`` is ahead
+  of ``origin/main`` and unpushed.
+- **Next theme:** not yet selected. Candidate Volley 019 themes (additive,
+  adapter/backend-first, per ``KERNEL.md``):
+  - a thin Manager-mediated MCP adapter over the public surface,
+  - real-provider hardening (stub tests remain mandatory; the real path is
+    optional and off by default),
+  - a first non-deterministic workload under tighter verification,
+  - operator / documentation polish only.
+- **Constraint:** do not expand composition or introduce messaging unless
+  explicitly directed. No execution invariants change while paused.
+
 ## Out of scope / future volleys (not started)
 
 See ``KERNEL.md`` for the authoritative v0 freeze boundaries. Highlights:
