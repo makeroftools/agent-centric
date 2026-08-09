@@ -9,8 +9,8 @@ trajectory**, and mediate every tool and model call. Agents can only *request*
 capabilities; the Manager is the sole authority that grants, executes, records,
 and verifies.
 
-This is the **v0.25 preliminary release** — a minimal but complete harness,
-built across Volleys 001–025. It reflects what exists in the codebase, not an
+This is the **v0.26 preliminary release** — a minimal but complete harness,
+built across Volleys 001–026. It reflects what exists in the codebase, not an
 aspirational platform.
 
 ```
@@ -38,7 +38,7 @@ governs every decision in this repository.
 
 ---
 
-## What v0.25 includes
+## What v0.26 includes
 
 | Area | What's implemented |
 | --- | --- |
@@ -351,7 +351,7 @@ The correctness guarantees are demonstrated across the test suite
 ```
 PRINCIPLES.md          Non-negotiable governing rules
 KERNEL.md              v0 kernel freeze note (guarantees, out-of-scope, versioning)
-STATUS.md              Volley history 001–025 + correctness evidence
+STATUS.md              Volley history 001–026 + correctness evidence
 src/meta_harness/
   __init__.py          Public surface
   contracts/           Versioned, strongly-typed contracts
@@ -390,7 +390,7 @@ task step budget. Enforcement stays entirely in the Manager.
 ## Versioning / preliminary-release status
 
 The package is versioned as a kernel milestone aligned with volley depth:
-**`0.25.0`** (25 volleys delivered). This is a **preliminary release** — the
+**`0.26.0`** (26 volleys delivered). This is a **preliminary release** — the
 v0.25 kernel is complete but APIs may evolve before a stable 1.0. See
 [`KERNEL.md`](KERNEL.md) for the versioning scheme and freeze boundaries.
 
@@ -590,6 +590,20 @@ A path outside the allowlist, or a failed/disallowed workspace operation, fails
 closed and never produces a verified result.
 
 ---
+
+## Dump intake (Volley 026)
+
+Drop files in an allowlisted `inbox/`, get a deterministic inventory, produce
+**unverified** bill drafts (structured `.json`/`.csv` + simple `.txt`), and
+explicitly **accept** only the rows you approve into the bills registry. No
+silent financial commits: inventory and drafts never touch the registry; accept
+is a separate, grant-gated operation. PDF/OCR and recurrence are deferred.
+
+```python
+# capability: intake.inventory.v1 / intake.draft_bills.v1 / intake.accept_bills.v1
+# operation: "inventory" | "drafts" | "accept"
+# accept requires the intake_accept tool and an explicit accept_ids list.
+```
 
 ## Roadmap posture
 

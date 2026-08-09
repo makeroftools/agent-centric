@@ -70,6 +70,13 @@ class Workspace:
             raise WorkspaceError(f"Path {relative_path!r} escapes the workspace root.")
         return candidate
 
+    def _require_allowed(self, relative_path: str) -> None:
+        """Reject a path that is neither an allowed file nor under a prefix."""
+        if not self._layout.allows_path(relative_path):
+            raise WorkspaceError(
+                f"Path {relative_path!r} is not on the workspace allowlist."
+            )
+
     # -- allowlisted, mediated file tools --------------------------------------
 
     def list_workspace(self) -> dict[str, str]:
@@ -91,28 +98,49 @@ class Workspace:
         return result
 
     def read_workspace_file(self, relative_path: str) -> WorkspaceEntry:
-        """Read an allowlisted file, rejecting any other path.
+        """Read an allowed file (exact allowlist or under a prefix), rejecting others.
 
         Raises:
-            WorkspaceError: If the path is not on the allowlist, is not a file,
-                or cannot be read.
+            WorkspaceError: If the path is not allowed, is not a file, or cannot
+                be read.
         """
-        if not self._layout.allows_file(relative_path):
-            raise WorkspaceError(
-                f"Path {relative_path!r} is not on the workspace file allowlist."
-            )
+        self._require_allowed(relative_path)
         path = self._resolve(relative_path)
         if not path.is_file():
             raise WorkspaceError(f"Workspace file {relative_path!r} does not exist.")
         try:
             content = path.read_text(encoding="utf-8")
         except OSError as exc:
-            raise WorkspaceError(f"Could not read workspace file {relative_path!r}: {exc}") from exc
+            raise WorkspaceError(
+                f"Could not read workspace file {relative_path!r}: {exc}"
+            ) from exc
         return WorkspaceEntry(
             relative_path=relative_path,
             kind=WorkspaceEntryKind.FILE,
             content=content,
         )
+
+    def list_prefix(self, prefix: str) -> dict[str, str]:
+        """List the files under an allowlisted directory prefix.
+
+        Returns a mapping of ``relative_path -> kind`` for every file directly
+        under ``prefix`` that exists. Only the allowlisted prefix is scanned;
+        anything else is rejected (fail-closed).
+
+        Raises:
+            WorkspaceError: If ``prefix`` is not on the prefix allowlist.
+        """
+        if prefix not in self._layout.prefixes:
+            raise WorkspaceError(f"Prefix {prefix!r} is not on the workspace allowlist.")
+        base = self._resolve(prefix)
+        if not base.is_dir():
+            return {}
+        result: dict[str, str] = {}
+        for child in base.iterdir():
+            if child.is_file():
+                rel = f"{prefix}{child.name}"
+                result[rel] = WorkspaceEntryKind.FILE.value
+        return result
 
     def write_workspace_file(self, relative_path: str, content: str) -> WorkspaceEntry:
         """Write an allowlisted file, rejecting any other path.
@@ -122,13 +150,10 @@ class Workspace:
         fail-closed — no implicit directory creation.
 
         Raises:
-            WorkspaceError: If the path is not on the allowlist, its parent
-                directory does not exist, or the write fails.
+            WorkspaceError: If the path is not allowed, its parent directory
+                does not exist, or the write fails.
         """
-        if not self._layout.allows_file(relative_path):
-            raise WorkspaceError(
-                f"Path {relative_path!r} is not on the workspace file allowlist."
-            )
+        self._require_allowed(relative_path)
         path = self._resolve(relative_path)
         if not path.parent.is_dir():
             raise WorkspaceError(

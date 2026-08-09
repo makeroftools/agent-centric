@@ -18,6 +18,14 @@ from .capability import Capability
 from .critical_path import CpmMetric, CpmVersion, CriticalPathResult, CriticalPathStage
 from .email import EmailList, EmailMessage, EmailVersion, MessageSummary
 from .handoff import HandoffSchema, is_valid_schema, validate_handoff
+from .intake import (
+    AcceptResult,
+    BillDraft,
+    DraftProposals,
+    InboxEntry,
+    InboxInventory,
+    IntakeVersion,
+)
 from .manifest import AgentComponentManifest, AgentManifestVersion
 from .model import (
     ModelProvider,
@@ -120,4 +128,10 @@ __all__ = [
     "RegistryBill",
     "AgendaEntry",
     "CalendarProjection",
+    "AcceptResult",
+    "BillDraft",
+    "DraftProposals",
+    "InboxEntry",
+    "InboxInventory",
+    "IntakeVersion",
 ]

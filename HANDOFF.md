@@ -6,7 +6,7 @@ handoff.
 ## Current git state — clean and synced
 - **Branch:** `main`; **working tree clean**; **ahead of `origin/main` by 1 commit** (Volley 025).
 - **HEAD:** `feat(volley-025): bills registry + calendar agenda` (Volleys 022–024 were pushed last round).
-- **Version:** **0.25.0** (kernel milestone aligned with volley depth: 25 volleys delivered).
+- **Version:** **0.26.0** (kernel milestone aligned with volley depth: 26 volleys delivered).
 - **Pushed:** Volleys 022, 023, 024 are on `origin/main` (pushed for backup on direction).
   Volley 025 is local-only. The standing `do NOT push` rule holds; pushes happen
   only on explicit instruction.
@@ -22,7 +22,7 @@ Governing docs: `PRINCIPLES.md` (non-negotiable rules), `KERNEL.md` (v0 freeze
 note), `STATUS.md` (volley-by-volley history + correctness evidence),
 `README.md` (GitHub frontpage, now enriched with a working Zed ACP quickstart).
 
-## What v0.25 includes (Volleys 001–025)
+## What v0.26 includes (Volleys 001–026)
 - Deterministic `AgentManager`: register, select (name/capability), run,
   summarise, replay.
 - Versioned contracts; capability registry; local tools (`to_upper`, `add`,
@@ -100,7 +100,7 @@ uv run mypy src      # clean, 50 source files
 - `pytest` → **370 passed**; `ruff` clean; `mypy` clean (50 files).
 
 ## Where we are / next steps
-- Kernel is **complete at v0.25** in code. Volley 022 is **accepted**; Volley 023
+- Kernel is **complete at v0.26** in code. Volley 022 is **accepted**; Volley 023
   (workspace) has its completion report submitted and awaits Architect acceptance;
   Volley 024 (read-only email) and Volley 025 (bills registry + calendar) are
   implemented with reports awaiting review. Volleys 022–024 were pushed for

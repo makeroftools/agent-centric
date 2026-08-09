@@ -7,10 +7,12 @@ Public surface is intentionally minimal. The primary entry point is
 
 from .agents import ToolContext, ToolRequest, ToolResult
 from .contracts import (
+    AcceptResult,
     AgendaEntry,
     AgentComponentManifest,
     AgentManifestVersion,
     Bill,
+    BillDraft,
     BillLine,
     BillsRegistry,
     BillsRegistryVersion,
@@ -23,11 +25,15 @@ from .contracts import (
     CpmVersion,
     CriticalPathResult,
     CriticalPathStage,
+    DraftProposals,
     EmailList,
     EmailMessage,
     EmailVersion,
     Failure,
     FailureReason,
+    InboxEntry,
+    InboxInventory,
+    IntakeVersion,
     MessageSummary,
     ModelProvider,
     ModelProviderError,
@@ -76,6 +82,7 @@ from .control_plane import (
     EmailTools,
     ExecutionBackend,
     InProcessBackend,
+    IntakeOps,
     LocalMcpServer,
     McpProtocolError,
     McpTimeoutError,
@@ -91,6 +98,7 @@ from .control_plane import (
     WorkspaceError,
     analyse_critical_path,
     ensure_bills_layout,
+    ensure_intake_layout,
 )
 from .providers import (
     EmailGatewayError,
@@ -199,4 +207,12 @@ __all__ = [
     "RegistryBill",
     "AgendaEntry",
     "CalendarProjection",
+    "AcceptResult",
+    "BillDraft",
+    "DraftProposals",
+    "InboxEntry",
+    "InboxInventory",
+    "IntakeVersion",
+    "IntakeOps",
+    "ensure_intake_layout",
 ]

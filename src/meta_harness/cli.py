@@ -30,17 +30,17 @@ from meta_harness.contracts.pipeline import PipelineVersion, SequentialCompositi
 from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
 from meta_harness.contracts.tool import ToolDescriptor
 from meta_harness.contracts.workspace import WorkspaceLayout
-from meta_harness.control_plane.bills_registry import (
-    BillsOps,
-    bills_tool_impls,
-    ensure_bills_layout,
-)
+from meta_harness.control_plane.bills_registry import BillsOps, bills_tool_impls
 from meta_harness.control_plane.email_tools import EmailTools, email_tool_impls
+from meta_harness.control_plane.intake import IntakeOps, ensure_intake_layout, intake_tool_impls
 from meta_harness.control_plane.tools import (
     BILLS_CALENDAR_DESCRIPTOR,
     BILLS_REGISTRY_READ_DESCRIPTOR,
     EMAIL_FETCH_DESCRIPTOR,
     EMAIL_LIST_DESCRIPTOR,
+    INBOX_INVENTORY_DESCRIPTOR,
+    INTAKE_ACCEPT_DESCRIPTOR,
+    INTAKE_DRAFTS_DESCRIPTOR,
     ToolRegistry,
 )
 from meta_harness.control_plane.trajectory_store import FileTrajectoryStore
@@ -119,6 +119,20 @@ _BILLS_REGISTRY_MANIFEST = AgentComponentManifest(
     ),
 )
 
+_INTAKE_MANIFEST = AgentComponentManifest(
+    version=AgentManifestVersion.V2,
+    name="intake",
+    entry_point="meta_harness.agents.intake:create_intake_agent",
+    description="Runs a dump-intake operation: inventory, drafts, or explicit accept.",
+    declared_capabilities=frozenset(
+        {
+            Capability(name="intake.inventory", version="1"),
+            Capability(name="intake.draft_bills", version="1"),
+            Capability(name="intake.accept_bills", version="1"),
+        }
+    ),
+)
+
 # A demo bills registry, written into the allowlisted workspace so the demo
 # calendar task projects a deterministic agenda.
 _DEMO_REGISTRY = {
@@ -158,6 +172,7 @@ _DEMO_MANIFESTS = (
     _WORKSPACE_MANIFEST,
     _EMAIL_MANIFEST,
     _BILLS_REGISTRY_MANIFEST,
+    _INTAKE_MANIFEST,
 )
 
 
@@ -264,6 +279,14 @@ def _demo_tasks() -> tuple[TaskSpecification, ...]:
             envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
             granted_tools=("bills_calendar",),
         ),
+        TaskSpecification(
+            version=TaskSpecVersion.V5,
+            task_id="demo-intake",
+            agent_name="intake",
+            payload={"operation": "drafts"},
+            envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
+            granted_tools=("intake_drafts",),
+        ),
     )
 
 
@@ -284,6 +307,14 @@ def _bills_tool_descriptor(name: str) -> ToolDescriptor:
         return BILLS_CALENDAR_DESCRIPTOR
     raise AssertionError(f"unknown bills-registry tool {name!r}")
 
+def _intake_tool_descriptor(name: str) -> ToolDescriptor:
+    """Return the ToolDescriptor for an intake tool name."""
+    return {
+        "inbox_inventory": INBOX_INVENTORY_DESCRIPTOR,
+        "intake_drafts": INTAKE_DRAFTS_DESCRIPTOR,
+        "intake_accept": INTAKE_ACCEPT_DESCRIPTOR,
+    }[name]
+
 
 def _manager(store_dir: Path) -> AgentManager:
     # The stub model provider makes the demo-model task deterministic and
@@ -295,7 +326,7 @@ def _manager(store_dir: Path) -> AgentManager:
     # ensure_bills_layout so the registry can live on the allowlist.
     workspace = Workspace(
         store_dir / "workspace",
-        ensure_bills_layout(
+        ensure_intake_layout(
             WorkspaceLayout(files=("invoices/note.txt",), directories=("invoices",))
         ),
     )
@@ -329,6 +360,24 @@ def _manager(store_dir: Path) -> AgentManager:
     bills_ops = BillsOps(workspace)
     for _name, _impl in bills_tool_impls(bills_ops).items():
         tools.register_impl(_bills_tool_descriptor(_name), _impl)
+    # A deterministic dump-intake inbox for the demo-intake task. The inbox and
+    # registry are on the allowlist; drafts stay unverified until an explicit
+    # accept (which the demo does not perform).
+    workspace.create_workspace_dir("inbox")
+    workspace.write_workspace_file(
+        "inbox/bill1.json",
+        json.dumps(
+            {
+                "vendor": "PostCo",
+                "amount_cents": 1200,
+                "due_date": "2026-09-15",
+                "notes": "demo inbox draft",
+            }
+        ),
+    )
+    intake_ops = IntakeOps(workspace)
+    for _name, _impl in intake_tool_impls(intake_ops).items():
+        tools.register_impl(_intake_tool_descriptor(_name), _impl)
     manager = AgentManager(store=FileTrajectoryStore(store_dir), tools=tools)
     for manifest in _DEMO_MANIFESTS:
         manager.register(manifest)

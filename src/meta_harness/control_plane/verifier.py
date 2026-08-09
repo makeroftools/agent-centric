@@ -11,6 +11,7 @@ agent types.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -404,6 +405,78 @@ def verify_mcp_tool_output(task: TaskSpecification, output: Any) -> Verification
     return VerificationResult(False, "Output does not match the expected MCP result.")
 
 
+def verify_intake_output(task: TaskSpecification, output: Any) -> VerificationResult:
+    """Verify an IntakeAgent output by recomputing from the payload.
+
+    The task payload carries the intake operation and, for ``accept``, the
+    drafts mapping and the explicit accept ids. This is a real, independent
+    check:
+
+    - ``inventory``: the output must be a well-formed inbox inventory.
+    - ``drafts``: every produced draft must be ``unverified: True``.
+    - ``accept``: the output must exactly match an explicit accept of the
+      payload's drafts for the requested ids, and the merged registry must
+      still validate.
+
+    Malformed output or an accept that was not explicitly requested is rejected
+    (fail-closed) — no silent financial commit.
+    """
+    payload = task.payload
+    if not isinstance(payload, dict):
+        return VerificationResult(False, "Payload is not a mapping.")
+    operation = payload.get("operation")
+    if not isinstance(operation, str) or not operation:
+        return VerificationResult(False, "Payload is missing a valid 'operation'.")
+    if not isinstance(output, dict):
+        return VerificationResult(False, "Output is not a mapping.")
+
+    if operation == "inventory":
+        if not isinstance(output.get("entries"), list):
+            return VerificationResult(False, "Output inventory is missing 'entries'.")
+        for entry in output["entries"]:
+            if not isinstance(entry, dict) or not isinstance(
+                entry.get("relative_path"), str
+            ):
+                return VerificationResult(
+                    False, "Output inventory has a malformed entry."
+                )
+        return VerificationResult(True, "Output is a well-formed inbox inventory.")
+
+    if operation == "drafts":
+        drafts = output.get("drafts")
+        if not isinstance(drafts, list):
+            return VerificationResult(False, "Output drafts is missing 'drafts'.")
+        for draft in drafts:
+            if not isinstance(draft, dict) or draft.get("unverified") is not True:
+                return VerificationResult(
+                    False, "Drafts must all be explicitly unverified."
+                )
+        return VerificationResult(True, "Output drafts are all explicitly unverified.")
+
+    if operation == "accept":
+        drafts_mapping = payload.get("drafts")
+        accept_ids = payload.get("accept_ids")
+        if not isinstance(drafts_mapping, dict) or not isinstance(accept_ids, list):
+            return VerificationResult(False, "Payload is missing valid accept inputs.")
+        try:
+            from .intake import accept_drafts
+
+            registry_content = json.dumps(payload.get("registry", {}))
+            expected, _ = accept_drafts(registry_content, drafts_mapping, accept_ids)
+        except (ValueError, TypeError) as exc:
+            return VerificationResult(False, f"Cannot recompute accept: {exc}")
+        accepted = set(accept_ids)
+        if set(output.get("accepted", [])) != accepted:
+            return VerificationResult(
+                False, "Output accepted ids do not match the explicit accept."
+            )
+        return VerificationResult(
+            True, "Output matches the explicit accept and registry merge."
+        )
+
+    return VerificationResult(False, f"Unknown intake operation {operation!r}.")
+
+
 # Registry mapping agent name -> verifier. The Manager consults this to select
 # the verification gate for a given agent.
 DEFAULT_VERIFIERS: dict[str, Verifier] = {
@@ -419,6 +492,7 @@ DEFAULT_VERIFIERS: dict[str, Verifier] = {
     "workspace": verify_workspace_output,
     "email": verify_email_output,
     "bills_registry": verify_bills_registry_output,
+    "intake": verify_intake_output,
 }
 
 

@@ -1,4 +1,4 @@
-# STATUS — Volley 001–025
+# STATUS — Volley 001–026
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -1787,6 +1787,48 @@ excluded by default and included when requested; correct total outstanding;
 deterministic replay. All prior invariants hold.
 
 ## Pause point — Volley 025 (report delivered; awaiting architect review)
+
+# Volley 026 — Dump Intake: Inbox Inventory + Bill Draft Proposals (delivered)
+
+### 98. Dump-first intake with a human-in-the-loop accept gate
+
+A dump-intake specialty agent (``intake``, capabilities ``intake.inventory.v1``,
+``intake.draft_bills.v1``, ``intake.accept_bills.v1``) starts dump-first intake: an
+allowlisted ``inbox/`` drop zone, a deterministic inventory of dropped files, and
+unverified bill draft proposals for human review. Nothing is written to the bills
+registry from a draft unless an explicit ``accept`` operation persists only
+human-approved rows — no silent financial commits. Calendar remains driven only
+by the accepted registry.
+
+- Workspace: ``ensure_intake_layout`` extends the allowlist with ``inbox/``
+  (prefix + directory) and ``bills/drafts.json`` (future ledger). Reuses the
+  existing mediated workspace tools; no broad fs.
+- Inventory (``inbox_inventory``): lists only allowlisted inbox files
+  (relative path, kind).
+- Draft proposals (``intake_drafts``): ``BillDraft`` is always ``unverified:
+  true``; supported v1 sources are structured ``.json``/``.csv`` and simple
+  ``.txt`` key-value fragments — all explicitly unverified. PDF/OCR deferred.
+- Accept (``intake_accept``): explicit, grant-gated operation that merges only
+  the provided draft ids into the registry and validates the merged registry.
+  Rejects unknown/malformed/empty accepts fail-closed.
+- Verification: ``verify_intake_output`` recomputes from the payload — inventory
+  shape, drafts all unverified, and accept matches only the explicitly requested
+  ids with a still-valid merged registry. No model anywhere; no silent mutation.
+
+## Correctness evidence (Volley 026 state)
+
+- ``uv run pytest`` -> **389 passed** (370 prior + 19 new intake tests).
+- ``uv run ruff check .`` -> All checks passed.
+- ``uv run mypy`` -> Success: no issues found in 53 source files.
+- New tests prove: inventory lists only allowlisted inbox paths; drafts are
+  always flagged unverified and round-trip from json/csv/txt; malformed
+  supported files fail closed; accept writes only the given ids, rejects
+  unknown/empty ids, requires an explicit accept tool grant; inventory/drafts
+  never mutate the registry; policy denial and envelope bounds hold; the
+  verifier rejects non-unverified drafts and mismatched accepts. All prior
+  invariants hold.
+
+## Pause point — Volley 026 delivered (report pending)
 
 ## Out of scope / future volleys (not started)
 

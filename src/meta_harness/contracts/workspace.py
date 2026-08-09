@@ -61,16 +61,27 @@ class WorkspaceLayout:
     Attributes:
         files: The relative paths of files the agent may read/write.
         directories: The relative paths of directories the agent may list/create.
+        prefixes: Optional directory prefixes (e.g. ``"inbox/"``) under which
+            any file may be read/listed. This supports drop-zone patterns where
+            files cannot be enumerated in advance, while staying bounded to the
+            allowlisted prefixes (no broad filesystem access).
     """
 
     files: tuple[str, ...] = ()
     directories: tuple[str, ...] = ()
+    prefixes: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for name in self.files:
             _require_relative_path(name, "file path")
         for name in self.directories:
             _require_relative_path(name, "directory path")
+        for prefix in self.prefixes:
+            _require_relative_path(prefix, "directory prefix")
+            if not prefix.endswith("/"):
+                raise ValueError(
+                    f"Directory prefix must end with '/', got {prefix!r}."
+                )
 
     def allows_file(self, relative_path: str) -> bool:
         """Return True if ``relative_path`` is on the file allowlist."""
@@ -79,6 +90,16 @@ class WorkspaceLayout:
     def allows_directory(self, relative_path: str) -> bool:
         """Return True if ``relative_path`` is on the directory allowlist."""
         return relative_path in self.directories
+
+    def allows_path(self, relative_path: str) -> bool:
+        """Return True if ``relative_path`` is an allowed file or under a prefix.
+
+        A path is allowed if it is exactly on the file allowlist or starts with
+        one of the allowlisted directory prefixes.
+        """
+        if self.allows_file(relative_path):
+            return True
+        return any(relative_path.startswith(prefix) for prefix in self.prefixes)
 
 
 @dataclass(frozen=True)

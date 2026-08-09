@@ -24,6 +24,7 @@ from .execution import (
     InProcessBackend,
     SubprocessBackend,
 )
+from .intake import IntakeOps, ensure_intake_layout
 from .manager import AgentManager, Outcome
 from .mcp_tools import (
     LocalMcpServer,
@@ -73,6 +74,8 @@ __all__ = [
     "EmailTools",
     "BillsOps",
     "ensure_bills_layout",
+    "IntakeOps",
+    "ensure_intake_layout",
     "TrajectoryStore",
     "TrajectoryStoreError",
     "CorruptTrajectoryError",

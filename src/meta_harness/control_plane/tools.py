@@ -161,6 +161,33 @@ BILLS_CALENDAR_DESCRIPTOR = ToolDescriptor(
     execution_semantics="allowlisted, deterministic, side-effect free",
 )
 
+INBOX_INVENTORY_DESCRIPTOR = ToolDescriptor(
+    version=ToolVersion.V1,
+    name="inbox_inventory",
+    description="List the allowlisted inbox entries.",
+    input_schema={},
+    output_schema="mapping",
+    execution_semantics="allowlisted, deterministic, side-effect free",
+)
+
+INTAKE_DRAFTS_DESCRIPTOR = ToolDescriptor(
+    version=ToolVersion.V1,
+    name="intake_drafts",
+    description="Produce unverified draft bill proposals from inbox files.",
+    input_schema={},
+    output_schema="mapping",
+    execution_semantics="allowlisted, deterministic, production of unverified drafts",
+)
+
+INTAKE_ACCEPT_DESCRIPTOR = ToolDescriptor(
+    version=ToolVersion.V1,
+    name="intake_accept",
+    description="Explicitly accept only the given draft ids into the registry.",
+    input_schema={"drafts": "mapping", "accept_ids": "list"},
+    output_schema="mapping",
+    execution_semantics="explicit write, least-privilege, human-in-the-loop",
+)
+
 
 class ToolRegistry:
     """Deterministic registry and executor of concrete tools.
