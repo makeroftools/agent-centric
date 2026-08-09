@@ -1,4 +1,4 @@
-# STATUS — Volley 001–012
+# STATUS — Volley 001–013
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -44,7 +44,14 @@ other action — it is mediated through a Manager-owned tool, only usable when
 explicitly granted, bounded by resource envelopes, subject to policy, recorded
 in the durable trajectory, and never sufficient on its own for a verified
 result. Model output is explicitly untrusted until it passes the mandatory
-verification gate.
+verification gate. For Volley 013, agent execution can now be isolated in a
+separate subprocess: each agent's generator loop runs in a child process that
+cannot corrupt Manager state, while every authority — tool mediation, policy,
+envelopes, trajectory recording, verification, and cancellation — remains in the
+Manager. This isolation is strictly additive and does **not** relax verification
+or mediation: a child crash, non-zero exit, or protocol violation is always an
+explicit, audited, fail-closed failure and never a verified success. The
+in-process backend remains the default and is unchanged for unit tests.
 
 ---
 
@@ -924,6 +931,58 @@ agent / capability, verification failure after model use failing closed,
 provider failure being explicit and fail-closed, and deterministic replayable
 trajectories under the stub provider.
 
+# Volley 013 — Subprocess Isolation for Agent Execution (delivered)
+
+### 44. Execution-backend abstraction
+
+Agent execution now flows through a uniform :class:`AgentSession` interface
+(``next_step(sent) -> step|request|result``, ``cancel(reason)``, ``close()``)
+provided by an :class:`ExecutionBackend`. The Manager ``__init__`` accepts an
+optional ``backend`` (default :class:`InProcessBackend`); all existing
+authority — tool mediation, policy, envelopes, trajectory recording,
+verification, cancellation — stays in the Manager and is unchanged.
+
+### 45. Versioned IPC protocol
+
+:class:`SubprocessBackend` spawns a child (``python -u -m
+meta_harness.control_plane.worker``) and communicates over a minimal, explicit,
+versioned JSON-lines protocol (``IPC_VERSION = "agent-ipc.v1"``) on the child's
+stdin/stdout. Codecs serialize every sent value (``None``/``ToolResult``/
+``Cancelled``) and every yield (``AgentStep``/``ToolRequest``); tool grants are
+shipped to the child as descriptors, never executable implementations.
+
+### 46. Child does only the agent loop
+
+The child (:mod:`meta_harness.control_plane.worker`) runs solely the agent's
+generator loop. It never mediates tools, applies policy, enforces envelopes,
+records the trajectory, or verifies output. It is intentionally not imported by
+the Manager, so it is executed once as ``__main__`` and class identity across
+the IPC boundary is preserved.
+
+### 47. Fail-closed child crash handling
+
+A child crash, non-zero exit, or protocol violation surfaces as an explicit,
+audited :class:`AGENT_ERROR` failure with child stderr captured for diagnostics.
+No verified success is ever produced from an unverified agent outcome.
+
+### 48. Cancellation termination as last resort
+
+Cooperative cancellation is delivered across the boundary as a ``Cancelled``
+send. If the child ignores it, the Manager enforces the envelope and terminates
+the child as a last resort, recording the cancellation honestly.
+
+## Correctness evidence (Volley 013 state)
+
+- ``uv run pytest`` → **190 passed** (180 prior + 10 new subprocess tests).
+- ``uv run ruff check .`` → All checks passed.
+- ``uv run mypy`` → Success: no issues found in 30 source files.
+- The tool round-trip (`case_tool` with `to_upper` granted, subprocess explicit)
+  returns `HELLO`; ungranted tools are still rejected by the Manager.
+- Trajectories from subprocess runs are deterministic, coherent, ordered, and
+  reconstructible, matching the in-process backend.
+- Child crash and protocol-violation tests fail closed with an audited
+  ``AGENT_ERROR``; policy is still enforced before any isolated work begins.
+
 ## Out of scope / future volleys (not started)
 
 - Agent-initiated spawning or delegation
@@ -942,3 +1001,7 @@ trajectories under the stub provider.
 - Production provider credential management
 - MCP/A2A integration
 - Distribution, networking, and cloud concerns
+- Container/VM isolation of agent execution
+- Network isolation / seccomp / sandbox profiles for agent execution
+- Hardening subprocess isolation further (e.g. resource limits, seccomp, OS
+  sandboxing) beyond the current process-boundary isolation

@@ -167,6 +167,43 @@ def create_unguarded_model() -> UnguardedModelAgent:
     return UnguardedModelAgent()
 
 
+class CrashAfterStepAgent:
+    """Agent that yields a step, then raises inside its generator.
+
+    Simulates a child crash mid-run: the subprocess fails, and the Manager must
+    report an explicit, audited ``AGENT_ERROR`` (fail-closed), never a success.
+    """
+
+    def __call__(
+        self, payload: Any, step_budget: int, tools: ToolContext
+    ) -> Generator[AgentStep, None, AgentResult]:
+        yield AgentStep(description="about to crash")
+        raise RuntimeError("simulated agent crash")
+
+
+class UnsupportedYieldAgent:
+    """Misbehaving agent that yields a value the IPC codec cannot encode.
+
+    This simulates a protocol violation on the child side. The child reports it
+    back to the Manager as an error, and the Manager must fail closed with an
+    explicit ``AGENT_ERROR``.
+    """
+
+    def __call__(
+        self, payload: Any, step_budget: int, tools: ToolContext
+    ) -> Generator[AgentStep, None, AgentResult]:
+        yield {"not": "a step"}  # type: ignore[return-value]
+        return AgentResult(output="ignored")
+
+
+def create_crash_after_step() -> CrashAfterStepAgent:
+    return CrashAfterStepAgent()
+
+
+def create_unsupported_yield() -> UnsupportedYieldAgent:
+    return UnsupportedYieldAgent()
+
+
 COOPERATIVE_CANCEL_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="cooperative_cancel",
@@ -221,4 +258,18 @@ UNGUARDED_MODEL_AGENT_MANIFEST = AgentComponentManifest(
     name="unguarded_model",
     entry_point="tests.fake_agent:create_unguarded_model",
     description="Agent that blindly requests the llm_complete tool regardless of grant.",
+)
+
+CRASH_AFTER_STEP_MANIFEST = AgentComponentManifest(
+    version=AgentManifestVersion.V2,
+    name="crash_after_step",
+    entry_point="tests.fake_agent:create_crash_after_step",
+    description="Agent that crashes mid-run after yielding a step.",
+)
+
+UNSUPPORTED_YIELD_MANIFEST = AgentComponentManifest(
+    version=AgentManifestVersion.V2,
+    name="unsupported_yield",
+    entry_point="tests.fake_agent:create_unsupported_yield",
+    description="Agent that yields an un-encodable value (protocol violation).",
 )

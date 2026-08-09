@@ -36,12 +36,14 @@ src/meta_harness/
     interface.py       Thin agent interface (Agent protocol)
     counter.py         Concrete agent (character counter)
     reverse.py         Concrete agent (string reverser)
-  control_plane/
-    manager.py         Deterministic Agent Manager
-    registry.py        In-process deterministic Registry
-    tools.py           Deterministic tools + ToolRegistry (Manager-controlled)
-    verifier.py        Mandatory verification gate
-    trajectory_store.py Durable, append-only trajectory store
+    control_plane/
+      manager.py         Deterministic Agent Manager
+      registry.py        In-process deterministic Registry
+      tools.py           Deterministic tools + ToolRegistry (Manager-controlled)
+      verifier.py        Mandatory verification gate
+      trajectory_store.py Durable, append-only trajectory store
+      execution.py       Agent session + execution backends (in-process/subprocess)
+      worker.py          Subprocess worker entry (runs only the agent loop)
   agents/
     interface.py       Thin agent interface (Agent protocol)
     counter.py         Concrete agent (character counter)
@@ -286,6 +288,31 @@ fact:
 - Partial work already recorded remains in the trajectory; the outcome is an
   explicit failure.
 
+## Subprocess isolation for agent execution
+
+By default agents run in the Manager's own process. For stronger isolation, an
+agent can be run in a separate child process via the `SubprocessBackend`:
+
+```python
+from meta_harness import AgentManager, SubprocessBackend
+
+m = AgentManager(backend=SubprocessBackend())
+```
+
+- Only the agent's generator loop crosses the process boundary. Every authority
+  — tool mediation, policy, envelopes, trajectory recording, verification, and
+  cancellation — stays in the Manager.
+- The Manager and child communicate over a minimal, explicit, versioned
+  JSON-lines protocol (`agent-ipc.v1`) on the child's stdin/stdout. Tool grants
+  are shipped as descriptors, never executable implementations.
+- Isolation is strictly additive: it never relaxes verification or mediation. A
+  child crash, non-zero exit, or protocol violation is an explicit, audited,
+  fail-closed `AGENT_ERROR` failure — never a verified success.
+- Cooperative cancellation is delivered across the boundary; if the child
+  ignores it, the Manager enforces the envelope and terminates the child as a
+  last resort.
+- The in-process backend remains the default and is unchanged for unit tests.
+
 ## Quick start
 
 ```sh
@@ -360,6 +387,18 @@ demonstrate that:
 - Exceeding either a stage or the overall limit aborts cleanly with a durable,
   inspectable record.
 - Verified hand-off and ordering invariants remain intact.
+
+The subprocess tests (`tests/test_subprocess.py`) demonstrate that:
+
+- A subprocess run produces the same verified result and coherent, ordered,
+  reconstructible trajectory as the in-process backend.
+- Mediated tool access still works across the boundary: granted tools round-trip
+  and ungranted tools are still rejected by the Manager.
+- A child crash or protocol violation is an explicit, audited, fail-closed
+  `AGENT_ERROR` failure, never a success.
+- Envelope exhaustion and cooperative cancellation work across the boundary,
+  including terminating a non-cooperative child as a last resort.
+- Policy is still enforced before any isolated work begins.
 
 ## License
 

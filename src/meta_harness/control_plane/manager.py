@@ -23,19 +23,15 @@ an explicit ``INTERNAL`` failure rather than returning an unrecorded result.
 
 from __future__ import annotations
 
-import contextlib
-import importlib
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
-from typing import Any, cast
+from typing import Any
 
 from ..agents.interface import (
-    Agent,
     AgentResult,
     AgentStep,
-    Cancelled,
     ToolContext,
     ToolRequest,
     ToolResult,
@@ -48,6 +44,11 @@ from ..contracts.result import Failure, FailureReason, VerifiedResult, VerifiedR
 from ..contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
 from ..contracts.tool import ToolDescriptor
 from ..contracts.trajectory import StepRecord, StepStatus, Trajectory, TrajectoryVersion
+from .execution import (
+    AgentExecutionError,
+    ExecutionBackend,
+    InProcessBackend,
+)
 from .registry import Registry
 from .tools import ToolExecutionError, ToolRegistry
 from .trajectory_store import (
@@ -133,11 +134,13 @@ class AgentManager:
         registry: Registry | None = None,
         store: TrajectoryStore | None = None,
         tools: ToolRegistry | None = None,
+        backend: ExecutionBackend | None = None,
     ) -> None:
         self._registry = registry or Registry()
         self._verifiers = verifiers or VerifierRegistry()
         self._store: TrajectoryStore = store or InMemoryTrajectoryStore()
         self._tools = tools or ToolRegistry()
+        self._backend = backend or InProcessBackend()
         self._run_seq = 0
         # Serializes durable step appends so a parallel composition's trajectory
         # stays coherent and append-only under concurrent stage threads.
@@ -167,18 +170,6 @@ class AgentManager:
             return self._registry.get_by_name(task.agent_name)
         assert task.capability is not None
         return self._registry.get_by_capability(task.capability)
-
-    def _instantiate(self, manifest: AgentComponentManifest) -> Agent:
-        """Resolve and call the agent factory from the manifest entry point."""
-        module_path, _, attr = manifest.entry_point.rpartition(":")
-        if not module_path or not attr:
-            raise ValueError(f"Malformed entry point: {manifest.entry_point!r}")
-        module = importlib.import_module(module_path)
-        factory = getattr(module, attr)
-        agent = factory()
-        if not callable(agent):
-            raise TypeError(f"Agent factory {manifest.entry_point!r} did not return a callable.")
-        return cast(Agent, agent)
 
     def _build_tool_context(self, task: TaskSpecification) -> ToolContext:
         """Build the ToolContext of tools explicitly granted to the agent.
@@ -926,9 +917,11 @@ class AgentManager:
                     ),
                     None,
                 )
-            agent = self._instantiate(manifest)
+            session = self._backend.session(
+                manifest, task.payload, envelope.max_steps, tool_context
+            )
         except Exception as exc:  # noqa: BLE001 - converted to explicit failure
-            message = f"Failed to instantiate agent: {exc}"
+            message = f"Failed to start agent: {exc}"
             return (
                 self._deferred_or_recorded_failure(
                     task, agent_name, trajectory_id, steps,
@@ -937,7 +930,6 @@ class AgentManager:
                 None,
             )
 
-        generator = agent(task.payload, envelope.max_steps, tool_context)
         stage_step = 0
         final_output: Any = None
         produced_output = False
@@ -975,15 +967,8 @@ class AgentManager:
                     "Failed to persist agent cancellation step.", stage_worker,
                 ), None
             # Deliver the cooperative signal without trusting its outcome.
-            try:
-                generator.send(Cancelled(reason=message))
-            except StopIteration:
-                pass  # the agent cooperated and exited cleanly
-            except Exception:  # noqa: BLE001 - cancellation is advisory only
-                pass  # a non-cooperative agent does not change the outcome
-            finally:
-                with contextlib.suppress(Exception):  # noqa: BLE001 - best-effort release
-                    generator.close()
+            session.cancel(reason=message)
+            session.close()
             return _fail(reason, message)
 
         try:
@@ -1034,16 +1019,16 @@ class AgentManager:
 
                 step_start = time.monotonic()
                 try:
-                    item = generator.send(sent)
-                except StopIteration as stop:
+                    item = session.next_step(sent)
+                except AgentExecutionError as exc:
+                    return _fail(
+                        FailureReason.AGENT_ERROR,
+                        f"Agent execution failed: {exc}",
+                    )
+
+                if isinstance(item, AgentResult):
                     # The agent returned its final result.
-                    result = stop.value
-                    if not isinstance(result, AgentResult):
-                        return _fail(
-                            FailureReason.AGENT_ERROR,
-                            "Agent returned a non-AgentResult value.",
-                        )
-                    final_output = result.output
+                    final_output = item.output
                     produced_output = True
                     break
 
