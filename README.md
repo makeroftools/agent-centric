@@ -50,7 +50,11 @@ src/meta_harness/
   contracts/
     capability.py      Capability (structured, versioned)
     pipeline.py        Sequential composition (pipeline) contract
+    parallel.py        Parallel composition (fan-out / join) contract
+    critical_path.py   CPM result contract (versioned)
     tool.py            ToolDescriptor (versioned tool contract)
+  control_plane/
+    critical_path.py   Read-only critical-path analysis (pure function)
 tests/                 Invariant tests (control plane, registry, contracts, store)
 examples/demo.py       End-to-end demonstration
 ```
@@ -174,6 +178,26 @@ sequential `pipeline`:
 - One coherent, durable trajectory records `parallel group begin`, per-stage,
   and `parallel group end` markers. Step appends are serialised under a lock so
   the trajectory stays ordered and reconstructible.
+
+## Read-only critical-path (CPM) analysis (`cpm.v1`)
+
+The control plane also exposes `analyse_critical_path(plan, recorded_steps=None,
+parent_envelope=None)` as a deterministic, **read-only observational aid**: it
+identifies the longest dependency chain (the critical path) and per-stage
+slack over a composition, and optionally over recorded consumption from a
+completed trajectory.
+
+- Accepts a `SequentialComposition`, `ParallelComposition`, or a
+  `TaskSpecification` (bare compositions require an explicit `parent_envelope`).
+- **Cost metric:** default is the effective stage `max_steps` (stage envelope if
+declared, else parent); `recorded_steps` overrides per stage.
+- Sequential: the full ordered sequence is the path; length is the sum of the
+  costs; every stage is on the path with zero slack. Parallel: the path is the
+  greatest-cost stage(s); length is that greatest cost; other stages have slack
+  `max_cost - stage_cost` (ties all on the path).
+- CPM is **purely observational**: it never mutates tasks, envelopes,
+  schedules, or resource accounting, and never alters scheduling, execution, or
+  resource enforcement.
 
 ## Mediated tool access
 

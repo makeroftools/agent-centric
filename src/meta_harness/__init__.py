@@ -10,6 +10,10 @@ from .contracts import (
     AgentComponentManifest,
     AgentManifestVersion,
     Capability,
+    CpmMetric,
+    CpmVersion,
+    CriticalPathResult,
+    CriticalPathStage,
     Failure,
     FailureReason,
     ParallelComposition,
@@ -38,6 +42,7 @@ from .control_plane import (
     Registry,
     ToolExecutionError,
     ToolRegistry,
+    analyse_critical_path,
 )
 
 __all__ = [
@@ -52,8 +57,13 @@ __all__ = [
     "AgentComponentManifest",
     "AgentManifestVersion",
     "Capability",
+    "CpmMetric",
+    "CpmVersion",
+    "CriticalPathResult",
+    "CriticalPathStage",
     "Failure",
     "FailureReason",
+    "analyse_critical_path",
     "ParallelComposition",
     "ParallelVersion",
     "PipelineVersion",

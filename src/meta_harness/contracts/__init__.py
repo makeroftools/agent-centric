@@ -6,6 +6,7 @@ version so that it can evolve without silently breaking the correctness model.
 """
 
 from .capability import Capability
+from .critical_path import CpmMetric, CpmVersion, CriticalPathResult, CriticalPathStage
 from .handoff import HandoffSchema, is_valid_schema, validate_handoff
 from .manifest import AgentComponentManifest, AgentManifestVersion
 from .parallel import ParallelComposition, ParallelVersion
@@ -23,6 +24,10 @@ from .trajectory import (
 
 __all__ = [
     "Capability",
+    "CpmMetric",
+    "CpmVersion",
+    "CriticalPathResult",
+    "CriticalPathStage",
     "HandoffSchema",
     "is_valid_schema",
     "validate_handoff",

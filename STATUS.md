@@ -1,4 +1,4 @@
-# STATUS — Volley 001–010
+# STATUS — Volley 001–011
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -32,7 +32,12 @@ composition (fan-out / join) was introduced: independent stages run
 concurrently under full governance, any failure cancels siblings and fails
 closed with a complete audit record, and success yields a deterministic join
 — without weakening isolation, verification, auditability, or fail-closed
-behaviour.
+behaviour. For Volley 011, the first critical-path analysis was introduced:
+critical-path (CPM) analysis is a deterministic, read-only observational aid
+owned by the control plane — it identifies the longest dependency chain and
+per-stage slack over a composition and, optionally, recorded consumption from
+a completed trajectory, but it is explicitly observational only at this stage
+and does not alter scheduling, execution, or resource enforcement.
 
 ---
 
@@ -783,12 +788,75 @@ aborting before any thread runs, policy and per-stage envelopes and
 verification and tool mediation applying per stage, and the trajectory being
 coherent, durable, and reconstructible.
 
+# Volley 011 — Read-Only Critical Path Analysis (delivered)
+
+### 36. Versioned CPM result contract
+
+- `CpmVersion.V1 = "cpm.v1"`, `CpmMetric` (`ENVELOPE_MAX_STEPS`,
+  `RECORDED_STEPS`)
+- `CriticalPathStage(stage, agent, cost, slack, on_critical_path)`
+- `CriticalPathResult(version, kind, metric, path, path_length, stages,
+  assumptions)`, validated in `__post_init__`: `kind` must be
+  `sequential` | `parallel`; at least one stage; unsupported versions rejected.
+  All dataclasses are frozen and immutable.
+
+### 37. Pure critical-path analysis
+
+- `analyse_critical_path(plan, recorded_steps=None, parent_envelope=None)`
+- Accepts `SequentialComposition`, `ParallelComposition`, or a
+  `TaskSpecification` (which uses its own `envelope`). A bare composition
+  requires an explicit `parent_envelope`; unsupported plans raise `TypeError`.
+
+**Cost metric (documented and deterministic):** default is the effective stage
+`max_steps` (the stage's `stage_envelope` if declared, else the parent).
+`recorded_steps: dict[int, int]` overrides per-stage with recorded consumption
+from a completed trajectory.
+
+**Path semantics:**
+- Sequential: the critical path is the full ordered sequence; path length is the
+  sum of stage costs; every stage is on the path with zero slack.
+- Parallel: the critical path is the stage(s) of greatest cost; path length is
+  the greatest cost; every other stage has slack `max_cost - stage_cost`. Ties
+  (multiple stages at the maximum cost) are all placed on the path.
+
+**Read-only guarantee:** CPM is a pure, side-effect-free function. It never
+mutates tasks, envelopes, schedules, or resource accounting, and never runs or
+re-orders stages. In line with the directive, it is **observational only at this
+stage**: it does not alter scheduling, execution, or resource enforcement.
+
+### 38. Exports
+
+- `meta_harness.contracts`: `CpmMetric, CpmVersion, CriticalPathResult,
+  CriticalPathStage`
+- `meta_harness.control_plane`: `analyse_critical_path`
+- `meta_harness`: re-exports the above.
+
+## Correctness evidence (Volley 011 state)
+
+Automated tests prove all invariants. All pass:
+
+```
+161 passed in 6.0s          # pytest (was 149)
+All checks passed!          # ruff
+Success: no issues found    # mypy (strict, 25 source files)
+```
+
+New `tests/test_critical_path.py` (12 tests) proves the sequential full-order
+path and its length as the sum of costs, task-with-pipeline plans, the parallel
+most-costly stage with correct slack, equal-cost stages all on the path, single
+stage (parallel and sequential) edge cases, the `recorded_steps` override
+flipping the critical path, deterministic results for identical inputs, no
+input mutation, side-effect-free purity, and `TypeError` on unsupported plans.
+
 ## Out of scope / future volleys (not started)
 
 - Agent-initiated spawning or delegation
 - Cyclic or dynamic workflows
 - Durable workflow engines / FBP networks
-- Full Critical Path Method implementation
+- CPM-driven scheduling: using the critical path to actively re-order,
+  re-prioritize, or re-allocate resources during execution (analysis now
+  exists; execution is still purely Manager-driven and CPM remains
+  observational)
 - Dynamic re-allocation of budgets at runtime
 - Complex economic or priority-based scheduling
 - External messaging

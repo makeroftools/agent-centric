@@ -5,6 +5,7 @@ deterministic, enforces resource bounds hard, records a full trajectory, and
 never accepts a result without passing the mandatory verification gate.
 """
 
+from .critical_path import analyse_critical_path
 from .manager import AgentManager, Outcome
 from .registry import Registry
 from .tools import ToolExecutionError, ToolRegistry
@@ -22,6 +23,7 @@ from .verifier import VerificationResult, Verifier
 __all__ = [
     "Verifier",
     "VerificationResult",
+    "analyse_critical_path",
     "AgentManager",
     "Outcome",
     "Registry",
