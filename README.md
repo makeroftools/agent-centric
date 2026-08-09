@@ -9,9 +9,13 @@ trajectory**, and mediate every tool and model call. Agents can only *request*
 capabilities; the Manager is the sole authority that grants, executes, records,
 and verifies.
 
-This is the **v0.20 preliminary release** — a minimal but complete harness,
-built across Volleys 001–020. It reflects what exists in the codebase, not an
+This is the **v0.21 preliminary release** — a minimal but complete harness,
+built across Volleys 001–021. It reflects what exists in the codebase, not an
 aspirational platform.
+
+```
+Zed (Agent Panel) ──ACP──▶ meta-harness-acp (adapter) ──▶ AgentManager ──▶ agents / tools / MCP
+```
 
 ---
 
@@ -34,7 +38,7 @@ governs every decision in this repository.
 
 ---
 
-## What v0.20 includes
+## What v0.21 includes
 
 | Area | What's implemented |
 | --- | --- |
@@ -48,6 +52,7 @@ governs every decision in this repository.
 | **Isolation** | Optional subprocess execution; silent-hang bounded, forced-kill recorded, no zombies. |
 | **Observability** | Deterministic trajectory summary, replay verification, and read-only critical-path (CPM) analysis. |
 | **Operator CLI** | `meta-harness` with `run`, `summarise`, and `replay-verify`. |
+| **Editor bridge** | Thin ACP adapter (`meta-harness-acp`) so Meta-Harness runs as an External Agent in Zed. |
 
 Full history and guarantees live in [`STATUS.md`](STATUS.md) and
 [`KERNEL.md`](KERNEL.md).
@@ -56,7 +61,7 @@ Full history and guarantees live in [`STATUS.md`](STATUS.md) and
 
 ## What it is not
 
-These are **explicit non-goals** for v0.20 (see also [`KERNEL.md`](KERNEL.md)):
+These are **explicit non-goals** for v0.21 (see also [`KERNEL.md`](KERNEL.md)):
 
 - Messaging fabric (ZeroMQ / NATS / etc.) or any network transport.
 - Multi-tenancy, distribution, or cloud concerns.
@@ -66,6 +71,7 @@ These are **explicit non-goals** for v0.20 (see also [`KERNEL.md`](KERNEL.md)):
 - Bit-exact replay of live non-deterministic model calls (replay applies to
   deterministic configurations only).
 - A UI or operator dashboard.
+- Full coding-agent parity in the editor bridge (see the Zed notes below).
 
 These are deferred intentionally: the harness prefers adapters and backends over
 changing Manager semantics.
@@ -88,12 +94,119 @@ Run the end-to-end demo or the operator CLI:
 ```sh
 uv run python examples/demo.py
 uv run meta-harness run          # run the deterministic demo task set
-uv run meta-harness summarise demo-pipeline#4
-uv run meta-harness replay-verify demo-pipeline#4
 ```
 
 The `meta-harness` CLI is **local-only and fail-closed** — it never starts a
 network service, never reads credentials, and exits non-zero on any failure.
+
+---
+
+## Use from Zed (ACP)
+
+Meta-Harness can appear as an **External Agent** in Zed via the Agent Client
+Protocol (ACP). The adapter (`meta_harness.acp`) is a client-facing transport
+only: every prompt is routed through the Manager, and no ACP path can produce a
+verified success that bypasses it.
+
+### 1. Configure the agent server
+
+Add an entry to Zed's `settings.json` (Zed → Settings → Agents). The command
+must match the real console script name, `meta-harness-acp`:
+
+```json
+{
+  "agent_servers": {
+    "Meta-Harness": {
+      "type": "custom",
+      "command": "uv",
+      "args": ["run", "meta-harness-acp"]
+    }
+  }
+}
+```
+
+If `uv run` is not desirable, point directly at the console script in the venv
+(the name is `meta-harness-acp`, same as above).
+
+### 2. Start a thread
+
+Open the **Agents Panel** in Zed (Agent Panel), choose **Meta-Harness** as the
+agent, and start a new thread. Each thread opens an ACP session; one process
+owns one Manager that is shared across sessions in that process.
+
+### 3. Try these prompts (v0.21 routing)
+
+Prompts map to deterministic demo tasks. The expected outputs below were
+produced by a live run:
+
+| You type | Manager routing | Verified output |
+| --- | --- | --- |
+| `hello world` | reverse (default) | `dlrow olleh` |
+| `upper hello` | mediated `to_upper` tool | `HELLO` |
+| `counter hello l` | counter agent | `2` |
+| `model hello` | stub model (`llm_complete`) | `stub response` |
+
+Each reply streams back the **verified output and its trajectory id** (or a
+clear fail-closed message).
+
+### v1 limits (honest)
+
+- **Not a full coding agent.** No diffs, slash commands, nested sub-agents, or
+  rich following — this is a thin governed harness bridge.
+- **Cancel-during-run is limited.** `session/cancel` is tracked per session, but
+  the synchronous Manager run is not pre-emptible mid-turn; a cancel arriving
+  before the next prompt causes it to be refused at start.
+- **The Manager still governs.** No filesystem, shell, or arbitrary tool access
+  is exposed from the ACP layer — only what the Manager grants for that task.
+  Model/MCP output stays untrusted until verified.
+
+---
+
+## Operator path
+
+`meta-harness` is a local, fail-closed operator CLI.
+
+### Commands
+
+| Command | Purpose |
+| --- | --- |
+| `run` | Run the deterministic demo task set and persist trajectories. |
+| `summarise <id>` | Print a trajectory's deterministic summary. |
+| `replay-verify <id>` | Re-run the demo task and verify equivalence. |
+
+`--store <dir>` (a global option, before the command) selects the durable
+trajectory store. When omitted it defaults to `examples/.trajectories`.
+
+```sh
+uv run meta-harness --store examples/.trajectories run
+```
+
+Output:
+
+```
+demo-counter: VERIFIED output=4 trajectory_id=demo-counter#0
+demo-reverse: VERIFIED output='cirtnec-tnega' trajectory_id=demo-reverse#1
+demo-tool: VERIFIED output='MEDIATED TOOLS' trajectory_id=demo-tool#2
+demo-model: VERIFIED output='stub response' trajectory_id=demo-model#3
+demo-pipeline: VERIFIED output='NOITISOPMOC LAITNEUQES' trajectory_id=demo-pipeline#4
+```
+
+Trajectories are durable, append-only JSON-lines files (hex-named `.jsonl`)
+under the store directory.
+
+### One "inspect a run" flow
+
+```sh
+# 1. run the demo set and note a trajectory id
+uv run meta-harness run
+# 2. summarise a run by id
+uv run meta-harness summarise demo-reverse#1
+# 3. re-run it and verify the fresh trajectory is equivalent
+uv run meta-harness replay-verify demo-reverse#1
+```
+
+`summarise` and `replay-verify` are fail-closed: a missing id exits non-zero
+with a clear message.
 
 ---
 
@@ -164,6 +277,47 @@ explicit `__all__` and don't leak internal helpers.
 
 ---
 
+## Extending (short)
+
+The kernel is designed to grow via **adapters and backends**, not by changing
+Manager semantics. Start with the versioned contracts in
+[`meta_harness/contracts/`](src/meta_harness/contracts) and the freeze note in
+[`KERNEL.md`](KERNEL.md).
+
+Register an agent (a manifest + a callable factory) and grant a tool on the
+task:
+
+```python
+from meta_harness import AgentManager
+from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+
+manager = AgentManager()
+manager.register(AgentComponentManifest(
+    version=AgentManifestVersion.V2,
+    name="case_tool",
+    entry_point="meta_harness.agents.case_tool:create_case_tool_agent",
+    description="Uppercases a string via a mediated tool.",
+))
+
+# Grant the "to_upper" tool for this task; the Manager mediates and records it.
+task = TaskSpecification(
+    version=TaskSpecVersion.V3,
+    task_id="upper-demo",
+    agent_name="case_tool",
+    payload={"text": "hello"},
+    envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
+    granted_tools=("to_upper",),
+)
+
+outcome = manager.run(task)
+print(outcome.result.output if outcome.result else outcome.failure)  # HELLO
+```
+
+All of the code above is real and smoke-checked against the public API.
+
+---
+
 ## Correctness posture
 
 - **Model and MCP outputs are untrusted until verified.** A tool returning data
@@ -192,7 +346,7 @@ The correctness guarantees are demonstrated across the test suite
 ```
 PRINCIPLES.md          Non-negotiable governing rules
 KERNEL.md              v0 kernel freeze note (guarantees, out-of-scope, versioning)
-STATUS.md              Volley history 001–020 + correctness evidence
+STATUS.md              Volley history 001–021 + correctness evidence
 src/meta_harness/
   __init__.py          Public surface
   contracts/           Versioned, strongly-typed contracts
@@ -200,6 +354,7 @@ src/meta_harness/
   control_plane/       AgentManager, registry, tools, verifier,
                        trajectory store, backends, summary, replay, CPM
   providers/           Stub + optional real model providers
+  acp.py               Thin ACP adapter (Zed bridge)
 tests/                 Invariant tests across every volley
 examples/demo.py       End-to-end demonstration
 ```
@@ -224,48 +379,6 @@ This applies identically to:
 
 Policy can allow or deny any tool, agent, or capability. Tool calls consume the
 task step budget. Enforcement stays entirely in the Manager.
-
----
-
-## Use from Zed (ACP)
-
-Meta-Harness can appear as an **External Agent** in Zed via the Agent Client
-Protocol (ACP). The adapter (`meta_harness.acp`) is a client-facing transport
-only: every prompt is routed through the Manager, and no ACP path can produce a
-verified success that bypasses it.
-
-Add an agent server to Zed's `settings.json` (Zed → Settings → Agents):
-
-```json
-{
-  "agent_servers": {
-    "Meta-Harness": {
-      "type": "custom",
-      "command": "uv",
-      "args": ["run", "meta-harness-acp"]
-    }
-  }
-}
-```
-
-Or launch it directly (e.g. for the Agent Panel thread):
-
-```sh
-uv run meta-harness-acp     # or: uv run python -m meta_harness.acp
-```
-
-What works in v1:
-
-- **initialize** — honest, minimal capabilities (all optional features disabled).
-- **session/new** — a new session id; one process owns one Manager.
-- **session/prompt** — a prompt maps to a deterministic demo task (`reverse`,
-  `upper`, `counter`, or the stub `model`) run by the Manager; the verified
-  result (or a clear fail-closed failure) and trajectory id are streamed back.
-- **session/cancel** — tracked per session. Mid-run cancellation of the
-  synchronous Manager run is not pre-emptible in v1 (documented limitation).
-
-No filesystem, shell, or arbitrary tool access is exposed from the ACP layer —
-only what the Manager grants for that task.
 
 ---
 
