@@ -1254,6 +1254,23 @@ backends over changing Manager semantics.
   and a clear message.
 - No execution invariants changed; all prior tests continue to pass.
 
+## Pause point — v0 checkpoint (Volley 017 accepted)
+
+Volley 017 was accepted by the architect as the close of the v0 kernel phase.
+This is a deliberate **pause point**; the kernel is frozen at v0 and no further
+volley is in flight.
+
+- **Push:** the standing instruction is to **not push**; local ``main`` remains
+  ahead of ``origin/main`` and unpushed. The v0 checkpoint is preserved locally.
+- **Next theme:** not yet selected. Candidate Volley 018 themes under
+  consideration (all additive, adapter/backend-first, per ``KERNEL.md``):
+  - a thin MCP adapter over the public surface,
+  - stronger sandboxing / subprocess isolation hardening,
+  - real-provider hardening (beyond the optional adapter),
+  - a first non-deterministic workload under tighter verification.
+- **Constraint:** do not expand composition or introduce messaging unless
+  explicitly directed. No execution invariants change while paused.
+
 ## Out of scope / future volleys (not started)
 
 See ``KERNEL.md`` for the authoritative v0 freeze boundaries. Highlights:
