@@ -24,6 +24,7 @@ from .execution import (
 )
 from .manager import AgentManager, Outcome
 from .registry import Registry
+from .replay import ReplayDiff, ReplayResult, ReplayVersion, verify_replay
 from .summary import summarise_stored, summarise_trajectory
 from .tools import ToolExecutionError, ToolRegistry
 from .trajectory_store import (
@@ -67,4 +68,8 @@ __all__ = [
     "PolicySummary",
     "summarise_stored",
     "summarise_trajectory",
+    "ReplayResult",
+    "ReplayDiff",
+    "ReplayVersion",
+    "verify_replay",
 ]

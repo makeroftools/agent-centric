@@ -1,4 +1,4 @@
-# STATUS — Volley 001–014
+# STATUS — Volley 001–015
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -58,7 +58,16 @@ operators: it projects a durable trajectory into a minimal, stable summary
 policy decision, cancellations) without ever mutating the audit log or altering
 execution. The summary is computed on demand, is side-effect free, and is
 strictly additive — it does not relax verification, mediation, or any
-control-plane invariant.
+control-plane invariant. For Volley 015, deterministic trajectory replay
+verification is now available: a task can be re-executed under the same
+deterministic configuration and the freshly produced trajectory checked for
+equivalence against the stored one (same terminal outcome class / failure
+reason, same verified output, same ordered step sequence — multiset for
+concurrent parallel work — same agents, and same tool grant/rejection pattern),
+excluding wall-clock timings. Replay is fail-closed and read-only with respect
+to the original trajectory: it never mutates the audit record, and it applies
+only to deterministic configurations (deterministic agents and stub/fake
+providers).
 
 ---
 
@@ -1036,6 +1045,60 @@ semantics are unchanged.
 - Summaries are deterministic and do not modify stored trajectory data;
   missing optional fields (no policy, no model, no parallel) are handled
   cleanly.
+
+# Volley 015 — Deterministic Trajectory Replay Verification (delivered)
+
+### 53. Versioned replay result contract
+
+A new immutable, versioned contract (:mod:`meta_harness.contracts.replay`,
+``replay.v1``) captures the outcome of a replay check: ``ReplayResult``
+(passed, original/replayed trajectory ids, structured ``ReplayDiff`` list, and a
+human-readable message). The result is fail-closed: it reports ``passed`` only
+when every equivalence rule holds, and otherwise carries structured diffs.
+
+### 54. Explicit equivalence definition
+
+:mod:`meta_harness.control_plane.replay` documents and enforces the equivalence
+rules. A replayed run is equivalent to the stored trajectory when: (1) the
+terminal outcome class matches (verified, or failed with the same failure
+reason); (2) the verified output matches; (3) the ordered step sequence matches
+for single-agent and sequential runs, while for parallel runs the *multiset* of
+concurrent step signatures is compared (order among concurrent work is excluded
+because it interleaves in the append-only log) and boundary markers are always
+compared in order; (4) the ordered unique agents match; and (5) the per-tool
+grant / rejection pattern matches. Wall-clock timings and other
+non-deterministic fields are explicitly excluded and never cause a false
+failure.
+
+### 55. Manager replay API
+
+``AgentManager.replay(task, trajectory_id)`` re-executes ``task`` under the
+same deterministic configuration and compares the freshly produced trajectory
+to the stored one, returning a ``ReplayResult``. The replayed run is recorded
+under a new trajectory id; the original trajectory is never mutated. An
+interrupted stored trajectory is reported as non-passing (it is not a
+deterministic configuration).
+
+### 56. Read-only, additive, fail-closed
+
+Replay never mutates the original audit record and never relaxes verification
+or mediation. It applies only to deterministic configurations (deterministic
+agents and stub/fake providers); true stochastic model providers are out of
+scope for bit-exact replay.
+
+## Correctness evidence (Volley 015 state)
+
+- ``uv run pytest`` → **220 passed** (206 prior + 14 new replay tests).
+- ``uv run ruff check .`` → All checks passed.
+- ``uv run mypy`` → Success: no issues found in 34 source files.
+- Successful single-agent, sequential, parallel, and model-agent runs replay as
+  equivalent.
+- Failure paths (verification failure, policy rejection, tool denial, step-limit
+  cancellation) replay as equivalent when the setup is identical.
+- Deliberate divergences (different output, different step sequence) are
+  detected and reported with structured diffs.
+- The original trajectory bytes/records are unchanged by replay; non-equivalent
+  timings do not cause false failures.
 
 ## Out of scope / future volleys (not started)
 

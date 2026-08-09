@@ -18,6 +18,7 @@ from .model import (
 from .parallel import ParallelComposition, ParallelVersion
 from .pipeline import PipelineVersion, SequentialComposition, StageSpec
 from .policy import Policy, PolicyDecision, PolicyVersion
+from .replay import ReplayDiff, ReplayResult, ReplayVersion
 from .result import Failure, FailureReason, VerifiedResult, VerifiedResultVersion
 from .summary import (
     ModelSummary,
@@ -74,6 +75,9 @@ __all__ = [
     "FailureReason",
     "VerifiedResult",
     "VerifiedResultVersion",
+    "ReplayResult",
+    "ReplayDiff",
+    "ReplayVersion",
     "TrajectorySummary",
     "SummaryVersion",
     "RunState",

@@ -40,6 +40,7 @@ from ..contracts.handoff import HandoffSchema, validate_handoff
 from ..contracts.manifest import AgentComponentManifest
 from ..contracts.pipeline import StageSpec
 from ..contracts.policy import Policy
+from ..contracts.replay import ReplayDiff, ReplayResult, ReplayVersion
 from ..contracts.result import Failure, FailureReason, VerifiedResult, VerifiedResultVersion
 from ..contracts.summary import TrajectorySummary
 from ..contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
@@ -51,6 +52,7 @@ from .execution import (
     InProcessBackend,
 )
 from .registry import Registry
+from .replay import verify_replay
 from .summary import summarise_stored
 from .tools import ToolExecutionError, ToolRegistry
 from .trajectory_store import (
@@ -178,6 +180,46 @@ class AgentManager:
         if stored is None:
             return None
         return summarise_stored(stored)
+
+    def replay(self, task: TaskSpecification, trajectory_id: str) -> ReplayResult:
+        """Re-execute a task and verify the new trajectory is equivalent.
+
+        Re-runs ``task`` under the same deterministic configuration (registered
+        agents, tools, and provider) and compares the freshly produced trajectory
+        to the stored one identified by ``trajectory_id`` under the documented
+        equivalence definition (see :mod:`meta_harness.control_plane.replay`).
+
+        This is read-only with respect to the *original* trajectory: it never
+        mutates the stored audit record. The replayed run is recorded under a new
+        trajectory id. Returns a fail-closed :class:`ReplayResult`; the original
+        trajectory is never modified.
+
+        Raises:
+            ValueError: If no trajectory with ``trajectory_id`` is stored.
+        """
+        original = self._store.load(trajectory_id)
+        if original is None:
+            raise ValueError(f"No stored trajectory with id {trajectory_id!r}.")
+        outcome = self.run(task)
+        if outcome.trajectory_id is None:
+            # The replayed run could not be durably recorded; fail closed.
+            return ReplayResult(
+                version=ReplayVersion.V1,
+                passed=False,
+                original_trajectory_id=trajectory_id,
+                replayed_trajectory_id=None,
+                diffs=(
+                    ReplayDiff(
+                        field="replay",
+                        original=None,
+                        replayed="replayed run was not durably recorded",
+                    ),
+                ),
+                message="The replayed run could not be durably recorded.",
+            )
+        replayed = self._store.load(outcome.trajectory_id)
+        assert replayed is not None
+        return verify_replay(original, replayed)
 
     def _resolve(self, task: TaskSpecification) -> AgentComponentManifest | None:
         """Resolve the agent manifest for a task by name or capability."""

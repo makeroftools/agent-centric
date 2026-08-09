@@ -45,6 +45,7 @@ src/meta_harness/
       execution.py       Agent session + execution backends (in-process/subprocess)
       worker.py          Subprocess worker entry (runs only the agent loop)
       summary.py         Deterministic, side-effect-free trajectory summary builder
+      replay.py          Deterministic trajectory replay verification
   agents/
     interface.py       Thin agent interface (Agent protocol)
     counter.py         Concrete agent (character counter)
@@ -58,6 +59,7 @@ src/meta_harness/
     model.py           Model-provider contract (versioned)
     tool.py            ToolDescriptor (versioned tool contract)
     summary.py         Trajectory Summary contract (versioned)
+    replay.py          Replay verification result contract (versioned)
   control_plane/
     critical_path.py   Read-only critical-path analysis (pure function)
   providers/
@@ -338,6 +340,31 @@ summary.cancellations  # count of recorded cancelled steps
 - It is strictly additive and read-only with respect to execution: it does not
   alter scheduling, resource enforcement, verification, or mediation.
 
+## Deterministic trajectory replay verification
+
+A deterministic run can be re-executed and checked for equivalence against its
+stored trajectory via `AgentManager.replay(task, trajectory_id)`:
+
+```python
+result = manager.replay(task, trajectory_id)
+result.passed   # True iff the replayed run is equivalent under the documented rules
+result.diffs    # structured divergences when it fails
+```
+
+Equivalence is defined explicitly and excludes wall-clock timings:
+
+- Same terminal outcome class (verified, or failed with the same failure
+  reason) and same verified output when successful.
+- Same ordered step sequence for single-agent and sequential runs; for parallel
+  runs, the multiset of concurrent step signatures is compared (order among
+  concurrent work is excluded) while boundary markers are compared in order.
+- Same agents/selections and same tool grant/rejection pattern.
+
+Replay is fail-closed and read-only with respect to the original trajectory: it
+never mutates the audit record, and it applies only to deterministic
+configurations (deterministic agents and stub/fake providers). An interrupted
+stored trajectory is reported as non-passing.
+
 ## Quick start
 
 ```sh
@@ -434,6 +461,16 @@ The summary tests (`tests/test_summary.py`) demonstrate that:
 - Summaries are deterministic and never modify stored trajectory data.
 - Missing optional fields (no policy, no model, no parallel) are handled
   cleanly.
+
+The replay tests (`tests/test_replay.py`) demonstrate that:
+
+- Successful single-agent, sequential, parallel, and model-agent runs replay as
+  equivalent.
+- Failure paths (verification failure, policy rejection, tool denial, step-limit
+  cancellation) replay as equivalent when the setup is identical.
+- Deliberate divergences are detected and reported with structured diffs.
+- The original trajectory is never mutated by replay, and non-equivalent
+  timings do not cause false failures.
 
 ## License
 
