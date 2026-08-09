@@ -9,8 +9,8 @@ trajectory**, and mediate every tool and model call. Agents can only *request*
 capabilities; the Manager is the sole authority that grants, executes, records,
 and verifies.
 
-This is the **v0.21 preliminary release** — a minimal but complete harness,
-built across Volleys 001–021. It reflects what exists in the codebase, not an
+This is the **v0.22 preliminary release** — a minimal but complete harness,
+built across Volleys 001–022. It reflects what exists in the codebase, not an
 aspirational platform.
 
 ```
@@ -38,19 +38,20 @@ governs every decision in this repository.
 
 ---
 
-## What v0.21 includes
+## What v0.22 includes
 
 | Area | What's implemented |
 | --- | --- |
 | **Manager** | Deterministic `AgentManager`: register, select (by name or capability), run, summarise, replay. |
-| **Contracts** | Versioned, strongly-typed contracts for tasks, results, trajectories, tools, pipelines, parallel, policy, model, summary, replay, and critical path. |
+| **Contracts** | Versioned, strongly-typed contracts for tasks, results, trajectories, tools, pipelines, parallel, policy, model, summary, replay, critical path, and bills. |
 | **Registry** | In-process, deterministic agent registry with capability-based selection. |
-| **Tools** | Local tools (`to_upper`, `add`) plus a Manager-mediated **MCP adapter**; grants and policy enforced by the Manager. |
+| **Tools** | Local tools (`to_upper`, `add`, `bill_total`) plus a Manager-mediated **MCP adapter**; grants and policy enforced by the Manager. |
 | **Model path** | Mediated `llm_complete` tool; deterministic stub by default; an optional, hardened real-provider path. |
 | **Composition** | Sequential pipelines, parallel fan-out/join, and nested sequential-as-parallel — all Manager-orchestrated. |
 | **Governance** | Policy (allow/deny), hard resource envelopes, cooperative cancellation, per-step budgets. |
 | **Isolation** | Optional subprocess execution; silent-hang bounded, forced-kill recorded, no zombies. |
 | **Observability** | Deterministic trajectory summary, replay verification, and read-only critical-path (CPM) analysis. |
+| **Specialty agents** | A narrow **bills** agent: structured bills in, deterministic totals out, real verification (recompute; rejects bad/missing data). |
 | **Operator CLI** | `meta-harness` with `run`, `summarise`, and `replay-verify`. |
 | **Editor bridge** | Thin ACP adapter (`meta-harness-acp`) so Meta-Harness runs as an External Agent in Zed. |
 
@@ -189,6 +190,7 @@ demo-reverse: VERIFIED output='cirtnec-tnega' trajectory_id=demo-reverse#1
 demo-tool: VERIFIED output='MEDIATED TOOLS' trajectory_id=demo-tool#2
 demo-model: VERIFIED output='stub response' trajectory_id=demo-model#3
 demo-pipeline: VERIFIED output='NOITISOPMOC LAITNEUQES' trajectory_id=demo-pipeline#4
+demo-bills: VERIFIED output={'line_subtotal_cents': 2750, 'discount_cents': 275, 'taxable_amount_cents': 2475, 'tax_cents': 124, 'grand_total_cents': 2599} trajectory_id=demo-bills#5
 ```
 
 Trajectories are durable, append-only JSON-lines files (hex-named `.jsonl`)
@@ -346,7 +348,7 @@ The correctness guarantees are demonstrated across the test suite
 ```
 PRINCIPLES.md          Non-negotiable governing rules
 KERNEL.md              v0 kernel freeze note (guarantees, out-of-scope, versioning)
-STATUS.md              Volley history 001–021 + correctness evidence
+STATUS.md              Volley history 001–022 + correctness evidence
 src/meta_harness/
   __init__.py          Public surface
   contracts/           Versioned, strongly-typed contracts
@@ -385,9 +387,56 @@ task step budget. Enforcement stays entirely in the Manager.
 ## Versioning / preliminary-release status
 
 The package is versioned as a kernel milestone aligned with volley depth:
-**`0.21.0`** (21 volleys delivered). This is a **preliminary release** — the
-v0.21 kernel is complete but APIs may evolve before a stable 1.0. See
+**`0.22.0`** (22 volleys delivered). This is a **preliminary release** — the
+v0.22 kernel is complete but APIs may evolve before a stable 1.0. See
 [`KERNEL.md`](KERNEL.md) for the versioning scheme and freeze boundaries.
+
+---
+
+## The bills specialty agent (Volley 022)
+
+A narrow, deterministic **bills** agent accepts a structured bill in and produces
+deterministic totals out. Money math is integer-only (minor units / cents) with
+an explicit half-up rounding rule, so totals are exact and replayable — no cloud
+model is involved. Verification is real: the Manager independently recomputes
+the expected totals from the payload and rejects bad or missing data.
+
+```python
+from meta_harness import AgentManager
+from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+
+manager = AgentManager()
+manager.register(AgentComponentManifest(
+    version=AgentManifestVersion.V2,
+    name="bills",
+    entry_point="meta_harness.agents.bills:create_bills_agent",
+    description="Computes deterministic totals for a structured bill.",
+))
+
+task = TaskSpecification(
+    version=TaskSpecVersion.V5,
+    task_id="bill-demo",
+    agent_name="bills",
+    payload={
+        "lines": [
+            {"description": "widget", "quantity": 2, "unit_price_cents": 1000},
+            {"description": "gadget", "quantity": 3, "unit_price_cents": 250},
+        ],
+        "discount_bps": 1000,
+        "tax_bps": 500,
+    },
+    envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
+    granted_tools=("bill_total",),
+)
+
+outcome = manager.run(task)
+print(outcome.result.output if outcome.result else outcome.failure)  # grand_total_cents=2599
+```
+
+A malformed bill (empty/missing `lines`, non-integer or negative quantities or
+prices, out-of-range rates) is rejected explicitly and fails closed — it never
+produces a verified result.
 
 ---
 

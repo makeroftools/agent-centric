@@ -1,8 +1,8 @@
-# STATUS — Volley 001–021
+# STATUS — Volley 001–022
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
-**Updated:** 2026-08-08
+**Updated:** 2026-08-09
 
 ## Adherence to the Overriding Correctness Directive
 
@@ -87,7 +87,14 @@ codes, and a short kernel freeze note (``KERNEL.md``) records what the v0 kernel
 guarantees, what is intentionally out of scope, and that further work should
 prefer adapters and backends over changing Manager semantics. No execution
 invariants changed; this volley prioritises clarity, stability, and operator
-usability.
+usability. For Volley 022, the first specialty agent was introduced: a narrow
+bills agent that accepts structured bills in and produces deterministic totals
+out, with real verification (independent recompute) that rejects bad or missing
+data. Money math is integer-only (cents) with an explicit half-up rounding rule,
+so totals are exact and replayable; the ``bill_total`` tool is Manager-mediated
+and grantable; and every failure mode is an explicit, audited, fail-closed
+failure. No PDF, email, workspace ontology, or Mail-in-a-Box was introduced, and
+the volley did not expand into doc organization or email.
 
 ---
 
@@ -1491,6 +1498,68 @@ volley is in flight.
 documented) — not full coding-agent parity.
 - **Resumption:** further volleys will not be opened until a concrete use
 drives the next need (scoped to adapters/backends per ``KERNEL.md``).
+
+# Volley 022 — Accounting Bills v1 (delivered)
+
+### 78. Structured bills in → deterministic totals out
+
+A narrow **bills specialty agent** (``bills``) accepts a structured bill and
+produces deterministic totals. The input/output contracts live in
+``meta_harness.contracts.bill`` (``BillLine``, ``Bill``, ``BillTotal``,
+``bill.v1``). Money math is integer-only (minor units / cents) with an explicit
+half-up rounding rule, so totals are exact and replayable — no cloud model is
+involved. This is the first specialty agent and the first step of the planned
+bills → workspace → email sequence; it is deliberately narrow and low
+blast-radius.
+
+### 79. Real verification (recompute; reject bad/missing data)
+
+``verify_bills_output`` is a real, independent check: it re-derives the expected
+``BillTotal`` from the task payload and compares it to the agent's output. Bad
+or missing payload data (empty/missing ``lines``, non-integer or negative
+quantities/prices, out-of-range rates) is rejected explicitly at the contract
+boundary and by the verifier, so a malformed bill can never produce a verified
+result.
+
+### 80. Manager-mediated tool (``bill_total``)
+
+A deterministic, side-effect-free ``bill_total`` tool is registered in the
+``ToolRegistry`` and mediated exactly like every other tool: only usable when
+explicitly granted, executed and recorded by the Manager, and never sufficient
+on its own for a verified result (the verification gate still recomputes).
+
+### 81. Fail closed; full trajectory; tests; docs; version 0.22.0
+
+All failure modes (bad/missing data, verification mismatch, ungranted tool,
+envelope exhaustion, policy denial, subprocess crash) are explicit, audited
+failures. Every step and tool call is recorded in the durable trajectory.
+Package version is bumped to **0.22.0**. No PDF, no email, no workspace
+ontology, and no Mail-in-a-Box are introduced; this volley does not expand into
+doc organization or email.
+
+## Correctness evidence (Volley 022 state)
+
+- ``uv run pytest`` → **293 passed** (267 prior + 26 new bills tests).
+- ``uv run ruff check .`` → All checks passed.
+- ``uv run mypy`` → Success: no issues found in 40 source files.
+- New tests prove: exact integer money math and half-up rounding; rejection of
+  bad/missing bill data; real verification (recompute) that rejects a wrong or
+  malformed output; the mediated ``bill_total`` tool (granted path verifies,
+  ungranted path still verifies locally, tool interaction recorded); hard step
+  envelopes; policy denial; deterministic replay; and subprocess-backend
+  isolation. All prior invariants hold.
+
+## Pause point — Volley 022 accepted
+
+Volley 022 was accepted; the bills specialty agent is delivered and the planned
+sequence (bills → workspace → email) is one step in. No volley is in flight.
+
+- **Status:** v0.22 baseline (bills specialty agent, deterministic totals).
+- **Push:** the standing instruction is to **not push**; local ``main`` is ahead
+  of ``origin/main`` and unpushed.
+- **Next (planned, not started):** Volley 023 — local workspace layout +
+  allowlisted mediated file tools (issued by the Architect only after 022 is
+  accepted).
 
 ## Out of scope / future volleys (not started)
 

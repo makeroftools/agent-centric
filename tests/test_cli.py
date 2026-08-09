@@ -34,12 +34,13 @@ class TestCliRun:
         assert "demo-tool: VERIFIED" in out
         assert "demo-model: VERIFIED" in out
         assert "demo-pipeline: VERIFIED" in out
+        assert "demo-bills: VERIFIED" in out
 
     def test_run_persists_trajectories(self, tmp_path: Path) -> None:
         _run(tmp_path, "run")
         # Each demo task produced a durable trajectory file.
         files = list(tmp_path.iterdir())
-        assert len(files) == 5
+        assert len(files) == 6
 
 
 class TestCliSummarise:

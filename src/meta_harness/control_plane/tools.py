@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from ..contracts.bill import Bill, BillTotal
 from ..contracts.model import ModelProvider, ModelProviderError
 from ..contracts.tool import ToolDescriptor, ToolVersion
 from .mcp_tools import McpToolAdapter, McpToolError
@@ -39,6 +40,19 @@ def _add(a: int, b: int) -> int:
     return a + b
 
 
+def _bill_total(bill: dict[str, Any]) -> dict[str, int]:
+    """Compute a bill's totals from a mapping, rejecting bad/missing data.
+
+    Raises:
+        ToolExecutionError: If the bill mapping is malformed or incomplete.
+    """
+    try:
+        parsed = Bill.from_mapping(bill)
+    except ValueError as exc:
+        raise ToolExecutionError(f"Invalid bill: {exc}") from exc
+    return BillTotal.compute(parsed).as_mapping()
+
+
 TO_UPPER_DESCRIPTOR = ToolDescriptor(
     version=ToolVersion.V1,
     name="to_upper",
@@ -54,6 +68,15 @@ ADD_DESCRIPTOR = ToolDescriptor(
     description="Return the sum of two integers.",
     input_schema={"a": "int", "b": "int"},
     output_schema="int",
+    execution_semantics="pure, deterministic, side-effect free",
+)
+
+BILL_TOTAL_DESCRIPTOR = ToolDescriptor(
+    version=ToolVersion.V1,
+    name="bill_total",
+    description="Compute deterministic totals for a structured bill.",
+    input_schema={"bill": "mapping"},
+    output_schema="mapping",
     execution_semantics="pure, deterministic, side-effect free",
 )
 
@@ -81,10 +104,12 @@ class ToolRegistry:
         self._impls: dict[str, Callable[..., Any]] = {
             "to_upper": _to_upper,
             "add": _add,
+            "bill_total": _bill_total,
         }
         self._descriptors: dict[str, ToolDescriptor] = {
             "to_upper": TO_UPPER_DESCRIPTOR,
             "add": ADD_DESCRIPTOR,
+            "bill_total": BILL_TOTAL_DESCRIPTOR,
         }
         if model_provider is not None:
             self.register_llm_tool(model_provider)

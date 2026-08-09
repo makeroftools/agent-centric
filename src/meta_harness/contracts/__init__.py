@@ -5,6 +5,7 @@ plane, agents, and verifiers all agree on. Each contract carries an explicit
 version so that it can evolve without silently breaking the correctness model.
 """
 
+from .bill import Bill, BillLine, BillTotal, BillVersion
 from .capability import Capability
 from .critical_path import CpmMetric, CpmVersion, CriticalPathResult, CriticalPathStage
 from .handoff import HandoffSchema, is_valid_schema, validate_handoff
@@ -41,6 +42,10 @@ from .trajectory import (
 
 __all__ = [
     "Capability",
+    "Bill",
+    "BillLine",
+    "BillTotal",
+    "BillVersion",
     "CpmMetric",
     "CpmVersion",
     "CriticalPathResult",

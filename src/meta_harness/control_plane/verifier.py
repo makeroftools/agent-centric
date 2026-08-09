@@ -15,6 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from ..contracts.bill import Bill, BillTotal
 from ..contracts.task import TaskSpecification
 
 # A verifier is a callable that takes the task specification and the agent's
@@ -164,6 +165,37 @@ def verify_unguarded_tool_output(task: TaskSpecification, output: Any) -> Verifi
     return VerificationResult(False, "Output does not match the input.")
 
 
+def verify_bills_output(task: TaskSpecification, output: Any) -> VerificationResult:
+    """Verify a BillsAgent output by independently recomputing the totals.
+
+    This is a real, independent check: it re-derives the expected ``BillTotal``
+    from the task payload and compares it to the agent's output. Bad or missing
+    payload data is rejected explicitly (fail-closed), so a malformed bill can
+    never produce a verified result.
+    """
+    payload = task.payload
+    try:
+        bill = Bill.from_mapping(payload)
+    except ValueError as exc:
+        return VerificationResult(False, f"Payload is not a valid bill: {exc}")
+    expected = BillTotal.compute(bill)
+    if not isinstance(output, dict):
+        return VerificationResult(False, "Output is not a bill-totals mapping.")
+    try:
+        actual = BillTotal(
+            line_subtotal_cents=output["line_subtotal_cents"],
+            discount_cents=output["discount_cents"],
+            taxable_amount_cents=output["taxable_amount_cents"],
+            tax_cents=output["tax_cents"],
+            grand_total_cents=output["grand_total_cents"],
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        return VerificationResult(False, f"Output is a malformed bill-totals mapping: {exc}")
+    if actual == expected:
+        return VerificationResult(True, "Output matches the recomputed bill totals.")
+    return VerificationResult(False, "Output does not match the recomputed bill totals.")
+
+
 def verify_mcp_tool_output(task: TaskSpecification, output: Any) -> VerificationResult:
     """Verify an MCP-backed tool round-trip against the expected output.
 
@@ -194,6 +226,7 @@ DEFAULT_VERIFIERS: dict[str, Verifier] = {
     "model": verify_model_output,
     "join_consumer": verify_join_consumer_output,
     "mcp_tool": verify_mcp_tool_output,
+    "bills": verify_bills_output,
 }
 
 

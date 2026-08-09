@@ -65,11 +65,20 @@ _MODEL_MANIFEST = AgentComponentManifest(
     declared_capabilities=frozenset({Capability(name="llm", version="1")}),
 )
 
+_BILLS_MANIFEST = AgentComponentManifest(
+    version=AgentManifestVersion.V2,
+    name="bills",
+    entry_point="meta_harness.agents.bills:create_bills_agent",
+    description="Computes deterministic totals for a structured bill.",
+    declared_capabilities=frozenset({Capability(name="bills", version="1")}),
+)
+
 _DEMO_MANIFESTS = (
     _COUNTER_MANIFEST,
     _REVERSE_MANIFEST,
     _CASE_TOOL_MANIFEST,
     _MODEL_MANIFEST,
+    _BILLS_MANIFEST,
 )
 
 
@@ -126,6 +135,21 @@ def _demo_tasks() -> tuple[TaskSpecification, ...]:
                     StageSpec(agent_name="reverse"),
                 ),
             ),
+        ),
+        TaskSpecification(
+            version=TaskSpecVersion.V5,
+            task_id="demo-bills",
+            agent_name="bills",
+            payload={
+                "lines": [
+                    {"description": "widget", "quantity": 2, "unit_price_cents": 1000},
+                    {"description": "gadget", "quantity": 3, "unit_price_cents": 250},
+                ],
+                "discount_bps": 1000,
+                "tax_bps": 500,
+            },
+            envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
+            granted_tools=("bill_total",),
         ),
     )
 
