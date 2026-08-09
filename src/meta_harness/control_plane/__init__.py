@@ -23,6 +23,14 @@ from .execution import (
     SubprocessBackend,
 )
 from .manager import AgentManager, Outcome
+from .mcp_tools import (
+    LocalMcpServer,
+    McpProtocolError,
+    McpTimeoutError,
+    McpToolAdapter,
+    McpToolCallError,
+    McpToolError,
+)
 from .registry import Registry
 from .replay import ReplayDiff, ReplayResult, ReplayVersion, verify_replay
 from .summary import summarise_stored, summarise_trajectory
@@ -48,6 +56,12 @@ __all__ = [
     "InProcessBackend",
     "SubprocessBackend",
     "AgentExecutionError",
+    "McpToolAdapter",
+    "McpToolError",
+    "McpProtocolError",
+    "McpToolCallError",
+    "McpTimeoutError",
+    "LocalMcpServer",
     "Registry",
     "ToolRegistry",
     "ToolExecutionError",

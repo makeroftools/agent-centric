@@ -164,6 +164,25 @@ def verify_unguarded_tool_output(task: TaskSpecification, output: Any) -> Verifi
     return VerificationResult(False, "Output does not match the input.")
 
 
+def verify_mcp_tool_output(task: TaskSpecification, output: Any) -> VerificationResult:
+    """Verify an MCP-backed tool round-trip against the expected output.
+
+    The payload carries the ``expected`` result alongside the MCP tool name and
+    arguments. This is a real, independent check: an MCP call that returned data
+    is only accepted if its output matches the expected value. A result whose
+    expected value is derived from the MCP server's deterministic behaviour is
+    therefore the only path to a verified success — data alone from an MCP call
+    is never sufficient.
+    """
+    payload = task.payload
+    if not isinstance(payload, dict):
+        return VerificationResult(False, "Payload is not a mapping.")
+    expected = payload.get("expected")
+    if output == expected:
+        return VerificationResult(True, "Output matches the expected MCP result.")
+    return VerificationResult(False, "Output does not match the expected MCP result.")
+
+
 # Registry mapping agent name -> verifier. The Manager consults this to select
 # the verification gate for a given agent.
 DEFAULT_VERIFIERS: dict[str, Verifier] = {
@@ -174,6 +193,7 @@ DEFAULT_VERIFIERS: dict[str, Verifier] = {
     "unguarded_model": verify_unguarded_model_output,
     "model": verify_model_output,
     "join_consumer": verify_join_consumer_output,
+    "mcp_tool": verify_mcp_tool_output,
 }
 
 

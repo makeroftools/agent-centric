@@ -1,4 +1,4 @@
-# STATUS — Volley 001–018
+# STATUS — Volley 001–019
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -1319,21 +1319,57 @@ tests).
 ## Pause point — Volley 018 accepted
 
 Volley 018 was accepted by the architect as a completed isolation milestone.
-This is a deliberate **pause point**; no volley is in flight.
+This was a deliberate **pause point**; no volley was in flight. The pause was
+**lifted for Volley 019 only** (a thin Manager-mediated MCP adapter, below); the
+kernel remains otherwise frozen and the standing no-push instruction holds.
 
 - **Kernel:** local ``main`` includes Volleys 001–018; isolation hardening is
   complete.
 - **Push:** the standing instruction is to **not push**; local ``main`` is ahead
   of ``origin/main`` and unpushed.
-- **Next theme:** not yet selected. Candidate Volley 019 themes (additive,
-  adapter/backend-first, per ``KERNEL.md``):
-  - a thin Manager-mediated MCP adapter over the public surface,
-  - real-provider hardening (stub tests remain mandatory; the real path is
-    optional and off by default),
-  - a first non-deterministic workload under tighter verification,
-  - operator / documentation polish only.
 - **Constraint:** do not expand composition or introduce messaging unless
-  explicitly directed. No execution invariants change while paused.
+  explicitly directed. No execution invariants change.
+
+# Volley 019 — Thin MCP Tool Adapter (Manager-Mediated) (delivered)
+
+### 69. Adapter boundary
+
+``McpToolAdapter`` maps a single MCP server's tools into the existing
+``ToolDescriptor`` model: it lists tools for grant/policy discovery and executes
+a named tool call with a bounded timeout, returning a structured result or an
+explicit :class:`McpToolError`. It sits behind the ``McpGateway`` interface so
+tests use an in-process fake. ``LocalMcpServer`` is both the v1 local transport
+and the fake MCP double — no real network is required in CI.
+
+### 70. Manager-mediated integration
+
+MCP tools are registered into ``ToolRegistry`` only via the explicit, opt-in
+``register_mcp(adapter)``. They are then subject to the exact same paths as
+local tools: an agent receives them only when listed in ``granted_tools`` and
+allowed by policy; every request/response (or failure) is recorded as normal
+mediated tool steps; timeouts and envelope consumption apply identically.
+Agents never talk to the MCP server directly.
+
+### 71. Fail-closed failure behaviour
+
+Server unavailable, protocol error, tool error, and timeout all surface as an
+``McpToolError`` converted by ``ToolRegistry`` into an explicit, audited tool
+failure — never a verified success. MCP output remains untrusted until it passes
+the mandatory verification gate (re-confirmed): data returned from an MCP call
+alone is never sufficient for a verified result.
+
+## Correctness evidence (Volley 019 state)
+
+- ``uv run pytest`` → **254 passed** (246 prior + 8 new MCP adapter tests).
+- ``uv run ruff check .`` → All checks passed.
+- ``uv run mypy`` → Success: no issues found in 37 source files.
+- New tests prove: ungranted MCP tool cannot be used (rejected, fail-closed); a
+granted MCP tool round-trips and is durably trajectory-recorded; policy can
+deny an MCP tool before any work runs; server/tool error, timeout, and an
+unavailable server are all audited and fail-closed; the adapter boundary raises
+explicit ``McpProtocolError``/``McpTimeoutError``.
+- All prior invariants hold: local tools and the full control-plane suite pass
+unchanged.
 
 ## Out of scope / future volleys (not started)
 

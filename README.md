@@ -303,6 +303,39 @@ no agent may reach outside its envelope directly.
   recorded, and never produce an unverified success: the final verification
   gate still applies.
 
+### MCP tool adapter (`mcp.v1`)
+
+A thin adapter can expose selected MCP tools to agents — **only through the
+same Manager mediation path**. MCP is treated strictly as an external tool
+transport; agents never talk to an MCP server directly.
+
+```python
+from meta_harness import LocalMcpServer, McpToolAdapter, ToolRegistry
+from meta_harness.control_plane.mcp_tools import mcp_descriptor
+
+server = LocalMcpServer()
+server.register_tool(
+    mcp_descriptor("mcp_echo", "Echo", input_schema={"text": "str"}, output_schema="str"),
+    lambda text: f"mcp:{text}",
+)
+registry = ToolRegistry()
+registry.register_mcp(McpToolAdapter(server))  # explicit, opt-in
+```
+
+- **Adapter boundary:** `McpToolAdapter` maps a single MCP server's tools into
+the existing `ToolDescriptor` model and executes calls with a bounded timeout,
+behind the `McpGateway` interface so tests use an in-process fake. `LocalMcpServer`
+is the v1 local transport and the fake double — no real network in CI.
+- **Opt-in registration:** MCP tools exist only if explicitly registered via
+`ToolRegistry.register_mcp`. An agent receives them only when listed in
+`granted_tools` and allowed by policy.
+- **Full mediation:** every MCP request/response (or failure) is recorded as
+normal mediated tool steps; timeouts and envelope consumption apply exactly as
+for local tools.
+- **Fail-closed:** server unavailable, protocol error, tool error, or timeout is
+an explicit, audited tool failure — never a verified success. **MCP output is
+untrusted until it passes the mandatory verification gate.**
+
 ## Durable trajectory store
 
 Trajectories are persisted through a durable, append-only store

@@ -223,6 +223,29 @@ class SilentHungAgent:
             time.sleep(0.01)
 
 
+class McpToolAgent:
+    """Agent that requests a single granted MCP tool and returns its output.
+
+    The tool name and arguments come from the payload (``tool`` / ``args``). On a
+    successful tool result it returns the output; on a rejected or failed tool
+    call it returns ``"UNVERIFIED"``, which the verifier rejects — proving a
+    tool/call failure cannot yield a verified success.
+    """
+
+    def __call__(
+        self, payload: Any, step_budget: int, tools: ToolContext
+    ) -> Generator[AgentStep | ToolRequest, None, AgentResult]:
+        if not isinstance(payload, dict):
+            raise TypeError("McpToolAgent payload must be a mapping.")
+        name = payload.get("tool")
+        args = payload.get("args") or {}
+        sent: Any = yield ToolRequest(name=str(name), args=dict(args))
+        yield AgentStep(description="received MCP tool result")
+        if sent is not None and getattr(sent, "success", False):
+            return AgentResult(output=sent.output)
+        return AgentResult(output="UNVERIFIED")
+
+
 class UnsupportedYieldAgent:
     """Misbehaving agent that yields a value the IPC codec cannot encode.
 
@@ -244,6 +267,10 @@ def create_join_consumer() -> JoinConsumerAgent:
 
 def create_crash_after_step() -> CrashAfterStepAgent:
     return CrashAfterStepAgent()
+
+
+def create_mcp_tool() -> McpToolAgent:
+    return McpToolAgent()
 
 
 def create_unsupported_yield() -> UnsupportedYieldAgent:
@@ -322,6 +349,13 @@ CRASH_AFTER_STEP_MANIFEST = AgentComponentManifest(
     name="crash_after_step",
     entry_point="tests.fake_agent:create_crash_after_step",
     description="Agent that crashes mid-run after yielding a step.",
+)
+
+MCP_TOOL_MANIFEST = AgentComponentManifest(
+    version=AgentManifestVersion.V2,
+    name="mcp_tool",
+    entry_point="tests.fake_agent:create_mcp_tool",
+    description="Agent that requests a single granted MCP tool.",
 )
 
 UNSUPPORTED_YIELD_MANIFEST = AgentComponentManifest(

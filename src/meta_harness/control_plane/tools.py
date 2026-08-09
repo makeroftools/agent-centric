@@ -13,6 +13,7 @@ from typing import Any
 
 from ..contracts.model import ModelProvider, ModelProviderError
 from ..contracts.tool import ToolDescriptor, ToolVersion
+from .mcp_tools import McpToolAdapter, McpToolError
 
 
 class ToolExecutionError(Exception):
@@ -99,6 +100,43 @@ class ToolRegistry:
         self._model_provider = provider
         self._impls["llm_complete"] = self._execute_llm
         self._descriptors["llm_complete"] = LLM_COMPLETE_DESCRIPTOR
+
+    def register_mcp(self, adapter: McpToolAdapter) -> tuple[str, ...]:
+        """Enumerate and register an MCP adapter's tools (explicit, opt-in).
+
+        MCP tools are added to the registry exactly like local tools, so they
+        are subject to the same grant, policy, envelope, recording, and
+        verification paths. Registration is explicit: the adapter must be
+        supplied by the caller (e.g. the CLI or an operator); no MCP tool is
+        available unless it is registered here.
+
+        Returns the names of the tools that were registered.
+        """
+        registered: list[str] = []
+        for descriptor in adapter.list_tools():
+            self._impls[descriptor.name] = self._make_mcp_impl(adapter, descriptor.name)
+            self._descriptors[descriptor.name] = descriptor
+            registered.append(descriptor.name)
+        return tuple(registered)
+
+    def _make_mcp_impl(
+        self, adapter: McpToolAdapter, name: str
+    ) -> Callable[..., Any]:
+        """Bind an MCP tool name to an executable impl that fails closed.
+
+        ``adapter.call_tool`` returns a structured result or raises an explicit
+        ``McpToolError``. This wrapper converts the latter into a
+        ``ToolExecutionError`` so the Manager records an audited, fail-closed
+        tool failure and never a verified success.
+        """
+
+        def _impl(**args: Any) -> Any:
+            try:
+                return adapter.call_tool(name, args)
+            except McpToolError as exc:
+                raise ToolExecutionError(f"MCP tool {name!r} failed: {exc}") from exc
+
+        return _impl
 
     def _execute_llm(self, prompt: str) -> str:
         provider = self._model_provider
