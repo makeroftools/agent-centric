@@ -45,6 +45,7 @@ from .trajectory_store import (
     TrajectoryStoreError,
 )
 from .verifier import VerificationResult, Verifier
+from .workspace import Workspace, WorkspaceError
 
 __all__ = [
     "Verifier",
@@ -65,6 +66,8 @@ __all__ = [
     "Registry",
     "ToolRegistry",
     "ToolExecutionError",
+    "Workspace",
+    "WorkspaceError",
     "TrajectoryStore",
     "TrajectoryStoreError",
     "CorruptTrajectoryError",

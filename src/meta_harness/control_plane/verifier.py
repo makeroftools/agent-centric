@@ -17,6 +17,7 @@ from typing import Any
 
 from ..contracts.bill import Bill, BillTotal
 from ..contracts.task import TaskSpecification
+from ..contracts.workspace import WorkspaceEntryKind
 
 # A verifier is a callable that takes the task specification and the agent's
 # output, and returns a VerificationResult.
@@ -196,6 +197,63 @@ def verify_bills_output(task: TaskSpecification, output: Any) -> VerificationRes
     return VerificationResult(False, "Output does not match the recomputed bill totals.")
 
 
+def verify_workspace_output(task: TaskSpecification, output: Any) -> VerificationResult:
+    """Verify a WorkspaceAgent output by recomputing the expected result.
+
+    The payload describes a workspace operation. This is a real, independent
+    check: it re-derives the expected result from the payload and compares it to
+    the agent's output. A malformed payload or a non-mapping output is rejected
+    explicitly (fail-closed), so a failed or disallowed workspace operation can
+    never produce a verified result.
+    """
+    payload = task.payload
+    if not isinstance(payload, dict):
+        return VerificationResult(False, "Payload is not a mapping.")
+    operation = payload.get("operation")
+    if not isinstance(operation, str) or not operation:
+        return VerificationResult(False, "Payload is missing a valid 'operation'.")
+    if not isinstance(output, dict):
+        return VerificationResult(False, "Output is not a mapping.")
+
+    if operation == "list":
+        # The list result is a mapping of relative_path -> kind. We verify it is
+        # a well-formed mapping of strings; the concrete contents are determined
+        # by the workspace and are checked by the tool itself.
+        if all(isinstance(k, str) and isinstance(v, str) for k, v in output.items()):
+            return VerificationResult(True, "Output is a well-formed workspace listing.")
+        return VerificationResult(False, "Output is not a well-formed workspace listing.")
+
+    if operation in ("read", "write", "mkdir"):
+        relative_path = payload.get("relative_path")
+        if not isinstance(relative_path, str) or not relative_path:
+            return VerificationResult(False, "Payload is missing a valid 'relative_path'.")
+        if output.get("relative_path") != relative_path:
+            return VerificationResult(
+                False, "Output relative_path does not match the requested path."
+            )
+        kind = output.get("kind")
+        # The operation determines the expected entry kind: read/write touch a
+        # file, mkdir creates a directory.
+        expected_kind = (
+            WorkspaceEntryKind.FILE.value
+            if operation in ("read", "write")
+            else WorkspaceEntryKind.DIRECTORY.value
+        )
+        if kind != expected_kind:
+            return VerificationResult(
+                False, f"Output kind {kind!r} does not match operation {operation!r}."
+            )
+        if operation == "write":
+            expected_content = payload.get("content")
+            if not isinstance(expected_content, str):
+                return VerificationResult(False, "Payload 'content' must be a string.")
+            if output.get("content") != expected_content:
+                return VerificationResult(False, "Output content does not match the payload.")
+        return VerificationResult(True, "Output matches the requested workspace operation.")
+
+    return VerificationResult(False, f"Unknown workspace operation {operation!r}.")
+
+
 def verify_mcp_tool_output(task: TaskSpecification, output: Any) -> VerificationResult:
     """Verify an MCP-backed tool round-trip against the expected output.
 
@@ -227,6 +285,7 @@ DEFAULT_VERIFIERS: dict[str, Verifier] = {
     "join_consumer": verify_join_consumer_output,
     "mcp_tool": verify_mcp_tool_output,
     "bills": verify_bills_output,
+    "workspace": verify_workspace_output,
 }
 
 

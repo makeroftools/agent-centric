@@ -89,6 +89,42 @@ LLM_COMPLETE_DESCRIPTOR = ToolDescriptor(
     execution_semantics="mediated, bounded, recorded model call (stochastic backend)",
 )
 
+LIST_WORKSPACE_DESCRIPTOR = ToolDescriptor(
+    version=ToolVersion.V1,
+    name="list_workspace",
+    description="List the allowlisted workspace entries that exist.",
+    input_schema={},
+    output_schema="mapping",
+    execution_semantics="allowlisted, deterministic, side-effect free",
+)
+
+READ_WORKSPACE_FILE_DESCRIPTOR = ToolDescriptor(
+    version=ToolVersion.V1,
+    name="read_workspace_file",
+    description="Read an allowlisted workspace file.",
+    input_schema={"relative_path": "str"},
+    output_schema="mapping",
+    execution_semantics="allowlisted, deterministic, side-effect free",
+)
+
+WRITE_WORKSPACE_FILE_DESCRIPTOR = ToolDescriptor(
+    version=ToolVersion.V1,
+    name="write_workspace_file",
+    description="Write an allowlisted workspace file.",
+    input_schema={"relative_path": "str", "content": "str"},
+    output_schema="mapping",
+    execution_semantics="allowlisted, bounded side effect",
+)
+
+CREATE_WORKSPACE_DIR_DESCRIPTOR = ToolDescriptor(
+    version=ToolVersion.V1,
+    name="create_workspace_dir",
+    description="Create an allowlisted workspace directory.",
+    input_schema={"relative_path": "str"},
+    output_schema="mapping",
+    execution_semantics="allowlisted, bounded side effect",
+)
+
 
 class ToolRegistry:
     """Deterministic registry and executor of concrete tools.
@@ -125,6 +161,16 @@ class ToolRegistry:
         self._model_provider = provider
         self._impls["llm_complete"] = self._execute_llm
         self._descriptors["llm_complete"] = LLM_COMPLETE_DESCRIPTOR
+
+    def register_impl(self, descriptor: ToolDescriptor, impl: Callable[..., Any]) -> None:
+        """Register a concrete tool implementation and its descriptor.
+
+        This is the explicit wiring point used by adapters (e.g. the workspace
+        tools). Once registered, the tool is subject to the same grant, policy,
+        envelope, recording, and verification paths as every other tool.
+        """
+        self._impls[descriptor.name] = impl
+        self._descriptors[descriptor.name] = descriptor
 
     def register_mcp(self, adapter: McpToolAdapter) -> tuple[str, ...]:
         """Enumerate and register an MCP adapter's tools (explicit, opt-in).

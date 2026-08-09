@@ -39,6 +39,12 @@ from .trajectory import (
     Trajectory,
     TrajectoryVersion,
 )
+from .workspace import (
+    WorkspaceEntry,
+    WorkspaceEntryKind,
+    WorkspaceLayout,
+    WorkspaceVersion,
+)
 
 __all__ = [
     "Capability",
@@ -91,4 +97,8 @@ __all__ = [
     "ToolSummary",
     "ModelSummary",
     "PolicySummary",
+    "WorkspaceEntry",
+    "WorkspaceEntryKind",
+    "WorkspaceLayout",
+    "WorkspaceVersion",
 ]

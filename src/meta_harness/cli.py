@@ -27,8 +27,10 @@ from meta_harness.contracts.capability import Capability
 from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
 from meta_harness.contracts.pipeline import PipelineVersion, SequentialComposition, StageSpec
 from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from meta_harness.contracts.workspace import WorkspaceLayout
 from meta_harness.control_plane.tools import ToolRegistry
 from meta_harness.control_plane.trajectory_store import FileTrajectoryStore
+from meta_harness.control_plane.workspace import Workspace, register_workspace_tools
 from meta_harness.providers import StubModelProvider
 
 # The built-in demo agents, registered by the CLI so a demo task set is
@@ -73,12 +75,21 @@ _BILLS_MANIFEST = AgentComponentManifest(
     declared_capabilities=frozenset({Capability(name="bills", version="1")}),
 )
 
+_WORKSPACE_MANIFEST = AgentComponentManifest(
+    version=AgentManifestVersion.V2,
+    name="workspace",
+    entry_point="meta_harness.agents.workspace:create_workspace_agent",
+    description="Performs an allowlisted workspace operation via mediated file tools.",
+    declared_capabilities=frozenset({Capability(name="workspace", version="1")}),
+)
+
 _DEMO_MANIFESTS = (
     _COUNTER_MANIFEST,
     _REVERSE_MANIFEST,
     _CASE_TOOL_MANIFEST,
     _MODEL_MANIFEST,
     _BILLS_MANIFEST,
+    _WORKSPACE_MANIFEST,
 )
 
 
@@ -151,16 +162,37 @@ def _demo_tasks() -> tuple[TaskSpecification, ...]:
             envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
             granted_tools=("bill_total",),
         ),
+        TaskSpecification(
+            version=TaskSpecVersion.V5,
+            task_id="demo-workspace",
+            agent_name="workspace",
+            payload={
+                "operation": "write",
+                "relative_path": "invoices/note.txt",
+                "content": "hello workspace",
+            },
+            envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
+            granted_tools=("create_workspace_dir", "write_workspace_file"),
+        ),
     )
 
 
 def _manager(store_dir: Path) -> AgentManager:
     # The stub model provider makes the demo-model task deterministic and
     # replayable without any network access or credentials.
-    manager = AgentManager(
-        store=FileTrajectoryStore(store_dir),
-        tools=ToolRegistry(model_provider=StubModelProvider()),
+    tools = ToolRegistry(model_provider=StubModelProvider())
+    # A small, allowlisted workspace for the demo-workspace task. It lives under
+    # the trajectory store directory so it is local, self-contained, and does
+    # not touch the repository.
+    workspace = Workspace(
+        store_dir / "workspace",
+        WorkspaceLayout(files=("invoices/note.txt",), directories=("invoices",)),
     )
+    register_workspace_tools(tools, workspace)
+    # Pre-create the allowlisted directory so the demo-workspace write task can
+    # run deterministically (writes require an existing parent directory).
+    workspace.create_workspace_dir("invoices")
+    manager = AgentManager(store=FileTrajectoryStore(store_dir), tools=tools)
     for manifest in _DEMO_MANIFESTS:
         manager.register(manifest)
     return manager

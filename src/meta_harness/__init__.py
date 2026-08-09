@@ -54,6 +54,10 @@ from .contracts import (
     TrajectoryVersion,
     VerifiedResult,
     VerifiedResultVersion,
+    WorkspaceEntry,
+    WorkspaceEntryKind,
+    WorkspaceLayout,
+    WorkspaceVersion,
 )
 from .control_plane import (
     AgentExecutionError,
@@ -71,6 +75,8 @@ from .control_plane import (
     SubprocessBackend,
     ToolExecutionError,
     ToolRegistry,
+    Workspace,
+    WorkspaceError,
     analyse_critical_path,
 )
 from .providers import (
@@ -153,4 +159,10 @@ __all__ = [
     "ToolSummary",
     "ModelSummary",
     "PolicySummary",
+    "Workspace",
+    "WorkspaceError",
+    "WorkspaceEntry",
+    "WorkspaceEntryKind",
+    "WorkspaceLayout",
+    "WorkspaceVersion",
 ]

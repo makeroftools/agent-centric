@@ -9,8 +9,8 @@ trajectory**, and mediate every tool and model call. Agents can only *request*
 capabilities; the Manager is the sole authority that grants, executes, records,
 and verifies.
 
-This is the **v0.22 preliminary release** — a minimal but complete harness,
-built across Volleys 001–022. It reflects what exists in the codebase, not an
+This is the **v0.23 preliminary release** — a minimal but complete harness,
+built across Volleys 001–023. It reflects what exists in the codebase, not an
 aspirational platform.
 
 ```
@@ -38,20 +38,20 @@ governs every decision in this repository.
 
 ---
 
-## What v0.22 includes
+## What v0.23 includes
 
 | Area | What's implemented |
 | --- | --- |
 | **Manager** | Deterministic `AgentManager`: register, select (by name or capability), run, summarise, replay. |
-| **Contracts** | Versioned, strongly-typed contracts for tasks, results, trajectories, tools, pipelines, parallel, policy, model, summary, replay, critical path, and bills. |
+| **Contracts** | Versioned, strongly-typed contracts for tasks, results, trajectories, tools, pipelines, parallel, policy, model, summary, replay, critical path, bills, and workspace. |
 | **Registry** | In-process, deterministic agent registry with capability-based selection. |
-| **Tools** | Local tools (`to_upper`, `add`, `bill_total`) plus a Manager-mediated **MCP adapter**; grants and policy enforced by the Manager. |
+| **Tools** | Local tools (`to_upper`, `add`, `bill_total`) plus a Manager-mediated **MCP adapter** and **allowlisted workspace tools**; grants and policy enforced by the Manager. |
 | **Model path** | Mediated `llm_complete` tool; deterministic stub by default; an optional, hardened real-provider path. |
 | **Composition** | Sequential pipelines, parallel fan-out/join, and nested sequential-as-parallel — all Manager-orchestrated. |
 | **Governance** | Policy (allow/deny), hard resource envelopes, cooperative cancellation, per-step budgets. |
 | **Isolation** | Optional subprocess execution; silent-hang bounded, forced-kill recorded, no zombies. |
 | **Observability** | Deterministic trajectory summary, replay verification, and read-only critical-path (CPM) analysis. |
-| **Specialty agents** | A narrow **bills** agent: structured bills in, deterministic totals out, real verification (recompute; rejects bad/missing data). |
+| **Specialty agents** | A **bills** agent (structured bills → deterministic totals) and a **workspace** agent (allowlisted, mediated file operations). |
 | **Operator CLI** | `meta-harness` with `run`, `summarise`, and `replay-verify`. |
 | **Editor bridge** | Thin ACP adapter (`meta-harness-acp`) so Meta-Harness runs as an External Agent in Zed. |
 
@@ -191,6 +191,7 @@ demo-tool: VERIFIED output='MEDIATED TOOLS' trajectory_id=demo-tool#2
 demo-model: VERIFIED output='stub response' trajectory_id=demo-model#3
 demo-pipeline: VERIFIED output='NOITISOPMOC LAITNEUQES' trajectory_id=demo-pipeline#4
 demo-bills: VERIFIED output={'line_subtotal_cents': 2750, 'discount_cents': 275, 'taxable_amount_cents': 2475, 'tax_cents': 124, 'grand_total_cents': 2599} trajectory_id=demo-bills#5
+demo-workspace: VERIFIED output={'relative_path': 'invoices/note.txt', 'kind': 'file', 'content': 'hello workspace'} trajectory_id=demo-workspace#6
 ```
 
 Trajectories are durable, append-only JSON-lines files (hex-named `.jsonl`)
@@ -348,7 +349,7 @@ The correctness guarantees are demonstrated across the test suite
 ```
 PRINCIPLES.md          Non-negotiable governing rules
 KERNEL.md              v0 kernel freeze note (guarantees, out-of-scope, versioning)
-STATUS.md              Volley history 001–022 + correctness evidence
+STATUS.md              Volley history 001–023 + correctness evidence
 src/meta_harness/
   __init__.py          Public surface
   contracts/           Versioned, strongly-typed contracts
@@ -387,13 +388,15 @@ task step budget. Enforcement stays entirely in the Manager.
 ## Versioning / preliminary-release status
 
 The package is versioned as a kernel milestone aligned with volley depth:
-**`0.22.0`** (22 volleys delivered). This is a **preliminary release** — the
-v0.22 kernel is complete but APIs may evolve before a stable 1.0. See
+**`0.23.0`** (23 volleys delivered). This is a **preliminary release** — the
+v0.23 kernel is complete but APIs may evolve before a stable 1.0. See
 [`KERNEL.md`](KERNEL.md) for the versioning scheme and freeze boundaries.
 
 ---
 
-## The bills specialty agent (Volley 022)
+## Specialty agents: bills (022) and workspace (023)
+
+### Bills (Volley 022)
 
 A narrow, deterministic **bills** agent accepts a structured bill in and produces
 deterministic totals out. Money math is integer-only (minor units / cents) with
@@ -438,15 +441,64 @@ A malformed bill (empty/missing `lines`, non-integer or negative quantities or
 prices, out-of-range rates) is rejected explicitly and fails closed — it never
 produces a verified result.
 
+### Workspace (Volley 023)
+
+A deterministic **workspace** agent operates on a local, allowlisted workspace
+through the Manager. The workspace is a root directory plus an explicit
+`WorkspaceLayout` allowlist of relative paths; the mediated file tools
+(`list_workspace`, `read_workspace_file`, `write_workspace_file`,
+`create_workspace_dir`) reject any path not on the allowlist (fail-closed). No
+deletion, rename, or arbitrary traversal is possible, so an agent never gains
+broad filesystem powers. Verification is real: the Manager recomputes the
+expected result (operation, path, and for writes content) from the payload.
+
+```python
+from meta_harness import AgentManager
+from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from meta_harness.contracts.workspace import WorkspaceLayout
+from meta_harness.control_plane.tools import ToolRegistry
+from meta_harness.control_plane.workspace import Workspace, register_workspace_tools
+
+workspace = Workspace("ws", WorkspaceLayout(files=("invoices/note.txt",), directories=("invoices",)))
+tools = ToolRegistry()
+register_workspace_tools(tools, workspace)
+workspace.create_workspace_dir("invoices")
+
+manager = AgentManager(tools=tools)
+manager.register(AgentComponentManifest(
+    version=AgentManifestVersion.V2,
+    name="workspace",
+    entry_point="meta_harness.agents.workspace:create_workspace_agent",
+    description="Performs an allowlisted workspace operation via mediated file tools.",
+))
+
+task = TaskSpecification(
+    version=TaskSpecVersion.V5,
+    task_id="ws-demo",
+    agent_name="workspace",
+    payload={"operation": "write", "relative_path": "invoices/note.txt", "content": "hello workspace"},
+    envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
+    granted_tools=("write_workspace_file",),
+)
+
+outcome = manager.run(task)
+print(outcome.result.output if outcome.result else outcome.failure)  # content='hello workspace'
+```
+
+A path outside the allowlist, or a failed/disallowed workspace operation, fails
+closed and never produces a verified result.
+
 ---
 
 ## Roadmap posture
 
 **Use first; enhance on demand.** The harness is intentionally minimal. New
 capabilities will be added only when driven by demonstrated need, and will
-prefer adapters and backends over changing Manager semantics. There is no
-standing roadmap of large features; the next step is whatever a real use-case
-requires.
+prefer adapters and backends over changing Manager semantics. The planned
+specialty agent sequence is bills → workspace → email; the next step is a
+**Mail-in-a-Box read-only tool + email agent** (list/fetch first, never send in
+v1).
 
 ---
 

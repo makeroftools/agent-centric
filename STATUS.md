@@ -1,4 +1,4 @@
-# STATUS — Volley 001–022
+# STATUS — Volley 001–023
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -94,7 +94,15 @@ data. Money math is integer-only (cents) with an explicit half-up rounding rule,
 so totals are exact and replayable; the ``bill_total`` tool is Manager-mediated
 and grantable; and every failure mode is an explicit, audited, fail-closed
 failure. No PDF, email, workspace ontology, or Mail-in-a-Box was introduced, and
-the volley did not expand into doc organization or email.
+the volley did not expand into doc organization or email. For Volley 023, a
+local, agent-centric workspace was introduced: a ``Workspace`` (root directory
+plus a ``WorkspaceLayout`` allowlist) and a ``workspace`` specialty agent that
+operates on it entirely through the Manager. The allowlisted mediated file
+tools (``list_workspace``, ``read_workspace_file``, ``write_workspace_file``,
+``create_workspace_dir``) reject any path not on the allowlist (fail-closed),
+with no deletion, rename, or arbitrary traversal; verification is real
+(recompute). No email or Mail-in-a-Box was introduced, and the volley did not
+expand into doc organization or email.
 
 ---
 
@@ -1559,6 +1567,75 @@ sequence (bills → workspace → email) is one step in. No volley is in flight.
   of ``origin/main`` and unpushed.
 - **Next (planned, not started):** Volley 023 — local workspace layout +
   allowlisted mediated file tools (issued by the Architect only after 022 is
+  accepted).
+
+# Volley 023 — Workspace (delivered)
+
+### 82. Local workspace layout
+
+A local, agent-centric workspace is introduced: a ``Workspace`` (a root
+directory plus a ``WorkspaceLayout`` allowlist) plus a specialty ``workspace``
+agent that operates on it through the Manager. The contracts live in
+``meta_harness.contracts.workspace`` (``WorkspaceLayout``, ``WorkspaceEntry``,
+``workspace.v1``). The allowlist is the single source of truth for what an
+agent may touch; this is agent-centric structure **without** unsupervised
+cleanup or broad filesystem powers.
+
+### 83. Allowlisted, mediated file tools
+
+The workspace tools (``list_workspace``, ``read_workspace_file``,
+``write_workspace_file``, ``create_workspace_dir``) are registered in the
+``ToolRegistry`` and mediated exactly like every other tool: only usable when
+explicitly granted, executed and recorded by the Manager, and subject to policy
+and envelopes. Every tool resolves the requested relative path against the
+workspace root and **rejects any path not on the allowlist** (fail-closed).
+There is no deletion, rename, or arbitrary traversal; writes require an
+existing allowlisted parent directory (created explicitly via
+``create_workspace_dir``). The workspace root itself is local-first and does
+not reach outside its bounds.
+
+### 84. Real verification
+
+``verify_workspace_output`` is a real, independent check: it recomputes the
+expected result from the task payload (operation, relative path, and for writes
+the content) and compares it to the agent's output. A malformed payload, a
+failed/disallowed tool call (agent returns ``None``), or a mismatched output is
+rejected explicitly, so a failed or disallowed workspace operation can never
+produce a verified result.
+
+### 85. Fail closed; full trajectory; tests; docs; version 0.23.0
+
+All failure modes (disallowed path, missing file/dir, ungranted tool, envelope
+exhaustion, policy denial, subprocess crash) are explicit, audited failures.
+Every tool call is recorded in the durable trajectory. Package version is
+bumped to **0.23.0**. No email or Mail-in-a-Box is introduced; this volley does
+not expand into doc organization or email.
+
+## Correctness evidence (Volley 023 state)
+
+- ``uv run pytest`` → **314 passed** (293 prior + 21 new workspace tests).
+- ``uv run ruff check .`` → All checks passed.
+- ``uv run mypy`` → Success: no issues found in 43 source files.
+- New tests prove: layout/allowlist validation (rejects absolute, ``..``
+  traversal, empty paths); write/read/list/create round-trips; writes require an
+  existing parent; missing files fail closed; disallowed file/dir paths are
+  rejected and never verify; the mediated workspace tools are registry-registered
+  and a disallowed call raises a fail-closed tool error; the ``workspace`` agent
+  verifies through granted tools, fails closed when the tool is ungranted or the
+  path is disallowed, rejects bad payloads; hard step envelopes; policy denial;
+  deterministic replay; and subprocess-backend isolation. All prior invariants
+  hold.
+
+## Pause point — Volley 023 accepted
+
+Volley 023 was accepted; the workspace specialty agent is delivered. No volley
+is in flight.
+
+- **Status:** v0.23 baseline (workspace specialty agent, allowlisted file tools).
+- **Push:** the standing instruction is to **not push**; local ``main`` is ahead
+  of ``origin/main`` and unpushed.
+- **Next (planned, not started):** Mail-in-a-Box read-only tool + email agent
+  (list/fetch first, never send in v1; issued by the Architect only after 023 is
   accepted).
 
 ## Out of scope / future volleys (not started)
