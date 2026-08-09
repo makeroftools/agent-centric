@@ -207,6 +207,22 @@ class CrashAfterStepAgent:
         raise RuntimeError("simulated agent crash")
 
 
+class SilentHungAgent:
+    """Agent that yields once, then hangs silently (never responds again).
+
+    Simulates a child that stops responding mid-run without crashing or writing
+    anything further. The Manager must bound it via the envelope deadline and
+    force-terminate it as a last resort, recording the forced kill honestly.
+    """
+
+    def __call__(
+        self, payload: Any, step_budget: int, tools: ToolContext
+    ) -> Generator[AgentStep, None, AgentResult]:
+        yield AgentStep(description="first step")
+        while True:
+            time.sleep(0.01)
+
+
 class UnsupportedYieldAgent:
     """Misbehaving agent that yields a value the IPC codec cannot encode.
 
@@ -232,6 +248,10 @@ def create_crash_after_step() -> CrashAfterStepAgent:
 
 def create_unsupported_yield() -> UnsupportedYieldAgent:
     return UnsupportedYieldAgent()
+
+
+def create_silent_hung() -> SilentHungAgent:
+    return SilentHungAgent()
 
 
 COOPERATIVE_CANCEL_MANIFEST = AgentComponentManifest(
@@ -309,4 +329,11 @@ UNSUPPORTED_YIELD_MANIFEST = AgentComponentManifest(
     name="unsupported_yield",
     entry_point="tests.fake_agent:create_unsupported_yield",
     description="Agent that yields an un-encodable value (protocol violation).",
+)
+
+SILENT_HUNG_MANIFEST = AgentComponentManifest(
+    version=AgentManifestVersion.V2,
+    name="silent_hung",
+    entry_point="tests.fake_agent:create_silent_hung",
+    description="Agent that hangs silently after one step.",
 )

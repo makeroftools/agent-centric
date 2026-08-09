@@ -13,10 +13,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from meta_harness.agents.interface import AgentResult, ToolContext
 from meta_harness.contracts.policy import Policy, PolicyVersion
 from meta_harness.contracts.result import FailureReason
 from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.control_plane.execution import SubprocessBackend
+from meta_harness.control_plane.execution import SubprocessBackend, SubprocessSession
 from meta_harness.control_plane.manager import AgentManager
 from meta_harness.control_plane.trajectory_store import FileTrajectoryStore
 from tests.conftest import CASE_TOOL_MANIFEST, REVERSE_MANIFEST
@@ -24,6 +25,7 @@ from tests.fake_agent import (
     COOPERATIVE_CANCEL_MANIFEST,
     CRASH_AFTER_STEP_MANIFEST,
     IGNORING_CANCEL_MANIFEST,
+    SILENT_HUNG_MANIFEST,
     UNGUARDED_TOOL_AGENT_MANIFEST,
     UNSUPPORTED_YIELD_MANIFEST,
 )
@@ -237,6 +239,86 @@ class TestSubprocessEnvelopeAndCancellation:
         assert any(
             s.status.value == "cancelled" for s in outcome.failure.trajectory.steps
         )
+
+
+class TestSubprocessLifecycle:
+    def test_silent_hung_child_is_bounded_fail_closed(self, tmp_path: Path) -> None:
+        """A child that stops responding is bounded by the envelope deadline.
+
+        A silent hang (no further output, no crash) must not block the Manager
+        indefinitely: it is mapped to an explicit ``TIMEOUT``, the child is
+        force-terminated as a last resort, and the forced kill is recorded
+        honestly. No verified success is produced.
+        """
+        m = _manager(store=FileTrajectoryStore(tmp_path))
+        m.register(SILENT_HUNG_MANIFEST)
+        task = TaskSpecification(
+            version=TaskSpecVersion.V3,
+            task_id="silent-hung",
+            agent_name="silent_hung",
+            payload={"text": "abc"},
+            envelope=ResourceEnvelope(timeout_seconds=0.2, max_steps=1000),
+        )
+        outcome = m.run(task)
+        assert outcome.result is None
+        assert outcome.failure is not None
+        assert outcome.failure.reason is FailureReason.TIMEOUT
+
+        stored = m.load(outcome.trajectory_id or "")
+        assert stored is not None
+        descriptions = [s.description for s in stored.steps]
+        # Partial work before the hang remains recorded.
+        assert any(d == "first step" for d in descriptions)
+        # The forced kill is recorded honestly (cooperative cancel was ignored).
+        assert any(d == "agent forcibly terminated" for d in descriptions)
+
+    def test_success_reaps_child_no_zombie(self) -> None:
+        """A successful subprocess run reaps the child (no zombie).
+
+        After a deterministic agent completes, ``close()`` must reap the child
+        process so no zombie survives a normal test path, and the child must not
+        have been force-killed.
+        """
+        session = SubprocessSession(
+            REVERSE_MANIFEST,
+            {"text": "abcdef"},
+            100,
+            ToolContext(tools=()),
+            timeout_seconds=10.0,
+        )
+        sent: object = None
+        while True:
+            item = session.next_step(sent)
+            if isinstance(item, AgentResult):
+                break
+            sent = None
+        session.close()
+        # The child is reaped (no zombie) and was not force-killed.
+        assert session._proc.poll() is not None
+        assert session.termination != "forced"
+
+    def test_cooperative_cancel_termination_recorded(self, tmp_path: Path) -> None:
+        """A cooperative child exits cleanly; no forced-kill step is recorded."""
+        m = _manager(store=FileTrajectoryStore(tmp_path))
+        m.register(COOPERATIVE_CANCEL_MANIFEST)
+        task = TaskSpecification(
+            version=TaskSpecVersion.V3,
+            task_id="coop-cancel",
+            agent_name="cooperative_cancel",
+            payload={"text": "abc"},
+            envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=2),
+        )
+        outcome = m.run(task)
+        assert outcome.result is None
+        assert outcome.failure is not None
+        assert outcome.failure.reason is FailureReason.STEP_LIMIT
+
+        stored = m.load(outcome.trajectory_id or "")
+        assert stored is not None
+        descriptions = [s.description for s in stored.steps]
+        assert any(d == "agent cancelled" for d in descriptions)
+        # No forced kill: the child cooperated and exited cleanly.
+        assert not any(d == "agent forcibly terminated" for d in descriptions)
 
 
 class TestSubprocessPolicy:

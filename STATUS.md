@@ -1,4 +1,4 @@
-# STATUS — Volley 001–017
+# STATUS — Volley 001–018
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -1257,19 +1257,64 @@ backends over changing Manager semantics.
 ## Pause point — v0 checkpoint (Volley 017 accepted)
 
 Volley 017 was accepted by the architect as the close of the v0 kernel phase.
-This is a deliberate **pause point**; the kernel is frozen at v0 and no further
-volley is in flight.
+The kernel was frozen at v0 and no further volley was in flight. The pause was
+**lifted for Volley 018 only** (subprocess isolation hardening, below); the
+kernel remains otherwise frozen and the standing no-push instruction holds.
 
 - **Push:** the standing instruction is to **not push**; local ``main`` remains
-  ahead of ``origin/main`` and unpushed. The v0 checkpoint is preserved locally.
-- **Next theme:** not yet selected. Candidate Volley 018 themes under
-  consideration (all additive, adapter/backend-first, per ``KERNEL.md``):
-  - a thin MCP adapter over the public surface,
-  - stronger sandboxing / subprocess isolation hardening,
-  - real-provider hardening (beyond the optional adapter),
-  - a first non-deterministic workload under tighter verification.
+  ahead of ``origin/main`` and unpushed.
 - **Constraint:** do not expand composition or introduce messaging unless
-  explicitly directed. No execution invariants change while paused.
+  explicitly directed. No execution invariants change.
+
+# Volley 018 — Subprocess Isolation Hardening (delivered)
+
+### 65. Bounded child reads (silent-hang hardening)
+
+``SubprocessSession`` reads are now bounded by the envelope deadline. A child
+that stops responding (no further output, no crash) can no longer block the
+Manager indefinitely: ``_read`` waits up to the remaining envelope time and then
+raises ``SubprocessTimeoutError``, which the Manager maps to an explicit
+``TIMEOUT`` failure and force-terminates the child as a last resort. This closes
+the gap where a silent hung child bypassed the envelope timeouts that are only
+checked between ``next_step`` calls.
+
+### 66. Honest termination accounting
+
+``SubprocessSession`` records how the child ended (``termination``):
+``completed`` (produced a result and exited), ``cooperative`` (exited on a
+cancel/close signal), or ``forced`` (had to be terminated/killed as a last
+resort). The Manager records a distinct ``agent forcibly terminated`` step in
+the trajectory only when the child had to be killed, so the audit record
+distinguishes cooperative cancel from a forced kill. The existing ``agent
+cancelled`` step is unchanged.
+
+### 67. Bounded child lifecycle & cleanup
+
+The child is now reaped on every path — success, failure, and cancellation —
+via ``session.close()``, so no zombie survives a normal test path. ``close()``
+first asks the child to exit cooperatively (up to a grace period), then
+terminates it, and as a last resort kills it, each with a bounded wait.
+
+### 68. Manager authority preserved
+
+Tool mediation, policy checks, envelope accounting, and verification all remain
+in the Manager process. The subprocess carries only the agent's generator loop;
+no authority moved into the child. The in-process backend's behaviour is
+unchanged (it accepts ``timeout_seconds`` for shared-interface clarity only).
+
+## Correctness evidence (Volley 018 state)
+
+- ``uv run pytest`` → **246 passed** (243 prior + 3 new subprocess lifecycle
+tests).
+- ``uv run ruff check .`` → All checks passed.
+- ``uv run mypy`` → Success: no issues found in 36 source files.
+- New tests prove: a silent hung child is bounded fail-closed (``TIMEOUT``,
+  forced kill recorded, partial work retained); a successful subprocess run
+  reaps the child (no zombie, not force-killed); a cooperative cancel records
+  ``agent cancelled`` with no forced-kill step.
+- All prior invariants hold: crash and protocol violations remain ``AGENT_ERROR``
+  fail-closed; success matches the in-process backend; no verified success after
+  any isolation failure; prior trajectories are never mutated.
 
 ## Out of scope / future volleys (not started)
 

@@ -51,6 +51,7 @@ from .execution import (
     AgentExecutionError,
     ExecutionBackend,
     InProcessBackend,
+    SubprocessTimeoutError,
 )
 from .registry import Registry
 from .replay import verify_replay
@@ -1095,7 +1096,11 @@ class AgentManager:
                     None,
                 )
             session = self._backend.session(
-                manifest, task.payload, envelope.max_steps, tool_context
+                manifest,
+                task.payload,
+                envelope.max_steps,
+                tool_context,
+                envelope.timeout_seconds,
             )
         except Exception as exc:  # noqa: BLE001 - converted to explicit failure
             message = f"Failed to start agent: {exc}"
@@ -1113,6 +1118,9 @@ class AgentManager:
         sent: Any = None
 
         def _fail(reason: FailureReason, message: str) -> tuple[Outcome | _StageFailure, Any]:
+            # Release the session so a crashed/hung child is reaped (no zombie
+            # under normal paths). Idempotent: ``_cancel`` also closes.
+            session.close()
             return (
                 self._deferred_or_recorded_failure(
                     task, agent_name, trajectory_id, steps, reason, message, stage_worker
@@ -1146,6 +1154,23 @@ class AgentManager:
             # Deliver the cooperative signal without trusting its outcome.
             session.cancel(reason=message)
             session.close()
+            # Record honestly whether the child cooperated or had to be killed.
+            if getattr(session, "termination", None) == "forced":
+                forced = StepRecord(
+                    step_index=len(steps),
+                    status=StepStatus.CANCELLED,
+                    description="agent forcibly terminated",
+                    input=None,
+                    output=None,
+                    error="child ignored cooperative cancellation; killed as last resort",
+                    elapsed_seconds=0.0,
+                )
+                if self._append_step_locked(trajectory_id, steps, forced) is not None:
+                    return self._deferred_or_recorded_failure(
+                        task, agent_name, trajectory_id, steps,
+                        FailureReason.INTERNAL,
+                        "Failed to persist forced-termination step.", stage_worker,
+                    ), None
             return _fail(reason, message)
 
         try:
@@ -1197,6 +1222,11 @@ class AgentManager:
                 step_start = time.monotonic()
                 try:
                     item = session.next_step(sent)
+                except SubprocessTimeoutError as exc:
+                    return _cancel(
+                        FailureReason.TIMEOUT,
+                        f"Agent subprocess did not respond within the envelope timeout: {exc}",
+                    )
                 except AgentExecutionError as exc:
                     return _fail(
                         FailureReason.AGENT_ERROR,
@@ -1276,6 +1306,9 @@ class AgentManager:
             )
 
         # Success: return the verified output; the caller records the outcome.
+        # Release the session so the child is reaped (no zombie under normal
+        # paths) before the caller records the verified outcome.
+        session.close()
         return None, final_output
 
     def _deferred_or_recorded_failure(

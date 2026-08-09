@@ -23,9 +23,11 @@ from __future__ import annotations
 import contextlib
 import importlib
 import json
+import queue
 import subprocess
 import sys
 import threading
+import time
 from collections.abc import Generator
 from typing import Any, Protocol, cast
 
@@ -51,6 +53,25 @@ class AgentExecutionError(Exception):
     The Manager converts this into an explicit, audited failure. It never
     yields a verified success.
     """
+
+
+class SubprocessTimeoutError(AgentExecutionError):
+    """Raised when a subprocess agent does not respond within its deadline.
+
+    This is a distinct subclass so the Manager can map a silent/hung child to an
+    explicit ``TIMEOUT`` failure (and force-terminate it as a last resort)
+    rather than a generic ``AGENT_ERROR``. It is subprocess-specific: the
+    in-process backend never raises it.
+    """
+
+
+# Grace periods for child teardown. ``close()`` first asks the child to exit
+# cooperatively and waits up to ``_COOPERATIVE_GRACE``; if it does not, the
+# Manager terminates it and, as a last resort, kills it, waiting up to
+# ``_FORCED_GRACE`` each time. These bound the child's lifetime so no zombie
+# survives a normal test path.
+_COOPERATIVE_GRACE = 2.0
+_FORCED_GRACE = 2.0
 
 
 def instantiate_agent(entry_point: str) -> Agent:
@@ -96,6 +117,7 @@ class ExecutionBackend(Protocol):
         payload: Any,
         step_budget: int,
         tool_context: ToolContext,
+        timeout_seconds: float,
     ) -> AgentSession: ...
 
 
@@ -161,7 +183,11 @@ class InProcessBackend:
         payload: Any,
         step_budget: int,
         tool_context: ToolContext,
+        timeout_seconds: float,
     ) -> AgentSession:
+        # The in-process backend blocks on the agent's generator directly; the
+        # Manager's envelope loop is the authority for timeouts. ``timeout_seconds``
+        # is accepted for interface clarity only and is not used here.
         agent = instantiate_agent(manifest.entry_point)
         return InProcessSession(agent, payload, step_budget, tool_context)
 
@@ -262,8 +288,14 @@ class SubprocessSession:
     """Drives an agent in a separate child process over JSON-lines IPC.
 
     The child runs only the agent's generator loop. All authority remains in
-    the Manager. A child crash, non-zero exit, or protocol violation surfaces
-    as an :class:`AgentExecutionError` (fail-closed).
+    the Manager. A child crash, non-zero exit, protocol violation, or silent
+    hang surfaces as an :class:`AgentExecutionError` (fail-closed).
+
+    Reads are bounded by ``timeout_seconds`` (the envelope deadline): a child
+    that stops responding raises :class:`SubprocessTimeoutError`, which the
+    Manager maps to an explicit ``TIMEOUT`` failure and force-terminates as a
+    last resort. ``termination`` records how the child ended (``completed``,
+    ``cooperative``, or ``forced``) so the Manager can audit it honestly.
     """
 
     def __init__(
@@ -272,6 +304,7 @@ class SubprocessSession:
         payload: Any,
         step_budget: int,
         tool_context: ToolContext,
+        timeout_seconds: float,
     ) -> None:
         self._stderr: list[str] = []
         self._proc = subprocess.Popen(
@@ -288,7 +321,21 @@ class SubprocessSession:
             target=self._drain_stderr, daemon=True
         )
         self._stderr_thread.start()
+        # Read stdout in a daemon thread into a queue so ``_read`` can wait with
+        # a bounded timeout instead of blocking forever on a silent child.
+        self._stdout_queue: queue.Queue[str | None] = queue.Queue()
+        self._stdout_thread = threading.Thread(
+            target=self._drain_stdout, daemon=True
+        )
+        self._stdout_thread.start()
         self._closed = False
+        # How the child ended: None (still running), ``completed`` (produced a
+        # result and exited), ``cooperative`` (exited on a cancel/close signal),
+        # or ``forced`` (had to be terminated/killed as a last resort).
+        self.termination: str | None = None
+        # The absolute monotonic deadline for reads, derived from the envelope
+        # timeout so the Manager remains the authority on time.
+        self._deadline = time.monotonic() + timeout_seconds
         self._write(
             {
                 "type": "start",
@@ -305,6 +352,12 @@ class SubprocessSession:
         for line in self._proc.stderr:
             self._stderr.append(line.rstrip("\n"))
 
+    def _drain_stdout(self) -> None:
+        assert self._proc.stdout is not None
+        for line in self._proc.stdout:
+            self._stdout_queue.put(line)
+        self._stdout_queue.put(None)  # EOF sentinel
+
     def _write(self, message: dict[str, Any]) -> None:
         if self._proc.stdin is None or self._proc.stdin.closed:
             raise AgentExecutionError("Agent process stdin is closed.")
@@ -315,10 +368,25 @@ class SubprocessSession:
             raise AgentExecutionError("Agent process terminated unexpectedly.") from exc
 
     def _read(self) -> dict[str, Any] | None:
-        if self._proc.stdout is None:
-            return None
-        line = self._proc.stdout.readline()
-        if not line:
+        """Read the next IPC message, bounded by the session deadline.
+
+        Returns ``None`` on EOF (child exited). Raises
+        :class:`SubprocessTimeoutError` if the child does not respond before
+        the envelope deadline, so a silent/hung child cannot block the Manager
+        indefinitely.
+        """
+        remaining = self._deadline - time.monotonic()
+        if remaining <= 0:
+            raise SubprocessTimeoutError(
+                "Agent subprocess did not respond within the envelope timeout."
+            )
+        try:
+            line = self._stdout_queue.get(timeout=remaining)
+        except queue.Empty:
+            raise SubprocessTimeoutError(
+                "Agent subprocess did not respond within the envelope timeout."
+            ) from None
+        if line is None:
             return None
         try:
             data = json.loads(line)
@@ -371,22 +439,41 @@ class SubprocessSession:
             self._write({"type": "send", "value": _encode_sent(Cancelled(reason=reason))})
 
     def close(self) -> None:
+        """Release the child process, reaping it and recording how it ended.
+
+        If the child already exited (e.g. produced a result), it is reaped and
+        ``termination`` is ``completed``. Otherwise the child is asked to exit
+        cooperatively and given a short grace period; if it does not, it is
+        terminated and, as a last resort, killed (``termination`` is
+        ``cooperative`` or ``forced`` respectively). This bounds the child's
+        lifetime so no zombie survives a normal test path.
+        """
         if self._closed:
             return
         self._closed = True
+        if self._proc.poll() is not None:
+            self.termination = "completed"
+            return
         try:
             if self._proc.stdin is not None and not self._proc.stdin.closed:
                 self._proc.stdin.write(json.dumps({"type": "close"}) + "\n")
                 self._proc.stdin.flush()
         except (BrokenPipeError, OSError):
             pass
-        with contextlib.suppress(Exception):  # noqa: BLE001 - best-effort teardown
-            self._proc.terminate()
-            self._proc.wait(timeout=2)
-        if self._proc.poll() is None:
-            with contextlib.suppress(Exception):  # noqa: BLE001 - last resort
-                self._proc.kill()
-                self._proc.wait(timeout=2)
+        try:
+            self._proc.wait(timeout=_COOPERATIVE_GRACE)
+            self.termination = "cooperative"
+            return
+        except subprocess.TimeoutExpired:
+            pass
+        # Forced termination as a last resort.
+        self._proc.terminate()
+        try:
+            self._proc.wait(timeout=_FORCED_GRACE)
+        except subprocess.TimeoutExpired:
+            self._proc.kill()
+            self._proc.wait(timeout=_FORCED_GRACE)
+        self.termination = "forced"
 
 
 class SubprocessBackend:
@@ -398,5 +485,8 @@ class SubprocessBackend:
         payload: Any,
         step_budget: int,
         tool_context: ToolContext,
+        timeout_seconds: float,
     ) -> AgentSession:
-        return SubprocessSession(manifest, payload, step_budget, tool_context)
+        return SubprocessSession(
+            manifest, payload, step_budget, tool_context, timeout_seconds
+        )

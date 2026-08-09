@@ -361,9 +361,15 @@ m = AgentManager(backend=SubprocessBackend())
 - Isolation is strictly additive: it never relaxes verification or mediation. A
   child crash, non-zero exit, or protocol violation is an explicit, audited,
   fail-closed `AGENT_ERROR` failure — never a verified success.
+- Reads are bounded by the envelope deadline: a child that stops responding
+  (silent hang) cannot block the Manager. It is mapped to an explicit `TIMEOUT`
+  failure and force-terminated as a last resort.
 - Cooperative cancellation is delivered across the boundary; if the child
   ignores it, the Manager enforces the envelope and terminates the child as a
-  last resort.
+  last resort. The trajectory distinguishes cooperative cancel (`agent
+  cancelled`) from a forced kill (`agent forcibly terminated`).
+- The child is reaped on every path (success, failure, cancellation), so no
+  zombie survives a normal test path.
 - The in-process backend remains the default and is unchanged for unit tests.
 
 ## Trajectory summary & operator inspection
