@@ -167,6 +167,32 @@ def create_unguarded_model() -> UnguardedModelAgent:
     return UnguardedModelAgent()
 
 
+class JoinConsumerAgent:
+    """Agent that consumes a parallel-group join payload ``{"stages": [...]}``.
+
+    It inspects the handed-off join and returns a deterministic summary string
+    derived from the joined branch outputs. Used to prove the group -> sequential
+    hand-off end-to-end: a later sequential stage receives the join dict as its
+    input payload.
+    """
+
+    def __call__(
+        self, payload: Any, step_budget: int, tools: ToolContext
+    ) -> Generator[AgentStep, None, AgentResult]:
+        if not isinstance(payload, dict) or "stages" not in payload:
+            raise TypeError("JoinConsumerAgent payload must be a join mapping.")
+        stages = payload["stages"]
+        if not isinstance(stages, (list, tuple)):
+            raise TypeError("JoinConsumerAgent payload['stages'] must be a list.")
+        yield AgentStep(
+            description="validated join payload",
+            detail={"branches": len(stages)},
+        )
+        # Deterministic summary: concatenate the branch outputs in join order.
+        parts = [str(s[2]) for s in stages]
+        return AgentResult(output="|".join(parts))
+
+
 class CrashAfterStepAgent:
     """Agent that yields a step, then raises inside its generator.
 
@@ -194,6 +220,10 @@ class UnsupportedYieldAgent:
     ) -> Generator[AgentStep, None, AgentResult]:
         yield {"not": "a step"}  # type: ignore[return-value]
         return AgentResult(output="ignored")
+
+
+def create_join_consumer() -> JoinConsumerAgent:
+    return JoinConsumerAgent()
 
 
 def create_crash_after_step() -> CrashAfterStepAgent:
@@ -258,6 +288,13 @@ UNGUARDED_MODEL_AGENT_MANIFEST = AgentComponentManifest(
     name="unguarded_model",
     entry_point="tests.fake_agent:create_unguarded_model",
     description="Agent that blindly requests the llm_complete tool regardless of grant.",
+)
+
+JOIN_CONSUMER_MANIFEST = AgentComponentManifest(
+    version=AgentManifestVersion.V2,
+    name="join_consumer",
+    entry_point="tests.fake_agent:create_join_consumer",
+    description="Agent that consumes a parallel-group join payload.",
 )
 
 CRASH_AFTER_STEP_MANIFEST = AgentComponentManifest(

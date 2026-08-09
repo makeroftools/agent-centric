@@ -17,6 +17,12 @@ Version history:
   ``input_schema`` before it is handed off as the next stage's input. Stages
   that declare neither schema use the documented conservative default (see
   ``validate_handoff``). All three versions are accepted.
+- pipeline.v4: additive — a sequential stage may be either an agent stage (a
+  ``StageSpec``) or a nested parallel group (a ``ParallelComposition``). This
+  expresses "run these branches concurrently, verify/join, then continue to the
+  next sequential stage". Depth is shallow: only one level of nesting is
+  supported (a sequential stage may be a parallel group, but a parallel group's
+  stages are agent stages only).
 """
 
 from __future__ import annotations
@@ -29,6 +35,7 @@ from .capability import Capability
 from .handoff import HandoffSchema, is_valid_schema
 
 if TYPE_CHECKING:
+    from .parallel import ParallelComposition
     from .task import ResourceEnvelope
 
 
@@ -38,6 +45,7 @@ class PipelineVersion(StrEnum):
     V1 = "pipeline.v1"
     V2 = "pipeline.v2"
     V3 = "pipeline.v3"
+    V4 = "pipeline.v4"
 
 
 @dataclass(frozen=True)
@@ -89,33 +97,49 @@ class StageSpec:
 
 @dataclass(frozen=True)
 class SequentialComposition:
-    """An ordered, Manager-orchestrated pipeline of agent stages.
+    """An ordered, Manager-orchestrated pipeline of stages.
+
+    Each stage is either an agent stage (a ``StageSpec``) or, in ``pipeline.v4``,
+    a nested parallel group (a ``ParallelComposition``). The Manager alone is
+    responsible for sequencing, data hand-off, and the lifecycle of each stage.
 
     Attributes:
         version: The pipeline contract version.
-        stages: The ordered, non-empty list of stages to run in sequence.
+        stages: The ordered, non-empty list of stages to run in sequence. In
+            ``pipeline.v4`` each stage may be a ``StageSpec`` or a
+            ``ParallelComposition``; in earlier versions only ``StageSpec``
+            stages are allowed.
     """
 
     version: PipelineVersion
-    stages: tuple[StageSpec, ...]
+    stages: tuple[StageSpec | ParallelComposition, ...]
 
     def __post_init__(self) -> None:
         if self.version not in (
             PipelineVersion.V1,
             PipelineVersion.V2,
             PipelineVersion.V3,
+            PipelineVersion.V4,
         ):
             raise ValueError(f"Unsupported pipeline version: {self.version!r}")
         if not self.stages:
             raise ValueError("A sequential composition must have at least one stage.")
+        if self.version is not PipelineVersion.V4 and any(
+            not isinstance(stage, StageSpec) for stage in self.stages
+        ):
+            raise ValueError(
+                "Nested parallel groups require pipeline.v4."
+            )
         if self.version is PipelineVersion.V1 and any(
-            stage.stage_envelope is not None for stage in self.stages
+            isinstance(stage, StageSpec) and stage.stage_envelope is not None
+            for stage in self.stages
         ):
             raise ValueError(
                 "pipeline.v1 does not support stage_envelope; use pipeline.v2."
             )
         if self.version in (PipelineVersion.V1, PipelineVersion.V2) and any(
-            stage.output_schema is not None or stage.input_schema is not None
+            isinstance(stage, StageSpec)
+            and (stage.output_schema is not None or stage.input_schema is not None)
             for stage in self.stages
         ):
             raise ValueError(

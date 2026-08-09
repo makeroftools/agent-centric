@@ -42,25 +42,6 @@ _ASSUMPTIONS = (
 )
 
 
-def _label(stage: StageSpec) -> str:
-    if stage.agent_name is not None:
-        return stage.agent_name
-    assert stage.capability is not None
-    return f"capability:{stage.capability.name}"
-
-
-def _stage_cost(
-    stage: StageSpec,
-    stage_index: int,
-    parent: ResourceEnvelope,
-    recorded: dict[int, int] | None,
-) -> tuple[int | float, CpmMetric]:
-    """Return ``(cost, metric)`` for a stage, honouring a recorded override."""
-    recorded_cost = recorded.get(stage_index) if recorded is not None else None
-    if recorded_cost is not None:
-        return recorded_cost, CpmMetric.RECORDED_STEPS
-    effective = stage.stage_envelope or parent
-    return effective.max_steps, CpmMetric.ENVELOPE_MAX_STEPS
 
 
 def analyse_critical_path(
@@ -114,7 +95,7 @@ def analyse_critical_path(
 
 
 def _analyse_sequential(
-    stages: tuple[StageSpec, ...],
+    stages: tuple[StageSpec | ParallelComposition, ...],
     parent: ResourceEnvelope,
     recorded: dict[int, int] | None,
 ) -> CriticalPathResult:
@@ -141,6 +122,42 @@ def _analyse_sequential(
         stages=tuple(result_stages),
         assumptions=_ASSUMPTIONS,
     )
+
+
+def _label(stage: StageSpec | ParallelComposition) -> str:
+    """Human-readable label for a stage selector or nested parallel group."""
+    if isinstance(stage, ParallelComposition):
+        branches = "+".join(_label(s) for s in stage.stages)
+        return f"group({branches})"
+    if stage.agent_name is not None:
+        return stage.agent_name
+    assert stage.capability is not None
+    return f"capability:{stage.capability.name}"
+
+
+def _stage_cost(
+    stage: StageSpec | ParallelComposition,
+    stage_index: int,
+    parent: ResourceEnvelope,
+    recorded: dict[int, int] | None,
+) -> tuple[int | float, CpmMetric]:
+    """Return ``(cost, metric)`` for a stage, honouring a recorded override.
+
+    A nested parallel-group stage has no declared envelope of its own; its cost
+    is the maximum of its branches (the critical path through the group), since
+    the group's branches run concurrently and the group completes when its
+    slowest branch does.
+    """
+    recorded_cost = recorded.get(stage_index) if recorded is not None else None
+    if recorded_cost is not None:
+        return recorded_cost, CpmMetric.RECORDED_STEPS
+    if isinstance(stage, ParallelComposition):
+        branch_costs = [
+            (stage.stage_envelope or parent).max_steps for stage in stage.stages
+        ]
+        return max(branch_costs), CpmMetric.ENVELOPE_MAX_STEPS
+    effective = stage.stage_envelope or parent
+    return effective.max_steps, CpmMetric.ENVELOPE_MAX_STEPS
 
 
 def _analyse_parallel(

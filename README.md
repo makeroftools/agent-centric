@@ -150,6 +150,31 @@ A task may request a Manager-orchestrated sequential pipeline via the optional
   conservative default: the handed-off payload must be a mapping (the shape the
   harness agents expect). Existing deterministic agents keep working unchanged.
 
+### Nested composition: a sequential stage as a parallel group (`pipeline.v4`)
+
+In `pipeline.v4` (additive), a sequential stage may be either an agent stage (a
+`StageSpec`) or a nested parallel group (a `ParallelComposition`). This lets the
+Manager express "run these branches concurrently, verify/join, then continue to
+the next sequential stage":
+
+- Composition stays Manager-orchestrated; agents cannot spawn or coordinate.
+- Depth is shallow: a sequential stage may be a parallel group, but a parallel
+group's stages are agent stages only.
+- The nested group reuses the existing parallel engine; its branches receive the
+  previous stage's handed-off output, and the deterministic join
+  (`{"stages": [...]}`) is handed off to the next sequential stage.
+- A failure inside a nested group aborts the outer sequence and cancels
+  siblings, exactly as a top-level parallel failure does.
+- Policy, per-stage envelopes, verification, tool mediation, and accounting all
+  apply to nested group stages; the whole run shares one coherent trajectory
+  with explicit `pipeline stage N begin` / `parallel group begin` / `parallel
+  stage N begin` / `parallel group end` markers.
+- A parallel-group producer has no declared `output_schema`; its join is
+  validated against the implicit default shape `{"stages": "list"}`.
+- Summary treats a nested run as sequential (of parallel); replay uses the
+  documented multiset rule for the concurrent branch work; critical-path analysis
+  gives a nested group a cost equal to the max of its branches.
+
 ## Policy-based governance (`policy.v1`)
 
 A task or composition may carry a thin, deterministic `Policy` (`task.v5`) that

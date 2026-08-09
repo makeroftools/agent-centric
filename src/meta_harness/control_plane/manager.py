@@ -38,6 +38,7 @@ from ..agents.interface import (
 )
 from ..contracts.handoff import HandoffSchema, validate_handoff
 from ..contracts.manifest import AgentComponentManifest
+from ..contracts.parallel import ParallelComposition
 from ..contracts.pipeline import StageSpec
 from ..contracts.policy import Policy
 from ..contracts.replay import ReplayDiff, ReplayResult, ReplayVersion
@@ -289,57 +290,30 @@ class AgentManager:
 
         if task.pipeline is not None:
             for stage in task.pipeline.stages:
-                if stage.agent_name is not None:
-                    decision = policy.check_agent(stage.agent_name)
-                    if not decision.allowed:
-                        return self._policy_violation(
-                            task, agent_name, trajectory_id, steps,
-                            decision.reason or "stage agent denied",
+                if isinstance(stage, ParallelComposition):
+                    for sub in stage.stages:
+                        policy_failure = self._check_stage_policy(
+                            policy, task, agent_name, trajectory_id, steps,
+                            sub, checks,
                         )
-                    checks.append(("stage agent", stage.agent_name))
-                elif stage.capability is not None:
-                    decision = policy.check_capability(stage.capability)
-                    if not decision.allowed:
-                        return self._policy_violation(
-                            task, agent_name, trajectory_id, steps,
-                            decision.reason or "stage capability denied",
-                        )
-                    checks.append(("stage capability", stage.capability.name))
-                for tool in stage.granted_tools:
-                    decision = policy.check_tool(tool)
-                    if not decision.allowed:
-                        return self._policy_violation(
-                            task, agent_name, trajectory_id, steps,
-                            decision.reason or "stage tool denied",
-                        )
-                    checks.append(("stage tool", tool))
+                        if policy_failure is not None:
+                            return policy_failure
+                else:
+                    policy_failure = self._check_stage_policy(
+                        policy, task, agent_name, trajectory_id, steps,
+                        stage, checks,
+                    )
+                    if policy_failure is not None:
+                        return policy_failure
 
         if task.parallel is not None:
             for stage in task.parallel.stages:
-                if stage.agent_name is not None:
-                    decision = policy.check_agent(stage.agent_name)
-                    if not decision.allowed:
-                        return self._policy_violation(
-                            task, agent_name, trajectory_id, steps,
-                            decision.reason or "stage agent denied",
-                        )
-                    checks.append(("parallel stage agent", stage.agent_name))
-                elif stage.capability is not None:
-                    decision = policy.check_capability(stage.capability)
-                    if not decision.allowed:
-                        return self._policy_violation(
-                            task, agent_name, trajectory_id, steps,
-                            decision.reason or "stage capability denied",
-                        )
-                    checks.append(("parallel stage capability", stage.capability.name))
-                for tool in stage.granted_tools:
-                    decision = policy.check_tool(tool)
-                    if not decision.allowed:
-                        return self._policy_violation(
-                            task, agent_name, trajectory_id, steps,
-                            decision.reason or "stage tool denied",
-                        )
-                    checks.append(("parallel stage tool", tool))
+                policy_failure = self._check_stage_policy(
+                    policy, task, agent_name, trajectory_id, steps,
+                    stage, checks,
+                )
+                if policy_failure is not None:
+                    return policy_failure
 
         record = StepRecord(
             step_index=len(steps),
@@ -355,6 +329,47 @@ class AgentManager:
                 task, agent_name, trajectory_id, steps, FailureReason.INTERNAL,
                 "Failed to persist policy acceptance step.",
             )
+        return None
+
+    def _check_stage_policy(
+        self,
+        policy: Policy,
+        task: TaskSpecification,
+        agent_name: str,
+        trajectory_id: str,
+        steps: list[StepRecord],
+        stage: StageSpec,
+        checks: list[tuple[str, str]],
+    ) -> Outcome | None:
+        """Check an agent-stage selector and granted tools against a policy.
+
+        Appends accepted constraints to ``checks``. Returns a sealed failure on
+        the first violation, else ``None``.
+        """
+        if stage.agent_name is not None:
+            decision = policy.check_agent(stage.agent_name)
+            if not decision.allowed:
+                return self._policy_violation(
+                    task, agent_name, trajectory_id, steps,
+                    decision.reason or "stage agent denied",
+                )
+            checks.append(("stage agent", stage.agent_name))
+        elif stage.capability is not None:
+            decision = policy.check_capability(stage.capability)
+            if not decision.allowed:
+                return self._policy_violation(
+                    task, agent_name, trajectory_id, steps,
+                    decision.reason or "stage capability denied",
+                )
+            checks.append(("stage capability", stage.capability.name))
+        for tool in stage.granted_tools:
+            decision = policy.check_tool(tool)
+            if not decision.allowed:
+                return self._policy_violation(
+                    task, agent_name, trajectory_id, steps,
+                    decision.reason or "stage tool denied",
+                )
+            checks.append(("stage tool", tool))
         return None
 
     def _policy_violation(
@@ -445,10 +460,13 @@ class AgentManager:
     def _run_pipeline(self, task: TaskSpecification, trajectory_id: str) -> Outcome:
         """Execute a Manager-orchestrated sequential composition.
 
-        Each stage runs as a fully governed single-agent execution. The verified
-        output of a stage is handed off as the input to the next. Any failure or
-        verification failure at a stage aborts the composition. The whole run
-        produces one coherent, durable trajectory with explicit stage boundaries.
+        Each stage is either an agent stage or (in ``pipeline.v4``) a nested
+        parallel group. The verified output of a stage is handed off as the input
+        to the next; for a parallel group stage the handed-off value is the
+        deterministic join. Any failure or verification failure at a stage (or a
+        nested parallel stage) aborts the composition and cancels outstanding
+        parallel siblings. The whole run produces one coherent, durable trajectory
+        with explicit stage boundaries and nested parallel group markers.
 
         Resource accounting: each stage runs under its own effective envelope
         (the stage's ``stage_envelope`` if declared, else the parent task
@@ -459,7 +477,11 @@ class AgentManager:
         pipeline = task.pipeline
         assert pipeline is not None
 
-        first_agent = self._resolve_stage(pipeline.stages[0])
+        first = pipeline.stages[0]
+        if isinstance(first, ParallelComposition):
+            first_agent = self._resolve_stage(first.stages[0])
+        else:
+            first_agent = self._resolve_stage(first)
         if first_agent is None:
             return self._run_unknown_agent(task, trajectory_id)
         agent_name = first_agent.name
@@ -467,6 +489,7 @@ class AgentManager:
         composition_start = time.monotonic()
         composition = _CompositionLimit(envelope=task.envelope, start=composition_start)
         steps: list[StepRecord] = []
+        cancel_event = threading.Event()
 
         try:
             self._store.begin(trajectory_id, task.task_id, agent_name)
@@ -488,8 +511,36 @@ class AgentManager:
         stage_accounts: list[dict[str, Any]] = []
         for stage_index, stage in enumerate(pipeline.stages):
             stage_start = time.monotonic()
-            effective = stage.stage_envelope or task.envelope
             started_steps = len(steps)
+            is_group = isinstance(stage, ParallelComposition)
+            effective = (
+                task.envelope
+                if isinstance(stage, ParallelComposition)
+                else (stage.stage_envelope or task.envelope)
+            )
+
+            # Resolve unknown-agent aborts up front (for a parallel group, every
+            # nested stage must resolve before any work runs).
+            if isinstance(stage, ParallelComposition):
+                unresolved = [s for s in stage.stages if self._resolve_stage(s) is None]
+                if unresolved:
+                    return self._record_failure(
+                        task, agent_name, trajectory_id, steps, FailureReason.UNKNOWN_AGENT,
+                        f"Stage {stage_index} (parallel group) references an unknown agent "
+                        f"({self._stage_label(unresolved[0])}).",
+                    )
+                stage_label = self._stage_label(stage.stages[0])
+                stage_name = stage_label
+            else:
+                manifest = self._resolve_stage(stage)
+                if manifest is None:
+                    return self._record_failure(
+                        task, agent_name, trajectory_id, steps, FailureReason.UNKNOWN_AGENT,
+                        f"Stage {stage_index} references an unknown agent "
+                        f"({self._stage_label(stage)}).",
+                    )
+                stage_label = self._stage_label(stage)
+                stage_name = manifest.name
 
             # Record an explicit stage-boundary marker with the accounting.
             boundary = StepRecord(
@@ -498,7 +549,8 @@ class AgentManager:
                 description=f"pipeline stage {stage_index} begin",
                 input={
                     "stage": stage_index,
-                    "agent": self._stage_label(stage),
+                    "agent": stage_label,
+                    "kind": "parallel" if is_group else "agent",
                     "envelope": self._summarise_envelope(effective),
                 },
             )
@@ -509,21 +561,24 @@ class AgentManager:
                     f"Failed to persist stage-boundary step for stage {stage_index}.",
                 )
 
-            manifest = self._resolve_stage(stage)
-            if manifest is None:
-                return self._record_failure(
-                    task, agent_name, trajectory_id, steps, FailureReason.UNKNOWN_AGENT,
-                    f"Stage {stage_index} references an unknown agent "
-                    f"({self._stage_label(stage)}).",
+            # Execute the stage: agent stage or nested parallel group.
+            if isinstance(stage, ParallelComposition):
+                joined, group_failure = self._run_parallel_group(
+                    task, stage, trajectory_id, steps, composition, cancel_event,
+                    stage_start, current_payload,
                 )
-
-            stage_name = manifest.name
-            stage_tool_context = self._build_tool_context_for_stage(stage)
-            stage_task = self._stage_task(task, current_payload)
-            stage_failure, stage_output = self._execute_agent(
-                stage_task, stage_name, trajectory_id, effective,
-                stage_tool_context, steps, stage_start, composition,
-            )
+                if group_failure is not None:
+                    return self._stage_failure_to_outcome(
+                        task, agent_name, trajectory_id, steps, stage_accounts, group_failure,
+                    )
+                stage_output: Any = {"stages": joined}
+            else:
+                stage_tool_context = self._build_tool_context_for_stage(stage)
+                stage_task = self._stage_task(task, current_payload)
+                stage_failure, stage_output = self._execute_agent(
+                    stage_task, stage_name, trajectory_id, effective,
+                    stage_tool_context, steps, stage_start, composition,
+                )
 
             elapsed = time.monotonic() - stage_start
             consumed_steps = len(steps) - started_steps
@@ -536,10 +591,14 @@ class AgentManager:
                 }
             )
 
-            if stage_failure is not None:
-                assert not isinstance(stage_failure, _StageFailure)  # not a parallel worker
-                # Abort the composition; record the stage's consumption before
-                # returning the already-persisted failure.
+            # Abort on failure, but only after recording this stage's
+            # consumption. An agent-stage failure is already a fully-recorded
+            # terminal ``Outcome`` (never a ``_StageFailure``), so we persist the
+            # accounting and return it as-is. A nested-parallel-group failure is
+            # an unrecorded ``_StageFailure`` that ``_stage_failure_to_outcome``
+            # records as the single terminal outcome.
+            if not is_group and stage_failure is not None:
+                assert not isinstance(stage_failure, _StageFailure)
                 if not self._persist_stage_summary(
                     task, agent_name, trajectory_id, steps, stage_accounts
                 ):
@@ -557,21 +616,11 @@ class AgentManager:
                 handed_off = stage_output
                 if not isinstance(handed_off, dict):
                     handed_off = {"text": handed_off}
-                next_stage = pipeline.stages[stage_index + 1]
                 handoff_failure = self._validate_handoff(
                     task, agent_name, trajectory_id, steps,
-                    stage, next_stage, handed_off, stage_index,
+                    stage, pipeline.stages[stage_index + 1], handed_off, stage_index,
                 )
                 if handoff_failure is not None:
-                    # Abort the composition; record the stage's consumption
-                    # before returning the already-persisted failure.
-                    if not self._persist_stage_summary(
-                        task, agent_name, trajectory_id, steps, stage_accounts
-                    ):
-                        return self._record_failure(
-                            task, agent_name, trajectory_id, steps, FailureReason.INTERNAL,
-                            "Failed to persist pipeline resource accounting.",
-                        )
                     return handoff_failure
                 current_payload = handed_off
             else:
@@ -588,6 +637,33 @@ class AgentManager:
             )
         return self._record_success(
             task, agent_name, trajectory_id, steps, current_payload
+        )
+
+    def _stage_failure_to_outcome(
+        self,
+        task: TaskSpecification,
+        agent_name: str,
+        trajectory_id: str,
+        steps: list[StepRecord],
+        stage_accounts: list[dict[str, Any]],
+        failure: _StageFailure,
+    ) -> Outcome:
+        """Record a stage/group failure and abort the outer composition.
+
+        Records the already-persisted stage consumption before returning the
+        failure outcome. Handles both agent-stage and nested-parallel-group
+        failures uniformly (a parallel group failure already cancelled its own
+        siblings via the shared cancel event).
+        """
+        if not self._persist_stage_summary(
+            task, agent_name, trajectory_id, steps, stage_accounts
+        ):
+            return self._record_failure(
+                task, agent_name, trajectory_id, steps, FailureReason.INTERNAL,
+                "Failed to persist pipeline resource accounting.",
+            )
+        return self._record_failure(
+            task, agent_name, trajectory_id, steps, failure.reason, failure.message
         )
 
     def _summarise_envelope(self, envelope: ResourceEnvelope) -> dict[str, Any]:
@@ -668,6 +744,50 @@ class AgentManager:
             if policy_failure is not None:
                 return policy_failure
 
+        # Run the parallel group within this trajectory.
+        joined, failure = self._run_parallel_group(
+            task, parallel, trajectory_id, steps, composition, cancel_event, group_start
+        )
+        if failure is not None:
+            return self._record_failure(
+                task, agent_name, trajectory_id, steps, failure.reason, failure.message
+            )
+        return self._record_success(
+            task, agent_name, trajectory_id, steps, {"stages": joined}
+        )
+
+    def _run_parallel_group(
+        self,
+        task: TaskSpecification,
+        parallel: ParallelComposition,
+        trajectory_id: str,
+        steps: list[StepRecord],
+        composition: _CompositionLimit,
+        cancel_event: threading.Event,
+        group_start: float,
+        payload: Any = None,
+    ) -> tuple[list[Any], _StageFailure | None]:
+        """Run a parallel group within an existing trajectory.
+
+        Records the ``parallel group begin`` / per-stage ``parallel stage N
+        begin`` / ``parallel group end`` markers into the shared ``steps`` list,
+        dispatches the group's agent stages to worker threads, and returns the
+        deterministic join ``[(stage_index, agent, output), ...]`` on success or
+        a ``_StageFailure`` on failure. On failure, remaining running siblings
+        are cooperatively cancelled via ``cancel_event`` and no partial success
+        is returned.
+
+        ``payload`` is the input handed to each branch stage: the task payload
+        for a top-level parallel task, or the previous stage's handed-off output
+        for a nested parallel group inside a sequential pipeline. It defaults to
+        ``task.payload``.
+
+        This is reused both for a top-level parallel task and for a nested
+        parallel group inside a sequential pipeline, so the whole run shares one
+        coherent trajectory.
+        """
+        if payload is None:
+            payload = task.payload
         # Record the parallel group begin marker.
         group_begin = StepRecord(
             step_index=len(steps),
@@ -682,9 +802,8 @@ class AgentManager:
         )
         steps.append(group_begin)
         if self._store_append(trajectory_id, group_begin) is not None:
-            return self._record_failure(
-                task, agent_name, trajectory_id, steps, FailureReason.INTERNAL,
-                "Failed to persist parallel group begin step.",
+            return [], _StageFailure(
+                FailureReason.INTERNAL, "Failed to persist parallel group begin step."
             )
 
         # Resolve every stage up front so unknown agents abort before any thread
@@ -695,8 +814,8 @@ class AgentManager:
         for stage_index, stage in enumerate(parallel.stages):
             manifest = self._resolve_stage(stage)
             if manifest is None:
-                return self._record_failure(
-                    task, agent_name, trajectory_id, steps, FailureReason.UNKNOWN_AGENT,
+                return [], _StageFailure(
+                    FailureReason.UNKNOWN_AGENT,
                     f"Parallel stage {stage_index} references an unknown agent "
                     f"({self._stage_label(stage)}).",
                 )
@@ -716,8 +835,8 @@ class AgentManager:
             )
             steps.append(marker)
             if self._store_append(trajectory_id, marker) is not None:
-                return self._record_failure(
-                    task, agent_name, trajectory_id, steps, FailureReason.INTERNAL,
+                return [], _StageFailure(
+                    FailureReason.INTERNAL,
                     f"Failed to persist parallel stage {stage_index} begin step.",
                 )
             stage_starts.append(time.monotonic())
@@ -729,7 +848,7 @@ class AgentManager:
             for stage_index, (stage, stage_name) in enumerate(resolved):
                 effective = stage.stage_envelope or task.envelope
                 tool_context = self._build_tool_context_for_stage(stage)
-                stage_task = self._stage_task(task, task.payload)
+                stage_task = self._stage_task(task, payload)
 
                 def _worker(
                     idx: int = stage_index,
@@ -761,8 +880,8 @@ class AgentManager:
                 else:
                     results[idx] = future.result()
 
-        # Determine whether the composition succeeded.
-        failure = None
+        # Determine whether the group succeeded.
+        failure: _StageFailure | None = None
         joined: list[Any] = []
         for stage_index, (_stage, _stage_name) in enumerate(resolved):
             idx, output, outcome = results[stage_index]
@@ -790,23 +909,13 @@ class AgentManager:
         )
         steps.append(group_end)
         if self._store_append(trajectory_id, group_end) is not None:
-            return self._record_failure(
-                task, agent_name, trajectory_id, steps, FailureReason.INTERNAL,
-                "Failed to persist parallel group end step.",
+            return [], _StageFailure(
+                FailureReason.INTERNAL, "Failed to persist parallel group end step."
             )
 
         if failure is not None:
-            # No partial success is returned; record a single terminal failure.
-            return self._record_failure(
-                task, agent_name, trajectory_id, steps,
-                failure.reason, failure.message,
-            )
-
-        # Success: build the deterministic join and seal the verified result.
-        joined_result = {"stages": joined}
-        return self._record_success(
-            task, agent_name, trajectory_id, steps, joined_result
-        )
+            return [], failure
+        return joined, None
 
     def _stage_label(self, stage: StageSpec) -> str:
         """Human-readable label for a stage selector."""
@@ -852,8 +961,8 @@ class AgentManager:
         agent_name: str,
         trajectory_id: str,
         steps: list[StepRecord],
-        producing: StageSpec,
-        consuming: StageSpec,
+        producing: StageSpec | ParallelComposition,
+        consuming: StageSpec | ParallelComposition,
         payload: Any,
         stage_index: int,
     ) -> Outcome | None:
@@ -861,23 +970,34 @@ class AgentManager:
 
         The payload must satisfy the producing stage's ``output_schema`` (if
         declared) and the consuming stage's ``input_schema`` (if declared). A
-        stage that declares neither schema is validated under the conservative
-        default: the payload must be a mapping (the shape the harness agents
-        expect). A validation failure aborts the composition with an explicit,
-        audited ``HANDOFF_FAILED`` failure and no data proceeds.
+        parallel-group stage declares no schema of its own: its join payload is
+        the mapping ``{"stages": [...]}`` and is validated under the
+        conservative default. A stage that declares neither schema is validated
+        under the conservative default: the payload must be a mapping (the shape
+        the harness agents expect). A validation failure aborts the composition
+        with an explicit, audited ``HANDOFF_FAILED`` failure and no data
+        proceeds.
 
         On success, a durable step records the validated hand-off and its shape.
         Returns ``None`` on success, or the sealed failure outcome on abort.
         """
         checks: list[tuple[str, HandoffSchema]] = []
-        if producing.output_schema is not None:
+        if isinstance(producing, StageSpec) and producing.output_schema is not None:
             checks.append((f"stage {stage_index} output_schema", producing.output_schema))
-        if consuming.input_schema is not None:
+        if isinstance(consuming, StageSpec) and consuming.input_schema is not None:
             checks.append((f"stage {stage_index + 1} input_schema", consuming.input_schema))
 
         if not checks:
-            # Conservative default: the handed-off payload must be a mapping.
-            checks.append(("default object shape", {"text": "any"}))
+            # Conservative default: the handed-off payload must be a mapping. A
+            # parallel-group producer has no declared schema of its own; its join
+            # payload is the mapping ``{"stages": [...]}``, so it is validated
+            # against that shape rather than the agent-stage default.
+            default_schema: HandoffSchema = (
+                {"stages": "list"}
+                if isinstance(producing, ParallelComposition)
+                else {"text": "any"}
+            )
+            checks.append(("default object shape", default_schema))
 
         for label, schema in checks:
             passed, message = validate_handoff(payload, schema)

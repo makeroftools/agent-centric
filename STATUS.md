@@ -1,4 +1,4 @@
-# STATUS — Volley 001–015
+# STATUS — Volley 001–016
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -67,7 +67,18 @@ concurrent parallel work — same agents, and same tool grant/rejection pattern)
 excluding wall-clock timings. Replay is fail-closed and read-only with respect
 to the original trajectory: it never mutates the audit record, and it applies
 only to deterministic configurations (deterministic agents and stub/fake
-providers).
+providers). For Volley 016, composition became composable: a sequential stage may
+now be either an agent stage or a nested parallel group, so the Manager can
+express "run these branches concurrently, verify/join, then continue to the next
+sequential stage". Nesting is shallow (a sequential stage may be a parallel
+group, but a parallel group's stages are agent stages only) and remains entirely
+Manager-orchestrated — agents still cannot spawn or coordinate. The nested group
+reuses the existing parallel engine (``_run_parallel_group``), shares one
+coherent trajectory with explicit ``pipeline stage N begin`` / ``parallel group
+begin`` / ``parallel stage N begin`` / ``parallel group end`` markers, and does
+not weaken isolation, verification, policy, cancellation, accounting, or
+auditability. A failure inside a nested group aborts the outer sequence and
+cancels siblings exactly as a top-level parallel failure does.
 
 ---
 
@@ -1099,6 +1110,83 @@ scope for bit-exact replay.
   detected and reported with structured diffs.
 - The original trajectory bytes/records are unchanged by replay; non-equivalent
   timings do not cause false failures.
+
+# Volley 016 — Nested Composition: a Sequential Stage as a Parallel Group (delivered)
+
+### 57. Versioned contract
+
+``pipeline.v4`` (additive) allows a sequential stage to be either an agent stage
+(a ``StageSpec``) or a nested parallel group (a ``ParallelComposition``).
+``SequentialComposition.stages`` is now ``tuple[StageSpec | ParallelComposition,
+...]``. ``__post_init__`` rejects nested parallel groups for versions earlier
+than ``v4`` and keeps the existing up-level envelope/schema validation (guarded
+with ``isinstance(stage, StageSpec)``). Depth is shallow by construction: a
+``ParallelComposition`` accepts only ``StageSpec`` stages, so a parallel group's
+stages are agent stages only.
+
+### 58. Manager orchestration (reuse, not a new executor)
+
+The existing parallel engine was refactored into a reusable
+``_run_parallel_group(task, parallel, trajectory_id, steps, composition,
+cancel_event, group_start, payload)`` that records the ``parallel group begin`` /
+per-stage ``parallel stage N begin`` / ``parallel group end`` markers into a
+shared ``steps`` list, dispatches the group's agent stages to worker threads,
+cancels siblings on failure, and returns a deterministic join
+``[(stage_index, agent, output), ...]``. ``_run_parallel`` is now a thin wrapper
+that begins the trajectory, evaluates policy, calls ``_run_parallel_group``, and
+seals success/failure. ``_run_pipeline`` iterates stages; a ``ParallelComposition``
+stage calls ``_run_parallel_group`` (output ``{"stages": joined}``) and an agent
+stage calls ``_execute_agent``. The nested group receives the previous stage's
+handed-off output as its branch input, and the join is handed off to the next
+sequential stage. A ``_stage_failure_to_outcome`` helper records a nested-group
+failure (which is an unrecorded ``_StageFailure``) as the single terminal outcome
+after persisting stage accounting; an agent-stage failure is already a
+fully-recorded ``Outcome`` and is returned as-is after persisting accounting.
+
+### 59. Hand-off, policy, and accounting
+
+``_validate_handoff`` now accepts ``StageSpec | ParallelComposition`` producers
+and consumers. A parallel-group producer has no declared ``output_schema``; its
+join payload is validated against the implicit default shape
+``{"stages": "list"}`` (instead of the agent-stage default ``{"text": "any"}``),
+while a real ``output_schema``/``input_schema`` is applied only when the
+producing/consuming stage is a ``StageSpec`` that declares one. Policy evaluation
+recurses into nested ``ParallelComposition`` stages via ``_check_stage_policy``.
+Resource accounting records each stage (agent or group) at its boundary and in
+the final summary, including on abort.
+
+### 60. Summary, replay, and critical path
+
+- **Summary**: a nested run is ``sequential`` (the ``pipeline stage N begin``
+  markers dominate); ``_compose_agents`` and ``_sequential_stages`` already
+detect both ``pipeline stage`` and ``parallel stage`` / ``parallel group begin``
+markers, so a nested trajectory attributes its agents correctly.
+- **Replay**: ``_is_parallel`` returns True when any ``parallel stage`` /
+``parallel group begin`` marker occurs, so a nested sequential-of-parallel run
+uses the documented **multiset** rule for concurrent work (parallel-order
+caveat) while boundary markers are always compared in order.
+- **Critical path**: a nested ``ParallelComposition`` stage is handled cleanly —
+its cost is the maximum of its branch costs (the critical path through the
+group) and it is labelled ``group(branch1+branch2+...)``. CPM remains
+observational only; CPM-driven scheduling stays out of scope.
+
+## Correctness evidence (Volley 016 state)
+
+- ``uv run pytest`` → **236 passed** (220 prior + 14 new nested-composition tests
+  + 2 new nested critical-path tests).
+- ``uv run ruff check .`` → All checks passed.
+- ``uv run mypy`` → Success: no issues found in 34 source files.
+- ``pipeline.v4`` accepts a parallel group as a sequential stage; ``pipeline.v3``
+  rejects it.
+- seq → parallel group → seq succeeds with correct hand-off and join; the join
+  dict is handed off intact to the next sequential stage (verified by a
+  ``join_consumer`` agent + verifier).
+- A failure inside a nested group aborts the outer sequence, cancels siblings,
+  and is fully audited; unknown agents in a group abort before any work runs.
+- Policy, per-stage envelopes, verification, and tool mediation all still hold
+  for nested group stages.
+- The nested trajectory is durable and reconstructible; summary attributes
+  agents correctly; replay passes under the documented multiset rule.
 
 ## Out of scope / future volleys (not started)
 

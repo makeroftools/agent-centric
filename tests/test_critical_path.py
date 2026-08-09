@@ -144,6 +144,46 @@ class TestRecordedStepsMetric:
         assert result.stages[0].slack == 80
 
 
+class TestNestedCriticalPath:
+    def test_nested_group_cost_is_max_of_branches(self) -> None:
+        """A nested parallel-group stage costs the max of its branches."""
+        plan = SequentialComposition(
+            version=PipelineVersion.V4,
+            stages=(
+                _par(
+                    StageSpec(agent_name="reverse", stage_envelope=_env(10)),
+                    StageSpec(agent_name="reverse", stage_envelope=_env(50)),
+                ),
+                StageSpec(agent_name="reverse", stage_envelope=_env(30)),
+            ),
+        )
+        result = analyse_critical_path(plan, parent_envelope=PARENT)
+        assert result.kind == "sequential"
+        # Group stage cost = max(10, 50) = 50; plus the 30 stage.
+        assert result.path_length == 80
+        assert [s.cost for s in result.stages] == [50, 30]
+        # The group is labelled as a group of its branches.
+        assert result.stages[0].agent == "group(reverse+reverse)"
+        assert all(s.slack == 0 for s in result.stages)
+
+    def test_nested_group_recorded_steps_override(self) -> None:
+        """A recorded override still applies to a nested group stage."""
+        plan = SequentialComposition(
+            version=PipelineVersion.V4,
+            stages=(
+                _par(
+                    StageSpec(agent_name="reverse", stage_envelope=_env(100)),
+                    StageSpec(agent_name="reverse", stage_envelope=_env(50)),
+                ),
+            ),
+        )
+        result = analyse_critical_path(
+            plan, recorded_steps={0: 7}, parent_envelope=PARENT
+        )
+        assert result.metric is CpmMetric.RECORDED_STEPS
+        assert result.path_length == 7
+
+
 class TestDeterminismAndReadOnly:
     def test_deterministic_for_same_inputs(self) -> None:
         plan = _par(

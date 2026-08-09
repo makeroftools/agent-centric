@@ -129,6 +129,27 @@ def verify_unguarded_model_output(task: TaskSpecification, output: Any) -> Verif
     return VerificationResult(False, "Output does not match the input.")
 
 
+def verify_join_consumer_output(task: TaskSpecification, output: Any) -> VerificationResult:
+    """Verify a JoinConsumerAgent output by re-deriving the join summary.
+
+    The agent consumes a handed-off join payload ``{"stages": [...]}`` and
+    returns ``"|".join(str(branch_output) for branch in stages)``. This is a
+    real, independent check that re-derives the expected summary from the
+    payload and compares it to the agent's output, proving the group ->
+    sequential hand-off delivered the join intact.
+    """
+    payload = task.payload
+    if not isinstance(payload, dict) or "stages" not in payload:
+        return VerificationResult(False, "Payload is not a join mapping.")
+    stages = payload["stages"]
+    if not isinstance(stages, (list, tuple)):
+        return VerificationResult(False, "Payload['stages'] is not a list.")
+    expected = "|".join(str(s[2]) for s in stages)
+    if output == expected:
+        return VerificationResult(True, "Output matches the expected join summary.")
+    return VerificationResult(False, "Output does not match the expected join summary.")
+
+
 def verify_unguarded_tool_output(task: TaskSpecification, output: Any) -> VerificationResult:
     """Verify an UnguardedToolAgent output (passthrough of the input text).
 
@@ -152,6 +173,7 @@ DEFAULT_VERIFIERS: dict[str, Verifier] = {
     "unguarded_tool": verify_unguarded_tool_output,
     "unguarded_model": verify_unguarded_model_output,
     "model": verify_model_output,
+    "join_consumer": verify_join_consumer_output,
 }
 
 
