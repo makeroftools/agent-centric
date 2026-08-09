@@ -4,10 +4,10 @@
 handoff.
 
 ## Current git state — clean and synced
-- **Branch:** `main`; **working tree clean**; **ahead of `origin/main` by 1 commit** (Volley 028).
-- **HEAD:** `feat(volley-028): bills registry maintenance - upsert + mark paid` (Volley 027 pushed last round).
-- **Version:** **0.28.0** (kernel milestone aligned with volley depth: 28 volleys delivered).
-- **Pushed:** Volleys 022–027 are on `origin/main`. The standing `do NOT push`
+- **Branch:** `main`; **working tree clean**; **ahead of `origin/main` by 1 commit** (Volley 029).
+- **HEAD:** `feat(volley-029): email to unverified bill draft - human-gated` (Volley 028 pushed last round).
+- **Version:** **0.29.0** (kernel milestone aligned with volley depth: 29 volleys delivered).
+- **Pushed:** Volleys 022–028 are on `origin/main`. The standing `do NOT push`
   rule holds; pushes happen only on explicit instruction.
 
 ## What Meta-Harness is
@@ -21,7 +21,7 @@ Governing docs: `PRINCIPLES.md` (non-negotiable rules), `KERNEL.md` (v0 freeze
 note), `STATUS.md` (volley-by-volley history + correctness evidence),
 `README.md` (GitHub frontpage, now enriched with a working Zed ACP quickstart).
 
-## What v0.28 includes (Volleys 001–028)
+## What v0.29 includes (Volleys 001–029)
 - Deterministic `AgentManager`: register, select (name/capability), run,
   summarise, replay.
 - Versioned contracts; capability registry; local tools (`to_upper`, `add`,
@@ -67,6 +67,12 @@ note), `STATUS.md` (volley-by-volley history + correctness evidence),
   (shared status path). Writes only the allowlisted registry path; never
   implicitly accepts intake drafts; verifier recomputes the expected merge;
   calendar stays correct after maintenance.
+- **Email → unverified draft (Volley 029)** (`control_plane/intake.py`): the
+  read-only `intake_email_draft` tool on the existing `intake` agent
+  (`intake.draft_from_email.v1`) parses a fetched email (subject + body) into
+  unverified `BillDraft` rows via the existing accept → registry → calendar path.
+  Weak/absent parse fails closed to no draft (no invented facts); read-only (no
+  send/delete); grant separate from `email_fetch` and `intake_accept`.
 - Operator CLI `meta-harness` (run/summarise/replay-verify) + **ACP adapter**
   `meta-harness-acp` (Zed external agent).
 
@@ -106,12 +112,12 @@ only — prefer adapters/backends over changing Manager semantics.**
 - `src/meta_harness/acp.py` — thin ACP adapter (uses official
   `agent-client-protocol` SDK, runtime dep `agent-client-protocol>=0.12.0`).
 - `src/meta_harness/cli.py` + `__main__.py` — operator CLI.
-- `tests/` — invariant tests across every volley (415 total).
+- `tests/` — invariant tests across every volley (428 total).
 
 ## Tooling / validation commands
 ```sh
 uv sync --extra dev
-uv run pytest        # 415 passed (as of handoff)
+uv run pytest        # 428 passed (as of handoff)
 uv run ruff check .  # clean
 uv run mypy src      # clean, 54 source files
 ```
@@ -121,13 +127,13 @@ uv run mypy src      # clean, 54 source files
   `printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}\n' | timeout 15 uv run meta-harness-acp`.
 
 ## Validation status (last full run)
-- `pytest` → **415 passed**; `ruff` clean; `mypy` clean (54 files).
+- `pytest` → **428 passed**; `ruff` clean; `mypy` clean (54 files).
 
 ## Where we are / next steps
-- Kernel is **complete at v0.28** in code. Volley 026 (dump intake), Volley 027
-  (PDF drafts), and Volley 028 (registry maintenance) are implemented and
-  validated. Volleys 022–027 were pushed for backup; Volley 028 is local-only
-  and unpushed.
+- Kernel is **complete at v0.29** in code. Volley 026 (dump intake), Volley 027
+  (PDF drafts), Volley 028 (registry maintenance), and Volley 029 (email →
+  unverified draft) are implemented and validated. Volleys 022–028 were pushed
+  for backup; Volley 029 is local-only and unpushed.
 - **Known v1 limits** (documented, not bugs): ACP is edge-transport only (not
   full coding-agent parity: no diffs/slash-commands/nested subagents);
   `session/cancel` is per-session but mid-run Manager cancellation is not
@@ -135,14 +141,15 @@ uv run mypy src      # clean, 54 source files
   `counter`, stub `model`). Read-only email v1 supports list/fetch only (no
   send/delete/move). PDF intake v1 handles only simple embedded-text PDFs; no
   OCR, no scanned-image PDFs, no auto-accept, no unsupervised calendar from
-  PDFs. Registry maintenance v1 has no delete-all, no recurrence engine, no
-  payments, and no broad "edit any JSON" tool.
+  PDFs or email. Registry maintenance v1 has no delete-all, no recurrence engine,
+  no payments, and no broad "edit any JSON" tool. Email→draft v1 does not
+  auto-organize or auto-accept.
 - **Roadmap posture:** use first, enhance on demand. The planned sequence
   **bills (022) -> workspace (023) -> read-only email (024) -> bills registry +
   calendar (025) -> dump intake (026) -> PDF drafts (027) -> registry
-  maintenance (028)** is now implemented. Each stays Manager-mediated,
-  policy-bound, verified, and audited. Follow-up (candidate, not started):
-  recurrence, or email->draft ingest.
+  maintenance (028) -> email → unverified draft (029)** is now implemented. Each
+  stays Manager-mediated, policy-bound, verified, and audited. Follow-up
+  (candidate, not started): recurrence, or auto-organize/auto-accept.
 
 ## Ground rules for the new thread
 - Mission-critical: **correctness first, deterministic control plane,

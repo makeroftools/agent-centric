@@ -38,7 +38,7 @@ governs every decision in this repository.
 
 ---
 
-## What v0.28 includes
+## What v0.29 includes
 
 | Area | What's implemented |
 | --- | --- |
@@ -623,12 +623,13 @@ closed and never produces a verified result.
 
 ---
 
-## Dump intake (Volley 026 / 027)
+## Dump intake (Volley 026 / 027 / 029)
 
-Drop files in an allowlisted `inbox/`, get a deterministic inventory, produce
-**unverified** bill drafts, and explicitly **accept** only the rows you approve
-into the bills registry. No silent financial commits: inventory and drafts never
-touch the registry; accept is a separate, grant-gated operation.
+Drop files in an allowlisted `inbox/` (or fetch an email), get a deterministic
+inventory, produce **unverified** bill drafts, and explicitly **accept** only the
+rows you approve into the bills registry. No silent financial commits: inventory,
+drafts, and email-draft never touch the registry; accept is a separate,
+grant-gated operation.
 
 - **Structured sources (Volley 026):** `.json`/`.csv` + simple `.txt` key-value
   fragments.
@@ -637,14 +638,21 @@ touch the registry; accept is a separate, grant-gated operation.
   date are parsed **only into an unverified `BillDraft`**; a PDF with no usable
   embedded text fails closed (no draft is invented). No OCR, no cloud APIs, no
   network.
-- **Limits:** there is **no unsupervised calendar from PDFs** — extracted facts
-  stay unverified until a human accepts them, and only the accepted registry
-  drives the calendar. PDFs that are scanned images (no embedded text) are not
-  parsed.
+- **Email → unverified draft (Volley 029):** a fetched email message (subject +
+  body) is parsed locally into unverified `BillDraft` rows via the read-only
+  `intake_email_draft` tool. Weak/absent content fails closed to no draft (no
+  invented facts). It is read-only (no send/delete) and its grant is separate
+  from both `email_fetch` and `intake_accept`.
+- **Limits:** there is **no unsupervised calendar from PDFs/email** — extracted
+  facts stay unverified until a human accepts them, and only the accepted
+  registry drives the calendar. PDFs that are scanned images (no embedded text)
+  are not parsed, and email drafting does not auto-organize or auto-accept.
 
 ```python
-# capability: intake.inventory.v1 / intake.draft_bills.v1 / intake.accept_bills.v1
-# operation: "inventory" | "drafts" | "accept"
+# capability: intake.inventory.v1 / intake.draft_bills.v1 /
+#             intake.draft_from_email.v1 / intake.accept_bills.v1
+# operation: "inventory" | "drafts" | "draft_from_email" | "accept"
+# draft_from_email requires the intake_email_draft tool (read-only);
 # accept requires the intake_accept tool and an explicit accept_ids list.
 ```
 

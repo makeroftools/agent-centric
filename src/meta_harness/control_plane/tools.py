@@ -188,6 +188,15 @@ INTAKE_ACCEPT_DESCRIPTOR = ToolDescriptor(
     execution_semantics="explicit write, least-privilege, human-in-the-loop",
 )
 
+INTAKE_EMAIL_DRAFT_DESCRIPTOR = ToolDescriptor(
+    version=ToolVersion.V1,
+    name="intake_email_draft",
+    description="Turn a fetched email message into unverified bill draft proposals (read-only).",
+    input_schema={"message": "mapping"},
+    output_schema="mapping",
+    execution_semantics="read-only, deterministic, production of unverified drafts",
+)
+
 BILLS_REGISTRY_UPSERT_DESCRIPTOR = ToolDescriptor(
     version=ToolVersion.V1,
     name="bills_registry_upsert",

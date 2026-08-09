@@ -1,12 +1,19 @@
-"""A deterministic dump-intake agent: inbox inventory + draft proposals + accept (Volley 026).
+"""A deterministic dump-intake agent: inbox inventory + draft proposals + accept (Volley 026 / 029).
 
 This agent performs a single intake operation through the Manager's mediated
-tools (only if explicitly granted): ``inventory`` (list the allowlisted inbox),
-``drafts`` (produce unverified draft proposals from supported inbox files), or
-``accept`` (explicitly accept only the provided draft ids into the bills
-registry). No operation may mutate the registry silently — accept is the only
-writing path, requires its own tool grant, and only persists the explicitly
-provided draft ids.
+tools (only if explicitly granted):
+
+- ``inventory`` — list the allowlisted inbox,
+- ``drafts`` — produce unverified draft proposals from supported inbox files,
+- ``draft_from_email`` — produce unverified bill drafts from a fetched email
+  message (read-only, weak/absent parse fails closed to no draft),
+- ``accept`` — explicitly accept only the provided draft ids into the bills
+  registry.
+
+No operation may mutate the registry silently — accept is the only writing
+path, requires its own tool grant, and only persists the explicitly provided
+draft ids. ``draft_from_email`` is read-only and never sends/deletes/mutates
+mail, and its grant is separate from both ``email_fetch`` and ``intake_accept``.
 """
 
 from __future__ import annotations
@@ -45,6 +52,18 @@ class IntakeAgent:
                 return AgentResult(output=None)
             sent = yield ToolRequest(name="intake_drafts", args={})
             return (yield from self._finish_tool(sent, "intake_drafts"))
+
+        if operation == "draft_from_email":
+            message = payload.get("message")
+            if not isinstance(message, dict):
+                raise TypeError("IntakeAgent payload['message'] must be a mapping.")
+            if not tools.available("intake_email_draft"):
+                yield AgentStep(description="tool intake_email_draft not granted")
+                return AgentResult(output=None)
+            sent = yield ToolRequest(
+                name="intake_email_draft", args={"message": message}
+            )
+            return (yield from self._finish_tool(sent, "intake_email_draft"))
 
         if operation == "accept":
             drafts = payload.get("drafts")

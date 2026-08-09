@@ -44,6 +44,7 @@ from meta_harness.control_plane.tools import (
     INBOX_INVENTORY_DESCRIPTOR,
     INTAKE_ACCEPT_DESCRIPTOR,
     INTAKE_DRAFTS_DESCRIPTOR,
+    INTAKE_EMAIL_DRAFT_DESCRIPTOR,
     ToolRegistry,
 )
 from meta_harness.control_plane.trajectory_store import FileTrajectoryStore
@@ -127,11 +128,12 @@ _INTAKE_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="intake",
     entry_point="meta_harness.agents.intake:create_intake_agent",
-    description="Runs a dump-intake operation: inventory, drafts, or explicit accept.",
+    description="Runs a dump-intake operation: inventory, drafts, email draft, or explicit accept.",
     declared_capabilities=frozenset(
         {
             Capability(name="intake.inventory", version="1"),
             Capability(name="intake.draft_bills", version="1"),
+            Capability(name="intake.draft_from_email", version="1"),
             Capability(name="intake.accept_bills", version="1"),
         }
     ),
@@ -303,6 +305,24 @@ def _demo_tasks() -> tuple[TaskSpecification, ...]:
             envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
             granted_tools=("intake_drafts",),
         ),
+        TaskSpecification(
+            version=TaskSpecVersion.V5,
+            task_id="demo-intake-email-draft",
+            agent_name="intake",
+            payload={
+                "operation": "draft_from_email",
+                "message": {
+                    "id": "m-bill",
+                    "folder": "INBOX",
+                    "subject": "Your bill from GasCo",
+                    "from_address": "billing@gasco.example",
+                    "date": "2026-08-05",
+                    "body": "Amount total: $123.45. Due date: 2026-09-20.",
+                },
+            },
+            envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
+            granted_tools=("intake_email_draft",),
+        ),
     )
 
 
@@ -331,6 +351,7 @@ def _intake_tool_descriptor(name: str) -> ToolDescriptor:
         "inbox_inventory": INBOX_INVENTORY_DESCRIPTOR,
         "intake_drafts": INTAKE_DRAFTS_DESCRIPTOR,
         "intake_accept": INTAKE_ACCEPT_DESCRIPTOR,
+        "intake_email_draft": INTAKE_EMAIL_DRAFT_DESCRIPTOR,
     }[name]
 
 
@@ -365,6 +386,13 @@ def _manager(store_dir: Path) -> AgentManager:
                         "from": "a@example.test",
                         "date": "2026-08-01",
                         "body": "first",
+                    },
+                    {
+                        "id": "m-bill",
+                        "subject": "Your bill from GasCo",
+                        "from": "billing@gasco.example",
+                        "date": "2026-08-05",
+                        "body": "Amount total: $123.45. Due date: 2026-09-20.",
                     },
                 ),
             }

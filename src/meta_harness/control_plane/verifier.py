@@ -500,6 +500,29 @@ def verify_intake_output(task: TaskSpecification, output: Any) -> VerificationRe
                 )
         return VerificationResult(True, "Output drafts are all explicitly unverified.")
 
+    if operation == "draft_from_email":
+        message = payload.get("message")
+        if not isinstance(message, dict):
+            return VerificationResult(False, "Payload is missing a valid 'message'.")
+        from .intake import draft_from_email
+
+        try:
+            expected_email = draft_from_email(message)
+        except (ValueError, TypeError) as exc:
+            return VerificationResult(False, f"Cannot recompute email draft: {exc}")
+        if output != expected_email:
+            return VerificationResult(
+                False, "Output does not match the recomputed email draft."
+            )
+        for draft in output.get("drafts", []):
+            if not isinstance(draft, dict) or draft.get("unverified") is not True:
+                return VerificationResult(
+                    False, "Email drafts must all be explicitly unverified."
+                )
+        return VerificationResult(
+            True, "Output matches the recomputed email draft and is unverified."
+        )
+
     if operation == "accept":
         drafts_mapping = payload.get("drafts")
         accept_ids = payload.get("accept_ids")

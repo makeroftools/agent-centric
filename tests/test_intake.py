@@ -106,12 +106,14 @@ def intake_tool_descriptor(name: str):
         INBOX_INVENTORY_DESCRIPTOR,
         INTAKE_ACCEPT_DESCRIPTOR,
         INTAKE_DRAFTS_DESCRIPTOR,
+        INTAKE_EMAIL_DRAFT_DESCRIPTOR,
     )
 
     return {
         "inbox_inventory": INBOX_INVENTORY_DESCRIPTOR,
         "intake_drafts": INTAKE_DRAFTS_DESCRIPTOR,
         "intake_accept": INTAKE_ACCEPT_DESCRIPTOR,
+        "intake_email_draft": INTAKE_EMAIL_DRAFT_DESCRIPTOR,
     }[name]
 
 

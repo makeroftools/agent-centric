@@ -1,4 +1,4 @@
-# STATUS — Volley 001–028
+# STATUS — Volley 001–029
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -1911,6 +1911,47 @@ dates only, and the Manager remains sole authority.
   invariants hold.
 
 ## Pause point — Volley 028 delivered (report pending)
+
+# Volley 029 — Email → Unverified Bill Draft (Human-Gated) (delivered)
+
+### 101. Read-only email → unverified bill drafts through the same accept gate
+
+Closes the main remaining intake gap: a fetched email (existing read-only email
+tools/gateway) becomes **unverified** ``BillDraft`` proposals that flow through
+the existing accept → registry → calendar path. Email-derived amounts/dates stay
+unverified until a human accept; no silent registry writes; no send/delete;
+secrets stay in env; weak/absent parse fails closed (no invented facts). Manager
+remains sole authority.
+
+- ``control_plane/intake.py``: ``draft_from_email`` parses vendor / amount /
+  due date from the email subject + body (local only, fixture-tested, reuses the
+  existing conservative heuristics). Result is a ``DraftProposals`` with
+  ``unverified: true`` and source ``email://folder/id``. Weak/absent content
+  fails closed to **no draft** (``count == 0``).
+- Mediated tool ``intake_email_draft`` (read-only, least-privilege) on the
+  existing ``intake`` agent under a new capability ``intake.draft_from_email.v1``
+  — extends the existing agent, no parallel god-agent. Its grant is separate
+  from both ``email_fetch`` and ``intake_accept``/registry-write.
+- Integration reuses ``FakeEmailGateway`` / optional real IMAP (still off by
+  default in CI). Accept reuses ``intake_accept``; nothing is auto-accepted.
+- Verification: the ``intake`` verifier recomputes the expected email draft from
+  the payload message and checks every draft is ``unverified``.
+
+## Correctness evidence (Volley 029 state)
+
+- ``uv run pytest`` -> **428 passed** (415 prior + 13 new email→draft tests).
+- ``uv run ruff check .`` -> All checks passed.
+- ``uv run mypy`` -> Success: no issues found in 54 source files.
+- New tests prove: a fixture bill email yields one unverified draft with correct
+  vendor/amount/due date/source; unparseable, missing-amount, and missing-date
+  bodies fail closed to no draft; missing folder/id fail closed; email-draft
+  alone never mutates the registry; accept is still required to persist an
+  email-derived draft into the registry; the email-draft op verifies under its
+  grant and fails closed ungranted; drafting needs no live gateway/network. The
+  CLI demo ``demo-intake-email-draft`` runs VERIFIED (GasCo, 12345c,
+  due 2026-09-20, source email://INBOX/m-bill). All prior invariants hold.
+
+## Pause point — Volley 029 delivered (report pending)
 
 ## Out of scope / future volleys (not started)
 

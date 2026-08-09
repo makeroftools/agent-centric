@@ -1,4 +1,4 @@
-"""Dump Intake: inbox inventory + unverified draft proposals + human accept (Volley 026).
+"""Dump Intake: inbox inventory + unverified draft proposals + human accept (Volley 026 / 029).
 
 This module provides the deterministic intake pipeline for a local workspace:
 
@@ -8,13 +8,17 @@ This module provides the deterministic intake pipeline for a local workspace:
 - ``extract_drafts`` turns supported structured sources (``.json``,
   ``.csv``, and simple ``.txt`` mappings) into ``BillDraft`` proposals that are
   **always** ``unverified``.
+- ``draft_from_email`` turns a fetched email message (subject + body) into
+  ``BillDraft`` proposals that are **always** ``unverified``; weak/absent
+  content fails closed to no draft.
 - ``accept_drafts`` is a pure upsert that merges only the explicitly provided
   draft rows into the registry; it never auto-accepts anything.
 
 ``IntakeOps`` binds these to a ``Workspace`` and exposes them as mediated tools
-(``inbox_inventory``, ``intake_drafts`` (read-only) and the least-privilege
-``intake_accept`` which requires the accept-drafts tool grant). Calendar remains
-driven only by the accepted registry.
+(``inbox_inventory``, ``intake_drafts`` (read-only), ``intake_email_draft``
+(read-only) and the least-privilege ``intake_accept`` which requires the
+accept-drafts tool grant). Calendar remains driven only by the accepted
+registry.
 """
 
 from __future__ import annotations
@@ -27,6 +31,7 @@ from collections.abc import Callable
 from typing import Any
 
 from ..contracts.bills_registry import BillsRegistry
+from ..contracts.email import EmailMessage
 from ..contracts.intake import AcceptResult, BillDraft, DraftProposals, InboxEntry, InboxInventory
 from ..contracts.workspace import WorkspaceLayout
 from .bills_registry import BILLS_REGISTRY_PATH, ensure_bills_layout, load_registry
@@ -158,7 +163,7 @@ def _extract_from_txt(source_path: str, content: str) -> BillDraft:
 
 
 _AMOUNT_RE = re.compile(
-    r"\b(?:total|amount)\s*[:$]?\s*([0-9]+(?:\.[0-9]{1,2})?)\b",
+    r"\b(?:total|amount)\s*[:$]?\s*\$?([0-9]+(?:\.[0-9]{1,2})?)\b",
     re.IGNORECASE,
 )
 _DUE_RE = re.compile(
@@ -235,6 +240,72 @@ def _extract_from_pdf(source_path: str, content: bytes) -> BillDraft:
             ),
         }
     )
+
+
+_VENDOR_EMAIL_RE = re.compile(
+    r"\b(?:from|vendor|billed by)\s*[:.]?\s*"
+    r"([A-Za-z0-9&.'\-]+(?:\s+(?!total|amount|due|date)[A-Za-z0-9&.'\-]+){0,2})",
+    re.IGNORECASE,
+)
+
+
+def draft_from_email(message: dict[str, Any] | EmailMessage) -> dict[str, Any]:
+    """Produce unverified bill drafts from a fetched email message (Volley 029).
+
+    Heuristics parse vendor / amount / due date from the email subject and body
+    (local only, fixture-tested). The result is a ``DraftProposals`` mapping
+    with **unverified: true** and the source pointing at the message
+    (``email://folder/id``). If the body/subject cannot be parsed into a
+    complete, non-empty draft, we **fail closed** and return **no drafts**
+    (``count == 0``) rather than invent facts.
+
+    No send/delete is ever performed. This never writes to the registry;
+    persisting requires the separate ``intake_accept`` gate.
+    """
+    msg = message.as_mapping() if isinstance(message, EmailMessage) else message
+    if not isinstance(msg, dict):
+        raise ValueError("email draft source must be a message mapping.")
+    folder = msg.get("folder")
+    message_id = msg.get("id")
+    if not isinstance(folder, str) or not folder:
+        raise ValueError("email message is missing a non-empty 'folder'.")
+    if not isinstance(message_id, str) or not message_id:
+        raise ValueError("email message is missing a non-empty 'id'.")
+    subject = msg.get("subject") or ""
+    body = msg.get("body") or ""
+    source_path = f"email://{folder}/{message_id}"
+    text = f"{subject} {body}"
+
+    amount_cents: int | None = None
+    due_date = ""
+    vendor = ""
+    m = _AMOUNT_RE.search(text)
+    if m:
+        amount_cents = _parse_money(m.group(1))
+    dm = _DUE_RE.search(text)
+    if dm:
+        due_date = dm.group(1)
+    vm = _VENDOR_EMAIL_RE.search(text)
+    if vm:
+        vendor = vm.group(1).strip()
+
+    # Fail closed: a complete draft needs a vendor, a parseable amount, and a
+    # due date. Any missing field -> no draft (we do not invent facts).
+    if not vendor or amount_cents is None or not due_date:
+        return DraftProposals(drafts=()).as_mapping()
+    return DraftProposals(
+        drafts=(
+            BillDraft(
+                draft_id=f"{message_id}:{due_date}",
+                vendor=vendor,
+                amount_cents=amount_cents,
+                due_date=due_date,
+                source_path=source_path,
+                notes="extracted from email (unverified); human accept required",
+                confidence="low",
+            ),
+        )
+    ).as_mapping()
 
 
 def extract_drafts(workspace: Workspace, prefix: str = INBOX_PREFIX) -> dict[str, Any]:
@@ -354,6 +425,22 @@ class IntakeOps:
     def drafts(self) -> dict[str, Any]:
         return extract_drafts(self._workspace)
 
+    def email_draft(self, message: dict[str, Any]) -> dict[str, Any]:
+        """Turn a fetched email message into unverified bill drafts (read-only).
+
+        This is a least-privilege, read-only operation: it never sends, deletes,
+        or mutates mail, and it never writes to the registry. Weak/unparseable
+        content fails closed to an empty draft set (no invented facts).
+        Persisting any produced draft still requires the separate ``intake_accept``
+        gate.
+        """
+        if not isinstance(message, dict):
+            raise ToolExecutionError("email_draft requires a message mapping.")
+        try:
+            return draft_from_email(message)
+        except ValueError as exc:
+            raise ToolExecutionError(str(exc)) from exc
+
     def accept(self, drafts: dict[str, Any], accept_ids: list[str]) -> dict[str, Any]:
         """Accept only the given draft ids into the registry and persist.
 
@@ -395,4 +482,5 @@ def intake_tool_impls(ops: IntakeOps) -> dict[str, Callable[..., Any]]:
         "inbox_inventory": ops.inventory,
         "intake_drafts": ops.drafts,
         "intake_accept": ops.accept,
+        "intake_email_draft": ops.email_draft,
     }
