@@ -8,6 +8,7 @@ version so that it can evolve without silently breaking the correctness model.
 from .bill import Bill, BillLine, BillTotal, BillVersion
 from .capability import Capability
 from .critical_path import CpmMetric, CpmVersion, CriticalPathResult, CriticalPathStage
+from .email import EmailList, EmailMessage, EmailVersion, MessageSummary
 from .handoff import HandoffSchema, is_valid_schema, validate_handoff
 from .manifest import AgentComponentManifest, AgentManifestVersion
 from .model import (
@@ -101,4 +102,8 @@ __all__ = [
     "WorkspaceEntryKind",
     "WorkspaceLayout",
     "WorkspaceVersion",
+    "MessageSummary",
+    "EmailMessage",
+    "EmailList",
+    "EmailVersion",
 ]

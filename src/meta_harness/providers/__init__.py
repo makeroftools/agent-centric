@@ -20,6 +20,12 @@ from ..contracts.model import (
     ModelProviderVersion,
     ModelResponse,
 )
+from .email import (
+    EmailGatewayError,
+    FakeEmailGateway,
+    OptionalRealEmailGateway,
+    build_optional_email_gateway,
+)
 
 # Default bound for a single real-provider call. The Manager's per-step and
 # overall envelope timeouts still apply independently; this bounds a genuinely
@@ -241,3 +247,16 @@ def build_real_model_provider(
         timeout_seconds=timeout_seconds,
         secret_values=secrets,
     )
+
+
+__all__ = [
+    "StubModelProvider",
+    "FailingStubModelProvider",
+    "OptionalRealModelProvider",
+    "build_real_model_provider",
+    "redact_secrets",
+    "EmailGatewayError",
+    "FakeEmailGateway",
+    "OptionalRealEmailGateway",
+    "build_optional_email_gateway",
+]

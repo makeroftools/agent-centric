@@ -9,8 +9,8 @@ trajectory**, and mediate every tool and model call. Agents can only *request*
 capabilities; the Manager is the sole authority that grants, executes, records,
 and verifies.
 
-This is the **v0.23 preliminary release** — a minimal but complete harness,
-built across Volleys 001–023. It reflects what exists in the codebase, not an
+This is the **v0.24 preliminary release** — a minimal but complete harness,
+built across Volleys 001–024. It reflects what exists in the codebase, not an
 aspirational platform.
 
 ```
@@ -38,20 +38,20 @@ governs every decision in this repository.
 
 ---
 
-## What v0.23 includes
+## What v0.24 includes
 
 | Area | What's implemented |
 | --- | --- |
 | **Manager** | Deterministic `AgentManager`: register, select (by name or capability), run, summarise, replay. |
-| **Contracts** | Versioned, strongly-typed contracts for tasks, results, trajectories, tools, pipelines, parallel, policy, model, summary, replay, critical path, bills, and workspace. |
+| **Contracts** | Versioned, strongly-typed contracts for tasks, results, trajectories, tools, pipelines, parallel, policy, model, summary, replay, critical path, bills, workspace, and email. |
 | **Registry** | In-process, deterministic agent registry with capability-based selection. |
-| **Tools** | Local tools (`to_upper`, `add`, `bill_total`) plus a Manager-mediated **MCP adapter** and **allowlisted workspace tools**; grants and policy enforced by the Manager. |
+| **Tools** | Local tools (`to_upper`, `add`, `bill_total`) plus a Manager-mediated **MCP adapter**, **allowlisted workspace tools**, and **read-only email tools**; grants and policy enforced by the Manager. |
 | **Model path** | Mediated `llm_complete` tool; deterministic stub by default; an optional, hardened real-provider path. |
 | **Composition** | Sequential pipelines, parallel fan-out/join, and nested sequential-as-parallel — all Manager-orchestrated. |
 | **Governance** | Policy (allow/deny), hard resource envelopes, cooperative cancellation, per-step budgets. |
 | **Isolation** | Optional subprocess execution; silent-hang bounded, forced-kill recorded, no zombies. |
 | **Observability** | Deterministic trajectory summary, replay verification, and read-only critical-path (CPM) analysis. |
-| **Specialty agents** | A **bills** agent (structured bills → deterministic totals) and a **workspace** agent (allowlisted, mediated file operations). |
+| **Specialty agents** | A **bills** agent (structured bills → deterministic totals), a **workspace** agent (allowlisted file operations), and a **read-only email** agent (`email_list` / `email_fetch`). |
 | **Operator CLI** | `meta-harness` with `run`, `summarise`, and `replay-verify`. |
 | **Editor bridge** | Thin ACP adapter (`meta-harness-acp`) so Meta-Harness runs as an External Agent in Zed. |
 
@@ -192,6 +192,7 @@ demo-model: VERIFIED output='stub response' trajectory_id=demo-model#3
 demo-pipeline: VERIFIED output='NOITISOPMOC LAITNEUQES' trajectory_id=demo-pipeline#4
 demo-bills: VERIFIED output={'line_subtotal_cents': 2750, 'discount_cents': 275, 'taxable_amount_cents': 2475, 'tax_cents': 124, 'grand_total_cents': 2599} trajectory_id=demo-bills#5
 demo-workspace: VERIFIED output={'relative_path': 'invoices/note.txt', 'kind': 'file', 'content': 'hello workspace'} trajectory_id=demo-workspace#6
+demo-email: VERIFIED output={'folder': 'INBOX', 'limit': 10, 'count': 1, 'messages': [{'id': 'm1', 'folder': 'INBOX', 'subject': 'Hello', 'from_address': 'a@example.test', 'date': '2026-08-01'}]} trajectory_id=demo-email#7
 ```
 
 Trajectories are durable, append-only JSON-lines files (hex-named `.jsonl`)
@@ -349,7 +350,7 @@ The correctness guarantees are demonstrated across the test suite
 ```
 PRINCIPLES.md          Non-negotiable governing rules
 KERNEL.md              v0 kernel freeze note (guarantees, out-of-scope, versioning)
-STATUS.md              Volley history 001–023 + correctness evidence
+STATUS.md              Volley history 001–024 + correctness evidence
 src/meta_harness/
   __init__.py          Public surface
   contracts/           Versioned, strongly-typed contracts
@@ -388,9 +389,44 @@ task step budget. Enforcement stays entirely in the Manager.
 ## Versioning / preliminary-release status
 
 The package is versioned as a kernel milestone aligned with volley depth:
-**`0.23.0`** (23 volleys delivered). This is a **preliminary release** — the
-v0.23 kernel is complete but APIs may evolve before a stable 1.0. See
+**`0.24.0`** (24 volleys delivered). This is a **preliminary release** — the
+v0.24 kernel is complete but APIs may evolve before a stable 1.0. See
 [`KERNEL.md`](KERNEL.md) for the versioning scheme and freeze boundaries.
+
+---
+
+## The read-only email specialty agent (Volley 024)
+
+A deterministic **read-only email** agent lists or fetches messages through the
+Manager's mediated `email_list` / `email_fetch` tools. It is strictly read-only:
+no send, delete, move, or mailbox-destructive operations. Verification is real
+(structural consistency): the output must match the requested operation, a list
+must be bounded by its limit, and a fetch must echo the requested message id.
+
+**Sensitivity note — email is sensitive.** Credentials are read from environment
+variables (host / user / password or app token) and **never** appear in a task
+payload, an agent prompt, or a trajectory. Errors from the real gateway are
+redacted of any known secret before they can be recorded. A trajectory records
+the message metadata (id, folder, subject, from, date) exactly as structured
+results; it does not dump full bodies into step descriptions.
+
+**Configuration (real IMAP, opt-in and off by default):**
+
+| Env var | Purpose |
+| --- | --- |
+| `META_HARNESS_EMAIL_HOST` | IMAP host (e.g. a Mail-in-a-Box mailbox). |
+| `META_HARNESS_EMAIL_USER` | Mailbox user. |
+| `META_HARNESS_EMAIL_PASSWORD` | Mailbox password or app token. |
+| `META_HARNESS_EMAIL_ENABLED` | Set to truthy (e.g. `1`) to opt in. |
+| `META_HARNESS_EMAIL_FOLDERS` | Optional comma-separated folder allowlist. |
+
+Missing host/user/password raises a clear fail-closed error; no network call is
+made unless explicitly enabled, so CI never touches a mailbox. All tests use the
+deterministic `FakeEmailGateway`.
+
+**Non-goals (explicit):** no SMTP send, no delete/move/flag-as-destructive bulk
+ops, no full mail-client UX, no PDF/bill auto-ingest from attachments, no cloud
+SaaS mail provider as primary.
 
 ---
 
@@ -496,9 +532,10 @@ closed and never produces a verified result.
 **Use first; enhance on demand.** The harness is intentionally minimal. New
 capabilities will be added only when driven by demonstrated need, and will
 prefer adapters and backends over changing Manager semantics. The planned
-specialty agent sequence is bills → workspace → email; the next step is a
-**Mail-in-a-Box read-only tool + email agent** (list/fetch first, never send in
-v1).
+specialty agent sequence was bills → workspace → email; with the read-only email
+agent now delivered, the next step is any follow-up the architect directs under
+the same fail-closed rules (candidate: PDF/bill auto-ingest from email
+attachments, explicitly deferred beyond this volley).
 
 ---
 

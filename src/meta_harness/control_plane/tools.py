@@ -125,6 +125,24 @@ CREATE_WORKSPACE_DIR_DESCRIPTOR = ToolDescriptor(
     execution_semantics="allowlisted, bounded side effect",
 )
 
+EMAIL_LIST_DESCRIPTOR = ToolDescriptor(
+    version=ToolVersion.V1,
+    name="email_list",
+    description="List the most recent messages in a folder (bounded).",
+    input_schema={"folder": "str", "limit": "int"},
+    output_schema="mapping",
+    execution_semantics="read-only, gateway-mediated, bounded",
+)
+
+EMAIL_FETCH_DESCRIPTOR = ToolDescriptor(
+    version=ToolVersion.V1,
+    name="email_fetch",
+    description="Fetch a message's headers and body by id.",
+    input_schema={"folder": "str", "message_id": "str"},
+    output_schema="mapping",
+    execution_semantics="read-only, gateway-mediated",
+)
+
 
 class ToolRegistry:
     """Deterministic registry and executor of concrete tools.

@@ -16,6 +16,7 @@ from ..contracts.summary import (
     TrajectorySummary,
 )
 from .critical_path import analyse_critical_path
+from .email_tools import EmailTools
 from .execution import (
     AgentExecutionError,
     ExecutionBackend,
@@ -68,6 +69,7 @@ __all__ = [
     "ToolExecutionError",
     "Workspace",
     "WorkspaceError",
+    "EmailTools",
     "TrajectoryStore",
     "TrajectoryStoreError",
     "CorruptTrajectoryError",

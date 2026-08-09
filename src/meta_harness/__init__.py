@@ -18,8 +18,12 @@ from .contracts import (
     CpmVersion,
     CriticalPathResult,
     CriticalPathStage,
+    EmailList,
+    EmailMessage,
+    EmailVersion,
     Failure,
     FailureReason,
+    MessageSummary,
     ModelProvider,
     ModelProviderError,
     ModelProviderVersion,
@@ -62,6 +66,7 @@ from .contracts import (
 from .control_plane import (
     AgentExecutionError,
     AgentManager,
+    EmailTools,
     ExecutionBackend,
     InProcessBackend,
     LocalMcpServer,
@@ -80,9 +85,13 @@ from .control_plane import (
     analyse_critical_path,
 )
 from .providers import (
+    EmailGatewayError,
     FailingStubModelProvider,
+    FakeEmailGateway,
+    OptionalRealEmailGateway,
     OptionalRealModelProvider,
     StubModelProvider,
+    build_optional_email_gateway,
     build_real_model_provider,
     redact_secrets,
 )
@@ -165,4 +174,13 @@ __all__ = [
     "WorkspaceEntryKind",
     "WorkspaceLayout",
     "WorkspaceVersion",
+    "MessageSummary",
+    "EmailMessage",
+    "EmailList",
+    "EmailVersion",
+    "EmailTools",
+    "EmailGatewayError",
+    "FakeEmailGateway",
+    "OptionalRealEmailGateway",
+    "build_optional_email_gateway",
 ]

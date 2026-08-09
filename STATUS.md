@@ -1,4 +1,4 @@
-# STATUS — Volley 001–023
+# STATUS — Volley 001–024
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -101,8 +101,15 @@ operates on it entirely through the Manager. The allowlisted mediated file
 tools (``list_workspace``, ``read_workspace_file``, ``write_workspace_file``,
 ``create_workspace_dir``) reject any path not on the allowlist (fail-closed),
 with no deletion, rename, or arbitrary traversal; verification is real
-(recompute). No email or Mail-in-a-Box was introduced, and the volley did not
-expand into doc organization or email.
+(recompute). No email was introduced, and the volley did not expand into doc
+organization or email. For Volley 024, the first read-only email integration was
+introduced: a narrow email gateway (fake for CI, optional real IMAP off by
+default) exposed only as mediated ``email_list`` / ``email_fetch`` tools plus a
+deterministic ``email`` specialty agent. It is strictly read-only (no send,
+delete, or mailbox-destructive operations), inputs are bounded (optional folder
+allowlist, enforced list limit), secrets come only from environment and are
+redacted from any error path, and verification is real (structural consistency).
+The real IMAP path is opt-in and disabled by default with no network in CI.
 
 ---
 
@@ -1626,17 +1633,86 @@ not expand into doc organization or email.
   deterministic replay; and subprocess-backend isolation. All prior invariants
   hold.
 
-## Pause point — Volley 023 accepted
+## Pause point — Volley 023 delivered (report submitted; awaiting review)
 
-Volley 023 was accepted; the workspace specialty agent is delivered. No volley
-is in flight.
+Volley 023 was delivered; the workspace specialty agent is implemented and its
+completion report has been submitted. No volley is in flight pending review.
 
-- **Status:** v0.23 baseline (workspace specialty agent, allowlisted file tools).
+- **Status:** v0.23 baseline code delivered; Volley 023 acceptance pending
+  Architect review.
 - **Push:** the standing instruction is to **not push**; local ``main`` is ahead
   of ``origin/main`` and unpushed.
 - **Next (planned, not started):** Mail-in-a-Box read-only tool + email agent
   (list/fetch first, never send in v1; issued by the Architect only after 023 is
   accepted).
+
+# Volley 024 — Read-Only Email Tool + Agent (in flight)
+
+### 86. Read-only email gateway (provider abstraction)
+
+A narrow read-only email gateway interface (``EmailGateway``: ``list_messages``
+and ``fetch_message``) plus two implementations. ``FakeEmailGateway`` is an
+in-memory, deterministic gateway used by all CI tests (no network, no
+credentials). ``OptionalRealEmailGateway`` is an optional real-IMAP backend,
+**disabled by default** and fail-closed: it requires explicit opt-in plus
+host/user/password (supplied via environment), exposes an optional folder
+allowlist, and redacts every known secret from any error it raises. No network
+is ever touched in CI.
+
+### 87. Mediated tools (``email_list`` / ``email_fetch``)
+
+Two read-only mediated tools are registered on the ``ToolRegistry`` and subject
+to the same grant, policy, envelope, recording, and verification paths as every
+other tool. Inputs are bounded: an optional folder allowlist restricts which
+folders may be listed/fetched, and a maximum list size is enforced. Any gateway
+error maps to a fail-closed ``ToolExecutionError``.
+
+### 88. Specialty agent (capability ``email.read.v1``)
+
+A deterministic ``email`` specialty agent performs a single read-only operation
+(``list`` or ``fetch``) under granted tools and returns a structured result
+(ids, subjects, from, dates; body only when fetched). No model is required for
+v1.
+
+### 89. Real verification
+
+``verify_email_output`` checks structural consistency: the output's shape must
+match the requested operation, a list must be bounded by its requested limit,
+and a fetch must echo the requested message id. Malformed agent output is
+rejected explicitly (fail-closed).
+
+### 90. Secrets & audit
+
+Credentials come only from environment/configuration, never from a task payload
+or an agent prompt. The real gateway redacts passwords/tokens from any error
+string before it can be recorded. Trajectories record message metadata
+(ids/subjects/dates) per the existing tool-recording policy; bodies are carried
+only as structured tool results (not dumped into step descriptions). See the
+README sensitivity note.
+
+### 91. Fail closed; full trajectory; tests; docs; version 0.24.0
+
+All failure modes (ungranted tool, disallowed folder, unknown folder/id, policy
+denial, envelope exhaustion, real-gateway failures) are explicit, audited
+failures. Package version is bumped to **0.24.0**. No send, delete, move, or
+mailbox-destructive operations exist; no PDF/bill auto-ingest; no cloud SaaS
+mail provider as primary.
+
+## Correctness evidence (Volley 024 state)
+
+- ``uv run pytest`` → **340 passed** (314 prior + 26 new email tests).
+- ``uv run ruff check .`` → All checks passed.
+- ``uv run mypy`` → Success: no issues found in 47 source files.
+- New tests prove: fake-gateway list/fetch success and limit bounding; unknown
+  folder/id fails closed; mediated tools bound list size and enforce the folder
+  allowlist; the ``email`` agent verifies through granted tools, fails closed
+  when ungranted or disallowed, and rejects bad payloads; verification rejects
+  malformed/wrong-folder output; policy denial; envelope exhaustion;
+  deterministic replay; tool calls recorded in the trajectory; real-gateway
+  opt-in (missing credentials fail closed, disabled-by-default fails closed);
+  and secrets redacted from error paths. All prior invariants hold.
+
+## Pause point — Volley 024 (report delivered; awaiting architect review)
 
 ## Out of scope / future volleys (not started)
 

@@ -27,11 +27,18 @@ from meta_harness.contracts.capability import Capability
 from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
 from meta_harness.contracts.pipeline import PipelineVersion, SequentialComposition, StageSpec
 from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from meta_harness.contracts.tool import ToolDescriptor
 from meta_harness.contracts.workspace import WorkspaceLayout
-from meta_harness.control_plane.tools import ToolRegistry
+from meta_harness.control_plane.email_tools import EmailTools, email_tool_impls
+from meta_harness.control_plane.tools import (
+    EMAIL_FETCH_DESCRIPTOR,
+    EMAIL_LIST_DESCRIPTOR,
+    ToolRegistry,
+)
 from meta_harness.control_plane.trajectory_store import FileTrajectoryStore
 from meta_harness.control_plane.workspace import Workspace, register_workspace_tools
 from meta_harness.providers import StubModelProvider
+from meta_harness.providers.email import FakeEmailGateway
 
 # The built-in demo agents, registered by the CLI so a demo task set is
 # self-contained and deterministic.
@@ -83,6 +90,14 @@ _WORKSPACE_MANIFEST = AgentComponentManifest(
     declared_capabilities=frozenset({Capability(name="workspace", version="1")}),
 )
 
+_EMAIL_MANIFEST = AgentComponentManifest(
+    version=AgentManifestVersion.V2,
+    name="email",
+    entry_point="meta_harness.agents.email:create_email_agent",
+    description="Performs a read-only email operation via mediated tools.",
+    declared_capabilities=frozenset({Capability(name="email.read", version="1")}),
+)
+
 _DEMO_MANIFESTS = (
     _COUNTER_MANIFEST,
     _REVERSE_MANIFEST,
@@ -90,6 +105,7 @@ _DEMO_MANIFESTS = (
     _MODEL_MANIFEST,
     _BILLS_MANIFEST,
     _WORKSPACE_MANIFEST,
+    _EMAIL_MANIFEST,
 )
 
 
@@ -174,7 +190,24 @@ def _demo_tasks() -> tuple[TaskSpecification, ...]:
             envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
             granted_tools=("create_workspace_dir", "write_workspace_file"),
         ),
+        TaskSpecification(
+            version=TaskSpecVersion.V5,
+            task_id="demo-email",
+            agent_name="email",
+            payload={"operation": "list", "folder": "INBOX", "limit": 10},
+            envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
+            granted_tools=("email_list",),
+        ),
     )
+
+
+def _email_tool_descriptor(name: str) -> ToolDescriptor:
+    """Return the ToolDescriptor for an email tool name."""
+    if name == "email_list":
+        return EMAIL_LIST_DESCRIPTOR
+    if name == "email_fetch":
+        return EMAIL_FETCH_DESCRIPTOR
+    raise AssertionError(f"unknown email tool {name!r}")
 
 
 def _manager(store_dir: Path) -> AgentManager:
@@ -192,6 +225,26 @@ def _manager(store_dir: Path) -> AgentManager:
     # Pre-create the allowlisted directory so the demo-workspace write task can
     # run deterministically (writes require an existing parent directory).
     workspace.create_workspace_dir("invoices")
+    # A fake, deterministic read-only email gateway for the demo-email task; the
+    # real IMAP path stays opt-in and off by default (no network in the demo).
+    email = EmailTools(
+        FakeEmailGateway(
+            mailbox={
+                "INBOX": (
+                    {
+                        "id": "m1",
+                        "subject": "Hello",
+                        "from": "a@example.test",
+                        "date": "2026-08-01",
+                        "body": "first",
+                    },
+                ),
+            }
+        ),
+        default_folders=("INBOX",),
+    )
+    for _name, _impl in email_tool_impls(email).items():
+        tools.register_impl(_email_tool_descriptor(_name), _impl)
     manager = AgentManager(store=FileTrajectoryStore(store_dir), tools=tools)
     for manifest in _DEMO_MANIFESTS:
         manager.register(manifest)

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..contracts.bill import Bill, BillTotal
+from ..contracts.email import EmailList, EmailMessage, MessageSummary
 from ..contracts.task import TaskSpecification
 from ..contracts.workspace import WorkspaceEntryKind
 
@@ -254,6 +255,81 @@ def verify_workspace_output(task: TaskSpecification, output: Any) -> Verificatio
     return VerificationResult(False, f"Unknown workspace operation {operation!r}.")
 
 
+def verify_email_output(task: TaskSpecification, output: Any) -> VerificationResult:
+    """Verify an EmailAgent output by checking structural consistency.
+
+    This is a real, independent check: it validates that the output's shape
+    matches the requested operation (``list`` vs ``fetch``), that a list is
+    bounded by its requested limit, and that a fetch echoes the requested
+    message id. Malformed output is rejected explicitly (fail-closed).
+    """
+    payload = task.payload
+    if not isinstance(payload, dict):
+        return VerificationResult(False, "Payload is not a mapping.")
+    operation = payload.get("operation")
+    if not isinstance(operation, str) or not operation:
+        return VerificationResult(False, "Payload is missing a valid 'operation'.")
+    if not isinstance(output, dict):
+        return VerificationResult(False, "Output is not a mapping.")
+
+    if operation == "list":
+        folder = payload.get("folder")
+        limit = payload.get("limit", 20)
+        if not isinstance(folder, str) or not folder:
+            return VerificationResult(False, "Payload is missing a valid 'folder'.")
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+            return VerificationResult(False, "Payload 'limit' must be a positive integer.")
+        if output.get("folder") != folder:
+            return VerificationResult(False, "Output folder does not match the requested folder.")
+        try:
+            result = EmailList(
+                folder=folder,
+                limit=limit,
+                messages=tuple(
+                    MessageSummary(
+                        id=row.get("id", ""),
+                        folder=row.get("folder", ""),
+                        subject=row.get("subject", ""),
+                        from_address=row.get("from_address", ""),
+                        date=row.get("date", ""),
+                    )
+                    for row in output.get("messages", [])
+                ),
+            )
+        except (TypeError, ValueError) as exc:
+            return VerificationResult(False, f"Output is a malformed list result: {exc}")
+        # The list result is bounded by the enforced limit (EmailList enforces this).
+        if result.limit != limit or len(result.messages) > limit:
+            return VerificationResult(False, "Output list exceeds the requested limit.")
+        return VerificationResult(True, "Output is a well-formed, bounded list result.")
+
+    if operation == "fetch":
+        folder = payload.get("folder")
+        message_id = payload.get("message_id")
+        if not isinstance(folder, str) or not folder:
+            return VerificationResult(False, "Payload is missing a valid 'folder'.")
+        if not isinstance(message_id, str) or not message_id:
+            return VerificationResult(False, "Payload is missing a valid 'message_id'.")
+        if output.get("folder") != folder:
+            return VerificationResult(False, "Output folder does not match the requested folder.")
+        if output.get("id") != message_id:
+            return VerificationResult(False, "Output id does not echo the requested message id.")
+        try:
+            EmailMessage(
+                id=message_id,
+                folder=folder,
+                subject=output.get("subject", ""),
+                from_address=output.get("from_address", ""),
+                date=output.get("date", ""),
+                body=output.get("body", ""),
+            )
+        except (TypeError, ValueError) as exc:
+            return VerificationResult(False, f"Output is a malformed message: {exc}")
+        return VerificationResult(True, "Output is a well-formed fetched message.")
+
+    return VerificationResult(False, f"Unknown email operation {operation!r}.")
+
+
 def verify_mcp_tool_output(task: TaskSpecification, output: Any) -> VerificationResult:
     """Verify an MCP-backed tool round-trip against the expected output.
 
@@ -286,6 +362,7 @@ DEFAULT_VERIFIERS: dict[str, Verifier] = {
     "mcp_tool": verify_mcp_tool_output,
     "bills": verify_bills_output,
     "workspace": verify_workspace_output,
+    "email": verify_email_output,
 }
 
 
