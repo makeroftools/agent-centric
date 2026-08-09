@@ -15,6 +15,7 @@ from ..contracts.summary import (
     ToolSummary,
     TrajectorySummary,
 )
+from .bills_registry import BillsOps, ensure_bills_layout
 from .critical_path import analyse_critical_path
 from .email_tools import EmailTools
 from .execution import (
@@ -70,6 +71,8 @@ __all__ = [
     "Workspace",
     "WorkspaceError",
     "EmailTools",
+    "BillsOps",
+    "ensure_bills_layout",
     "TrajectoryStore",
     "TrajectoryStoreError",
     "CorruptTrajectoryError",

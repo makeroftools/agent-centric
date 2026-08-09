@@ -143,6 +143,24 @@ EMAIL_FETCH_DESCRIPTOR = ToolDescriptor(
     execution_semantics="read-only, gateway-mediated",
 )
 
+BILLS_REGISTRY_READ_DESCRIPTOR = ToolDescriptor(
+    version=ToolVersion.V1,
+    name="bills_registry_read",
+    description="Read and validate the allowlisted bills registry.",
+    input_schema={},
+    output_schema="mapping",
+    execution_semantics="allowlisted, deterministic, side-effect free",
+)
+
+BILLS_CALENDAR_DESCRIPTOR = ToolDescriptor(
+    version=ToolVersion.V1,
+    name="bills_calendar",
+    description="Project a deterministic ordered agenda for a date window.",
+    input_schema={"from_date": "str", "to_date": "str", "include_paid": "bool"},
+    output_schema="mapping",
+    execution_semantics="allowlisted, deterministic, side-effect free",
+)
+
 
 class ToolRegistry:
     """Deterministic registry and executor of concrete tools.

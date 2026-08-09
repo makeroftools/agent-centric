@@ -1,4 +1,4 @@
-# STATUS — Volley 001–024
+# STATUS — Volley 001–025
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
@@ -109,7 +109,16 @@ deterministic ``email`` specialty agent. It is strictly read-only (no send,
 delete, or mailbox-destructive operations), inputs are bounded (optional folder
 allowlist, enforced list limit), secrets come only from environment and are
 redacted from any error path, and verification is real (structural consistency).
-The real IMAP path is opt-in and disabled by default with no network in CI.
+The real IMAP path is opt-in and disabled by default with no network in CI. For
+Volley 025, a canonical local bills registry (``bills_registry.v1``) can live in
+the allowlisted workspace at ``bills/registry.json``, and a deterministic
+calendar/agenda projection answers what is due when — purely from registry data
+with no model involved. The registry validates fail-closed at the contract/agent
+boundary; projection supports an explicit include/exclude-paid policy, ordered
+entries, window filtering, and recompute verification that rejects wrong order,
+wrong totals, missing fields, and out-of-window entries. Recurrence is omitted
+in v1 (documented as future). No email ingest, PDF OCR, bank APIs, SMTP, or
+payments are introduced.
 
 ---
 
@@ -1713,6 +1722,71 @@ mail provider as primary.
   and secrets redacted from error paths. All prior invariants hold.
 
 ## Pause point — Volley 024 (report delivered; awaiting architect review)
+
+# Volley 025 — Bills Registry + Calendar Agenda (delivered)
+
+### 92. Canonical registry contract (``bills_registry.v1``)
+
+A versioned ``BillsRegistry`` (plus ``RegistryBill``) can live in the
+allowlisted workspace at ``bills/registry.json``. Each record carries ``id``,
+``vendor``, ``amount_cents`` (non-negative integer cents), an ISO ``due_date``,
+and optional ``status`` (``due``/``paid``/``skipped``) and ``category``.
+Validation is at the contract/agent boundary: non-negative cents, required
+fields, valid dates, unique ids — garbage is rejected fail-closed.
+
+### 93. Workspace layout
+
+The default allowlist is documented and encoded by ``ensure_bills_layout``:
+``bills`` as an allowed directory and ``bills/registry.json`` as an allowed
+file. It reuses the existing workspace tools; no arbitrary filesystem access is
+granted.
+
+### 94. Calendar / agenda projection (deterministic, no model)
+
+``project_calendar`` produces a deterministic, ordered ``CalendarProjection``
+for a date window (``from_date``/``to_date`` inclusive, or future work to add
+``next_n_days``). Rules are explicit: by default only unpaid bills
+(``due``/``skipped``) are included; ``include_paid=True`` also includes ``paid``.
+Entries are ordered by due date then bill id, with a total outstanding sum. No
+model is involved anywhere in the projection path.
+
+### 95. Agent(s) / capabilities
+
+A ``bills_registry`` specialty agent exposes capabilities ``bills.registry.v1``
+and ``bills.calendar.v1`` and two v1 operations: ``load`` (read + validate the
+registry via mediated workspace read) and ``calendar`` (project the agenda for
+a window via the mediated ``bills_calendar`` tool). Recurrence is **omitted**
+in v1 and documented as future; mark-paid/upsert are deferred to a later volley
+rather than weaken verification.
+
+### 96. Verification
+
+``verify_bills_registry_output`` recomputes the agenda from the registry +
+window and compares to the agent's output. It rejects wrong order, wrong totals
+of listed items, missing required fields, entries outside the window, and
+malformed registry output (fail-closed).
+
+### 97. Fail closed; full trajectory; tests; docs; version 0.25.0
+
+All failure modes (invalid registry, ungranted tool, disallowed path, policy
+denial, envelope exhaustion, reversed window) are explicit, audited failures.
+Package version is bumped to **0.25.0**. No email ingest, PDF OCR, bank APIs,
+SMTP/payments, recurrence engine, or UI calendar widgets are introduced.
+
+## Correctness evidence (Volley 025 state)
+
+- ``uv run pytest`` → **370 passed** (340 prior + 30 new bills-registry tests).
+- ``uv run ruff check .`` → All checks passed.
+- ``uv run mypy`` → Success: no issues found in 50 source files.
+- New tests prove: registry parse/validation (bad JSON, empty/missing bills,
+  duplicate ids, negative amounts, bad dates/status, missing vendor fail
+  closed); calendar ordering by date-then-id and window filtering; paid
+excluded by default and included when requested; correct total outstanding;
+  reversed-window rejection; allowlisted layout + ungranted tools fail closed;
+  policy denial; envelope exhaustion; verifier rejects tampered output; and
+deterministic replay. All prior invariants hold.
+
+## Pause point — Volley 025 (report delivered; awaiting architect review)
 
 ## Out of scope / future volleys (not started)
 

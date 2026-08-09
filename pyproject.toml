@@ -1,6 +1,6 @@
 [project]
 name = "agent-centric"
-version = "0.24.0"
+version = "0.25.0"
 description = "Agent-centric Meta-Harness: a deterministic control plane for governed, verifiable agents."
 readme = "README.md"
 requires-python = ">=3.13"

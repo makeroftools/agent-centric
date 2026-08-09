@@ -6,6 +6,14 @@ version so that it can evolve without silently breaking the correctness model.
 """
 
 from .bill import Bill, BillLine, BillTotal, BillVersion
+from .bills_registry import (
+    AgendaEntry,
+    BillsRegistry,
+    BillsRegistryVersion,
+    BillStatus,
+    CalendarProjection,
+    RegistryBill,
+)
 from .capability import Capability
 from .critical_path import CpmMetric, CpmVersion, CriticalPathResult, CriticalPathStage
 from .email import EmailList, EmailMessage, EmailVersion, MessageSummary
@@ -106,4 +114,10 @@ __all__ = [
     "EmailMessage",
     "EmailList",
     "EmailVersion",
+    "BillStatus",
+    "BillsRegistry",
+    "BillsRegistryVersion",
+    "RegistryBill",
+    "AgendaEntry",
+    "CalendarProjection",
 ]

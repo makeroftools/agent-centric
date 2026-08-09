@@ -37,13 +37,14 @@ class TestCliRun:
         assert "demo-bills: VERIFIED" in out
         assert "demo-workspace: VERIFIED" in out
         assert "demo-email: VERIFIED" in out
+        assert "demo-bills-calendar: VERIFIED" in out
 
     def test_run_persists_trajectories(self, tmp_path: Path) -> None:
         _run(tmp_path, "run")
         # Each demo task produced a durable trajectory file (the workspace dir
         # is also created under the store dir, so count only .jsonl files).
         files = [p for p in tmp_path.iterdir() if p.suffix == ".jsonl"]
-        assert len(files) == 8
+        assert len(files) == 9
 
 
 class TestCliSummarise:

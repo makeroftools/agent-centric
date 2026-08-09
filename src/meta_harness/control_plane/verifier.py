@@ -16,9 +16,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..contracts.bill import Bill, BillTotal
+from ..contracts.bills_registry import BillsRegistry
 from ..contracts.email import EmailList, EmailMessage, MessageSummary
 from ..contracts.task import TaskSpecification
 from ..contracts.workspace import WorkspaceEntryKind
+from .bills_registry import project_calendar
 
 # A verifier is a callable that takes the task specification and the agent's
 # output, and returns a VerificationResult.
@@ -255,6 +257,59 @@ def verify_workspace_output(task: TaskSpecification, output: Any) -> Verificatio
     return VerificationResult(False, f"Unknown workspace operation {operation!r}.")
 
 
+def verify_bills_registry_output(task: TaskSpecification, output: Any) -> VerificationResult:
+    """Verify a BillsRegistryAgent output by recomputing from the payload.
+
+    The task payload carries the registry mapping (``registry``) plus the
+    requested operation and, for ``calendar``, the window and include-paid flag.
+    This is a real, independent check: it re-derives the expected registry
+    (``load``) or the expected ordered agenda (``calendar``) from the payload and
+    compares to the agent's output. Bad or missing registry data, wrong order,
+    wrong totals, or entries outside the window are rejected explicitly
+    (fail-closed).
+    """
+    payload = task.payload
+    if not isinstance(payload, dict):
+        return VerificationResult(False, "Payload is not a mapping.")
+    operation = payload.get("operation")
+    if not isinstance(operation, str) or not operation:
+        return VerificationResult(False, "Payload is missing a valid 'operation'.")
+    raw_registry = payload.get("registry")
+    try:
+        registry = BillsRegistry.from_mapping(raw_registry)
+    except ValueError as exc:
+        return VerificationResult(False, f"Payload registry is invalid: {exc}")
+
+    if operation == "load":
+        if output != registry.as_mapping():
+            return VerificationResult(
+                False, "Output registry does not match the payload registry."
+            )
+        return VerificationResult(True, "Output matches the parsed registry.")
+
+    if operation == "calendar":
+        from_date = payload.get("from_date")
+        to_date = payload.get("to_date")
+        include_paid = payload.get("include_paid", False)
+        if not isinstance(from_date, str) or not isinstance(to_date, str):
+            return VerificationResult(False, "Payload is missing a valid date window.")
+        if not isinstance(include_paid, bool):
+            return VerificationResult(False, "Payload 'include_paid' must be a bool.")
+        try:
+            expected = project_calendar(
+                registry, from_date, to_date, include_paid=include_paid
+            ).as_mapping()
+        except ValueError as exc:
+            return VerificationResult(False, f"Cannot project calendar: {exc}")
+        if output != expected:
+            return VerificationResult(
+                False, "Output agenda does not match the recomputed calendar."
+            )
+        return VerificationResult(True, "Output matches the recomputed calendar.")
+
+    return VerificationResult(False, f"Unknown bills-registry operation {operation!r}.")
+
+
 def verify_email_output(task: TaskSpecification, output: Any) -> VerificationResult:
     """Verify an EmailAgent output by checking structural consistency.
 
@@ -363,6 +418,7 @@ DEFAULT_VERIFIERS: dict[str, Verifier] = {
     "bills": verify_bills_output,
     "workspace": verify_workspace_output,
     "email": verify_email_output,
+    "bills_registry": verify_bills_registry_output,
 }
 
 

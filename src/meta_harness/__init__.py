@@ -7,12 +7,17 @@ Public surface is intentionally minimal. The primary entry point is
 
 from .agents import ToolContext, ToolRequest, ToolResult
 from .contracts import (
+    AgendaEntry,
     AgentComponentManifest,
     AgentManifestVersion,
     Bill,
     BillLine,
+    BillsRegistry,
+    BillsRegistryVersion,
+    BillStatus,
     BillTotal,
     BillVersion,
+    CalendarProjection,
     Capability,
     CpmMetric,
     CpmVersion,
@@ -36,6 +41,7 @@ from .contracts import (
     PolicyDecision,
     PolicySummary,
     PolicyVersion,
+    RegistryBill,
     ReplayDiff,
     ReplayResult,
     ReplayVersion,
@@ -66,6 +72,7 @@ from .contracts import (
 from .control_plane import (
     AgentExecutionError,
     AgentManager,
+    BillsOps,
     EmailTools,
     ExecutionBackend,
     InProcessBackend,
@@ -83,6 +90,7 @@ from .control_plane import (
     Workspace,
     WorkspaceError,
     analyse_critical_path,
+    ensure_bills_layout,
 )
 from .providers import (
     EmailGatewayError,
@@ -183,4 +191,12 @@ __all__ = [
     "FakeEmailGateway",
     "OptionalRealEmailGateway",
     "build_optional_email_gateway",
+    "BillsOps",
+    "ensure_bills_layout",
+    "BillStatus",
+    "BillsRegistry",
+    "BillsRegistryVersion",
+    "RegistryBill",
+    "AgendaEntry",
+    "CalendarProjection",
 ]

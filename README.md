@@ -9,8 +9,8 @@ trajectory**, and mediate every tool and model call. Agents can only *request*
 capabilities; the Manager is the sole authority that grants, executes, records,
 and verifies.
 
-This is the **v0.24 preliminary release** — a minimal but complete harness,
-built across Volleys 001–024. It reflects what exists in the codebase, not an
+This is the **v0.25 preliminary release** — a minimal but complete harness,
+built across Volleys 001–025. It reflects what exists in the codebase, not an
 aspirational platform.
 
 ```
@@ -38,20 +38,20 @@ governs every decision in this repository.
 
 ---
 
-## What v0.24 includes
+## What v0.25 includes
 
 | Area | What's implemented |
 | --- | --- |
 | **Manager** | Deterministic `AgentManager`: register, select (by name or capability), run, summarise, replay. |
-| **Contracts** | Versioned, strongly-typed contracts for tasks, results, trajectories, tools, pipelines, parallel, policy, model, summary, replay, critical path, bills, workspace, and email. |
+| **Contracts** | Versioned, strongly-typed contracts for tasks, results, trajectories, tools, pipelines, parallel, policy, model, summary, replay, critical path, bills, workspace, email, and bills-registry. |
 | **Registry** | In-process, deterministic agent registry with capability-based selection. |
-| **Tools** | Local tools (`to_upper`, `add`, `bill_total`) plus a Manager-mediated **MCP adapter**, **allowlisted workspace tools**, and **read-only email tools**; grants and policy enforced by the Manager. |
+| **Tools** | Local tools (`to_upper`, `add`, `bill_total`) plus a Manager-mediated **MCP adapter**, **allowlisted workspace tools**, **read-only email tools**, and **bills-registry tools**; grants and policy enforced by the Manager. |
 | **Model path** | Mediated `llm_complete` tool; deterministic stub by default; an optional, hardened real-provider path. |
 | **Composition** | Sequential pipelines, parallel fan-out/join, and nested sequential-as-parallel — all Manager-orchestrated. |
 | **Governance** | Policy (allow/deny), hard resource envelopes, cooperative cancellation, per-step budgets. |
 | **Isolation** | Optional subprocess execution; silent-hang bounded, forced-kill recorded, no zombies. |
 | **Observability** | Deterministic trajectory summary, replay verification, and read-only critical-path (CPM) analysis. |
-| **Specialty agents** | A **bills** agent (structured bills → deterministic totals), a **workspace** agent (allowlisted file operations), and a **read-only email** agent (`email_list` / `email_fetch`). |
+| **Specialty agents** | A **bills** agent, a **workspace** agent, a **read-only email** agent, and a **bills-registry + calendar** agent (deterministic agenda projection). |
 | **Operator CLI** | `meta-harness` with `run`, `summarise`, and `replay-verify`. |
 | **Editor bridge** | Thin ACP adapter (`meta-harness-acp`) so Meta-Harness runs as an External Agent in Zed. |
 
@@ -193,6 +193,7 @@ demo-pipeline: VERIFIED output='NOITISOPMOC LAITNEUQES' trajectory_id=demo-pipel
 demo-bills: VERIFIED output={'line_subtotal_cents': 2750, 'discount_cents': 275, 'taxable_amount_cents': 2475, 'tax_cents': 124, 'grand_total_cents': 2599} trajectory_id=demo-bills#5
 demo-workspace: VERIFIED output={'relative_path': 'invoices/note.txt', 'kind': 'file', 'content': 'hello workspace'} trajectory_id=demo-workspace#6
 demo-email: VERIFIED output={'folder': 'INBOX', 'limit': 10, 'count': 1, 'messages': [{'id': 'm1', 'folder': 'INBOX', 'subject': 'Hello', 'from_address': 'a@example.test', 'date': '2026-08-01'}]} trajectory_id=demo-email#7
+demo-bills-calendar: VERIFIED output={'from_date': '2026-09-01', 'to_date': '2026-09-30', 'include_paid': False, 'count': 2, 'entries': [{'due_date': '2026-09-01', 'bill_id': 'b1', 'vendor': 'NetCo', 'amount_cents': 3000, 'status': 'due'}, {'due_date': '2026-09-10', 'bill_id': 'b3', 'vendor': 'PowerCo', 'amount_cents': 5000, 'status': 'due'}], 'total_outstanding_cents': 8000} trajectory_id=demo-bills-calendar#8
 ```
 
 Trajectories are durable, append-only JSON-lines files (hex-named `.jsonl`)
@@ -350,7 +351,7 @@ The correctness guarantees are demonstrated across the test suite
 ```
 PRINCIPLES.md          Non-negotiable governing rules
 KERNEL.md              v0 kernel freeze note (guarantees, out-of-scope, versioning)
-STATUS.md              Volley history 001–024 + correctness evidence
+STATUS.md              Volley history 001–025 + correctness evidence
 src/meta_harness/
   __init__.py          Public surface
   contracts/           Versioned, strongly-typed contracts
@@ -389,9 +390,72 @@ task step budget. Enforcement stays entirely in the Manager.
 ## Versioning / preliminary-release status
 
 The package is versioned as a kernel milestone aligned with volley depth:
-**`0.24.0`** (24 volleys delivered). This is a **preliminary release** — the
-v0.24 kernel is complete but APIs may evolve before a stable 1.0. See
+**`0.25.0`** (25 volleys delivered). This is a **preliminary release** — the
+v0.25 kernel is complete but APIs may evolve before a stable 1.0. See
 [`KERNEL.md`](KERNEL.md) for the versioning scheme and freeze boundaries.
+
+---
+
+## The bills-registry + calendar agent (Volley 025)
+
+A deterministic **bills-registry + calendar** agent maintains a canonical local
+bills registry in the allowlisted workspace and answers **what is due when**.
+The registry lives at `bills/registry.json` (an allowlisted path,
+`bills_registry.v1`): each record has `id`, `vendor`, `amount_cents` (integer
+cents), an ISO `due_date`, and optional `status` (`due`/`paid`/`skipped`) and
+`category`. Projection is purely deterministic — no model is involved. By
+default only unpaid bills (`due`/`skipped`) appear; `include_paid=True` also
+includes `paid`. Entries are ordered by due date then bill id, with a total
+outstanding sum. Recurrence is omitted in v1 (documented as future);
+mark-paid/upsert are deferred to a later volley.
+
+Example registry:
+
+```json
+{
+  "version": "bills_registry.v1",
+  "bills": [
+    {"id": "b1", "vendor": "NetCo", "amount_cents": 3000, "due_date": "2026-09-01", "status": "due"},
+    {"id": "b2", "vendor": "WaterCo", "amount_cents": 2000, "due_date": "2026-09-05", "status": "paid"}
+  ]
+}
+```
+
+Example agenda request (what is due in September, excluding paid):
+
+```python
+from meta_harness import AgentManager
+from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+
+manager = AgentManager()
+manager.register(AgentComponentManifest(
+    version=AgentManifestVersion.V2,
+    name="bills_registry",
+    entry_point="meta_harness.agents.bills_registry:create_bills_registry_agent",
+    description="Reads the bills registry and projects a deterministic agenda.",
+))
+
+task = TaskSpecification(
+    version=TaskSpecVersion.V5,
+    task_id="bills-cal",
+    agent_name="bills_registry",
+    payload={
+        "operation": "calendar",
+        "registry": {"version": "bills_registry.v1", "bills": [
+            {"id": "b1", "vendor": "NetCo", "amount_cents": 3000, "due_date": "2026-09-01", "status": "due"},
+        ]},
+        "from_date": "2026-09-01",
+        "to_date": "2026-09-30",
+        "include_paid": False,
+    },
+    envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
+    granted_tools=("bills_calendar",),
+)
+
+outcome = manager.run(task)
+print(outcome.result.output if outcome.result else outcome.failure)  # total=3000
+```
 
 ---
 

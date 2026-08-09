@@ -19,6 +19,7 @@ replay identically.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -29,8 +30,15 @@ from meta_harness.contracts.pipeline import PipelineVersion, SequentialCompositi
 from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
 from meta_harness.contracts.tool import ToolDescriptor
 from meta_harness.contracts.workspace import WorkspaceLayout
+from meta_harness.control_plane.bills_registry import (
+    BillsOps,
+    bills_tool_impls,
+    ensure_bills_layout,
+)
 from meta_harness.control_plane.email_tools import EmailTools, email_tool_impls
 from meta_harness.control_plane.tools import (
+    BILLS_CALENDAR_DESCRIPTOR,
+    BILLS_REGISTRY_READ_DESCRIPTOR,
     EMAIL_FETCH_DESCRIPTOR,
     EMAIL_LIST_DESCRIPTOR,
     ToolRegistry,
@@ -98,6 +106,49 @@ _EMAIL_MANIFEST = AgentComponentManifest(
     declared_capabilities=frozenset({Capability(name="email.read", version="1")}),
 )
 
+_BILLS_REGISTRY_MANIFEST = AgentComponentManifest(
+    version=AgentManifestVersion.V2,
+    name="bills_registry",
+    entry_point="meta_harness.agents.bills_registry:create_bills_registry_agent",
+    description="Reads the bills registry and projects a deterministic agenda.",
+    declared_capabilities=frozenset(
+        {
+            Capability(name="bills.registry", version="1"),
+            Capability(name="bills.calendar", version="1"),
+        }
+    ),
+)
+
+# A demo bills registry, written into the allowlisted workspace so the demo
+# calendar task projects a deterministic agenda.
+_DEMO_REGISTRY = {
+    "version": "bills_registry.v1",
+    "description": "demo registry",
+    "bills": [
+        {
+            "id": "b1",
+            "vendor": "NetCo",
+            "amount_cents": 3000,
+            "due_date": "2026-09-01",
+            "status": "due",
+        },
+        {
+            "id": "b2",
+            "vendor": "WaterCo",
+            "amount_cents": 2000,
+            "due_date": "2026-09-05",
+            "status": "paid",
+        },
+        {
+            "id": "b3",
+            "vendor": "PowerCo",
+            "amount_cents": 5000,
+            "due_date": "2026-09-10",
+            "status": "due",
+        },
+    ],
+}
+
 _DEMO_MANIFESTS = (
     _COUNTER_MANIFEST,
     _REVERSE_MANIFEST,
@@ -106,6 +157,7 @@ _DEMO_MANIFESTS = (
     _BILLS_MANIFEST,
     _WORKSPACE_MANIFEST,
     _EMAIL_MANIFEST,
+    _BILLS_REGISTRY_MANIFEST,
 )
 
 
@@ -198,6 +250,20 @@ def _demo_tasks() -> tuple[TaskSpecification, ...]:
             envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
             granted_tools=("email_list",),
         ),
+        TaskSpecification(
+            version=TaskSpecVersion.V5,
+            task_id="demo-bills-calendar",
+            agent_name="bills_registry",
+            payload={
+                "operation": "calendar",
+                "registry": _DEMO_REGISTRY,
+                "from_date": "2026-09-01",
+                "to_date": "2026-09-30",
+                "include_paid": False,
+            },
+            envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
+            granted_tools=("bills_calendar",),
+        ),
     )
 
 
@@ -210,21 +276,34 @@ def _email_tool_descriptor(name: str) -> ToolDescriptor:
     raise AssertionError(f"unknown email tool {name!r}")
 
 
+def _bills_tool_descriptor(name: str) -> ToolDescriptor:
+    """Return the ToolDescriptor for a bills-registry tool name."""
+    if name == "bills_registry_read":
+        return BILLS_REGISTRY_READ_DESCRIPTOR
+    if name == "bills_calendar":
+        return BILLS_CALENDAR_DESCRIPTOR
+    raise AssertionError(f"unknown bills-registry tool {name!r}")
+
+
 def _manager(store_dir: Path) -> AgentManager:
     # The stub model provider makes the demo-model task deterministic and
     # replayable without any network access or credentials.
     tools = ToolRegistry(model_provider=StubModelProvider())
-    # A small, allowlisted workspace for the demo-workspace task. It lives under
-    # the trajectory store directory so it is local, self-contained, and does
-    # not touch the repository.
+    # A small, allowlisted workspace for the demo tasks. It lives under the
+    # trajectory store directory so it is local, self-contained, and does not
+    # touch the repository. The bills-registry layout is added via
+    # ensure_bills_layout so the registry can live on the allowlist.
     workspace = Workspace(
         store_dir / "workspace",
-        WorkspaceLayout(files=("invoices/note.txt",), directories=("invoices",)),
+        ensure_bills_layout(
+            WorkspaceLayout(files=("invoices/note.txt",), directories=("invoices",))
+        ),
     )
     register_workspace_tools(tools, workspace)
-    # Pre-create the allowlisted directory so the demo-workspace write task can
-    # run deterministically (writes require an existing parent directory).
+    # Pre-create the allowlisted directories so writes can run deterministically.
     workspace.create_workspace_dir("invoices")
+    workspace.create_workspace_dir("bills")
+    workspace.write_workspace_file("bills/registry.json", json.dumps(_DEMO_REGISTRY))
     # A fake, deterministic read-only email gateway for the demo-email task; the
     # real IMAP path stays opt-in and off by default (no network in the demo).
     email = EmailTools(
@@ -245,6 +324,11 @@ def _manager(store_dir: Path) -> AgentManager:
     )
     for _name, _impl in email_tool_impls(email).items():
         tools.register_impl(_email_tool_descriptor(_name), _impl)
+    # The deterministic bills-registry read + calendar tools, bound to the
+    # allowlisted workspace registry.
+    bills_ops = BillsOps(workspace)
+    for _name, _impl in bills_tool_impls(bills_ops).items():
+        tools.register_impl(_bills_tool_descriptor(_name), _impl)
     manager = AgentManager(store=FileTrajectoryStore(store_dir), tools=tools)
     for manifest in _DEMO_MANIFESTS:
         manager.register(manifest)
