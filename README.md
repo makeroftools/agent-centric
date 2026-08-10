@@ -9,9 +9,13 @@ trajectory**, and mediate every tool and model call. Agents can only *request*
 capabilities; the Manager is the sole authority that grants, executes, records,
 and verifies.
 
-This is the **v0.26 preliminary release** — a minimal but complete harness,
-built across Volleys 001–026. It reflects what exists in the codebase, not an
+This is the **v0.29 preliminary release** — a minimal but complete harness,
+built across Volleys 001–029. It reflects what exists in the codebase, not an
 aspirational platform.
+
+> **Session continuity:** new sessions should read [`HANDOFF.md`](HANDOFF.md)
+> first (authoritative one-pager), then [`KERNEL.md`](KERNEL.md) and
+> [`STATUS.md`](STATUS.md).
 
 ```
 Zed (Agent Panel) ──ACP──▶ meta-harness-acp (adapter) ──▶ AgentManager ──▶ agents / tools / MCP

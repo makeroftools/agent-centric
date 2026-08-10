@@ -3,12 +3,21 @@
 **Prepared for a new session thread.** All facts below are current as of this
 handoff.
 
+> **Read first: `KERNEL.md`, `README.md`, `STATUS.md`, then this `HANDOFF.md`.**
+> `KERNEL.md` is the v0 freeze note; `STATUS.md` is the volley-by-volley history
+> + correctness evidence; `README.md` is the GitHub frontpage with the Zed ACP
+> quickstart; this file is the authoritative one-pager for session continuity.
+
 ## Current git state — clean and synced
-- **Branch:** `main`; **working tree clean**; **ahead of `origin/main` by 1 commit** (Volley 029).
-- **HEAD:** `feat(volley-029): email to unverified bill draft - human-gated` (Volley 028 pushed last round).
+- **Branch:** `main`; **working tree clean**; **in sync with `origin/main`**.
+- **HEAD:** `2ed0251b7b74fe9dec012ff9c6aebb3267e6f462` =
+  `feat(volley-029): email to unverified bill draft - human-gated`.
 - **Version:** **0.29.0** (kernel milestone aligned with volley depth: 29 volleys delivered).
-- **Pushed:** Volleys 022–028 are on `origin/main`. The standing `do NOT push`
-  rule holds; pushes happen only on explicit instruction.
+- **Pushed:** Volleys 022–029 are on `origin/main`; nothing is unpushed. The
+  standing `do NOT push` rule holds; pushes happen only on explicit instruction.
+- **Recommended tag (not created — repo has no tags yet):**
+  `git tag -a v0.29.0-milestone -m "v0.29.0 milestone (Volleys 001-029)"`
+  (create only on explicit direction).
 
 ## What Meta-Harness is
 A deterministic, local-first, in-process control plane for governed, verifiable
@@ -20,6 +29,24 @@ never spawn or directly invoke one another.
 Governing docs: `PRINCIPLES.md` (non-negotiable rules), `KERNEL.md` (v0 freeze
 note), `STATUS.md` (volley-by-volley history + correctness evidence),
 `README.md` (GitHub frontpage, now enriched with a working Zed ACP quickstart).
+
+## The bills loop (the core need this system serves)
+
+```
+inbox/ (json/csv/txt/PDF-text) or email --(intake)--> unverified BillDraft
+        --> human accept (intake_accept, grant-gated) --> bills/registry.json
+        --> calendar projection (bills_calendar) --> upsert / mark-paid (bills.maintain)
+```
+
+- **Inbox files** (`.json`/`.csv`/`.txt`/PDF embedded text) and **email** become
+  **unverified** `BillDraft` proposals (Volleys 026/027/029).
+- **Human accept** (`intake_accept`) is the only path that writes drafts into the
+  registry; it never auto-accepts.
+- **Registry + calendar** (`bills_registry` agent) project a deterministic agenda
+  from the accepted registry.
+- **Maintenance** (`bills_registry_upsert` / `_mark_paid` / `_mark_status`)
+  keeps vendors/status correct without breaking calendar invariants (Volley 028).
+- Every stage is Manager-mediated, policy-bound, verified, and audited.
 
 ## What v0.29 includes (Volleys 001–029)
 - Deterministic `AgentManager`: register, select (name/capability), run,
@@ -83,18 +110,44 @@ MCP adapter types, providers, and builder helpers. Sub-package `__init__.py`
 files define `__all__`; `py.typed` marks the package typed. **Additive changes
 only — prefer adapters/backends over changing Manager semantics.**
 
+## What Zed ACP does today (thin adapter)
+- `src/meta_harness/acp.py` is a **thin ACP adapter** over the official
+  `agent-client-protocol` SDK (runtime dep `agent-client-protocol>=0.12.0`),
+  exposing Meta-Harness as an External Agent in Zed.
+- It is **edge-transport only** — not full coding-agent parity: no diffs,
+  slash-commands, or nested subagents.
+- **Demo routing is fixed** (`reverse` default, `upper`, `counter`, stub
+  `model`); it does not yet route to the bills loop.
+- **Spawn path (absolute):** `uv run meta-harness-acp` from the repo root
+  (`/home/makerooftools/github/agent-centric`), configured in Zed under
+  `agent_servers` (see `README.md` → "Use from Zed (ACP)").
+
 ## Key invariants to never break
 - No unverified success; fail-closed everywhere; deterministic control plane;
   full auditability; local-first.
 - **Model and MCP outputs are untrusted until verified.**
 - **Real providers are opt-in**; CI/stubs are the default (no network in CI).
-- **Extracted PDF facts stay unverified until human accept** — no silent
-  registry writes from PDF parsing; no unsupervised calendar from PDFs.
+- **No unverified money/dates**: extracted PDF/email facts stay unverified until
+  a human accept — no silent registry writes, no unsupervised calendar from
+  PDFs/email.
+- **No auto-accept**: only the explicit `intake_accept` gate writes drafts into
+  the registry.
 - **Registry mutations are explicit, mediated, and verified** — upsert / status
   updates write only the allowlisted registry path with integer cents and valid
   ISO dates, and never implicitly accept intake drafts.
 - Migration/follow-up: if you change public types, respect the freeze note in
   `KERNEL.md`.
+
+## Explicit non-goals / do-not-build list
+- New agents, ACP features, refactors, or dependency bumps without explicit
+  direction.
+- Auto-accept / unsupervised organize-all (never auto-file or auto-commit money).
+- SMTP / send / delete / move email; email→draft stays read-only.
+- Recurrence engine, payments, delete-all, or a broad "edit any JSON" tool.
+- Cloud OCR, cloud APIs, or any network in CI.
+- Messaging fabric / A2A / MCP integration beyond the existing thin adapter.
+- Changing Manager orchestration, verification, policy, envelope, or accounting
+  semantics (prefer adapters/backends).
 
 ## Architecture quick map
 - `src/meta_harness/contracts/` — versioned contracts (incl. `bill.py`,
@@ -132,8 +185,8 @@ uv run mypy src      # clean, 54 source files
 ## Where we are / next steps
 - Kernel is **complete at v0.29** in code. Volley 026 (dump intake), Volley 027
   (PDF drafts), Volley 028 (registry maintenance), and Volley 029 (email →
-  unverified draft) are implemented and validated. Volleys 022–028 were pushed
-  for backup; Volley 029 is local-only and unpushed.
+  unverified draft) are implemented and validated. Volleys 022–029 are pushed;
+  nothing is unpushed.
 - **Known v1 limits** (documented, not bugs): ACP is edge-transport only (not
   full coding-agent parity: no diffs/slash-commands/nested subagents);
   `session/cancel` is per-session but mid-run Manager cancellation is not
@@ -144,6 +197,11 @@ uv run mypy src      # clean, 54 source files
   PDFs or email. Registry maintenance v1 has no delete-all, no recurrence engine,
   no payments, and no broad "edit any JSON" tool. Email→draft v1 does not
   auto-organize or auto-accept.
+- **Suggested next (only if needed):** ACP routes for the bills loop
+  (propose → accept → calendar → mark-paid) so the loop is reachable from Zed,
+  and/or extraction fixes driven by real data (e.g. more robust PDF/email
+  vendor/amount/date heuristics). Otherwise, exercise the full loop on real data
+  before adding features.
 - **Roadmap posture:** use first, enhance on demand. The planned sequence
   **bills (022) -> workspace (023) -> read-only email (024) -> bills registry +
   calendar (025) -> dump intake (026) -> PDF drafts (027) -> registry

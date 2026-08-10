@@ -4,6 +4,10 @@
 **Classification:** Mission-Critical
 **Updated:** 2026-08-09
 
+> **Session continuity:** new sessions should read [`HANDOFF.md`](HANDOFF.md)
+> first (authoritative one-pager), then [`KERNEL.md`](KERNEL.md) and
+> [`README.md`](README.md).
+
 ## Adherence to the Overriding Correctness Directive
 
 All volleys were executed under the overriding directive: correctness first,
