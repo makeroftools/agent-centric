@@ -67,6 +67,60 @@ Full history and guarantees live in [`STATUS.md`](STATUS.md) and
 
 ---
 
+## The FBP subsystem (agent-centric, flow-based)
+
+The **`agent-centric-fbp`** branch adds a separate, additive architecture: a
+rooted, recursive **tree of agents** with **no central manager** — the topology
+*is* the governance. Work travels **down**; responses and responsibility bubble
+**up**, each parent **re-verifying a child's value** before accepting it (the
+correctness spine). A task terminates in a **verified result or an explicit,
+audited failure**.
+
+Features, all validated by the test suite and reachable via an easy-UX
+`FbpDriver`:
+
+| Property | Meaning |
+| --- | --- |
+| **Directive/response protocol** | Versioned, enforced wire contract on `inproc://` / `tcp://` / `ipc://`. |
+| **registry-as-agent** | `register`/`resolve` capabilities as directives; a passive catalog serving *locations*, never code. |
+| **Correctness spine** | A parent re-verifies a child's value on the way up; a child's self-claimed `verified` is never trusted. |
+| **Mediated spawn + delegation** | A parent provisions a real child `Agent` and routes a named child; unknown targets fail closed. |
+| **Side-effect idempotency** | Replays keyed by full directive fingerprint; correlation reuse fails closed. |
+| **Fail-closed robustness** | Malformed directives are explicit errors; the poll loop never crashes. |
+| **Chain audit** | Every response carries the `source` of the callable that produced it. |
+| **Easy UX** | `FbpDriver` — synchronous driver that hides sockets/frames/loop; plus `agent-centric fbp` CLI and `examples/fbp_demo.py`. |
+
+```python
+from agent_centric.fbp import FbpDriver
+
+def double(x: int) -> int:
+    return x * 2
+
+def even(v) -> bool:
+    return isinstance(v, int) and v % 2 == 0
+
+with FbpDriver() as d:                  # inproc, offline
+    d.register("double", double)
+    d.configure(tasks=("double",), verifiers=("even",), verifier="even")
+    assert d.run("double", {"value": 21}).verified is True  # 42
+    d.spawn("child")
+    d.configure_child("child", tasks=("double",))
+    r = d.run("double", {"value": 21}, child="child")     # delegated & re-verified
+```
+
+Run the demo:
+
+```sh
+uv run agent-centric fbp              # inproc (default)
+uv run agent-centric fbp --transport tcp
+uv run agent-centric fbp --transport ipc
+```
+
+See [`docs/fbp.md`](docs/fbp.md) and the specs in
+`src/agent_centric/fbp/{spec,protocol}.md` for full detail.
+
+---
+
 ## What it is not
 
 These are **explicit non-goals** for v0.21 (see also [`KERNEL.md`](KERNEL.md)):

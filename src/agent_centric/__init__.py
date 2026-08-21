@@ -100,6 +100,34 @@ from .control_plane import (
     ensure_bills_layout,
     ensure_intake_layout,
 )
+
+# The flow-based-programming (FBP) subsystem: a rooted, recursive tree of
+# agents over the directive/response protocol. Exported additively so the
+# existing control-plane surface is untouched.
+from .fbp import (
+    Agent as FbpAgent,
+)
+from .fbp import (
+    AgentConfig as FbpAgentConfig,
+)
+from .fbp import (
+    Context as FbpContext,
+)
+from .fbp import (
+    Directive as FbpDirective,
+)
+from .fbp import (
+    FbpDriver,
+)
+from .fbp import (
+    Response as FbpResponse,
+)
+from .fbp import (
+    Shell as FbpShell,
+)
+from .fbp import (
+    register_callable as fbp_register_callable,
+)
 from .providers import (
     EmailGatewayError,
     FailingStubModelProvider,
@@ -215,4 +243,13 @@ __all__ = [
     "IntakeVersion",
     "IntakeOps",
     "ensure_intake_layout",
+    # Flow-based-programming (FBP) subsystem
+    "FbpAgent",
+    "FbpAgentConfig",
+    "FbpContext",
+    "FbpDirective",
+    "FbpDriver",
+    "FbpResponse",
+    "FbpShell",
+    "fbp_register_callable",
 ]

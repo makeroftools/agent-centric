@@ -22,6 +22,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from agent_centric import AgentManager
 from agent_centric.contracts.capability import Capability
@@ -537,7 +538,79 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p_replay = sub.add_parser("replay-verify", help="Re-run and verify a demo trajectory.")
     p_replay.add_argument("trajectory_id", help="The durable trajectory id to verify.")
+
+    p_fbp = sub.add_parser("fbp", help="Drive the FBP subsystem demo (inproc, offline).")
+    p_fbp.add_argument(
+        "--transport",
+        choices=("inproc", "tcp", "ipc"),
+        default="inproc",
+        help="Transport to prove the protocol over (default: inproc).",
+    )
     return parser
+
+
+def _cmd_fbp(transport: str) -> int:
+    """Drive the FBP subsystem demo over the directive/response protocol.
+
+    Uses the high-level ``FbpDriver`` (the easy-UX layer) to prove the core
+    properties on a real tree: registry-as-agent, configure, local run,
+    mediated spawn + delegation, the correctness spine (parent re-verifies a
+    child's value on the way up), and fail-closed delegation. All offline; the
+    transport exercises ``inproc``/``tcp``/``ipc``.
+    """
+    import agent_centric.fbp as fbp
+
+    def _double(value: int) -> int:
+        return value * 2
+
+    def _even(value: Any) -> bool:
+        return isinstance(value, int) and value % 2 == 0
+
+    def _odd(value: Any) -> bool:
+        return isinstance(value, int) and value % 2 == 1
+
+    # A transport-appropriate root endpoint: "inproc" uses a bare name;
+    # "tcp" needs host:port; "ipc" needs a path. Child endpoints are
+    # resolved by the driver against the same transport.
+    endpoint = {
+        "inproc": "root",
+        "tcp": "127.0.0.1:5599",
+        "ipc": "/tmp/agent-centric-fbp-root",
+    }[transport]
+    with fbp.FbpDriver(transport=transport, endpoint=endpoint) as driver:
+        driver.register("double", _double, source_url="file:///tasks/double")
+        driver.register("even", _even)
+        driver.register("odd", _odd)
+        driver.configure(tasks=("double",), verifiers=("even", "odd"))
+
+        local = driver.run("double", {"value": 21})
+        print(f"local  : {local.kind} verified={local.verified} value={local.value!r}")
+
+        driver.spawn("child")
+        driver.configure_child("child", tasks=("double",))
+        delegated = driver.run("double", {"value": 21}, child="child")
+        print(
+            f"delegate: {delegated.kind} verified={delegated.verified} "
+            f"value={delegated.value!r} node={delegated.node!r}"
+        )
+
+        # Correctness spine on the upward path: root's verifier demotes the
+        # child's even result to an explicit failure.
+        driver.configure(verifier="odd")
+        demoted = driver.run("double", {"value": 21}, child="child")
+        print(
+            f"demote  : {demoted.kind} verified={demoted.verified} "
+            f"error={demoted.error!r}"
+        )
+
+        # Fail closed: unknown delegation target.
+        driver.configure(verifier="even")
+        unknown = driver.run("double", {"value": 21}, child="ghost")
+        print(
+            f"unknown : {unknown.kind} verified={unknown.verified} error={unknown.error!r}"
+        )
+
+        return 0 if local.verified and delegated.verified else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -549,6 +622,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_summarise(args.store, args.trajectory_id)
     if args.command == "replay-verify":
         return _cmd_replay_verify(args.store, args.trajectory_id)
+    if args.command == "fbp":
+        return _cmd_fbp(args.transport)
     raise AssertionError(f"unhandled command: {args.command}")
 
 

@@ -25,6 +25,7 @@ adapters (see ``spec.md`` and ``protocol.md``).
 from .agent import Agent, register_callable
 from .config import AgentConfig
 from .context import Context, Verifier
+from .driver import FbpDriver
 from .message import (
     DIRECTIVE_CONFIGURE,
     DIRECTIVE_KILL,
@@ -57,6 +58,7 @@ __all__ = [
     # Agent
     "Agent",
     "AgentConfig",
+    "FbpDriver",
     "register_callable",
     # Context / governance
     "Context",

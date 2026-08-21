@@ -122,6 +122,11 @@ class Agent:
     def config(self) -> AgentConfig:
         return self._config
 
+    @property
+    def children(self) -> dict[str, Agent]:
+        """The spawned child agents (a read-only copy)."""
+        return dict(self._child_agents)
+
     def init(self) -> None:
         """Bootstrap: create the context and connect to the parent.
 
@@ -280,8 +285,18 @@ class Agent:
             await self.delegate(delegated, directive)
             self._delegated[directive.correlation_id] = delegated
             return None
-        # Either not a run directive, not delegatable, or an unknown delegation
-        # target (fail closed): handle locally.
+        if delegated is not None:
+            # The directive names a child that is not a spawned child. This is
+            # a directed route to an unknown target: fail closed rather than
+            # silently handling it locally (which would route work somewhere
+            # the caller did not intend).
+            response = self._error(
+                directive,
+                f"delegation target {delegated!r} is not a spawned child",
+            )
+            await self._send(response)
+            return response
+        # Not delegatable (no child named): handle locally.
         response = self._handle(directive)
         await self._send(response)
         return response
@@ -499,7 +514,10 @@ class Agent:
 
         task_name = directive.payload.get("task")
         args = directive.payload.get("args", {})
-        verifier_name = directive.payload.get("verifier")
+        # The directive may name a verifier; otherwise fall back to the agent's
+        # configured default verifier (set by ``configure``). This makes the
+        # configured verifier apply to local runs, not just child re-verification.
+        verifier_name = directive.payload.get("verifier") or self._verifier
 
         if not isinstance(task_name, str):
             return self._error(directive, "run directive requires a 'task' name")
@@ -600,6 +618,45 @@ class Agent:
             node=self.identity,
         )
 
+    def configure_child(
+        self,
+        identity: str,
+        *,
+        tasks: tuple[str, ...] = (),
+        verifiers: tuple[str, ...] = (),
+        rules: tuple[str, ...] = (),
+        verifier: str | None = None,
+    ) -> Response:
+        """Configure a spawned child (the parent provides the child's context).
+
+        This is the parent-mediated form of ``configure`` for a child the parent
+        spawned: the parent builds the child's configure directive and applies
+        it. It fails closed if ``identity`` is not a spawned child.
+        """
+        child = self._child_agents.get(identity)
+        if child is None:
+            return Response(
+                correlation_id="configure-child",
+                kind=RESPONSE_ERROR,
+                verified=False,
+                node=self.identity,
+                error=f"no spawned child {identity!r}",
+            )
+        payload: dict[str, Any] = {
+            "tasks": list(tasks),
+            "verifiers": list(verifiers),
+            "rules": list(rules),
+        }
+        if verifier is not None:
+            payload["verifier"] = verifier
+        return child._configure(
+            Directive(
+                correlation_id="configure-child",
+                kind=DIRECTIVE_CONFIGURE,
+                payload=payload,
+            )
+        )
+
     async def delegate(self, child_identity: str, directive: Directive) -> None:
         """Route a directive down to a child agent (mediated delegation).
 
@@ -613,13 +670,17 @@ class Agent:
         child = self._children.get(child_identity)
         if child is None:
             raise KeyError(f"no spawned child {child_identity!r}")
+        # Strip the routing field before forwarding: ``child`` is the parent's
+        # delegation hint and must not reach the child (which would otherwise
+        # try to re-delegate to itself). The parent mediates the route.
+        payload = {k: v for k, v in directive.payload.items() if k != "child"}
         await child.send_multipart(
             [
                 child_identity.encode(),
                 directive.correlation_id.encode(),
                 MESSAGE_DIRECTIVE.encode(),
                 directive.kind.encode(),
-                json.dumps(directive.payload).encode(),
+                json.dumps(payload).encode(),
             ]
         )
 

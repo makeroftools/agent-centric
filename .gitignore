@@ -219,3 +219,6 @@ __marimo__/
 
 # Demo-generated durable trajectories
 examples/.trajectories/
+
+# Zed editor-local state (never committed)
+.zed/
