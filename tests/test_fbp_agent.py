@@ -95,6 +95,7 @@ async def _recv_response(socket: zmq.asyncio.Socket) -> Response:
         verified=payload.get("verified", False),
         node=payload.get("node", identity),
         error=payload.get("error"),
+        source=payload.get("source", ""),
     )
 
 
@@ -294,6 +295,73 @@ class TestAgentRun:
             )
             assert resp.kind == RESPONSE_OK
             assert resp.verified is True
+
+        asyncio.run(scenario())
+
+    def test_chain_audit_source_on_verified_response(self) -> None:
+        """A verified result carries the source URL of the callable that ran.
+
+        This is the chain-audit clamp: the trajectory records *which* callable
+        ran and from where, so execution is fully auditable.
+        """
+        async def scenario() -> None:
+            register_callable("double", _double, source_url="src://tasks/double.py")
+            agent = Agent(
+                AgentConfig(
+                    identity="leaf",
+                    parent_endpoint="inproc://parent",
+                    context=zmq.asyncio.Context(),
+                )
+            )
+            agent.init()
+            agent._configure(
+                Directive(
+                    correlation_id="cfg1",
+                    kind=DIRECTIVE_CONFIGURE,
+                    payload={"tasks": ["double"]},
+                )
+            )
+            run = Directive(
+                correlation_id="run1",
+                kind=DIRECTIVE_RUN,
+                payload={"task": "double", "args": {"value": 21}},
+            )
+            resp, _ = await self._run_agent(run, agent=agent)
+            assert resp.kind == RESPONSE_RESULT
+            assert resp.verified is True
+            assert resp.value == 42
+            assert resp.source == "src://tasks/double.py"
+
+        asyncio.run(scenario())
+
+    def test_run_without_source_is_empty(self) -> None:
+        """A callable registered without a source records an empty source."""
+        async def scenario() -> None:
+            register_callable("double", _double)
+            agent = Agent(
+                AgentConfig(
+                    identity="leaf",
+                    parent_endpoint="inproc://parent",
+                    context=zmq.asyncio.Context(),
+                )
+            )
+            agent.init()
+            agent._configure(
+                Directive(
+                    correlation_id="cfg1",
+                    kind=DIRECTIVE_CONFIGURE,
+                    payload={"tasks": ["double"]},
+                )
+            )
+            run = Directive(
+                correlation_id="run1",
+                kind=DIRECTIVE_RUN,
+                payload={"task": "double", "args": {"value": 21}},
+            )
+            resp, _ = await self._run_agent(run, agent=agent)
+            assert resp.kind == RESPONSE_RESULT
+            assert resp.verified is True
+            assert resp.source == ""
 
         asyncio.run(scenario())
 

@@ -37,7 +37,8 @@ prepends the sender's routing identity as the first frame.
   makes async matching deterministic and idempotency checkable.
 - `kind` — `directive` | `ack` | `response`.
 - `payload` — JSON. A directive carries the complete task specification; a
-  response carries the outcome.
+  response carries the outcome (value, verified, node, error, and source — the
+  source location of the callable that produced it, for chain audit).
 
 JSON payload is deliberate: it forces a uniform wire contract and makes
 persistence and replay work.
@@ -104,6 +105,19 @@ Trust is clamped down. The parent is trusted by construction (it provides the
 child's context), but *which* callable ran is always recorded, so the trajectory
 is fully auditable. A child cannot name an arbitrary callable; it runs only what
 its context grants.
+
+**Chain audit.** Every response carries a ``source`` field — the source location
+(URL) of the callable that produced it. This is the execution clamp: the
+registry is a passive catalog, so the power to compile/run lives in the
+consuming agent, and the trajectory records *which* callable ran and from where
+(source URL → fetch → compile → run). A response with an empty ``source`` means
+the callable was registered without a source location; the field is always
+present on the wire so the audit is uniform.
+
+**Consumption clamp.** An agent runs only what its parent explicitly granted it
+via ``configure`` (the ``tasks``/``verifiers`` names). A directive cannot name an
+arbitrary callable; it must name one the agent was configured with. This is the
+allowlist/grant that bounds who may act on a recorded location.
 
 ## 8. Telemetry
 

@@ -146,6 +146,8 @@ Implemented here (pure, offline-testable, deterministic):
 - `AgentConfig` — minimal bootstrap (identity + parent endpoint).
 - `Directive` / `Ack` / `Response` — the message protocol (the crux).
 - `Registry` — a stub; the registry-as-agent is a next step.
+- **Chain audit** — every response carries the ``source`` of the callable that
+  produced it, so execution is auditable (which callable ran, from where).
 
 **Not yet implemented (next steps, optional adapters):**
 

@@ -66,10 +66,19 @@ class Registry:
         """
         self._entries[name] = RegistryEntry(name=name, callable=fn)
 
+    def register_entry(self, entry: RegistryEntry) -> None:
+        """Register a metadata entry (name + optional source URL + callable)."""
+        self._entries[entry.name] = entry
+
     def resolve(self, name: str) -> CallableT | None:
         """Resolve a registered callable by name (None if not registered)."""
         entry = self._entries.get(name)
         return entry.callable if entry is not None else None
+
+    def source(self, name: str) -> str | None:
+        """Return the source URL of a registered entry (None if not registered)."""
+        entry = self._entries.get(name)
+        return entry.source_url if entry is not None else None
 
     def names(self) -> tuple[str, ...]:
         """Return the sorted registered names."""

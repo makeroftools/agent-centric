@@ -99,6 +99,8 @@ class Response:
         verified: True if the value passed verification on the upward path.
         node: The node that produced this response (responsibility/audit).
         error: A human-readable error message on failure, else None.
+        source: The source location (URL) of the callable that produced this
+            response, for chain audit. Empty when not applicable.
         protocol: The protocol version this response speaks.
     """
 
@@ -108,6 +110,7 @@ class Response:
     verified: bool = False
     node: str = ""
     error: str | None = None
+    source: str = ""
     protocol: str = PROTOCOL_VERSION
 
 
@@ -163,3 +166,5 @@ def validate_response(msg: Response) -> None:
         raise ProtocolError("a 'result' response must be verified")
     if msg.kind == RESPONSE_ERROR and msg.verified:
         raise ProtocolError("an 'error' response must not be verified")
+    if not isinstance(msg.source, str):
+        raise ProtocolError("response source must be a string")

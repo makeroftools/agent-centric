@@ -44,7 +44,7 @@ from .message import (
     validate_directive,
     validate_response,
 )
-from .registry import Registry
+from .registry import Registry, RegistryEntry
 
 # A task is a registered callable: same reference, same args -> same result.
 Task = Callable[..., Any]
@@ -53,12 +53,14 @@ Verifier = Callable[[Any], bool]
 
 
 # The registry of callables known to the system. In the foundation this is a
-# module-level stub; trust and persistence are clamped down later.
-_REGISTRY: dict[str, Callable[..., Any]] = {}
+# module-level stub; trust and persistence are clamped down later. Each entry
+# carries the callable and its source location (URL) so the trajectory can
+# record *which* callable ran and from where (chain audit).
+_REGISTRY: dict[str, RegistryEntry] = {}
 
 
-def _resolve(name: str) -> Callable[..., Any]:
-    """Resolve a callable by name from the system registry.
+def _resolve_entry(name: str) -> RegistryEntry:
+    """Resolve the full registry entry (callable + source) by name.
 
     Raises:
         KeyError: If the name is not registered.
@@ -66,9 +68,17 @@ def _resolve(name: str) -> Callable[..., Any]:
     return _REGISTRY[name]
 
 
-def register_callable(name: str, fn: Callable[..., Any]) -> None:
-    """Register a callable by name so directives can reference it."""
-    _REGISTRY[name] = fn
+def register_callable(
+    name: str, fn: Callable[..., Any], *, source_url: str = ""
+) -> None:
+    """Register a callable by name so directives can reference it.
+
+    Args:
+        name: The name directives will use to reference the callable.
+        fn: The callable to register.
+        source_url: The source location (URL) of the callable, for chain audit.
+    """
+    _REGISTRY[name] = RegistryEntry(name=name, callable=fn, source_url=source_url)
 
 
 class Agent:
@@ -170,6 +180,7 @@ class Agent:
             "verified": msg.verified,
             "node": msg.node,
             "error": msg.error,
+            "source": msg.source,
             "protocol": msg.protocol,
         }
 
@@ -261,9 +272,11 @@ class Agent:
         payload = directive.payload
         self._rules = tuple(payload.get("rules", ()))
         for name in payload.get("tasks", ()):
-            self._registry.register(name, _resolve(name))
+            entry = _resolve_entry(name)
+            self._registry.register_entry(entry)
         for name in payload.get("verifiers", ()):
-            self._registry.register(name, _resolve(name))
+            entry = _resolve_entry(name)
+            self._registry.register_entry(entry)
         return Response(
             correlation_id=directive.correlation_id,
             kind=RESPONSE_OK,
@@ -284,9 +297,14 @@ class Agent:
         args = directive.payload.get("args", {})
         verifier_name = directive.payload.get("verifier")
 
-        task = self._registry.resolve(task_name) if task_name else None
+        if not isinstance(task_name, str):
+            return self._error(directive, "run directive requires a 'task' name")
+
+        task = self._registry.resolve(task_name)
         if task is None:
             return self._error(directive, f"unknown task {task_name!r}")
+
+        source = self._registry.source(task_name) or ""
 
         try:
             value = task(**args)
@@ -301,6 +319,7 @@ class Agent:
             verified=verified,
             node=self.identity,
             error=None if verified else f"verification failed for task {task_name!r}",
+            source=source,
         )
         self._results[directive.correlation_id] = response
         return response
@@ -370,6 +389,7 @@ class Agent:
             verified=payload.get("verified", False),
             node=payload.get("node", identity),
             error=payload.get("error"),
+            source=payload.get("source", ""),
         )
         try:
             validate_response(msg)
