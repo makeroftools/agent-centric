@@ -1,12 +1,16 @@
 """A stub registry of agents and their metadata.
 
-The registry is an **agent**, not a module-level structure. In the full design
-it holds a list of agents and their metadata, where each entry is itself an
-agent and includes a **URL to its source code or executable**. Another agent
-has the ability to **compile on demand**, so the system can accommodate
-multiple programming languages simultaneously (different agent runtimes as
-self-contained executable processes), communicating over the ZeroMQ protocol
-rather than by sharing memory.
+The registry is an **agent**, not a module-level structure. It is a **passive
+catalog — nothing more**: it holds a list of records of metadata, where each
+record describes an agent/capability (name, metadata, and the location/URL of
+its source code or executable). The registry does **not** compile, does **not**
+run, and does **not** hold code.
+
+Other agents take the *information* (the location) and act on it — fetch,
+compile, run — as their own governed directives allow. Because agents are
+self-contained executable processes (potentially different runtimes), the
+system can accommodate multiple programming languages simultaneously,
+communicating over the ZeroMQ protocol rather than by sharing memory.
 
 This is a minimal stub for the foundation. The protocol is JSON over the wire,
 so callables cannot cross the bus; a directive names a callable by its
@@ -26,14 +30,15 @@ CallableT = Callable[..., Any]
 
 @dataclass(frozen=True)
 class RegistryEntry:
-    """Metadata for a registered agent/capability.
+    """Metadata for a registered agent/capability (a passive catalog record).
 
     Attributes:
         name: The name directives use to reference this entry.
-        source_url: A URL to the source code or executable.
+        source_url: The location (URL) of the source code or executable.
         kind: The runtime/language kind (e.g. "python", "executable").
-        callable: An optional in-process callable (stub; the full design
-            resolves/compiles from ``source_url`` on demand).
+        callable: An optional in-process callable (stub convenience only; the
+            full design stores only metadata and location, and other agents
+            fetch/compile/run as their own directives allow).
     """
 
     name: str

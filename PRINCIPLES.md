@@ -92,17 +92,32 @@ CPM is especially valuable in the fractal, agent-centric model: at every level
 of the tree it reveals which path dominates and where slack exists, making the
 system's timing transparent and auditable.
 
-## 10. The Registry Is an Agent
+## 10. The Registry Is a Passive Metadata Catalog
 
-The registry is not a module-level structure; it is an **agent**. It holds a
-list of agents and their metadata, where each entry is itself an agent and
-includes a **URL to its source code or executable**. Another agent has the
-ability to **compile on demand**. Because agents are self-contained executable
-processes (potentially different runtimes), the system can accommodate
-**multiple programming languages simultaneously**, communicating over the
-ZeroMQ protocol rather than by sharing memory.
+The registry is not a module-level structure; it is an **agent**. But it is a
+**passive catalog — nothing more**. It holds a list of records of metadata,
+where each record describes an agent/capability: its name, its metadata, and
+the **location** (URL) of its source code or executable. The registry does
+**not** compile, does **not** run, and does **not** hold code.
+
+Other agents take the *information* (the location) and act on it — fetch,
+compile, run — as their own governed directives allow. Because agents are
+self-contained executable processes (potentially different runtimes), the
+system can accommodate **multiple programming languages simultaneously**,
+communicating over the ZeroMQ protocol rather than by sharing memory.
 
 This is the fractal principle applied to the registry itself: the registry is
 an agent, the compile step is an agent, and each registered capability is an
 agent. Registration, compilation, and resolution are all directives — never
 module-level globals.
+
+**The trust boundary (clamp down) applies at three distinct points:**
+
+1. **Registry writes** — who may register a record (explicit, audited).
+2. **Consumption** — who may act on a recorded location (allowlist/grant).
+3. **Execution** — what a runtime agent may run, under what envelope, with
+   what verification and audit.
+
+The registry itself has a low trust surface: it only stores and serves
+metadata. The power to compile and run lives in the agents that consume the
+metadata, and that is where the clamp-down is hardest.
