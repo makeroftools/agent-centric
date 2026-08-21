@@ -13,17 +13,30 @@ worse than a system that is slow but provably correct.
 
 ## 2. Deterministic Control Plane
 
-The control plane (Agent Manager) must be deterministic. Given the same inputs
-(agent manifest, task, resource envelope, and a deterministic agent), it must
-reproduce the same trajectory and the same outcome. Nondeterminism is confined
-to the agent's own computation and is recorded, never relied upon by the
-control plane.
+The control plane must be deterministic. Given the same inputs (agent manifest,
+task, resource envelope, and a deterministic agent), it must reproduce the
+same trajectory and the same outcome. Nondeterminism is confined to the
+agent's own computation and is recorded, never relied upon by the control
+plane.
+
+## 2a. Abstract System — Not a Trading System
+
+This is an **abstract, general-purpose agent system**. It is not a trading
+system, and trading / automated-trading concerns are **non-relevant** to this
+project. The mission-critical posture (correctness, determinism, verification,
+audit, fail-closed) applies to the abstract system itself, not to any
+particular domain. Do not frame this project as a trading system.
 
 ## 3. Agent-Centric Design
 
 Agents are first-class governed components. They are registered, isolated,
 and executed under explicit contracts. The harness does not embed agent
 behavior; it governs it. Every agent exposes a thin, intentional interface.
+
+There is **no central Manager**. The architecture is a tree of agents; the
+"manager" role is simply the upward-facing responsibility any agent has toward
+its children (providing their context, routing directives, verifying
+responses).
 
 The architecture is **fractal and recursive**: there is one abstract concept —
 the Agent — and everything is an instance of it. Every task is itself an
@@ -54,8 +67,8 @@ replayed to reconstruct exactly what occurred.
 ## 7. Least Privilege
 
 Each agent receives only the resources and capabilities it was granted in its
-resource envelope. The Manager enforces these bounds hard: timeouts, step
-limits, and resource caps are not advisory.
+resource envelope. These bounds are enforced hard: timeouts, step limits, and
+resource caps are not advisory.
 
 ## 8. Explicit Failure
 
@@ -78,3 +91,18 @@ duration and where slack allows flexibility — not for driving execution.
 CPM is especially valuable in the fractal, agent-centric model: at every level
 of the tree it reveals which path dominates and where slack exists, making the
 system's timing transparent and auditable.
+
+## 10. The Registry Is an Agent
+
+The registry is not a module-level structure; it is an **agent**. It holds a
+list of agents and their metadata, where each entry is itself an agent and
+includes a **URL to its source code or executable**. Another agent has the
+ability to **compile on demand**. Because agents are self-contained executable
+processes (potentially different runtimes), the system can accommodate
+**multiple programming languages simultaneously**, communicating over the
+ZeroMQ protocol rather than by sharing memory.
+
+This is the fractal principle applied to the registry itself: the registry is
+an agent, the compile step is an agent, and each registered capability is an
+agent. Registration, compilation, and resolution are all directives — never
+module-level globals.

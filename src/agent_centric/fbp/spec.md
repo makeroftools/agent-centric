@@ -10,10 +10,13 @@ step of a pivot, not the finished system.
 
 ## 1. The model
 
-A rooted, recursive **tree of nodes**. There is no central `AgentManager`; the
-topology *is* the governance.
+A rooted, recursive **tree of agents**. There is no central `AgentManager`;
+the topology *is* the governance.
 
-- **Root = the shell.** The shell is a node (not an external orchestrator). It
+This is an **abstract, general-purpose agent system** — not a trading system.
+Trading / automated-trading concerns are **non-relevant** to this project.
+
+- **Root = the shell.** The shell is an agent (not an external orchestrator). It
   bootstraps the tree and is the origin of work and the final owner of
   responsibility.
 - **Work travels down.** A node delegates work to its children.
@@ -101,18 +104,37 @@ of the tree, CPM reveals which path dominates the duration and where slack
 allows flexibility. It is the tool that makes the system's timing transparent
 and auditable.
 
+## 3c. The Registry Is an Agent
+
+The registry is not a module-level structure; it is an **agent**. It holds a
+list of agents and their metadata, where each entry is itself an agent and
+includes a **URL to its source code or executable**. Another agent has the
+ability to **compile on demand**. Because agents are self-contained executable
+processes (potentially different runtimes), the system can accommodate
+**multiple programming languages simultaneously**, communicating over the
+ZeroMQ protocol rather than by sharing memory.
+
+This is the fractal principle applied to the registry itself: the registry is
+an agent, the compile step is an agent, and each registered capability is an
+agent. Registration, compilation, and resolution are all directives — never
+module-level globals.
+
 ## 4. Scope of this foundation
 
 Implemented here (pure, offline-testable, deterministic):
 
 - `Context` — hierarchical context (the governance mechanism).
 - `Node` — the `init/run/kill` contract.
-- `Shell` — the root node that builds the tree and runs work through it.
+- `Shell` — the root agent that builds the tree and runs work through it.
 - Verification on the upward path (a `Verifier` gate).
+- `Agent` — the abstract agent with a steppable async `zmq_poll` loop.
+- `AgentConfig` — minimal bootstrap (identity + parent endpoint).
+- `Directive` / `Ack` / `Response` — the message protocol (the crux).
+- `Registry` — a stub; the registry-as-agent is a next step.
 
 **Not yet implemented (next steps, optional adapters):**
 
-- ZeroMQ `poll` transport for multiplexing channels (adds a dependency).
+- The registry-as-agent (list of agents + metadata + source URL + compile-on-demand).
 - FastAPI UI/API layer (adds a dependency).
 - The concrete bills-loop nodes (intake → accept → registry → calendar →
   maintain) as an FBP graph.
@@ -121,8 +143,9 @@ Implemented here (pure, offline-testable, deterministic):
 These are deliberately deferred so the foundation can be proven correct,
 deterministic, and fully tested before layering on transport and UI.
 
-## 4. Non-goals (unchanged from the existing system)
+## 5. Non-goals
 
+- Not a trading system; trading concerns are non-relevant.
 - No unverified money/dates; no auto-accept.
 - No silent registry writes.
 - No network in CI.

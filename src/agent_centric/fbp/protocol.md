@@ -8,6 +8,9 @@ This document is the **crux of the system**: the standard "language" that every
 agent speaks. It is a versioned, enforced contract. Messages that do not conform
 are rejected — never silently accepted.
 
+This is an **abstract, general-purpose agent system** — not a trading system.
+Trading / automated-trading concerns are **non-relevant** to this project.
+
 ## 1. Transport
 
 The comms channel is **ZeroMQ** (`zmq_poll`), a first-class citizen. The same

@@ -1,13 +1,16 @@
 # Agent-centric
 
-**A deterministic control plane for governed, verifiable agents.**
+**A deterministic, agent-centric system for governed, verifiable agents.**
 
-Agent-centric is a minimal, local-first, in-process core that lets a control
-plane — the **Agent Manager** — register agent components, execute a task under
-a strict resource envelope, record a full **durable, append-only audit
-trajectory**, and mediate every tool and model call. Agents can only *request*
-capabilities; the Manager is the sole authority that grants, executes, records,
-and verifies.
+Agent-centric is an **abstract, general-purpose agent system** — not a trading
+system. Trading / automated-trading concerns are non-relevant to this project.
+
+It is a local-first, in-process core built around one abstract concept: the
+**Agent**. There is no central Manager; the architecture is a tree of agents,
+where each agent is simultaneously a worker to its parent and a manager to its
+children. Work flows down as **directives**; verified responses bubble up.
+Every step is recorded in a durable, append-only audit trajectory, and every
+tool and model call is mediated.
 
 This is the **v0.29 preliminary release** — a minimal but complete harness,
 built across Volleys 001–029. It reflects what exists in the codebase, not an
@@ -18,7 +21,7 @@ aspirational platform.
 > [`STATUS.md`](STATUS.md).
 
 ```
-Zed (Agent Panel) ──ACP──▶ agent-centric-acp (adapter) ──▶ AgentManager ──▶ agents / tools / MCP
+Zed (Agent Panel) ──ACP──▶ agent-centric-acp (adapter) ──▶ agent tree ──▶ agents / tools / MCP
 ```
 
 ---
