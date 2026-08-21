@@ -877,3 +877,81 @@ class TestRegistryAsAgent:
             context.term()
 
         asyncio.run(scenario())
+
+
+class TestTransportParity:
+    """Prove the directive/response protocol runs identically over every
+    transport: ``inproc`` (in-process), ``ipc`` (local inter-process), and
+    ``tcp`` (distribution). The transport is a property of the channel, never
+    of the protocol.
+    """
+
+    async def _round_trip(self, bind_endpoint: str, transport: str) -> Response:
+        context = zmq.asyncio.Context()
+        register_callable("double", _double)
+        parent = context.socket(zmq.ROUTER)
+        parent.bind(bind_endpoint)
+        # For transport with ephemeral ports, connect to the actual bound endpoint.
+        if bind_endpoint.endswith(":*"):
+            parent_endpoint = parent.getsockopt_string(zmq.LAST_ENDPOINT)
+        else:
+            parent_endpoint = bind_endpoint
+
+        agent = Agent(
+            AgentConfig(
+                identity="leaf",
+                parent_endpoint=parent_endpoint,
+                transport=transport,
+                context=context,
+            )
+        )
+        agent.init()
+        # Over ``tcp``/``ipc`` the DEALER connection is established asynchronously,
+        # so a directive sent too soon can precede the peer's registration. A
+        # brief settle lets the transport-link carry the message, matching
+        # real-world semantics (inproc connects synchronously).
+        if transport != "inproc":
+            await asyncio.sleep(0.2)
+        agent._configure(
+            Directive(
+                correlation_id="cfg1",
+                kind=DIRECTIVE_CONFIGURE,
+                payload={"tasks": ["double"]},
+            )
+        )
+        run = Directive(
+            correlation_id="run1",
+            kind=DIRECTIVE_RUN,
+            payload={"task": "double", "args": {"value": 21}},
+        )
+        await _send(parent, run, to=b"leaf")
+        await agent.poll(timeout=0.5)
+        ack = await _recv_ack(parent)
+        assert ack.correlation_id == "run1"
+        response = await _recv_response(parent)
+
+        agent.kill()
+        parent.close(0)
+        context.term()
+        return response
+
+    def test_run_over_tcp(self) -> None:
+        async def scenario() -> None:
+            resp = await self._round_trip("tcp://127.0.0.1:*", "tcp")
+            assert resp.kind == RESPONSE_RESULT
+            assert resp.verified is True
+            assert resp.value == 42
+
+        asyncio.run(scenario())
+
+    def test_run_over_ipc(self) -> None:
+        async def scenario() -> None:
+            import tempfile
+
+            sock = tempfile.mktemp(prefix="fbp-ipc-", suffix=".ipc")
+            resp = await self._round_trip(f"ipc://{sock}", "ipc")
+            assert resp.kind == RESPONSE_RESULT
+            assert resp.verified is True
+            assert resp.value == 42
+
+        asyncio.run(scenario())

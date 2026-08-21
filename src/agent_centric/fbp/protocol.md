@@ -23,6 +23,13 @@ protocol runs over any transport:
 The transport is a property of the channel, not of the protocol. The protocol
 is identical on every transport.
 
+**Transport note.** A DEALER link over ``tcp``/``ipc`` is established
+asynchronously, unlike ``inproc`` (which connects synchronously). A message
+sent before the peer's registration can be silently dropped by the transport.
+Because every directive must be acknowledged (Ack), a producer that has not
+seen an Ack for its directive should retry — the Ack is the delivery guarantee
+that makes transport asynchrony safe.
+
 ## 2. The envelope
 
 A message is a sequence of frames on a DEALER/ROUTER socket. On a ROUTER, ZeroMQ

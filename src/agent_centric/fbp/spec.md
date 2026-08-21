@@ -145,6 +145,9 @@ Implemented here (pure, offline-testable, deterministic):
 - `Agent` — the abstract agent with a steppable async `zmq_poll` loop.
 - `AgentConfig` — minimal bootstrap (identity + parent endpoint).
 - `Directive` / `Ack` / `Response` — the message protocol (the crux).
+- **Transport parity** — the protocol is proven to round-trip identically over
+  `inproc://`, `tcp://`, and `ipc://`; the transport is a property of the
+  channel, never of the protocol.
 - `Registry` — a passive metadata catalog serving ``register``/``resolve`` over
   the directive protocol (registry-as-agent); it records location, never code.
 - **Chain audit** — every response carries the ``source`` of the callable that
