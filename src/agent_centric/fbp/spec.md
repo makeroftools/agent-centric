@@ -145,7 +145,8 @@ Implemented here (pure, offline-testable, deterministic):
 - `Agent` — the abstract agent with a steppable async `zmq_poll` loop.
 - `AgentConfig` — minimal bootstrap (identity + parent endpoint).
 - `Directive` / `Ack` / `Response` — the message protocol (the crux).
-- `Registry` — a stub; the registry-as-agent is a next step.
+- `Registry` — a passive metadata catalog serving ``register``/``resolve`` over
+  the directive protocol (registry-as-agent); it records location, never code.
 - **Chain audit** — every response carries the ``source`` of the callable that
   produced it, so execution is auditable (which callable ran, from where).
 - **Mediated spawn & delegation** — a parent provisions a real child ``Agent``
@@ -155,7 +156,7 @@ Implemented here (pure, offline-testable, deterministic):
 
 **Not yet implemented (next steps, optional adapters):**
 
-- The registry-as-agent (list of agents + metadata + source URL + compile-on-demand).
+- Compile-on-demand from a resolved source URL (the execution clamp behind the catalog).
 - FastAPI UI/API layer (adds a dependency).
 - The concrete bills-loop nodes (intake → accept → registry → calendar →
   maintain) as an FBP graph.

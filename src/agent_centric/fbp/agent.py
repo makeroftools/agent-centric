@@ -28,6 +28,8 @@ from .message import (
     DIRECTIVE_CONFIGURE,
     DIRECTIVE_KILL,
     DIRECTIVE_PING,
+    DIRECTIVE_REGISTER,
+    DIRECTIVE_RESOLVE,
     DIRECTIVE_RUN,
     DIRECTIVE_SPAWN,
     MESSAGE_ACK,
@@ -379,6 +381,10 @@ class Agent:
             return self._run_task(directive)
         if directive.kind == DIRECTIVE_SPAWN:
             return self._spawn(directive)
+        if directive.kind == DIRECTIVE_REGISTER:
+            return self._register_capability(directive)
+        if directive.kind == DIRECTIVE_RESOLVE:
+            return self._resolve_capability(directive)
         if directive.kind == DIRECTIVE_PING:
             return Response(
                 correlation_id=directive.correlation_id,
@@ -424,6 +430,53 @@ class Agent:
             kind=RESPONSE_OK,
             verified=True,
             node=self.identity,
+        )
+
+    def _register_capability(self, directive: Directive) -> Response:
+        """Handle a ``register`` directive: record capability metadata.
+
+        This is the registry-as-agent write clamp. The registry is a passive
+        catalog: it records the name, kind, and source location (URL) — never
+        a callable, which cannot cross the JSON bus. Registration is explicit
+        and audited; the agent records the entry so other agents can resolve it.
+        """
+        payload = directive.payload
+        name = payload.get("name")
+        if not isinstance(name, str) or not name:
+            return self._error(directive, "register requires a 'name'")
+        source_url = payload.get("source_url") or ""
+        kind = payload.get("kind") or "python"
+        entry = RegistryEntry(name=name, source_url=source_url, kind=kind)
+        self._registry.register_entry(entry)
+        return Response(
+            correlation_id=directive.correlation_id,
+            kind=RESPONSE_OK,
+            verified=True,
+            node=self.identity,
+        )
+
+    def _resolve_capability(self, directive: Directive) -> Response:
+        """Handle a ``resolve`` directive: return a capability's location.
+
+        This is the passive-catalog read: it returns the metadata (name, kind,
+        source location) for a named capability. It never returns a callable and
+        never executes anything — resolve only serves the location.
+        """
+        payload = directive.payload
+        name = payload.get("name")
+        if not isinstance(name, str) or not name:
+            return self._error(directive, "resolve requires a 'name'")
+        entry = self._registry.entry(name)
+        if entry is None:
+            return self._error(directive, f"unknown capability {name!r}")
+        verified = bool(entry.source_url)
+        return Response(
+            correlation_id=directive.correlation_id,
+            kind=RESPONSE_RESULT if verified else RESPONSE_ERROR,
+            value={"name": entry.name, "kind": entry.kind, "source_url": entry.source_url},
+            verified=verified,
+            node=self.identity,
+            error=None if verified else f"capability {name!r} has no source location",
         )
 
     def _run_task(self, directive: Directive) -> Response:

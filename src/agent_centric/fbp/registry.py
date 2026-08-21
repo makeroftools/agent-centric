@@ -80,6 +80,10 @@ class Registry:
         entry = self._entries.get(name)
         return entry.source_url if entry is not None else None
 
+    def entry(self, name: str) -> RegistryEntry | None:
+        """Return the full metadata entry by name (None if not registered)."""
+        return self._entries.get(name)
+
     def names(self) -> tuple[str, ...]:
         """Return the sorted registered names."""
         return tuple(sorted(self._entries))

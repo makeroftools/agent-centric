@@ -24,6 +24,8 @@ import zmq.asyncio
 from agent_centric.fbp import (
     DIRECTIVE_CONFIGURE,
     DIRECTIVE_PING,
+    DIRECTIVE_REGISTER,
+    DIRECTIVE_RESOLVE,
     DIRECTIVE_RUN,
     DIRECTIVE_SPAWN,
     MESSAGE_ACK,
@@ -785,6 +787,92 @@ class TestFailClosedOnMalformedInput:
             assert error.verified is False
 
             agent.kill()
+            parent.close(0)
+            context.term()
+
+        asyncio.run(scenario())
+
+
+class TestRegistryAsAgent:
+    """Prove the registry is a governed, passive metadata catalog over the wire.
+
+    An agent can serve ``register`` (explicit, audited writes of location
+    metadata) and ``resolve`` (read-only lookup that returns the source location,)
+    never a callable and never executing anything.
+    """
+
+    def test_register_then_resolve_over_wire(self) -> None:
+        async def scenario() -> None:
+            context = zmq.asyncio.Context()
+            parent = context.socket(zmq.ROUTER)
+            parent.bind("inproc://parent")
+
+            registry_agent = Agent(
+                AgentConfig(identity="registry", parent_endpoint="inproc://parent", context=context)
+            )
+            registry_agent.init()
+
+            # Register a capability: name + source location, never a callable.
+            reg = Directive(
+                correlation_id="reg1",
+                kind=DIRECTIVE_REGISTER,
+                payload={"name": "counter", "source_url": "agent://counter", "kind": "python"},
+            )
+            await _send(parent, reg, to=b"registry")
+            await registry_agent.poll(timeout=0.1)
+            await _recv_ack(parent)
+            reg_resp = await _recv_response(parent)
+            assert reg_resp.kind == RESPONSE_OK
+            assert reg_resp.verified is True
+
+            # Resolve it: returns the location metadata.
+            res = Directive(
+                correlation_id="res1",
+                kind=DIRECTIVE_RESOLVE,
+                payload={"name": "counter"},
+            )
+            await _send(parent, res, to=b"registry")
+            await registry_agent.poll(timeout=0.1)
+            await _recv_ack(parent)
+            res_resp = await _recv_response(parent)
+            assert res_resp.kind == RESPONSE_RESULT
+            assert res_resp.verified is True
+            assert res_resp.value == {
+                "name": "counter",
+                "kind": "python",
+                "source_url": "agent://counter",
+            }
+
+            registry_agent.kill()
+            parent.close(0)
+            context.term()
+
+        asyncio.run(scenario())
+
+    def test_resolve_unknown_capability_fails(self) -> None:
+        async def scenario() -> None:
+            context = zmq.asyncio.Context()
+            parent = context.socket(zmq.ROUTER)
+            parent.bind("inproc://parent")
+
+            registry_agent = Agent(
+                AgentConfig(identity="registry", parent_endpoint="inproc://parent", context=context)
+            )
+            registry_agent.init()
+
+            res = Directive(
+                correlation_id="res1",
+                kind=DIRECTIVE_RESOLVE,
+                payload={"name": "ghost"},
+            )
+            await _send(parent, res, to=b"registry")
+            await registry_agent.poll(timeout=0.1)
+            await _recv_ack(parent)
+            res_resp = await _recv_response(parent)
+            assert res_resp.kind == RESPONSE_ERROR
+            assert res_resp.verified is False
+
+            registry_agent.kill()
             parent.close(0)
             context.term()
 

@@ -71,6 +71,8 @@ outcome, regardless of arrival order.
 | `configure` | Parent configures the agent's domain, rules, verifier, and protocol version. |
 | `run` | Execute a task (the core directive). Carries the full context. |
 | `spawn` | Spawn a child agent, as prescribed by the directive. |
+| `register` | Registry write: record a capability's metadata (name, kind, source URL). |
+| `resolve` | Registry read: return a capability's location (never a callable, never executes). |
 | `ping` | Liveness / health check. |
 | `kill` | Teardown. |
 
