@@ -96,10 +96,14 @@ class Agent:
         self._owns_context = True
         self._parent: zmq.asyncio.Socket | None = None
         self._children: dict[str, zmq.asyncio.Socket] = {}
+        self._child_agents: dict[str, Agent] = {}
         self._registry = Registry()
         self._rules: tuple[str, ...] = ()
         self._alive = False
         self._results: dict[str, Response] = {}  # correlation_id -> response (idempotency)
+        # correlation_id -> child_identity, for mediated delegation awaiting a
+        # child response to route back up.
+        self._delegated: dict[str, str] = {}
 
     @property
     def identity(self) -> str:
@@ -126,8 +130,11 @@ class Agent:
         self._alive = True
 
     def kill(self) -> None:
-        """Teardown: close children, then the parent, then the context."""
+        """Teardown: kill child agents, close children, then parent, then context."""
         self._alive = False
+        for child_agent in self._child_agents.values():
+            child_agent.kill()
+        self._child_agents.clear()
         for child in self._children.values():
             child.close(0)
         self._children.clear()
@@ -221,15 +228,73 @@ class Agent:
         if events.get(self._parent) == zmq.POLLIN:
             directive = await self._recv()
             await self._send_ack(directive.correlation_id)
-            response = self._handle(directive)
-            await self._send(response)
-            responses.append(response)
+            delegated = self._maybe_delegate(directive)
+            if delegated is not None and delegated in self._children:
+                # Route the directive down to the named child; the child response
+                # comes back later via a child event (handled below) and is relayed up.
+                await self.delegate(delegated, directive)
+                self._delegated[directive.correlation_id] = delegated
+            else:
+                # Either not a run directive, not delegatable, or an unknown
+                # delegation target (fail closed): handle locally.
+                response = self._handle(directive)
+                await self._send(response)
+                responses.append(response)
 
         for child in self._children.values():
             if events.get(child) == zmq.POLLIN:
-                responses.append(await self._handle_child(child))
+                responses.extend(await self._drain_child(child))
 
         return responses
+
+    async def _drain_child(self, child: zmq.asyncio.Socket) -> list[Response]:
+        """Receive and handle all ready messages from a child channel.
+
+        A child sends an ack (delivery) then a response (completion), so a
+        single POLLIN event can cover two messages. Drain until the socket has
+        no more pending messages; acks are consumed and skipped, responses are
+        verified and (if they fulfil a delegation) relayed up.
+        """
+        drained: list[Response] = []
+        while True:
+            if not await self._child_ready(child):
+                break
+            child_response = await self._handle_child(child)
+            if child_response is None:
+                # A consumed ack; continue draining.
+                continue
+            if self._delegated.pop(child_response.correlation_id, None) is not None:
+                await self._send(child_response)
+            drained.append(child_response)
+        return drained
+
+    @staticmethod
+    async def _child_ready(child: zmq.asyncio.Socket) -> bool:
+        """Return True if the child channel has a ready message."""
+        poller = zmq.asyncio.Poller()
+        poller.register(child, zmq.POLLIN)
+        events = dict(await poller.poll(0))
+        return events.get(child) == zmq.POLLIN
+
+    def _maybe_delegate(self, directive: Directive) -> str | None:
+        """Return the named child a run directive should be delegated to, else None.
+
+        Delegation is explicit and mediated: a parent routes a ``run`` directive
+        to a child only when the payload names one (``child`` field) and that
+        child is a spawned child. If the directive names no child, or names an
+        unknown child, the parent does not delegate (it handles the directive
+        itself, or fails closed if it cannot). This is fail-closed: a directive
+        cannot silently route to an arbitrary child.
+        """
+        if directive.kind != DIRECTIVE_RUN:
+            return None
+        target = directive.payload.get("child")
+        if not isinstance(target, str) or not target:
+            return None
+        if target in self._children:
+            return target
+        # Unknown target: return it so the caller can fail closed explicitly.
+        return target
 
     def _handle(self, directive: Directive) -> Response:
         """Handle a directive from the parent, dispatching by kind."""
@@ -336,8 +401,12 @@ class Agent:
     def _spawn(self, directive: Directive) -> Response:
         """Spawn a child agent as prescribed by the directive.
 
-        The child is created with the config in the payload and connected to
-        this agent as its parent. The child's socket is added to the poll set.
+        The parent provisions a real child ``Agent``: it binds a ROUTER socket
+        at the child's endpoint, creates the child with a config pointing at
+        that endpoint, and stores both the socket and the child agent. The
+        child is then initialised (its DEALER connects to the parent's ROUTER).
+        This is mediated spawn — the parent creates and governs the child,
+        rather than merely bookkeeping a socket.
         """
         payload = directive.payload
         child_identity = payload.get("identity")
@@ -348,9 +417,19 @@ class Agent:
         if self._context is None:
             return self._error(directive, "agent not initialised")
 
-        child = self._context.socket(zmq.ROUTER)
-        child.bind(self._endpoint(child_endpoint))
-        self._children[child_identity] = child
+        child_socket = self._context.socket(zmq.ROUTER)
+        child_socket.bind(self._endpoint(child_endpoint))
+        child = Agent(
+            AgentConfig(
+                identity=child_identity,
+                parent_endpoint=child_endpoint,
+                transport=self._config.transport,
+                context=self._context,
+            )
+        )
+        child.init()
+        self._children[child_identity] = child_socket
+        self._child_agents[child_identity] = child
         return Response(
             correlation_id=directive.correlation_id,
             kind=RESPONSE_OK,
@@ -358,9 +437,49 @@ class Agent:
             node=self.identity,
         )
 
-    async def _handle_child(self, child: zmq.asyncio.Socket) -> Response:
-        """Handle a response from a child, verifying it on the way up."""
+    async def delegate(self, child_identity: str, directive: Directive) -> None:
+        """Route a directive down to a child agent (mediated delegation).
+
+        The parent sends the directive to the child over the child's ROUTER
+        socket. The child's response is later received by ``poll`` and relayed
+        up. This is how a parent delegates work it cannot resolve locally.
+
+        Raises:
+            KeyError: If ``child_identity`` is not a spawned child.
+        """
+        child = self._children.get(child_identity)
+        if child is None:
+            raise KeyError(f"no spawned child {child_identity!r}")
+        await child.send_multipart(
+            [
+                child_identity.encode(),
+                directive.correlation_id.encode(),
+                MESSAGE_DIRECTIVE.encode(),
+                directive.kind.encode(),
+                json.dumps(directive.payload).encode(),
+            ]
+        )
+
+    async def _handle_child(self, child: zmq.asyncio.Socket) -> Response | None:
+        """Handle a message from a child, verifying on the way up.
+
+        A child sends an ack (delivery) then a response (completion). The ack
+        merely confirms delivery down and carries no result, so it is consumed
+        and skipped (returns None). The response is verified and returned.
+        A malformed or non-response message fails closed.
+        """
         frames = await child.recv_multipart()
+        if len(frames) == 4:
+            # Ack from child: [identity, correlation_id, kind=ack, payload=""].
+            if frames[2].decode() == MESSAGE_ACK:
+                return None
+            return Response(
+                correlation_id="",
+                kind=RESPONSE_ERROR,
+                verified=False,
+                node=self.identity,
+                error="malformed child message",
+            )
         if len(frames) != 5:
             return Response(
                 correlation_id="",

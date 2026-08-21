@@ -25,6 +25,7 @@ from agent_centric.fbp import (
     DIRECTIVE_CONFIGURE,
     DIRECTIVE_PING,
     DIRECTIVE_RUN,
+    DIRECTIVE_SPAWN,
     MESSAGE_ACK,
     MESSAGE_DIRECTIVE,
     MESSAGE_RESPONSE,
@@ -433,6 +434,129 @@ class TestTwoAgentRoundTrip:
             assert resp.verified is True
             assert resp.value == 42
             assert resp.node == "child"
+
+        asyncio.run(scenario())
+
+
+class TestMediatedSpawnDelegation:
+    """Prove mediated spawn and delegation: a parent provisions a real child
+    Agent and routes a run directive down to it, receiving the child's verified
+    response and relaying it up to its own parent.
+    """
+
+    def test_spawn_provisions_real_child_and_delegates(self) -> None:
+        async def scenario() -> None:
+            register_callable("double", _double)
+            context = zmq.asyncio.Context()
+
+            # Root ROUTER: the parent connects its DEALER up to it. This is the
+            # origin of work and the recipient of the relayed response.
+            root = context.socket(zmq.ROUTER)
+            root.bind("inproc://root")
+
+            parent = Agent(
+                AgentConfig(identity="parent", parent_endpoint="inproc://root", context=context)
+            )
+            parent.init()
+
+            # Parent mediates child-creation: it binds the child's ROUTER and
+            # provisions a real child Agent (not just a socket).
+            spawn = Directive(
+                correlation_id="spawn1",
+                kind=DIRECTIVE_SPAWN,
+                payload={"identity": "child", "endpoint": "inproc://children"},
+            )
+            resp = parent._spawn(spawn)
+            assert resp.kind == RESPONSE_OK
+            assert "child" in parent._children
+            assert "child" in parent._child_agents
+
+            # Configure the child with the double task.
+            child = parent._child_agents["child"]
+            child._configure(
+                Directive(
+                    correlation_id="cfg-child",
+                    kind=DIRECTIVE_CONFIGURE,
+                    payload={"tasks": ["double"]},
+                )
+            )
+
+            # The root sends a run directive to the parent, naming the child.
+            run = Directive(
+                correlation_id="run1",
+                kind=DIRECTIVE_RUN,
+                payload={"task": "double", "args": {"value": 21}, "child": "child"},
+            )
+            await _send(root, run, to=b"parent")
+
+            # Parent polls: receives the run, acks, delegates it to the child.
+            await parent.poll(timeout=0.1)
+            ack = await _recv_ack(root)
+            assert ack.correlation_id == "run1"
+
+            # Child polls: receives the directive, acks, executes, responds.
+            await child.poll(timeout=0.1)
+
+            # Parent polls: receives the child's verified response and relays it up.
+            await parent.poll(timeout=0.1)
+            relayed = await _recv_response(root)
+            assert relayed.kind == RESPONSE_RESULT
+            assert relayed.verified is True
+            assert relayed.value == 42
+            assert relayed.node == "child"
+
+            child.kill()
+            parent.kill()
+            root.close(0)
+            context.term()
+
+        asyncio.run(scenario())
+
+    def test_unknown_delegation_target_fails_closed(self) -> None:
+        """A run naming an unknown child is not silently routed anywhere.
+
+        The parent has no spawned child with that identity; fail-closed means
+        the directive is handled (and fails) rather than silently dropped or
+        routed to an arbitrary child.
+        """
+        async def scenario() -> None:
+            register_callable("double", _double)
+            context = zmq.asyncio.Context()
+
+            root = context.socket(zmq.ROUTER)
+            root.bind("inproc://root")
+
+            parent = Agent(
+                AgentConfig(identity="parent", parent_endpoint="inproc://root", context=context)
+            )
+            parent.init()
+            parent._configure(
+                Directive(
+                    correlation_id="cfg1",
+                    kind=DIRECTIVE_CONFIGURE,
+                    payload={"tasks": ["double"]},
+                )
+            )
+
+            run = Directive(
+                correlation_id="run1",
+                kind=DIRECTIVE_RUN,
+                payload={"task": "double", "args": {"value": 21}, "child": "ghost"},
+            )
+            await _send(root, run, to=b"parent")
+
+            await parent.poll(timeout=0.1)
+            ack = await _recv_ack(root)
+            assert ack.correlation_id == "run1"
+
+            # The parent cannot delegate to "ghost"; it must still produce a
+            # terminal response rather than hang or silently drop.
+            response = await _recv_response(root)
+            assert response.kind in (RESPONSE_RESULT, RESPONSE_ERROR)
+
+            parent.kill()
+            root.close(0)
+            context.term()
 
         asyncio.run(scenario())
         

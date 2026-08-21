@@ -148,6 +148,10 @@ Implemented here (pure, offline-testable, deterministic):
 - `Registry` — a stub; the registry-as-agent is a next step.
 - **Chain audit** — every response carries the ``source`` of the callable that
   produced it, so execution is auditable (which callable ran, from where).
+- **Mediated spawn & delegation** — a parent provisions a real child ``Agent``
+  (not just a socket) via ``spawn``, and routes ``run`` directives down to a
+  named child via ``delegate``, relaying the child's verified response up and
+  failing closed on an unknown delegation target.
 
 **Not yet implemented (next steps, optional adapters):**
 
