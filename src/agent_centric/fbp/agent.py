@@ -233,19 +233,8 @@ class Agent:
         responses: list[Response] = []
 
         if events.get(self._parent) == zmq.POLLIN:
-            directive = await self._recv()
-            await self._send_ack(directive.correlation_id)
-            delegated = self._maybe_delegate(directive)
-            if delegated is not None and delegated in self._children:
-                # Route the directive down to the named child; the child response
-                # comes back later via a child event (handled below) and is relayed up.
-                await self.delegate(delegated, directive)
-                self._delegated[directive.correlation_id] = delegated
-            else:
-                # Either not a run directive, not delegatable, or an unknown
-                # delegation target (fail closed): handle locally.
-                response = self._handle(directive)
-                await self._send(response)
+            response = await self._handle_parent_message()
+            if response is not None:
                 responses.append(response)
 
         for child_id, child in self._children.items():
@@ -253,6 +242,47 @@ class Agent:
                 responses.extend(await self._drain_child(child, child_id))
 
         return responses
+
+    async def _handle_parent_message(self) -> Response | None:
+        """Receive and handle one message from the parent, failing closed.
+
+        A malformed or invalid message — wrong frame count, bad protocol, or
+        unparseable JSON — is converted into an explicit, audited error response
+        rather than crashing the poll loop. This enforces ``Explicit Failure``:
+        garbage input is never an implicit or silent outcome.
+        """
+        try:
+            directive = await self._recv()
+        except (ProtocolError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+            response = self._correlationless_error(f"malformed directive rejected: {exc}")
+            await self._send(response)
+            return response
+        await self._send_ack(directive.correlation_id)
+        return await self._dispatch(directive)
+
+    async def _dispatch(self, directive: Directive) -> Response | None:
+        """Dispatch a directive, delegating down or handling locally (fail-closed)."""
+        try:
+            return await self._dispatch_inner(directive)
+        except (ProtocolError, ValueError, KeyError) as exc:
+            response = self._error(directive, f"directive rejected: {exc}")
+            await self._send(response)
+            return response
+
+    async def _dispatch_inner(self, directive: Directive) -> Response | None:
+        """Route to a child (delegation) or handle locally."""
+        delegated = self._maybe_delegate(directive)
+        if delegated is not None and delegated in self._children:
+            # Route the directive down to the named child; the child response
+            # comes back later via a child event and is relayed up.
+            await self.delegate(delegated, directive)
+            self._delegated[directive.correlation_id] = delegated
+            return None
+        # Either not a run directive, not delegatable, or an unknown delegation
+        # target (fail closed): handle locally.
+        response = self._handle(directive)
+        await self._send(response)
+        return response
 
     async def _drain_child(
         self, child: zmq.asyncio.Socket, child_identity: str
@@ -606,6 +636,21 @@ class Agent:
         """Build an explicit, audited failure response."""
         return Response(
             correlation_id=directive.correlation_id,
+            kind=RESPONSE_ERROR,
+            verified=False,
+            node=self.identity,
+            error=message,
+        )
+
+    def _correlationless_error(self, message: str) -> Response:
+        """Build an explicit failure for a message whose correlation id could
+        not be read (e.g. a malformed or unparseable directive).
+
+        The protocol requires a non-empty correlation id, so a fixed sentinel
+        is used; the error is audited and never a verified success.
+        """
+        return Response(
+            correlation_id="malformed",
             kind=RESPONSE_ERROR,
             verified=False,
             node=self.identity,

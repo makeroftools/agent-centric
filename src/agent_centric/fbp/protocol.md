@@ -92,6 +92,10 @@ outcome, regardless of arrival order.
   verified success.
 - **No third state.** A task terminates in a verified result or an explicit,
   audited failure.
+- **Garbage fails closed.** A malformed directive — wrong frame count, bad
+  protocol, or unparseable JSON — is rejected with an explicit, audited error
+  and the agent continues to service valid directives. It is never an implicit
+  or silent outcome, and it never crashes the poll loop.
 
 **In the agent protocol, the spine is enforced on delegation.** When a parent
 routes a ``run`` directive to a child, it re-verifies the child's returned

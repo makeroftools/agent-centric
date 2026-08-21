@@ -705,3 +705,87 @@ class TestMediatedSpawnDelegation:
             context.term()
 
         asyncio.run(scenario())
+
+
+class TestFailClosedOnMalformedInput:
+    """Prove the agent fails closed on malformed input rather than crashing.
+
+    A malformed directive (wrong frame count, bad protocol, or unparseable JSON)
+    is converted into an explicit, audited error and the agent keeps polling —
+    garbage input is never an implicit or silent outcome (Explicit Failure).
+    """
+
+    def test_agent_survives_malformed_directive(self) -> None:
+        async def scenario() -> None:
+            context = zmq.asyncio.Context()
+            parent = context.socket(zmq.ROUTER)
+            parent.bind("inproc://parent")
+
+            agent = Agent(
+                AgentConfig(identity="parent", parent_endpoint="inproc://parent", context=context)
+            )
+            agent.init()
+
+            # Send a malformed directive: wrong number of frames (partial).
+            await parent.send_multipart([b"parent", b"c1", MESSAGE_DIRECTIVE.encode()])
+            await agent.poll(timeout=0.1)
+
+            # The agent must respond with an explicit error, not crash.
+            error = await _recv_response(parent)
+            assert error.kind == RESPONSE_ERROR
+            assert error.verified is False
+
+            # The agent is still alive and can service a valid directive.
+            register_callable("double", _double)
+            agent._configure(
+                Directive(
+                    correlation_id="cfg1",
+                    kind=DIRECTIVE_CONFIGURE,
+                    payload={"tasks": ["double"]},
+                )
+            )
+            run = Directive(
+                correlation_id="run1",
+                kind=DIRECTIVE_RUN,
+                payload={"task": "double", "args": {"value": 21}},
+            )
+            await _send(parent, run, to=b"parent")
+            await agent.poll(timeout=0.1)
+            await _recv_ack(parent)
+            resp = await _recv_response(parent)
+            assert resp.verified is True
+            assert resp.value == 42
+
+            agent.kill()
+            parent.close(0)
+            context.term()
+
+        asyncio.run(scenario())
+
+    def test_agent_survives_unparseable_json(self) -> None:
+        async def scenario() -> None:
+            context = zmq.asyncio.Context()
+            parent = context.socket(zmq.ROUTER)
+            parent.bind("inproc://parent")
+
+            agent = Agent(
+                AgentConfig(identity="parent", parent_endpoint="inproc://parent", context=context)
+            )
+            agent.init()
+
+            # Unparseable JSON payload frame. Note the frame layout expected by
+            # _recv: [correlation_id, kind=directive, directive_kind, payload].
+            await parent.send_multipart(
+                [b"parent", b"c1", MESSAGE_DIRECTIVE.encode(), b"run", b"not-json{"]
+            )
+            await agent.poll(timeout=0.1)
+
+            error = await _recv_response(parent)
+            assert error.kind == RESPONSE_ERROR
+            assert error.verified is False
+
+            agent.kill()
+            parent.close(0)
+            context.term()
+
+        asyncio.run(scenario())
