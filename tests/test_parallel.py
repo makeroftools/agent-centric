@@ -10,13 +10,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from meta_harness.contracts.parallel import ParallelComposition, ParallelVersion
-from meta_harness.contracts.pipeline import StageSpec
-from meta_harness.contracts.policy import Policy, PolicyVersion
-from meta_harness.contracts.result import FailureReason
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.control_plane.manager import AgentManager
-from meta_harness.control_plane.trajectory_store import FileTrajectoryStore
+from agent_centric.contracts.parallel import ParallelComposition, ParallelVersion
+from agent_centric.contracts.pipeline import StageSpec
+from agent_centric.contracts.policy import Policy, PolicyVersion
+from agent_centric.contracts.result import FailureReason
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.control_plane.manager import AgentManager
+from agent_centric.control_plane.trajectory_store import FileTrajectoryStore
 from tests.conftest import CASE_TOOL_MANIFEST, REVERSE_MANIFEST
 from tests.fake_agent import (
     COOPERATIVE_CANCEL_MANIFEST,
@@ -44,7 +44,7 @@ def _parallel_task(
 
 class TestParallelContract:
     def test_empty_parallel_rejected(self) -> None:
-        from meta_harness.contracts.parallel import ParallelComposition
+        from agent_centric.contracts.parallel import ParallelComposition
 
         try:
             ParallelComposition(version=ParallelVersion.V1, stages=())
@@ -54,7 +54,7 @@ class TestParallelContract:
             raise AssertionError("empty parallel composition should be rejected")
 
     def test_task_cannot_set_both_pipeline_and_parallel(self) -> None:
-        from meta_harness.contracts.pipeline import PipelineVersion, SequentialComposition
+        from agent_centric.contracts.pipeline import PipelineVersion, SequentialComposition
 
         try:
             TaskSpecification(
@@ -303,7 +303,7 @@ class TestParallelTrajectory:
 
     def test_agents_cannot_invoke_each_other(self) -> None:
         """Agents have no mechanism to spawn or directly invoke other agents."""
-        from meta_harness.agents.interface import ToolContext
+        from agent_centric.agents.interface import ToolContext
 
         ctx = ToolContext()
         assert not hasattr(ctx, "invoke")

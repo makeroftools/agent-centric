@@ -18,11 +18,11 @@ from __future__ import annotations
 
 import time
 
-from meta_harness import AgentManager
-from meta_harness.contracts.policy import Policy, PolicyVersion
-from meta_harness.contracts.result import FailureReason
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.control_plane.mcp_tools import (
+from agent_centric import AgentManager
+from agent_centric.contracts.policy import Policy, PolicyVersion
+from agent_centric.contracts.result import FailureReason
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.control_plane.mcp_tools import (
     LocalMcpServer,
     McpProtocolError,
     McpTimeoutError,
@@ -30,7 +30,7 @@ from meta_harness.control_plane.mcp_tools import (
     McpToolCallError,
     mcp_descriptor,
 )
-from meta_harness.control_plane.tools import ToolRegistry
+from agent_centric.control_plane.tools import ToolRegistry
 from tests.fake_agent import MCP_TOOL_MANIFEST
 
 _MCP_ECHO = mcp_descriptor(

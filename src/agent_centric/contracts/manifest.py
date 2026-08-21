@@ -33,7 +33,7 @@ class AgentComponentManifest:
         version: The manifest contract version.
         name: Unique, stable identifier of the agent component.
         entry_point: Fully-qualified import path to the agent factory, e.g.
-            ``meta_harness.agents.counter:create_counter_agent``. The Manager
+            ``agent_centric.agents.counter:create_counter_agent``. The Manager
             resolves this to obtain a fresh agent instance per task.
         description: Human-readable summary of what the agent does.
         declared_capabilities: The set of capabilities the agent declares it

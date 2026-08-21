@@ -308,7 +308,7 @@ class SubprocessSession:
     ) -> None:
         self._stderr: list[str] = []
         self._proc = subprocess.Popen(
-            [sys.executable, "-u", "-m", "meta_harness.control_plane.worker"],
+            [sys.executable, "-u", "-m", "agent_centric.control_plane.worker"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

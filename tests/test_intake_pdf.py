@@ -15,11 +15,11 @@ from pathlib import Path
 
 import pytest
 
-from meta_harness.contracts.bills_registry import BillsRegistry
-from meta_harness.contracts.workspace import WorkspaceLayout
-from meta_harness.control_plane.intake import IntakeOps, ensure_intake_layout, extract_drafts
-from meta_harness.control_plane.tools import ToolExecutionError
-from meta_harness.control_plane.workspace import Workspace
+from agent_centric.contracts.bills_registry import BillsRegistry
+from agent_centric.contracts.workspace import WorkspaceLayout
+from agent_centric.control_plane.intake import IntakeOps, ensure_intake_layout, extract_drafts
+from agent_centric.control_plane.tools import ToolExecutionError
+from agent_centric.control_plane.workspace import Workspace
 
 REGISTRY = {
     "version": "bills_registry.v1",
@@ -70,17 +70,17 @@ def _write_pdf(ws: Workspace, name: str, data: bytes) -> None:
 
 class TestPdfTextExtractor:
     def test_extracts_compressed_text(self) -> None:
-        from meta_harness.control_plane.pdf_text import extract_text
+        from agent_centric.control_plane.pdf_text import extract_text
 
         assert extract_text(make_pdf("Total: 123.45")) == "Total: 123.45"
 
     def test_extracts_raw_text(self) -> None:
-        from meta_harness.control_plane.pdf_text import extract_text
+        from agent_centric.control_plane.pdf_text import extract_text
 
         assert extract_text(make_pdf("Hello world", compress=False)) == "Hello world"
 
     def test_returns_empty_on_garbage(self) -> None:
-        from meta_harness.control_plane.pdf_text import extract_text
+        from agent_centric.control_plane.pdf_text import extract_text
 
         assert extract_text(b"not a pdf at all") == ""
         assert extract_text(b"") == ""

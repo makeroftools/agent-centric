@@ -10,10 +10,10 @@ from typing import Any
 
 import pytest
 
-from meta_harness.contracts.result import FailureReason
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.control_plane.manager import AgentManager
-from meta_harness.control_plane.trajectory_store import (
+from agent_centric.contracts.result import FailureReason
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.control_plane.manager import AgentManager
+from agent_centric.control_plane.trajectory_store import (
     CorruptTrajectoryError,
     FileTrajectoryStore,
     StoredOutcome,
@@ -210,7 +210,7 @@ class TestManagerDurabilityIntegration:
 
     def test_unknown_capability_is_durably_recorded(self, tmp_path: Path) -> None:
         m = _make_manager(tmp_path)
-        from meta_harness.contracts.capability import Capability
+        from agent_centric.contracts.capability import Capability
 
         task = TaskSpecification(
             version=TaskSpecVersion.V2, task_id="unkcap",
@@ -248,8 +248,8 @@ class TestManagerDurabilityIntegration:
 
         # A separate Python process reloads the trajectory from the same directory.
         code = (
-            "import sys; from meta_harness.control_plane.trajectory_store import "
-            "FileTrajectoryStore; from meta_harness.control_plane.manager import AgentManager; "
+            "import sys; from agent_centric.control_plane.trajectory_store import "
+            "FileTrajectoryStore; from agent_centric.control_plane.manager import AgentManager; "
             "m=AgentManager(store=FileTrajectoryStore(sys.argv[1])); "
             "t=m.load(sys.argv[2]); "
             "assert t is not None and t.outcome.kind=='verified' and t.outcome.output==2; "
@@ -266,7 +266,7 @@ class TestManagerDurabilityIntegration:
 
 
 def _step(index: int, description: str) -> Any:
-    from meta_harness.contracts.trajectory import StepRecord, StepStatus
+    from agent_centric.contracts.trajectory import StepRecord, StepStatus
 
     return StepRecord(
         step_index=index, status=StepStatus.COMPLETED, description=description

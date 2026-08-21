@@ -1,7 +1,7 @@
 """Deterministic, side-effect-free trajectory summary builder.
 
 This module provides pure function(s) that project a loaded durable trajectory
-into an immutable :class:`~meta_harness.contracts.summary.TrajectorySummary`.
+into an immutable :class:`~agent_centric.contracts.summary.TrajectorySummary`.
 It is observational only: it never mutates the trajectory store, never writes
 records, and recomputes the same summary for the same trajectory content. It is
 the read half of the operator inspection API.

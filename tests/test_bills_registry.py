@@ -15,32 +15,32 @@ from typing import Any
 
 import pytest
 
-from meta_harness.contracts.bills_registry import (
+from agent_centric.contracts.bills_registry import (
     BillsRegistry,
     RegistryBill,
 )
-from meta_harness.contracts.capability import Capability
-from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from meta_harness.contracts.policy import Policy, PolicyVersion
-from meta_harness.contracts.result import FailureReason
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.contracts.workspace import WorkspaceLayout
-from meta_harness.control_plane.bills_registry import (
+from agent_centric.contracts.capability import Capability
+from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from agent_centric.contracts.policy import Policy, PolicyVersion
+from agent_centric.contracts.result import FailureReason
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.contracts.workspace import WorkspaceLayout
+from agent_centric.control_plane.bills_registry import (
     BillsOps,
     bills_tool_impls,
     ensure_bills_layout,
     load_registry,
     project_calendar,
 )
-from meta_harness.control_plane.manager import AgentManager
-from meta_harness.control_plane.tools import ToolRegistry
-from meta_harness.control_plane.verifier import verify_bills_registry_output
-from meta_harness.control_plane.workspace import Workspace, register_workspace_tools
+from agent_centric.control_plane.manager import AgentManager
+from agent_centric.control_plane.tools import ToolRegistry
+from agent_centric.control_plane.verifier import verify_bills_registry_output
+from agent_centric.control_plane.workspace import Workspace, register_workspace_tools
 
 MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="bills_registry",
-    entry_point="meta_harness.agents.bills_registry:create_bills_registry_agent",
+    entry_point="agent_centric.agents.bills_registry:create_bills_registry_agent",
     description="Reads the bills registry and projects a deterministic agenda.",
     declared_capabilities=frozenset(
         {
@@ -115,7 +115,7 @@ def _manager(tmp_path: Path) -> AgentManager:
 
 
 def bills_tool_descriptor(name: str):
-    from meta_harness.control_plane.tools import (
+    from agent_centric.control_plane.tools import (
         BILLS_CALENDAR_DESCRIPTOR,
         BILLS_REGISTRY_MARK_PAID_DESCRIPTOR,
         BILLS_REGISTRY_MARK_STATUS_DESCRIPTOR,

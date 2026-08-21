@@ -126,12 +126,12 @@ payments are introduced.
 
 ---
 
-# Volley 001 — Meta-Harness Foundation (delivered)
+# Volley 001 — Agent-centric Foundation (delivered)
 
 ### 1. Repository foundations
-- Monorepo-style layout: `src/meta_harness/contracts/` (contracts),
-  `src/meta_harness/control_plane/` (Manager + Verifier),
-  `src/meta_harness/agents/` (agent interface + agents),
+- Monorepo-style layout: `src/agent_centric/contracts/` (contracts),
+  `src/agent_centric/control_plane/` (Manager + Verifier),
+  `src/agent_centric/agents/` (agent interface + agents),
   `tests/` (invariant tests), `examples/demo.py`.
 - Lightweight tooling: `uv` (deps), `ruff` (lint), `mypy` (strict),
   `pytest`. `PRINCIPLES.md` records the non-negotiable rules.
@@ -156,7 +156,7 @@ No multi-agent composition, delegation, or inter-agent communication was
 introduced.
 
 ### 4. Capability model
-- New `Capability` contract (`src/meta_harness/contracts/capability.py`): a
+- New `Capability` contract (`src/agent_centric/contracts/capability.py`): a
   structured, versioned `{name, version}` declaration, immutable and hashable,
   designed for exact-match selection and later matching.
 - `AgentComponentManifest` refined from flat `frozenset[str]` capabilities to
@@ -164,7 +164,7 @@ introduced.
   retained only in the version enum).
 
 ### 5. In-process deterministic Registry
-- New `Registry` (`src/meta_harness/control_plane/registry.py`), owned by the
+- New `Registry` (`src/agent_centric/control_plane/registry.py`), owned by the
   Agent Manager. Supports registration of multiple agents and lookup by exact
   capability (name + version) or by name.
 - Registration validates the manifest and rejects, atomically:
@@ -911,10 +911,10 @@ stage**: it does not alter scheduling, execution, or resource enforcement.
 
 ### 38. Exports
 
-- `meta_harness.contracts`: `CpmMetric, CpmVersion, CriticalPathResult,
+- `agent_centric.contracts`: `CpmMetric, CpmVersion, CriticalPathResult,
   CriticalPathStage`
-- `meta_harness.control_plane`: `analyse_critical_path`
-- `meta_harness`: re-exports the above.
+- `agent_centric.control_plane`: `analyse_critical_path`
+- `agent_centric`: re-exports the above.
 
 ## Correctness evidence (Volley 011 state)
 
@@ -1016,7 +1016,7 @@ verification, cancellation — stays in the Manager and is unchanged.
 ### 45. Versioned IPC protocol
 
 :class:`SubprocessBackend` spawns a child (``python -u -m
-meta_harness.control_plane.worker``) and communicates over a minimal, explicit,
+agent_centric.control_plane.worker``) and communicates over a minimal, explicit,
 versioned JSON-lines protocol (``IPC_VERSION = "agent-ipc.v1"``) on the child's
 stdin/stdout. Codecs serialize every sent value (``None``/``ToolResult``/
 ``Cancelled``) and every yield (``AgentStep``/``ToolRequest``); tool grants are
@@ -1024,7 +1024,7 @@ shipped to the child as descriptors, never executable implementations.
 
 ### 46. Child does only the agent loop
 
-The child (:mod:`meta_harness.control_plane.worker`) runs solely the agent's
+The child (:mod:`agent_centric.control_plane.worker`) runs solely the agent's
 generator loop. It never mediates tools, applies policy, enforces envelopes,
 records the trajectory, or verifies output. It is intentionally not imported by
 the Manager, so it is executed once as ``__main__`` and class identity across
@@ -1058,7 +1058,7 @@ the child as a last resort, recording the cancellation honestly.
 
 ### 49. Versioned summary contract
 
-A new immutable, versioned contract (:mod:`meta_harness.contracts.summary`,
+A new immutable, versioned contract (:mod:`agent_centric.contracts.summary`,
 ``summary.v1``) captures a minimal, stable operator view of a run:
 ``TrajectorySummary`` (trajectory id, task identity, terminal state, failure
 reason/message, verified output, agents, stage kind, per-stage summaries, tool
@@ -1068,7 +1068,7 @@ cancellation count). Nested ``StageSummary`` / ``ToolSummary`` / ``ModelSummary`
 
 ### 50. Pure summary builder
 
-:mod:`meta_harness.control_plane.summary` provides pure, side-effect-free
+:mod:`agent_centric.control_plane.summary` provides pure, side-effect-free
 functions (``summarise_trajectory`` / ``summarise_stored``) that project a
 loaded trajectory into a summary. They never read or write the trajectory store
 and are deterministic for the same trajectory content. Tool and model calls are
@@ -1105,7 +1105,7 @@ semantics are unchanged.
 
 ### 53. Versioned replay result contract
 
-A new immutable, versioned contract (:mod:`meta_harness.contracts.replay`,
+A new immutable, versioned contract (:mod:`agent_centric.contracts.replay`,
 ``replay.v1``) captures the outcome of a replay check: ``ReplayResult``
 (passed, original/replayed trajectory ids, structured ``ReplayDiff`` list, and a
 human-readable message). The result is fail-closed: it reports ``passed`` only
@@ -1113,7 +1113,7 @@ when every equivalence rule holds, and otherwise carries structured diffs.
 
 ### 54. Explicit equivalence definition
 
-:mod:`meta_harness.control_plane.replay` documents and enforces the equivalence
+:mod:`agent_centric.control_plane.replay` documents and enforces the equivalence
 rules. A replayed run is equivalent to the stored trajectory when: (1) the
 terminal outcome class matches (verified, or failed with the same failure
 reason); (2) the verified output matches; (3) the ordered step sequence matches
@@ -1236,7 +1236,7 @@ observational only; CPM-driven scheduling stays out of scope.
 
 ### 61. Public API surface
 
-The public surface is explicit and documented. ``meta_harness`` exports the
+The public surface is explicit and documented. ``agent_centric`` exports the
 deliberate surface: ``AgentManager``, the core contracts (task, pipeline,
 parallel, policy, result, trajectory, summary, replay, critical-path, model,
 manifest, capability, tool), the execution backends (``InProcessBackend`` /
@@ -1252,12 +1252,12 @@ type-annotated.
 The package is versioned as a kernel milestone aligned with volley depth:
 **0.16.0** (16 volleys delivered). The scheme is documented in ``KERNEL.md``.
 Project metadata is accurate and minimal: name, description, Python requirement
-(``>=3.13``), and a ``meta-harness`` console entry point wired to the CLI.
+(``>=3.13``), and a ``agent-centric`` console entry point wired to the CLI.
 
 ### 63. Minimal operator CLI
 
-A local-only, fail-closed CLI (``meta-harness``, also ``python -m
-meta_harness``) provides three commands over the public surface:
+A local-only, fail-closed CLI (``agent-centric``, also ``python -m
+agent_centric``) provides three commands over the public surface:
 
 - ``run`` — execute the deterministic demo task set against a file-backed store
   and print each outcome and its durable trajectory id.
@@ -1283,7 +1283,7 @@ backends over changing Manager semantics.
 - ``uv run pytest`` → **243 passed** (236 prior + 7 new CLI smoke tests).
 - ``uv run ruff check .`` → All checks passed.
 - ``uv run mypy`` → Success: no issues found in 36 source files.
-- ``meta-harness run`` runs the full deterministic demo set and persists five
+- ``agent-centric run`` runs the full deterministic demo set and persists five
   durable trajectories; ``summarise`` and ``replay-verify`` work against them.
 - Missing trajectories and non-demo tasks fail closed with a non-zero exit code
   and a clear message.
@@ -1480,7 +1480,7 @@ with additive hardening and no volley in flight.
 
 ### 75. ACP adapter boundary
 
-A thin ACP transport (``meta_harness.acp``) exposes Meta-Harness as an External
+A thin ACP transport (``agent_centric.acp``) exposes Agent-centric as an External
 Agent in Zed. It uses the official ``agent-client-protocol`` Python SDK and
 talks ACP over stdio (``initialize`` / ``session/new`` / ``session/prompt`` /
 ``session/cancel``). ACP is an edge transport only: the Agent Manager remains
@@ -1499,8 +1499,8 @@ run is documented as a v1 limitation.
 
 ### 77. Zed wiring & no-Zed CI
 
-Configured via ``settings.json`` ``agent_servers`` launching ``meta-harness-acp``
-(or ``python -m meta_harness.acp``). CI tests drive the adapter over the SDK's
+Configured via ``settings.json`` ``agent_servers`` launching ``agent-centric-acp``
+(or ``python -m agent_centric.acp``). CI tests drive the adapter over the SDK's
 in-memory transport with raw JSON-RPC — no Zed, no subprocess, no network.
 
 ## Correctness evidence (Volley 021 state)
@@ -1515,8 +1515,8 @@ in-memory transport with raw JSON-RPC — no Zed, no subprocess, no network.
 
 ## Pause point — Volley 021 accepted
 
-Volley 021 was accepted; Meta-Harness is usable from Zed as an External Agent
-via the documented ``agent_servers`` / ``meta-harness-acp`` entry point. No
+Volley 021 was accepted; Agent-centric is usable from Zed as an External Agent
+via the documented ``agent_servers`` / ``agent-centric-acp`` entry point. No
 volley is in flight.
 
 - **Status:** v0.21 baseline (thin ACP adapter, edge transport only).
@@ -1533,7 +1533,7 @@ drives the next need (scoped to adapters/backends per ``KERNEL.md``).
 
 A narrow **bills specialty agent** (``bills``) accepts a structured bill and
 produces deterministic totals. The input/output contracts live in
-``meta_harness.contracts.bill`` (``BillLine``, ``Bill``, ``BillTotal``,
+``agent_centric.contracts.bill`` (``BillLine``, ``Bill``, ``BillTotal``,
 ``bill.v1``). Money math is integer-only (minor units / cents) with an explicit
 half-up rounding rule, so totals are exact and replayable — no cloud model is
 involved. This is the first specialty agent and the first step of the planned
@@ -1596,7 +1596,7 @@ sequence (bills → workspace → email) is one step in. No volley is in flight.
 A local, agent-centric workspace is introduced: a ``Workspace`` (a root
 directory plus a ``WorkspaceLayout`` allowlist) plus a specialty ``workspace``
 agent that operates on it through the Manager. The contracts live in
-``meta_harness.contracts.workspace`` (``WorkspaceLayout``, ``WorkspaceEntry``,
+``agent_centric.contracts.workspace`` (``WorkspaceLayout``, ``WorkspaceEntry``,
 ``workspace.v1``). The allowlist is the single source of truth for what an
 agent may touch; this is agent-centric structure **without** unsupervised
 cleanup or broad filesystem powers.

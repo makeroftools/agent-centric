@@ -53,6 +53,54 @@ money/dates") in a manager-less design:
 This makes the tree a **recursive verification hierarchy**: the same
 verification rule composes down via context, and is enforced on the way up.
 
+## 3a. The fractal principle: every task is an agent
+
+The architecture is **fractal and recursive**. There is one abstract concept —
+the Agent — and everything is an instance of it. A task is not a special kind
+of thing: **every task is itself an agent**, which may in turn delegate to
+further agents, which may delegate further still. This recursion extends, in
+principle, all the way down to individual instructions.
+
+This is what "centricity" means: each agent is the center of its own little
+universe, simultaneously a worker to its parent and a manager to its children.
+The same contract holds at every level — there is no privileged "task" type
+that is exempt from being an agent.
+
+The practical consequence: a directive that names a task is really naming an
+agent (or a callable that behaves as one). The system does not distinguish
+"running a task" from "invoking an agent" — they are the same operation at
+different scales. This keeps the model uniform, deterministic, and auditable
+at every level of granularity.
+
+## 3b. Critical Path Method (CPM)
+
+**Critical Path Method (CPM)** is a fundamental, first-class tool of the
+architecture. It identifies the longest dependency chain through a graph of
+work (the **critical path**) and the **slack/float** of every other element —
+the amount by which an element can be delayed without delaying the whole.
+
+Key concepts (from the classic CPM/PDM formulation):
+
+- **Forward pass** — computes early start/finish of every activity.
+- **Backward pass** — computes late start/finish of every activity.
+- **Slack / float** — the difference between late and early times; an activity
+  with zero slack lies on the critical path.
+- **Critical path** — the chain of zero-slack activities that determines the
+  minimum feasible duration of the whole.
+
+In this architecture, CPM is a **deterministic, read-only observational aid**:
+
+- It is a pure, side-effect-free function over a plan (and optionally recorded
+  consumption). It never mutates tasks, envelopes, schedules, or accounting.
+- It is used for **planning and observation** — identifying which agents/stages
+  are on the critical path and where slack exists — not for driving execution.
+- It is **deterministic**: identical inputs produce identical results.
+
+CPM is especially valuable in the fractal, agent-centric model: at every level
+of the tree, CPM reveals which path dominates the duration and where slack
+allows flexibility. It is the tool that makes the system's timing transparent
+and auditable.
+
 ## 4. Scope of this foundation
 
 Implemented here (pure, offline-testable, deterministic):

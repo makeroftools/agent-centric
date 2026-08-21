@@ -6,12 +6,12 @@ from typing import Any
 
 import pytest
 
-from meta_harness.contracts.capability import Capability
-from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from meta_harness.contracts.result import FailureReason
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.control_plane.manager import AgentManager
-from meta_harness.control_plane.registry import Registry
+from agent_centric.contracts.capability import Capability
+from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from agent_centric.contracts.result import FailureReason
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.control_plane.manager import AgentManager
+from agent_centric.control_plane.registry import Registry
 from tests.conftest import (
     COUNTER_CAPABILITY,
     COUNTER_MANIFEST,
@@ -76,7 +76,7 @@ class TestRegistry:
         conflicting = AgentComponentManifest(
             version=AgentManifestVersion.V2,
             name="counter2",
-            entry_point="meta_harness.agents.counter:create_counter_agent",
+            entry_point="agent_centric.agents.counter:create_counter_agent",
             description="Another counter.",
             declared_capabilities=frozenset({COUNTER_CAPABILITY}),
         )
@@ -164,7 +164,7 @@ class TestCapabilitySelection:
         We verify the reverse verifier (used for capability-selected reverse
         tasks) rejects a wrong output, proving the gate is not bypassed.
         """
-        from meta_harness.control_plane.verifier import verify_reverse_output
+        from agent_centric.control_plane.verifier import verify_reverse_output
 
         task = _task("cap-verify", {"text": "hello"}, capability=REVERSE_CAPABILITY)
         assert verify_reverse_output(task, "WRONG").passed is False

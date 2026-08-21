@@ -1,4 +1,4 @@
-"""Thin ACP adapter: expose Meta-Harness as an External Agent in Zed (Volley 021).
+"""Thin ACP adapter: expose Agent-centric as an External Agent in Zed (Volley 021).
 
 This module bridges the Agent Client Protocol (ACP) — a client-facing transport
 used by editors such as Zed — to the governed ``AgentManager``. ACP is an edge
@@ -18,7 +18,7 @@ The adapter implements the smallest usable ACP surface:
 
 Only the demo agents and the deterministic stub model provider are used, so
 trajectories are replayable and no network or credentials are required. Use the
-``meta-harness-acp`` console entry point (or ``python -m meta_harness.acp``) and
+``agent-centric-acp`` console entry point (or ``python -m agent_centric.acp``) and
 point an ACP client at it over stdio.
 """
 
@@ -58,11 +58,11 @@ from acp.schema import (
     TextContentBlock,
 )
 
-from meta_harness import AgentManager, StubModelProvider
-from meta_harness.contracts.capability import Capability
-from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.control_plane.tools import ToolRegistry
+from agent_centric import AgentManager, StubModelProvider
+from agent_centric.contracts.capability import Capability
+from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.control_plane.tools import ToolRegistry
 
 # The ACP protocol version this adapter implements and advertises.
 _ACP_VERSION = PROTOCOL_VERSION
@@ -71,8 +71,8 @@ _ACP_VERSION = PROTOCOL_VERSION
 _DEFAULT_ENVELOPE = ResourceEnvelope(timeout_seconds=30.0, max_steps=200)
 
 # The agent identity advertised during initialize.
-_AGENT_NAME = "meta-harness"
-_AGENT_VERSION = "0.21.0"
+_AGENT_NAME = "agent-centric"
+_AGENT_VERSION = "0.29.0"
 
 # Content-block types a client may send in ``session/prompt``.
 _PromptBlock = (
@@ -87,7 +87,7 @@ _PromptBlock = (
 _COUNTER_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="counter",
-    entry_point="meta_harness.agents.counter:create_counter_agent",
+    entry_point="agent_centric.agents.counter:create_counter_agent",
     description="Counts occurrences of a target character in a string.",
     declared_capabilities=frozenset({Capability(name="count", version="1")}),
 )
@@ -95,7 +95,7 @@ _COUNTER_MANIFEST = AgentComponentManifest(
 _REVERSE_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="reverse",
-    entry_point="meta_harness.agents.reverse:create_reverse_agent",
+    entry_point="agent_centric.agents.reverse:create_reverse_agent",
     description="Reverses a string.",
     declared_capabilities=frozenset({Capability(name="reverse", version="1")}),
 )
@@ -103,7 +103,7 @@ _REVERSE_MANIFEST = AgentComponentManifest(
 _CASE_TOOL_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="case_tool",
-    entry_point="meta_harness.agents.case_tool:create_case_tool_agent",
+    entry_point="agent_centric.agents.case_tool:create_case_tool_agent",
     description="Uppercases a string via a mediated tool.",
     declared_capabilities=frozenset(),
 )
@@ -111,7 +111,7 @@ _CASE_TOOL_MANIFEST = AgentComponentManifest(
 _MODEL_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="model",
-    entry_point="meta_harness.agents.model_agent:create_model_agent",
+    entry_point="agent_centric.agents.model_agent:create_model_agent",
     description="Answers a constrained prompt via a mediated language model.",
     declared_capabilities=frozenset({Capability(name="llm", version="1")}),
 )
@@ -250,7 +250,7 @@ class MetaHarnessAcpAgent(Agent):
             protocol_version=_ACP_VERSION,
             agent_info=Implementation(
                 name=_AGENT_NAME,
-                title="Meta-Harness (governed deterministic harness)",
+                title="Agent-centric (governed deterministic harness)",
                 version=_AGENT_VERSION,
             ),
         )
@@ -378,7 +378,7 @@ async def _serve_agent() -> None:
 
 
 def main() -> int:
-    """Console entry point for the ACP agent (``meta-harness-acp``)."""
+    """Console entry point for the ACP agent (``agent-centric-acp``)."""
     asyncio.run(_serve_agent())
     return 0
 

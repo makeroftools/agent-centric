@@ -6,7 +6,7 @@ import time
 from collections.abc import Generator
 from typing import Any
 
-from meta_harness.agents.interface import (
+from agent_centric.agents.interface import (
     AgentResult,
     AgentStep,
     Cancelled,
@@ -14,7 +14,7 @@ from meta_harness.agents.interface import (
     ToolRequest,
     ToolResult,
 )
-from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
 
 
 class CooperativeCancellingAgent:

@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from meta_harness.contracts.capability import Capability
-from meta_harness.contracts.result import (
+from agent_centric.contracts.capability import Capability
+from agent_centric.contracts.result import (
     Failure,
     FailureReason,
     VerifiedResult,
 )
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.contracts.trajectory import (
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.contracts.trajectory import (
     StepRecord,
     StepStatus,
     Trajectory,

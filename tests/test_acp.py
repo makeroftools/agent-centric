@@ -22,10 +22,10 @@ from typing import Any
 from acp._transport import memory_transport_pair
 from acp.agent import AgentSideConnection
 
-from meta_harness.acp import MetaHarnessAcpAgent
-from meta_harness.contracts.result import Failure, FailureReason
-from meta_harness.contracts.trajectory import Trajectory, TrajectoryVersion
-from meta_harness.control_plane.manager import Outcome
+from agent_centric.acp import MetaHarnessAcpAgent
+from agent_centric.contracts.result import Failure, FailureReason
+from agent_centric.contracts.trajectory import Trajectory, TrajectoryVersion
+from agent_centric.control_plane.manager import Outcome
 
 
 class _FailingManager:
@@ -212,7 +212,7 @@ def test_acp_manager_is_shared_across_sessions() -> None:
     import asyncio as _asyncio
 
     async def run() -> bool:
-        from meta_harness.contracts.task import (
+        from agent_centric.contracts.task import (
             ResourceEnvelope,
             TaskSpecification,
             TaskSpecVersion,

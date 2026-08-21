@@ -1,4 +1,4 @@
-"""Minimal operator CLI for the Meta-Harness kernel (Volley 017).
+"""Minimal operator CLI for the Agent-centric kernel (Volley 017).
 
 This is a local-only, fail-closed command-line interface over the public
 surface. It provides three operations:
@@ -23,17 +23,17 @@ import json
 import sys
 from pathlib import Path
 
-from meta_harness import AgentManager
-from meta_harness.contracts.capability import Capability
-from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from meta_harness.contracts.pipeline import PipelineVersion, SequentialComposition, StageSpec
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.contracts.tool import ToolDescriptor
-from meta_harness.contracts.workspace import WorkspaceLayout
-from meta_harness.control_plane.bills_registry import BillsOps, bills_tool_impls
-from meta_harness.control_plane.email_tools import EmailTools, email_tool_impls
-from meta_harness.control_plane.intake import IntakeOps, ensure_intake_layout, intake_tool_impls
-from meta_harness.control_plane.tools import (
+from agent_centric import AgentManager
+from agent_centric.contracts.capability import Capability
+from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from agent_centric.contracts.pipeline import PipelineVersion, SequentialComposition, StageSpec
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.contracts.tool import ToolDescriptor
+from agent_centric.contracts.workspace import WorkspaceLayout
+from agent_centric.control_plane.bills_registry import BillsOps, bills_tool_impls
+from agent_centric.control_plane.email_tools import EmailTools, email_tool_impls
+from agent_centric.control_plane.intake import IntakeOps, ensure_intake_layout, intake_tool_impls
+from agent_centric.control_plane.tools import (
     BILLS_CALENDAR_DESCRIPTOR,
     BILLS_REGISTRY_MARK_PAID_DESCRIPTOR,
     BILLS_REGISTRY_MARK_STATUS_DESCRIPTOR,
@@ -47,17 +47,17 @@ from meta_harness.control_plane.tools import (
     INTAKE_EMAIL_DRAFT_DESCRIPTOR,
     ToolRegistry,
 )
-from meta_harness.control_plane.trajectory_store import FileTrajectoryStore
-from meta_harness.control_plane.workspace import Workspace, register_workspace_tools
-from meta_harness.providers import StubModelProvider
-from meta_harness.providers.email import FakeEmailGateway
+from agent_centric.control_plane.trajectory_store import FileTrajectoryStore
+from agent_centric.control_plane.workspace import Workspace, register_workspace_tools
+from agent_centric.providers import StubModelProvider
+from agent_centric.providers.email import FakeEmailGateway
 
 # The built-in demo agents, registered by the CLI so a demo task set is
 # self-contained and deterministic.
 _COUNTER_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="counter",
-    entry_point="meta_harness.agents.counter:create_counter_agent",
+    entry_point="agent_centric.agents.counter:create_counter_agent",
     description="Counts occurrences of a target character in a string.",
     declared_capabilities=frozenset({Capability(name="count", version="1")}),
 )
@@ -65,7 +65,7 @@ _COUNTER_MANIFEST = AgentComponentManifest(
 _REVERSE_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="reverse",
-    entry_point="meta_harness.agents.reverse:create_reverse_agent",
+    entry_point="agent_centric.agents.reverse:create_reverse_agent",
     description="Reverses a string.",
     declared_capabilities=frozenset({Capability(name="reverse", version="1")}),
 )
@@ -73,7 +73,7 @@ _REVERSE_MANIFEST = AgentComponentManifest(
 _CASE_TOOL_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="case_tool",
-    entry_point="meta_harness.agents.case_tool:create_case_tool_agent",
+    entry_point="agent_centric.agents.case_tool:create_case_tool_agent",
     description="Uppercases a string via a mediated tool.",
     declared_capabilities=frozenset(),
 )
@@ -81,7 +81,7 @@ _CASE_TOOL_MANIFEST = AgentComponentManifest(
 _MODEL_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="model",
-    entry_point="meta_harness.agents.model_agent:create_model_agent",
+    entry_point="agent_centric.agents.model_agent:create_model_agent",
     description="Answers a constrained prompt via a mediated language model.",
     declared_capabilities=frozenset({Capability(name="llm", version="1")}),
 )
@@ -89,7 +89,7 @@ _MODEL_MANIFEST = AgentComponentManifest(
 _BILLS_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="bills",
-    entry_point="meta_harness.agents.bills:create_bills_agent",
+    entry_point="agent_centric.agents.bills:create_bills_agent",
     description="Computes deterministic totals for a structured bill.",
     declared_capabilities=frozenset({Capability(name="bills", version="1")}),
 )
@@ -97,7 +97,7 @@ _BILLS_MANIFEST = AgentComponentManifest(
 _WORKSPACE_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="workspace",
-    entry_point="meta_harness.agents.workspace:create_workspace_agent",
+    entry_point="agent_centric.agents.workspace:create_workspace_agent",
     description="Performs an allowlisted workspace operation via mediated file tools.",
     declared_capabilities=frozenset({Capability(name="workspace", version="1")}),
 )
@@ -105,7 +105,7 @@ _WORKSPACE_MANIFEST = AgentComponentManifest(
 _EMAIL_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="email",
-    entry_point="meta_harness.agents.email:create_email_agent",
+    entry_point="agent_centric.agents.email:create_email_agent",
     description="Performs a read-only email operation via mediated tools.",
     declared_capabilities=frozenset({Capability(name="email.read", version="1")}),
 )
@@ -113,7 +113,7 @@ _EMAIL_MANIFEST = AgentComponentManifest(
 _BILLS_REGISTRY_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="bills_registry",
-    entry_point="meta_harness.agents.bills_registry:create_bills_registry_agent",
+    entry_point="agent_centric.agents.bills_registry:create_bills_registry_agent",
     description="Reads the bills registry, projects a deterministic agenda, and maintains bills.",
     declared_capabilities=frozenset(
         {
@@ -127,7 +127,7 @@ _BILLS_REGISTRY_MANIFEST = AgentComponentManifest(
 _INTAKE_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="intake",
-    entry_point="meta_harness.agents.intake:create_intake_agent",
+    entry_point="agent_centric.agents.intake:create_intake_agent",
     description="Runs a dump-intake operation: inventory, drafts, email draft, or explicit accept.",
     declared_capabilities=frozenset(
         {
@@ -519,8 +519,8 @@ def _task_for_id(task_id: str) -> TaskSpecification | None:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="meta-harness",
-        description="Meta-Harness kernel operator CLI (local-only, fail-closed).",
+        prog="agent-centric",
+        description="Agent-centric kernel operator CLI (local-only, fail-closed).",
     )
     parser.add_argument(
         "--store",

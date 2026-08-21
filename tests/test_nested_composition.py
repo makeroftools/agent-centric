@@ -14,14 +14,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from meta_harness.contracts.parallel import ParallelComposition, ParallelVersion
-from meta_harness.contracts.pipeline import PipelineVersion, SequentialComposition, StageSpec
-from meta_harness.contracts.policy import Policy, PolicyVersion
-from meta_harness.contracts.result import FailureReason
-from meta_harness.contracts.summary import RunState, StageKind
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.control_plane.manager import AgentManager
-from meta_harness.control_plane.trajectory_store import FileTrajectoryStore
+from agent_centric.contracts.parallel import ParallelComposition, ParallelVersion
+from agent_centric.contracts.pipeline import PipelineVersion, SequentialComposition, StageSpec
+from agent_centric.contracts.policy import Policy, PolicyVersion
+from agent_centric.contracts.result import FailureReason
+from agent_centric.contracts.summary import RunState, StageKind
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.control_plane.manager import AgentManager
+from agent_centric.control_plane.trajectory_store import FileTrajectoryStore
 from tests.conftest import CASE_TOOL_MANIFEST, REVERSE_MANIFEST
 from tests.fake_agent import (
     COOPERATIVE_CANCEL_MANIFEST,

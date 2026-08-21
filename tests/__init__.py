@@ -1,1 +1,1 @@
-"""Test package for the Meta-Harness."""
+"""Test package for Agent-centric."""

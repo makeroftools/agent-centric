@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from meta_harness.cli import main
+from agent_centric.cli import main
 
 
 def _run(store: Path, *args: str) -> tuple[int, str]:
@@ -79,7 +79,7 @@ class TestCliReplayVerify:
 
 class TestCliEntryPoint:
     def test_module_runs(self) -> None:
-        """``python -m meta_harness`` is wired to the CLI main."""
-        import meta_harness.__main__ as m  # noqa: F401
+        """``python -m agent_centric`` is wired to the CLI main."""
+        import agent_centric.__main__ as m  # noqa: F401
 
         assert callable(m.main)

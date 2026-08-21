@@ -6,8 +6,8 @@ is fully governed by the Manager: it validates the payload, may *request* the
 that the Manager's mandatory verification gate recomputes independently.
 
 The payload is a mapping describing a bill (see
-:class:`meta_harness.contracts.bill.Bill`). The output is a
-:class:`meta_harness.contracts.bill.BillTotal`. Money math is integer-only
+:class:`agent_centric.contracts.bill.Bill`). The output is a
+:class:`agent_centric.contracts.bill.BillTotal`. Money math is integer-only
 (minor units / cents) and deterministic; no cloud model is involved, so the
 result is exact and replayable.
 """

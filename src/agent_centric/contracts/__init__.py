@@ -1,4 +1,4 @@
-"""Versioned core contracts for the Meta-Harness.
+"""Versioned core contracts for Agent-centric.
 
 This package defines the stable, strongly-typed contracts that the control
 plane, agents, and verifiers all agree on. Each contract carries an explicit

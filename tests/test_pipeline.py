@@ -7,12 +7,12 @@ from typing import Any
 
 import pytest
 
-from meta_harness.contracts.capability import Capability
-from meta_harness.contracts.pipeline import PipelineVersion, SequentialComposition, StageSpec
-from meta_harness.contracts.result import FailureReason
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.control_plane.manager import AgentManager
-from meta_harness.control_plane.trajectory_store import FileTrajectoryStore
+from agent_centric.contracts.capability import Capability
+from agent_centric.contracts.pipeline import PipelineVersion, SequentialComposition, StageSpec
+from agent_centric.contracts.result import FailureReason
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.control_plane.manager import AgentManager
+from agent_centric.control_plane.trajectory_store import FileTrajectoryStore
 from tests.conftest import (
     CASE_TOOL_MANIFEST,
     COUNTER_CAPABILITY,
@@ -232,7 +232,7 @@ class TestSequentialComposition:
 
     def test_agents_cannot_invoke_each_other(self) -> None:
         """Agents have no mechanism to spawn or directly invoke other agents."""
-        from meta_harness.agents.interface import ToolContext
+        from agent_centric.agents.interface import ToolContext
 
         ctx = ToolContext()
         # No agent-invocation capability is exposed to agents.

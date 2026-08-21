@@ -1,4 +1,4 @@
-# HANDOFF — Meta-Harness (mission-critical system)
+# HANDOFF — Agent-centric (mission-critical system)
 
 **Prepared for a new session thread.** All facts below are current as of this
 handoff.
@@ -19,7 +19,7 @@ handoff.
   `git tag -a v0.29.0-milestone -m "v0.29.0 milestone (Volleys 001-029)"`
   (create only on explicit direction).
 
-## What Meta-Harness is
+## What Agent-centric is
 A deterministic, local-first, in-process control plane for governed, verifiable
 agents. The **Agent Manager** is the sole authority for policy, tool/model
 mediation, resource envelopes, verification, and audit. A task terminates in a
@@ -100,25 +100,25 @@ inbox/ (json/csv/txt/PDF-text) or email --(intake)--> unverified BillDraft
   unverified `BillDraft` rows via the existing accept → registry → calendar path.
   Weak/absent parse fails closed to no draft (no invented facts); read-only (no
   send/delete); grant separate from `email_fetch` and `intake_accept`.
-- Operator CLI `meta-harness` (run/summarise/replay-verify) + **ACP adapter**
-  `meta-harness-acp` (Zed external agent).
+- Operator CLI `agent-centric` (run/summarise/replay-verify) + **ACP adapter**
+  `agent-centric-acp` (Zed external agent).
 
 ## Public surface (deliberate, minimal)
-Top-level `meta_harness/__init__.py` exports `AgentManager`, core contracts,
+Top-level `agent_centric/__init__.py` exports `AgentManager`, core contracts,
 backends, stores, `summarise`/`replay`/`verify_replay`, `analyse_critical_path`,
 MCP adapter types, providers, and builder helpers. Sub-package `__init__.py`
 files define `__all__`; `py.typed` marks the package typed. **Additive changes
 only — prefer adapters/backends over changing Manager semantics.**
 
 ## What Zed ACP does today (thin adapter)
-- `src/meta_harness/acp.py` is a **thin ACP adapter** over the official
+- `src/agent_centric/acp.py` is a **thin ACP adapter** over the official
   `agent-client-protocol` SDK (runtime dep `agent-client-protocol>=0.12.0`),
-  exposing Meta-Harness as an External Agent in Zed.
+  exposing Agent-centric as an External Agent in Zed.
 - It is **edge-transport only** — not full coding-agent parity: no diffs,
   slash-commands, or nested subagents.
 - **Demo routing is fixed** (`reverse` default, `upper`, `counter`, stub
   `model`); it does not yet route to the bills loop.
-- **Spawn path (absolute):** `uv run meta-harness-acp` from the repo root
+- **Spawn path (absolute):** `uv run agent-centric-acp` from the repo root
   (`/home/makerooftools/github/agent-centric`), configured in Zed under
   `agent_servers` (see `README.md` → "Use from Zed (ACP)").
 
@@ -150,21 +150,21 @@ only — prefer adapters/backends over changing Manager semantics.**
   semantics (prefer adapters/backends).
 
 ## Architecture quick map
-- `src/meta_harness/contracts/` — versioned contracts (incl. `bill.py`,
+- `src/agent_centric/contracts/` — versioned contracts (incl. `bill.py`,
   `workspace.py`, `email.py`, `bills_registry.py`, `intake.py`).
-- `src/meta_harness/agents/` — thin interface + built-in agents (counter,
+- `src/agent_centric/agents/` — thin interface + built-in agents (counter,
   reverse, case_tool, model_agent, bills, workspace, email, bills_registry,
   intake).
-- `src/meta_harness/control_plane/` — `manager.py`, `registry.py`, `tools.py`,
+- `src/agent_centric/control_plane/` — `manager.py`, `registry.py`, `tools.py`,
   `verifier.py`, `trajectory_store.py`, `execution.py`, `worker.py`,
   `summary.py`, `replay.py`, `critical_path.py`, `mcp_tools.py`,
   `workspace.py`, `email_tools.py`, `bills_registry.py`, `intake.py`,
   `pdf_text.py`.
-- `src/meta_harness/providers/` — stub / failing stub / optional real provider
+- `src/agent_centric/providers/` — stub / failing stub / optional real provider
   + `email.py` (fake + optional real IMAP gateway).
-- `src/meta_harness/acp.py` — thin ACP adapter (uses official
+- `src/agent_centric/acp.py` — thin ACP adapter (uses official
   `agent-client-protocol` SDK, runtime dep `agent-client-protocol>=0.12.0`).
-- `src/meta_harness/cli.py` + `__main__.py` — operator CLI.
+- `src/agent_centric/cli.py` + `__main__.py` — operator CLI.
 - `tests/` — invariant tests across every volley (428 total).
 
 ## Tooling / validation commands
@@ -174,10 +174,10 @@ uv run pytest        # 428 passed (as of handoff)
 uv run ruff check .  # clean
 uv run mypy src      # clean, 54 source files
 ```
-- Entry points: `meta-harness` (operator CLI), `meta-harness-acp` (ACP agent).
+- Entry points: `agent-centric` (operator CLI), `agent-centric-acp` (ACP agent).
   Both smoke-verified.
-- Quick manual checks: `uv run meta-harness run`;
-  `printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}\n' | timeout 15 uv run meta-harness-acp`.
+- Quick manual checks: `uv run agent-centric run`;
+  `printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}\n' | timeout 15 uv run agent-centric-acp`.
 
 ## Validation status (last full run)
 - `pytest` → **428 passed**; `ruff` clean; `mypy` clean (54 files).

@@ -1,8 +1,8 @@
-"""Meta-Harness: a deterministic control plane for governed, verifiable agents.
+"""Agent-centric: a deterministic control plane for governed, verifiable agents.
 
 Public surface is intentionally minimal. The primary entry point is
 ``AgentManager`` from the control-plane package; contracts live in
-``meta_harness.contracts``.
+``agent_centric.contracts``.
 """
 
 from .agents import ToolContext, ToolRequest, ToolResult

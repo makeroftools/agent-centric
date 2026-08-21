@@ -7,11 +7,11 @@ from typing import Any
 
 import pytest
 
-from meta_harness.contracts.result import FailureReason
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.control_plane.manager import AgentManager
-from meta_harness.control_plane.tools import ToolExecutionError, ToolRegistry
-from meta_harness.control_plane.trajectory_store import FileTrajectoryStore
+from agent_centric.contracts.result import FailureReason
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.control_plane.manager import AgentManager
+from agent_centric.control_plane.tools import ToolExecutionError, ToolRegistry
+from agent_centric.control_plane.trajectory_store import FileTrajectoryStore
 from tests.conftest import CASE_TOOL_MANIFEST
 
 
@@ -101,7 +101,7 @@ class TestMediatedToolAccess:
 
     def test_ungranted_tool_rejection_is_recorded(self, tmp_path: Path) -> None:
         """The Manager rejects and records an ungranted tool request."""
-        from meta_harness.contracts.task import ResourceEnvelope as RE
+        from agent_centric.contracts.task import ResourceEnvelope as RE
         from tests.fake_agent import UNGUARDED_TOOL_AGENT_MANIFEST
 
         m = AgentManager(store=FileTrajectoryStore(tmp_path))
@@ -206,7 +206,7 @@ class TestMediatedToolAccess:
         assert ok.result is not None and ok.result.output == "HELLO"
         # A wrong output (simulated by a misbehaving agent) would fail the gate;
         # here we assert the gate function itself rejects a wrong output.
-        from meta_harness.control_plane.verifier import verify_case_tool_output
+        from agent_centric.control_plane.verifier import verify_case_tool_output
 
         task = _case_task("gate", "hello", granted=("to_upper",))
         assert verify_case_tool_output(task, "hello").passed is False

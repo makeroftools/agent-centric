@@ -15,22 +15,22 @@ from typing import Any
 
 import pytest
 
-from meta_harness.contracts.capability import Capability
-from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from meta_harness.contracts.policy import Policy, PolicyVersion
-from meta_harness.contracts.result import FailureReason
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.control_plane.email_tools import EmailTools, email_tool_impls
-from meta_harness.control_plane.manager import AgentManager
-from meta_harness.control_plane.tools import (
+from agent_centric.contracts.capability import Capability
+from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from agent_centric.contracts.policy import Policy, PolicyVersion
+from agent_centric.contracts.result import FailureReason
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.control_plane.email_tools import EmailTools, email_tool_impls
+from agent_centric.control_plane.manager import AgentManager
+from agent_centric.control_plane.tools import (
     EMAIL_FETCH_DESCRIPTOR,
     EMAIL_LIST_DESCRIPTOR,
     ToolExecutionError,
     ToolRegistry,
 )
-from meta_harness.control_plane.trajectory_store import FileTrajectoryStore
-from meta_harness.control_plane.verifier import verify_email_output
-from meta_harness.providers.email import (
+from agent_centric.control_plane.trajectory_store import FileTrajectoryStore
+from agent_centric.control_plane.verifier import verify_email_output
+from agent_centric.providers.email import (
     EmailGatewayError,
     FakeEmailGateway,
     OptionalRealEmailGateway,
@@ -40,7 +40,7 @@ from meta_harness.providers.email import (
 EMAIL_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="email",
-    entry_point="meta_harness.agents.email:create_email_agent",
+    entry_point="agent_centric.agents.email:create_email_agent",
     description="Performs a read-only email operation via mediated tools.",
     declared_capabilities=frozenset({Capability(name="email.read", version="1")}),
 )
@@ -362,7 +362,7 @@ class TestEmailTrajectory:
 
 class TestEmailRealGatewayOptIn:
     def test_missing_credentials_fails_closed(self) -> None:
-        from meta_harness.providers import build_optional_email_gateway
+        from agent_centric.providers import build_optional_email_gateway
 
         with pytest.raises(EmailGatewayError, match="missing"):
             build_optional_email_gateway(host=None, user=None, password=None)
@@ -404,7 +404,7 @@ class TestEmailRealGatewayOptIn:
 
 class TestEmailSubprocess:
     def test_runs_under_subprocess_backend(self, tmp_path: Path) -> None:
-        from meta_harness.control_plane.execution import SubprocessBackend
+        from agent_centric.control_plane.execution import SubprocessBackend
 
         tools = ToolRegistry()
         email = EmailTools(FakeEmailGateway(mailbox=MAILBOX), default_folders=("INBOX",))

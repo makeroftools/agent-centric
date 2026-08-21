@@ -15,15 +15,15 @@ from typing import Any
 
 import pytest
 
-from meta_harness.contracts.bills_registry import BillsRegistry
-from meta_harness.contracts.capability import Capability
-from meta_harness.contracts.intake import BillDraft, DraftProposals
-from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from meta_harness.contracts.policy import Policy, PolicyVersion
-from meta_harness.contracts.result import FailureReason
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.contracts.workspace import WorkspaceLayout
-from meta_harness.control_plane.intake import (
+from agent_centric.contracts.bills_registry import BillsRegistry
+from agent_centric.contracts.capability import Capability
+from agent_centric.contracts.intake import BillDraft, DraftProposals
+from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from agent_centric.contracts.policy import Policy, PolicyVersion
+from agent_centric.contracts.result import FailureReason
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.contracts.workspace import WorkspaceLayout
+from agent_centric.control_plane.intake import (
     IntakeOps,
     accept_drafts,
     ensure_intake_layout,
@@ -31,15 +31,15 @@ from meta_harness.control_plane.intake import (
     intake_tool_impls,
     inventory_inbox,
 )
-from meta_harness.control_plane.manager import AgentManager
-from meta_harness.control_plane.tools import ToolExecutionError, ToolRegistry
-from meta_harness.control_plane.verifier import verify_intake_output
-from meta_harness.control_plane.workspace import Workspace, register_workspace_tools
+from agent_centric.control_plane.manager import AgentManager
+from agent_centric.control_plane.tools import ToolExecutionError, ToolRegistry
+from agent_centric.control_plane.verifier import verify_intake_output
+from agent_centric.control_plane.workspace import Workspace, register_workspace_tools
 
 INTAKE_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="intake",
-    entry_point="meta_harness.agents.intake:create_intake_agent",
+    entry_point="agent_centric.agents.intake:create_intake_agent",
     description="Runs a dump-intake operation: inventory, drafts, or explicit accept.",
     declared_capabilities=frozenset(
         {
@@ -102,7 +102,7 @@ def _manager(tmp_path: Path, inbox_files: dict[str, str] | None = None) -> Agent
 
 
 def intake_tool_descriptor(name: str):
-    from meta_harness.control_plane.tools import (
+    from agent_centric.control_plane.tools import (
         INBOX_INVENTORY_DESCRIPTOR,
         INTAKE_ACCEPT_DESCRIPTOR,
         INTAKE_DRAFTS_DESCRIPTOR,

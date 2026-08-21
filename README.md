@@ -1,8 +1,8 @@
-# Meta-Harness
+# Agent-centric
 
 **A deterministic control plane for governed, verifiable agents.**
 
-Meta-Harness is a minimal, local-first, in-process core that lets a control
+Agent-centric is a minimal, local-first, in-process core that lets a control
 plane — the **Agent Manager** — register agent components, execute a task under
 a strict resource envelope, record a full **durable, append-only audit
 trajectory**, and mediate every tool and model call. Agents can only *request*
@@ -18,14 +18,14 @@ aspirational platform.
 > [`STATUS.md`](STATUS.md).
 
 ```
-Zed (Agent Panel) ──ACP──▶ meta-harness-acp (adapter) ──▶ AgentManager ──▶ agents / tools / MCP
+Zed (Agent Panel) ──ACP──▶ agent-centric-acp (adapter) ──▶ AgentManager ──▶ agents / tools / MCP
 ```
 
 ---
 
 ## Why it exists
 
-Autonomous agents are only useful if you can trust what they did. Meta-Harness
+Autonomous agents are only useful if you can trust what they did. Agent-centric
 treats *correctness under autonomy* as the core problem:
 
 - **No unverified success.** A task terminates in a verified result or an
@@ -56,8 +56,8 @@ governs every decision in this repository.
 | **Isolation** | Optional subprocess execution; silent-hang bounded, forced-kill recorded, no zombies. |
 | **Observability** | Deterministic trajectory summary, replay verification, and read-only critical-path (CPM) analysis. |
 | **Specialty agents** | A **bills** agent, a **workspace** agent, a **read-only email** agent, an **intake** agent (inventory + unverified drafts + explicit accept), and a **bills-registry** agent (deterministic agenda projection + governed registry maintenance). |
-| **Operator CLI** | `meta-harness` with `run`, `summarise`, and `replay-verify`. |
-| **Editor bridge** | Thin ACP adapter (`meta-harness-acp`) so Meta-Harness runs as an External Agent in Zed. |
+| **Operator CLI** | `agent-centric` with `run`, `summarise`, and `replay-verify`. |
+| **Editor bridge** | Thin ACP adapter (`agent-centric-acp`) so Agent-centric runs as an External Agent in Zed. |
 
 Full history and guarantees live in [`STATUS.md`](STATUS.md) and
 [`KERNEL.md`](KERNEL.md).
@@ -98,44 +98,44 @@ Run the end-to-end demo or the operator CLI:
 
 ```sh
 uv run python examples/demo.py
-uv run meta-harness run          # run the deterministic demo task set
+uv run agent-centric run          # run the deterministic demo task set
 ```
 
-The `meta-harness` CLI is **local-only and fail-closed** — it never starts a
+The `agent-centric` CLI is **local-only and fail-closed** — it never starts a
 network service, never reads credentials, and exits non-zero on any failure.
 
 ---
 
 ## Use from Zed (ACP)
 
-Meta-Harness can appear as an **External Agent** in Zed via the Agent Client
-Protocol (ACP). The adapter (`meta_harness.acp`) is a client-facing transport
+Agent-centric can appear as an **External Agent** in Zed via the Agent Client
+Protocol (ACP). The adapter (`agent_centric.acp`) is a client-facing transport
 only: every prompt is routed through the Manager, and no ACP path can produce a
 verified success that bypasses it.
 
 ### 1. Configure the agent server
 
 Add an entry to Zed's `settings.json` (Zed → Settings → Agents). The command
-must match the real console script name, `meta-harness-acp`:
+must match the real console script name, `agent-centric-acp`:
 
 ```json
 {
   "agent_servers": {
-    "Meta-Harness": {
+    "Agent-centric": {
       "type": "custom",
       "command": "uv",
-      "args": ["run", "meta-harness-acp"]
+      "args": ["run", "agent-centric-acp"]
     }
   }
 }
 ```
 
 If `uv run` is not desirable, point directly at the console script in the venv
-(the name is `meta-harness-acp`, same as above).
+(the name is `agent-centric-acp`, same as above).
 
 ### 2. Start a thread
 
-Open the **Agents Panel** in Zed (Agent Panel), choose **Meta-Harness** as the
+Open the **Agents Panel** in Zed (Agent Panel), choose **Agent-centric** as the
 agent, and start a new thread. Each thread opens an ACP session; one process
 owns one Manager that is shared across sessions in that process.
 
@@ -169,7 +169,7 @@ clear fail-closed message).
 
 ## Operator path
 
-`meta-harness` is a local, fail-closed operator CLI.
+`agent-centric` is a local, fail-closed operator CLI.
 
 ### Commands
 
@@ -183,7 +183,7 @@ clear fail-closed message).
 trajectory store. When omitted it defaults to `examples/.trajectories`.
 
 ```sh
-uv run meta-harness --store examples/.trajectories run
+uv run agent-centric --store examples/.trajectories run
 ```
 
 Output:
@@ -207,11 +207,11 @@ under the store directory.
 
 ```sh
 # 1. run the demo set and note a trajectory id
-uv run meta-harness run
+uv run agent-centric run
 # 2. summarise a run by id
-uv run meta-harness summarise demo-reverse#1
+uv run agent-centric summarise demo-reverse#1
 # 3. re-run it and verify the fresh trajectory is equivalent
-uv run meta-harness replay-verify demo-reverse#1
+uv run agent-centric replay-verify demo-reverse#1
 ```
 
 `summarise` and `replay-verify` are fail-closed: a missing id exits non-zero
@@ -234,15 +234,15 @@ There are exactly two roles:
 A minimal single-agent run:
 
 ```python
-from meta_harness import AgentManager
-from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric import AgentManager
+from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
 
 manager = AgentManager()
 manager.register(AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="reverse",
-    entry_point="meta_harness.agents.reverse:create_reverse_agent",
+    entry_point="agent_centric.agents.reverse:create_reverse_agent",
     description="Reverses a string.",
 ))
 
@@ -275,14 +275,14 @@ The public API is deliberate and minimal. Top-level exports include
 package is marked typed via `py.typed`; sub-package `__init__` files define
 explicit `__all__` and don't leak internal helpers.
 
-- **Contracts** — `meta_harness.contracts` (task, result, trajectory, tool,
+- **Contracts** — `agent_centric.contracts` (task, result, trajectory, tool,
   pipeline, parallel, policy, model, summary, replay, critical-path, manifest,
   capability).
-- **Manager & control plane** — `meta_harness.control_plane` (AgentManager,
+- **Manager & control plane** — `agent_centric.control_plane` (AgentManager,
   registry, tools, verifier, trajectory store, execution backends, summary,
   replay, CPM).
-- **Agents** — `meta_harness.agents` (thin interface + built-in agents).
-- **Providers** — `meta_harness.providers` (stub / failing stub / optional real).
+- **Agents** — `agent_centric.agents` (thin interface + built-in agents).
+- **Providers** — `agent_centric.providers` (stub / failing stub / optional real).
 
 ---
 
@@ -290,22 +290,22 @@ explicit `__all__` and don't leak internal helpers.
 
 The kernel is designed to grow via **adapters and backends**, not by changing
 Manager semantics. Start with the versioned contracts in
-[`meta_harness/contracts/`](src/meta_harness/contracts) and the freeze note in
+[`agent_centric/contracts/`](src/agent_centric/contracts) and the freeze note in
 [`KERNEL.md`](KERNEL.md).
 
 Register an agent (a manifest + a callable factory) and grant a tool on the
 task:
 
 ```python
-from meta_harness import AgentManager
-from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric import AgentManager
+from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
 
 manager = AgentManager()
 manager.register(AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="case_tool",
-    entry_point="meta_harness.agents.case_tool:create_case_tool_agent",
+    entry_point="agent_centric.agents.case_tool:create_case_tool_agent",
     description="Uppercases a string via a mediated tool.",
 ))
 
@@ -356,7 +356,7 @@ The correctness guarantees are demonstrated across the test suite
 PRINCIPLES.md          Non-negotiable governing rules
 KERNEL.md              v0 kernel freeze note (guarantees, out-of-scope, versioning)
 STATUS.md              Volley history 001–026 + correctness evidence
-src/meta_harness/
+src/agent_centric/
   __init__.py          Public surface
   contracts/           Versioned, strongly-typed contracts
   agents/              Thin agent interface + built-in agents
@@ -429,15 +429,15 @@ Example registry:
 Example agenda request (what is due in September, excluding paid):
 
 ```python
-from meta_harness import AgentManager
-from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric import AgentManager
+from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
 
 manager = AgentManager()
 manager.register(AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="bills_registry",
-    entry_point="meta_harness.agents.bills_registry:create_bills_registry_agent",
+    entry_point="agent_centric.agents.bills_registry:create_bills_registry_agent",
     description="Reads the bills registry and projects a deterministic agenda.",
 ))
 
@@ -541,15 +541,15 @@ model is involved. Verification is real: the Manager independently recomputes
 the expected totals from the payload and rejects bad or missing data.
 
 ```python
-from meta_harness import AgentManager
-from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric import AgentManager
+from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
 
 manager = AgentManager()
 manager.register(AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="bills",
-    entry_point="meta_harness.agents.bills:create_bills_agent",
+    entry_point="agent_centric.agents.bills:create_bills_agent",
     description="Computes deterministic totals for a structured bill.",
 ))
 
@@ -589,12 +589,12 @@ broad filesystem powers. Verification is real: the Manager recomputes the
 expected result (operation, path, and for writes content) from the payload.
 
 ```python
-from meta_harness import AgentManager
-from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.contracts.workspace import WorkspaceLayout
-from meta_harness.control_plane.tools import ToolRegistry
-from meta_harness.control_plane.workspace import Workspace, register_workspace_tools
+from agent_centric import AgentManager
+from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.contracts.workspace import WorkspaceLayout
+from agent_centric.control_plane.tools import ToolRegistry
+from agent_centric.control_plane.workspace import Workspace, register_workspace_tools
 
 workspace = Workspace("ws", WorkspaceLayout(files=("invoices/note.txt",), directories=("invoices",)))
 tools = ToolRegistry()
@@ -605,7 +605,7 @@ manager = AgentManager(tools=tools)
 manager.register(AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="workspace",
-    entry_point="meta_harness.agents.workspace:create_workspace_agent",
+    entry_point="agent_centric.agents.workspace:create_workspace_agent",
     description="Performs an allowlisted workspace operation via mediated file tools.",
 ))
 

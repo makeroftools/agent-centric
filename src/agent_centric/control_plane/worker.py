@@ -1,7 +1,7 @@
 """Subprocess worker entry point (runs in the child process).
 
 This module is intentionally **not imported by the Manager**. It is spawned via
-``python -m meta_harness.control_plane.worker`` so that it is executed exactly
+``python -m agent_centric.control_plane.worker`` so that it is executed exactly
 once as ``__main__`` — avoiding the double-import that would otherwise break
 class identity across the IPC boundary.
 

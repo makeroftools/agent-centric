@@ -15,21 +15,25 @@ from typing import Any
 
 import pytest
 
-from meta_harness.contracts.capability import Capability
-from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from meta_harness.contracts.policy import Policy, PolicyVersion
-from meta_harness.contracts.result import FailureReason
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.contracts.workspace import WorkspaceLayout
-from meta_harness.control_plane.manager import AgentManager
-from meta_harness.control_plane.tools import ToolExecutionError, ToolRegistry
-from meta_harness.control_plane.verifier import verify_workspace_output
-from meta_harness.control_plane.workspace import Workspace, WorkspaceError, register_workspace_tools
+from agent_centric.contracts.capability import Capability
+from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from agent_centric.contracts.policy import Policy, PolicyVersion
+from agent_centric.contracts.result import FailureReason
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.contracts.workspace import WorkspaceLayout
+from agent_centric.control_plane.manager import AgentManager
+from agent_centric.control_plane.tools import ToolExecutionError, ToolRegistry
+from agent_centric.control_plane.verifier import verify_workspace_output
+from agent_centric.control_plane.workspace import (
+    Workspace,
+    WorkspaceError,
+    register_workspace_tools,
+)
 
 WORKSPACE_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="workspace",
-    entry_point="meta_harness.agents.workspace:create_workspace_agent",
+    entry_point="agent_centric.agents.workspace:create_workspace_agent",
     description="Performs an allowlisted workspace operation via mediated file tools.",
     declared_capabilities=frozenset({Capability(name="workspace", version="1")}),
 )
@@ -321,7 +325,7 @@ class TestWorkspaceDeterminism:
 
 class TestWorkspaceSubprocess:
     def test_runs_under_subprocess_backend(self, tmp_path: Path) -> None:
-        from meta_harness.control_plane.execution import SubprocessBackend
+        from agent_centric.control_plane.execution import SubprocessBackend
 
         workspace = Workspace(tmp_path, _LAYOUT)
         workspace.create_workspace_dir("invoices")

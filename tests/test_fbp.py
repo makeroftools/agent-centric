@@ -19,7 +19,7 @@ from typing import Any
 
 import pytest
 
-from meta_harness.fbp import AgentNode, Context, Shell
+from agent_centric.fbp import AgentNode, Context, Shell
 
 
 class _DoubleNode(AgentNode):

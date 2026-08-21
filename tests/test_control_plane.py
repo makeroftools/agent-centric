@@ -16,10 +16,10 @@ from typing import Any
 
 import pytest
 
-from meta_harness.contracts.result import FailureReason
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.contracts.trajectory import Trajectory
-from meta_harness.control_plane.manager import AgentManager
+from agent_centric.contracts.result import FailureReason
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.contracts.trajectory import Trajectory
+from agent_centric.control_plane.manager import AgentManager
 from tests.conftest import COUNTER_MANIFEST
 from tests.fake_agent import SLEEPY_AGENT_MANIFEST, SLOW_STEP_AGENT_MANIFEST, WRONG_AGENT_MANIFEST
 
@@ -121,7 +121,7 @@ def test_step_limit_is_enforced(manager: AgentManager) -> None:
 
 def test_overall_timeout_is_enforced() -> None:
     """A slow agent must be stopped at the overall timeout and fail explicitly."""
-    from meta_harness.control_plane.manager import AgentManager
+    from agent_centric.control_plane.manager import AgentManager
 
     m = AgentManager()
     m.register(SLEEPY_AGENT_MANIFEST)
@@ -145,7 +145,7 @@ def test_overall_timeout_is_enforced() -> None:
 
 def test_per_step_timeout_is_enforced() -> None:
     """A step that exceeds max_step_seconds must be stopped and fail explicitly."""
-    from meta_harness.control_plane.manager import AgentManager
+    from agent_centric.control_plane.manager import AgentManager
 
     m = AgentManager()
     m.register(SLOW_STEP_AGENT_MANIFEST)
@@ -166,7 +166,7 @@ def test_per_step_timeout_is_enforced() -> None:
 
 
 def test_unknown_agent_fails_explicitly() -> None:
-    from meta_harness.control_plane.manager import AgentManager
+    from agent_centric.control_plane.manager import AgentManager
 
     m = AgentManager()  # empty registry
     task = _make_task(

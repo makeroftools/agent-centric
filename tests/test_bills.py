@@ -15,21 +15,21 @@ from typing import Any
 
 import pytest
 
-from meta_harness.contracts.bill import Bill, BillLine, BillTotal
-from meta_harness.contracts.capability import Capability
-from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from meta_harness.contracts.policy import Policy, PolicyVersion
-from meta_harness.contracts.result import FailureReason
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.control_plane.manager import AgentManager
-from meta_harness.control_plane.tools import ToolExecutionError, ToolRegistry
-from meta_harness.control_plane.trajectory_store import FileTrajectoryStore
-from meta_harness.control_plane.verifier import verify_bills_output
+from agent_centric.contracts.bill import Bill, BillLine, BillTotal
+from agent_centric.contracts.capability import Capability
+from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+from agent_centric.contracts.policy import Policy, PolicyVersion
+from agent_centric.contracts.result import FailureReason
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.control_plane.manager import AgentManager
+from agent_centric.control_plane.tools import ToolExecutionError, ToolRegistry
+from agent_centric.control_plane.trajectory_store import FileTrajectoryStore
+from agent_centric.control_plane.verifier import verify_bills_output
 
 BILLS_MANIFEST = AgentComponentManifest(
     version=AgentManifestVersion.V2,
     name="bills",
-    entry_point="meta_harness.agents.bills:create_bills_agent",
+    entry_point="agent_centric.agents.bills:create_bills_agent",
     description="Computes deterministic totals for a structured bill.",
     declared_capabilities=frozenset({Capability(name="bills", version="1")}),
 )
@@ -282,7 +282,7 @@ class TestBillsDeterminism:
 
 class TestBillsSubprocess:
     def test_runs_under_subprocess_backend(self, tmp_path: Path) -> None:
-        from meta_harness.control_plane.execution import SubprocessBackend
+        from agent_centric.control_plane.execution import SubprocessBackend
 
         m = AgentManager(
             store=FileTrajectoryStore(tmp_path),

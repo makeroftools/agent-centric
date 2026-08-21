@@ -11,17 +11,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from meta_harness.contracts.parallel import ParallelComposition, ParallelVersion
-from meta_harness.contracts.pipeline import PipelineVersion, SequentialComposition, StageSpec
-from meta_harness.contracts.policy import Policy, PolicyVersion
-from meta_harness.contracts.result import FailureReason
-from meta_harness.contracts.summary import RunState, StageKind
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.control_plane.manager import AgentManager
-from meta_harness.control_plane.summary import summarise_stored, summarise_trajectory
-from meta_harness.control_plane.tools import ToolRegistry
-from meta_harness.control_plane.trajectory_store import FileTrajectoryStore
-from meta_harness.providers import StubModelProvider
+from agent_centric.contracts.parallel import ParallelComposition, ParallelVersion
+from agent_centric.contracts.pipeline import PipelineVersion, SequentialComposition, StageSpec
+from agent_centric.contracts.policy import Policy, PolicyVersion
+from agent_centric.contracts.result import FailureReason
+from agent_centric.contracts.summary import RunState, StageKind
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.control_plane.manager import AgentManager
+from agent_centric.control_plane.summary import summarise_stored, summarise_trajectory
+from agent_centric.control_plane.tools import ToolRegistry
+from agent_centric.control_plane.trajectory_store import FileTrajectoryStore
+from agent_centric.providers import StubModelProvider
 from tests.conftest import CASE_TOOL_MANIFEST, MODEL_MANIFEST, REVERSE_MANIFEST
 from tests.fake_agent import (
     COOPERATIVE_CANCEL_MANIFEST,
@@ -369,7 +369,7 @@ class TestModelSummary:
         assert all(t.name != "llm_complete" for t in summary.tools)
 
     def test_model_call_failure_summary(self, tmp_path: Path) -> None:
-        from meta_harness.providers import FailingStubModelProvider
+        from agent_centric.providers import FailingStubModelProvider
 
         m = AgentManager(
             store=FileTrajectoryStore(tmp_path),

@@ -9,11 +9,11 @@ handles edge cases (single stage, equal costs) explicitly.
 
 from __future__ import annotations
 
-from meta_harness.contracts.critical_path import CpmMetric
-from meta_harness.contracts.parallel import ParallelComposition, ParallelVersion
-from meta_harness.contracts.pipeline import PipelineVersion, SequentialComposition, StageSpec
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.control_plane.critical_path import analyse_critical_path
+from agent_centric.contracts.critical_path import CpmMetric
+from agent_centric.contracts.parallel import ParallelComposition, ParallelVersion
+from agent_centric.contracts.pipeline import PipelineVersion, SequentialComposition, StageSpec
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.control_plane.critical_path import analyse_critical_path
 
 PARENT = ResourceEnvelope(timeout_seconds=10.0, max_steps=200)
 

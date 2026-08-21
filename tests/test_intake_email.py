@@ -16,9 +16,9 @@ from typing import Any
 
 import pytest
 
-from meta_harness.contracts.bills_registry import BillsRegistry
-from meta_harness.control_plane.intake import IntakeOps, draft_from_email
-from meta_harness.control_plane.workspace import Workspace
+from agent_centric.contracts.bills_registry import BillsRegistry
+from agent_centric.control_plane.intake import IntakeOps, draft_from_email
+from agent_centric.control_plane.workspace import Workspace
 
 REGISTRY = {
     "version": "bills_registry.v1",
@@ -49,8 +49,8 @@ def _bill_message(**overrides: Any) -> dict[str, Any]:
 
 
 def _make_workspace(tmp_path: Path) -> Workspace:
-    from meta_harness.contracts.workspace import WorkspaceLayout
-    from meta_harness.control_plane.intake import ensure_intake_layout
+    from agent_centric.contracts.workspace import WorkspaceLayout
+    from agent_centric.control_plane.intake import ensure_intake_layout
 
     layout = ensure_intake_layout(WorkspaceLayout())
     ws = Workspace(tmp_path, layout)
@@ -61,7 +61,7 @@ def _make_workspace(tmp_path: Path) -> Workspace:
 
 
 def _read_registry(ws: Workspace) -> BillsRegistry:
-    from meta_harness.control_plane.bills_registry import load_registry
+    from agent_centric.control_plane.bills_registry import load_registry
 
     content = ws.read_workspace_file("bills/registry.json").content
     assert content is not None
@@ -119,7 +119,7 @@ class TestIntakeOpsEmailDraft:
         assert before == after
 
     def test_email_draft_invalid_message_fails_closed(self, tmp_path: Path) -> None:
-        from meta_harness.control_plane.tools import ToolExecutionError
+        from agent_centric.control_plane.tools import ToolExecutionError
 
         ws = _make_workspace(tmp_path)
         ops = IntakeOps(ws)
@@ -144,18 +144,22 @@ class TestIntakeOpsEmailDraft:
 
 class TestAgentGate:
     def test_email_draft_under_grant_verifies(self, tmp_path: Path) -> None:
-        from meta_harness.agents.intake import create_intake_agent
-        from meta_harness.contracts.capability import Capability
-        from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-        from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-        from meta_harness.control_plane.manager import AgentManager
-        from meta_harness.control_plane.tools import ToolRegistry
-        from meta_harness.control_plane.workspace import register_workspace_tools
+        from agent_centric.agents.intake import create_intake_agent
+        from agent_centric.contracts.capability import Capability
+        from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+        from agent_centric.contracts.task import (
+            ResourceEnvelope,
+            TaskSpecification,
+            TaskSpecVersion,
+        )
+        from agent_centric.control_plane.manager import AgentManager
+        from agent_centric.control_plane.tools import ToolRegistry
+        from agent_centric.control_plane.workspace import register_workspace_tools
 
         manifest = AgentComponentManifest(
             version=AgentManifestVersion.V2,
             name="intake",
-            entry_point="meta_harness.agents.intake:create_intake_agent",
+            entry_point="agent_centric.agents.intake:create_intake_agent",
             description="intake",
             declared_capabilities=frozenset(
                 {Capability(name="intake.draft_from_email", version="1")}
@@ -166,7 +170,7 @@ class TestAgentGate:
         tools = ToolRegistry()
         register_workspace_tools(tools, ws)
         ops = IntakeOps(ws)
-        from meta_harness.control_plane.tools import INTAKE_EMAIL_DRAFT_DESCRIPTOR
+        from agent_centric.control_plane.tools import INTAKE_EMAIL_DRAFT_DESCRIPTOR
 
         tools.register_impl(INTAKE_EMAIL_DRAFT_DESCRIPTOR, ops.email_draft)
         m = AgentManager(tools=tools)
@@ -187,17 +191,21 @@ class TestAgentGate:
         assert outcome.result.output["unverified"] is True
 
     def test_email_draft_ungranted_fails_closed(self, tmp_path: Path) -> None:
-        from meta_harness.contracts.capability import Capability
-        from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-        from meta_harness.contracts.result import FailureReason
-        from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-        from meta_harness.control_plane.manager import AgentManager
-        from meta_harness.control_plane.tools import ToolRegistry
+        from agent_centric.contracts.capability import Capability
+        from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+        from agent_centric.contracts.result import FailureReason
+        from agent_centric.contracts.task import (
+            ResourceEnvelope,
+            TaskSpecification,
+            TaskSpecVersion,
+        )
+        from agent_centric.control_plane.manager import AgentManager
+        from agent_centric.control_plane.tools import ToolRegistry
 
         manifest = AgentComponentManifest(
             version=AgentManifestVersion.V2,
             name="intake",
-            entry_point="meta_harness.agents.intake:create_intake_agent",
+            entry_point="agent_centric.agents.intake:create_intake_agent",
             description="intake",
             declared_capabilities=frozenset(
                 {Capability(name="intake.draft_from_email", version="1")}
@@ -222,17 +230,21 @@ class TestAgentGate:
         assert outcome.failure.reason is FailureReason.VERIFICATION_FAILED
 
     def test_email_draft_never_mutates_registry_via_agent(self, tmp_path: Path) -> None:
-        from meta_harness.contracts.capability import Capability
-        from meta_harness.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-        from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-        from meta_harness.control_plane.manager import AgentManager
-        from meta_harness.control_plane.tools import INTAKE_EMAIL_DRAFT_DESCRIPTOR, ToolRegistry
-        from meta_harness.control_plane.workspace import register_workspace_tools
+        from agent_centric.contracts.capability import Capability
+        from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
+        from agent_centric.contracts.task import (
+            ResourceEnvelope,
+            TaskSpecification,
+            TaskSpecVersion,
+        )
+        from agent_centric.control_plane.manager import AgentManager
+        from agent_centric.control_plane.tools import INTAKE_EMAIL_DRAFT_DESCRIPTOR, ToolRegistry
+        from agent_centric.control_plane.workspace import register_workspace_tools
 
         manifest = AgentComponentManifest(
             version=AgentManifestVersion.V2,
             name="intake",
-            entry_point="meta_harness.agents.intake:create_intake_agent",
+            entry_point="agent_centric.agents.intake:create_intake_agent",
             description="intake",
             declared_capabilities=frozenset(
                 {Capability(name="intake.draft_from_email", version="1")}

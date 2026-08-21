@@ -1,4 +1,4 @@
-"""Allow ``python -m meta_harness`` to invoke the operator CLI."""
+"""Allow ``python -m agent_centric`` to invoke the operator CLI."""
 
 from __future__ import annotations
 

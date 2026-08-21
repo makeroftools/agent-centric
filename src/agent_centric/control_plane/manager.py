@@ -189,7 +189,7 @@ class AgentManager:
         Re-runs ``task`` under the same deterministic configuration (registered
         agents, tools, and provider) and compares the freshly produced trajectory
         to the stored one identified by ``trajectory_id`` under the documented
-        equivalence definition (see :mod:`meta_harness.control_plane.replay`).
+        equivalence definition (see :mod:`agent_centric.control_plane.replay`).
 
         This is read-only with respect to the *original* trajectory: it never
         mutates the stored audit record. The replayed run is recorded under a new

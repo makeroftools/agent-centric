@@ -14,14 +14,14 @@ from typing import Any
 
 import pytest
 
-from meta_harness.contracts.model import ModelProviderError
-from meta_harness.contracts.policy import Policy, PolicyVersion
-from meta_harness.contracts.result import FailureReason
-from meta_harness.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from meta_harness.control_plane.manager import AgentManager
-from meta_harness.control_plane.tools import ToolExecutionError, ToolRegistry
-from meta_harness.control_plane.trajectory_store import FileTrajectoryStore
-from meta_harness.providers import (
+from agent_centric.contracts.model import ModelProviderError
+from agent_centric.contracts.policy import Policy, PolicyVersion
+from agent_centric.contracts.result import FailureReason
+from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
+from agent_centric.control_plane.manager import AgentManager
+from agent_centric.control_plane.tools import ToolExecutionError, ToolRegistry
+from agent_centric.control_plane.trajectory_store import FileTrajectoryStore
+from agent_centric.providers import (
     FailingStubModelProvider,
     OptionalRealModelProvider,
     StubModelProvider,
