@@ -54,11 +54,13 @@ def _odd(value: Any) -> bool:
     return isinstance(value, int) and value % 2 == 1
 
 
-async def _send(socket: zmq.asyncio.Socket, directive: Directive) -> None:
+async def _send(
+    socket: zmq.asyncio.Socket, directive: Directive, to: bytes = b"leaf"
+) -> None:
     # On a ROUTER, the first frame is the destination's routing identity.
     await socket.send_multipart(
         [
-            b"leaf",
+            to,
             directive.correlation_id.encode(),
             MESSAGE_DIRECTIVE.encode(),
             directive.kind.encode(),
@@ -292,6 +294,77 @@ class TestAgentRun:
             )
             assert resp.kind == RESPONSE_OK
             assert resp.verified is True
+
+        asyncio.run(scenario())
+
+
+class TestTwoAgentRoundTrip:
+    """Prove the core topology: a real parent/child agent round-trip over inproc.
+
+    Parent binds a ROUTER at an endpoint; the child (a real Agent) connects a
+    DEALER to it. The parent routes a run directive down; the child executes and
+    responds; the parent relays the verified response up. This is the
+    foundation's untested claim: work flows down, verified responses flow up.
+    """
+
+    async def _round_trip(
+        self, correlation_id: str
+    ) -> tuple[Response, Agent, Agent]:
+        context = zmq.asyncio.Context()
+        # Child connects its DEALER to this endpoint; parent binds a ROUTER here.
+        parent_socket = context.socket(zmq.ROUTER)
+        parent_socket.bind("inproc://children")
+
+        # Parent agent: connects DEALER up (unused here), holds child ROUTER.
+        parent = Agent(
+            AgentConfig(identity="parent", parent_endpoint="inproc://root", context=context)
+        )
+        parent.init()
+        parent._children["child"] = parent_socket  # child ROUTER on parent's poll
+
+        # Child agent: connects DEALER to the parent's child ROUTER.
+        child = Agent(
+            AgentConfig(identity="child", parent_endpoint="inproc://children", context=context)
+        )
+        child.init()
+
+        # Configure the child with the double task.
+        register_callable("double", _double)
+        child._configure(
+            Directive(
+                correlation_id="cfg-child",
+                kind=DIRECTIVE_CONFIGURE,
+                payload={"tasks": ["double"]},
+            )
+        )
+
+        # Parent routes a run directive down to the child.
+        run = Directive(
+            correlation_id=correlation_id,
+            kind=DIRECTIVE_RUN,
+            payload={"task": "double", "args": {"value": 21}},
+        )
+        await _send(parent_socket, run, to=b"child")
+
+        # Child polls: receives the directive, acks, executes, responds.
+        await child.poll(timeout=0.1)
+        # The child's ack + response arrive on the parent's child ROUTER.
+        ack = await _recv_ack(parent_socket)
+        assert ack.correlation_id == correlation_id
+        response = await _recv_response(parent_socket)
+
+        parent.kill()
+        child.kill()
+        context.term()
+        return response, parent, child
+
+    def test_child_response_reaches_parent_verified(self) -> None:
+        async def scenario() -> None:
+            resp, _, _ = await self._round_trip("rt1")
+            assert resp.kind == RESPONSE_RESULT
+            assert resp.verified is True
+            assert resp.value == 42
+            assert resp.node == "child"
 
         asyncio.run(scenario())
         
