@@ -95,9 +95,16 @@ outcome, regardless of arrival order.
 
 ## 6. Idempotency
 
-Processing the same directive twice yields the same result. The agent caches
-`correlation_id → result`, so a replayed directive returns the cached result
-instead of re-executing. This makes retry and replay safe.
+Processing the same directive twice yields the same result. A directive is
+identified by its **full fingerprint** — correlation id + kind + canonical
+payload — not by correlation id alone. A replayed directive (same fingerprint)
+returns the cached result instead of re-executing, so retry and replay are safe.
+
+**Side-effect safety.** Stateful directives are idempotent too: a replayed
+``spawn`` reuses an already-provisioned child instead of re-binding the endpoint
+or creating a duplicate. A correlation id that is reused for *different* work is
+a protocol violation and **fails closed** (an explicit error, never a stale
+result), so the system cannot silently serve an old outcome for new work.
 
 ## 7. Trust
 

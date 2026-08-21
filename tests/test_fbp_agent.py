@@ -289,6 +289,49 @@ class TestAgentRun:
 
         asyncio.run(scenario())
 
+    def test_idempotency_keyed_by_full_directive_content(self) -> None:
+        """A replayed directive is cached by its full content, not correlation id alone.
+
+        The cache key includes the payload, so a directive with the same
+        correlation id but different content is not served stale data.
+        """
+        async def scenario() -> None:
+            register_callable("double", _double)
+            agent = Agent(
+                AgentConfig(
+                    identity="leaf",
+                    parent_endpoint="inproc://parent",
+                    context=zmq.asyncio.Context(),
+                )
+            )
+            agent.init()
+            agent._configure(
+                Directive(
+                    correlation_id="cfg1",
+                    kind=DIRECTIVE_CONFIGURE,
+                    payload={"tasks": ["double"]},
+                )
+            )
+            run21 = Directive(
+                correlation_id="run1",
+                kind=DIRECTIVE_RUN,
+                payload={"task": "double", "args": {"value": 21}},
+            )
+            first, _ = await self._run_agent(run21, agent=agent)
+            assert first.value == 42
+            # Same correlation id, different args: must NOT return the cached 42.
+            run99 = Directive(
+                correlation_id="run1",
+                kind=DIRECTIVE_RUN,
+                payload={"task": "double", "args": {"value": 99}},
+            )
+            second, _ = await self._run_agent(run99, agent=agent)
+            assert second.kind == RESPONSE_ERROR
+            assert second.verified is False
+            assert "reused" in (second.error or "")
+
+        asyncio.run(scenario())
+
     def test_ping(self) -> None:
         async def scenario() -> None:
             resp, _ = await self._run_agent(
@@ -559,4 +602,37 @@ class TestMediatedSpawnDelegation:
             context.term()
 
         asyncio.run(scenario())
-        
+
+    def test_spawn_is_idempotent(self) -> None:
+        """A replayed spawn directive does not create a duplicate child.
+
+        Binding the same inproc endpoint twice would raise, so idempotent spawn
+        must reuse the existing child rather than create a second one.
+        """
+        async def scenario() -> None:
+            context = zmq.asyncio.Context()
+            parent = Agent(
+                AgentConfig(identity="parent", parent_endpoint="inproc://root", context=context)
+            )
+            parent.init()
+
+            spawn = Directive(
+                correlation_id="spawn1",
+                kind=DIRECTIVE_SPAWN,
+                payload={"identity": "child", "endpoint": "inproc://children"},
+            )
+            first = parent._spawn(spawn)
+            assert first.kind == RESPONSE_OK
+            assert "child" in parent._child_agents
+
+            # Replaying the same spawn must reuse the existing child, not
+            # create a duplicate (and not re-bind the endpoint, which would fail).
+            second = parent._spawn(spawn)
+            assert second.kind == RESPONSE_OK
+            assert len(parent._child_agents) == 1
+            assert len(parent._children) == 1
+
+            parent.kill()
+            context.term()
+
+        asyncio.run(scenario())

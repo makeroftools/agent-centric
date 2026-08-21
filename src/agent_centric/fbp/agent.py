@@ -100,7 +100,13 @@ class Agent:
         self._registry = Registry()
         self._rules: tuple[str, ...] = ()
         self._alive = False
-        self._results: dict[str, Response] = {}  # correlation_id -> response (idempotency)
+        # Idempotency cache: full directive fingerprint -> response. A replayed
+        # directive (same correlation_id + kind + canonic payload) returns the
+        # cached result instead of re-executing, so retry/replay are safe.
+        self._results: dict[tuple[str, str, str], Response] = {}
+        # Correlation ids already served, to reject a correlation id reused for
+        # different work (fail closed rather than silently returning stale data).
+        self._used_keys: set[tuple[str, str]] = set()
         # correlation_id -> child_identity, for mediated delegation awaiting a
         # child response to route back up.
         self._delegated: dict[str, str] = {}
@@ -352,11 +358,20 @@ class Agent:
     def _run_task(self, directive: Directive) -> Response:
         """Execute a task from the directive's payload.
 
-        Idempotency: if this correlation id was already handled, return the
-        cached result instead of re-executing.
+        Idempotency: a directive is identified by its full fingerprint
+        (correlation id + kind + payload), so a replayed directive returns the
+        cached result instead of re-executing. If the same correlation id is
+        reused for a *different* directive, that is a protocol violation and
+        fails closed rather than silently serving stale data.
         """
-        if directive.correlation_id in self._results:
-            return self._results[directive.correlation_id]
+        fingerprint = self._fingerprint(directive)
+        if fingerprint in self._results:
+            return self._results[fingerprint]
+        # A correlation id must be unique per directive. If it was already used
+        # for different work, fail closed instead of returning a stale result.
+        key = (directive.correlation_id, directive.kind)
+        if key in self._used_keys:
+            return self._error(directive, "correlation id reused for different directive")
 
         task_name = directive.payload.get("task")
         args = directive.payload.get("args", {})
@@ -386,8 +401,21 @@ class Agent:
             error=None if verified else f"verification failed for task {task_name!r}",
             source=source,
         )
-        self._results[directive.correlation_id] = response
+        self._results[fingerprint] = response
+        self._used_keys.add(key)
         return response
+
+    @staticmethod
+    def _fingerprint(directive: Directive) -> tuple[str, str, str]:
+        """A stable identity for a directive: correlation id + kind + canonic payload.
+
+        The payload is serialised with sorted keys so that two directives with
+        the same correlation id, kind, and content map to the same fingerprint,
+        while a different directive with the same correlation id does not. This
+        is what makes idempotency safe against replay.
+        """
+        canonic = json.dumps(directive.payload, sort_keys=True, default=str)
+        return (directive.correlation_id, directive.kind, canonic)
 
     def _verify(self, value: Any, verifier_name: str | None) -> bool:
         """Apply the named verifier to a value (True if none named)."""
@@ -416,6 +444,17 @@ class Agent:
 
         if self._context is None:
             return self._error(directive, "agent not initialised")
+
+        # Idempotency: a replayed spawn reuses an already-provisioned child
+        # rather than re-binding the endpoint (which would fail) or creating a
+        # duplicate. Same identity -> same child, so retry/replay are safe.
+        if child_identity in self._child_agents:
+            return Response(
+                correlation_id=directive.correlation_id,
+                kind=RESPONSE_OK,
+                verified=True,
+                node=self.identity,
+            )
 
         child_socket = self._context.socket(zmq.ROUTER)
         child_socket.bind(self._endpoint(child_endpoint))
