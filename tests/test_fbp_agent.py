@@ -636,3 +636,72 @@ class TestMediatedSpawnDelegation:
             context.term()
 
         asyncio.run(scenario())
+
+    def test_parent_reverifies_child_on_upward_path(self) -> None:
+        """The correctness spine in the agent protocol: a parent re-verifies a
+        delegated child's value against its own verifier before accepting it.
+
+        A child that claims verified but returns a value failing the parent's
+        configured verifier must be demoted to an explicit, audited failure —
+        never relayed up as a verified success. This mirrors the parent
+        verification in the synchronous node model.
+        """
+        async def scenario() -> None:
+            register_callable("double", _double)
+            register_callable("odd", _odd)
+            context = zmq.asyncio.Context()
+
+            root = context.socket(zmq.ROUTER)
+            root.bind("inproc://root")
+
+            parent = Agent(
+                AgentConfig(identity="parent", parent_endpoint="inproc://root", context=context)
+            )
+            parent.init()
+            # Parent's own default verifier: only odd results pass.
+            parent._configure(
+                Directive(
+                    correlation_id="cfg-parent",
+                    kind=DIRECTIVE_CONFIGURE,
+                    payload={"verifiers": ["odd"], "verifier": "odd"},
+                )
+            )
+
+            spawn = Directive(
+                correlation_id="spawn1",
+                kind=DIRECTIVE_SPAWN,
+                payload={"identity": "child", "endpoint": "inproc://children"},
+            )
+            parent._spawn(spawn)
+            child = parent._child_agents["child"]
+            child._configure(
+                Directive(
+                    correlation_id="cfg-child",
+                    kind=DIRECTIVE_CONFIGURE,
+                    payload={"tasks": ["double"]},
+                )
+            )
+
+            run = Directive(
+                correlation_id="run1",
+                kind=DIRECTIVE_RUN,
+                payload={"task": "double", "args": {"value": 21}, "child": "child"},
+            )
+            await _send(root, run, to=b"parent")
+
+            await parent.poll(timeout=0.1)
+            await _recv_ack(root)
+            await child.poll(timeout=0.1)
+            await parent.poll(timeout=0.1)
+
+            # Child returns 42 (even); parent's odd-verifier rejects it.
+            relayed = await _recv_response(root)
+            assert relayed.kind == RESPONSE_ERROR
+            assert relayed.verified is False
+
+            child.kill()
+            parent.kill()
+            root.close(0)
+            context.term()
+
+        asyncio.run(scenario())

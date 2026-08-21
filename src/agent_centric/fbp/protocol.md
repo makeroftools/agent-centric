@@ -93,6 +93,14 @@ outcome, regardless of arrival order.
 - **No third state.** A task terminates in a verified result or an explicit,
   audited failure.
 
+**In the agent protocol, the spine is enforced on delegation.** When a parent
+routes a ``run`` directive to a child, it re-verifies the child's returned
+value against the **parent's own configured verifier** before relaying it up. A
+child that claims ``verified`` but returns a value the parent cannot verify is
+demoted to an explicit, audited failure — it is never accepted as a verified
+success. A child's self-reported ``verified`` alone is never trusted on the
+upward path.
+
 ## 6. Idempotency
 
 Processing the same directive twice yields the same result. A directive is

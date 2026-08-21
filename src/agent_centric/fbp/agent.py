@@ -99,6 +99,7 @@ class Agent:
         self._child_agents: dict[str, Agent] = {}
         self._registry = Registry()
         self._rules: tuple[str, ...] = ()
+        self._verifier: str | None = None
         self._alive = False
         # Idempotency cache: full directive fingerprint -> response. A replayed
         # directive (same correlation_id + kind + canonic payload) returns the
@@ -108,7 +109,7 @@ class Agent:
         # different work (fail closed rather than silently returning stale data).
         self._used_keys: set[tuple[str, str]] = set()
         # correlation_id -> child_identity, for mediated delegation awaiting a
-        # child response to route back up.
+        # child response to verify (via the parent's own verifier) and route up.
         self._delegated: dict[str, str] = {}
 
     @property
@@ -247,13 +248,15 @@ class Agent:
                 await self._send(response)
                 responses.append(response)
 
-        for child in self._children.values():
+        for child_id, child in self._children.items():
             if events.get(child) == zmq.POLLIN:
-                responses.extend(await self._drain_child(child))
+                responses.extend(await self._drain_child(child, child_id))
 
         return responses
 
-    async def _drain_child(self, child: zmq.asyncio.Socket) -> list[Response]:
+    async def _drain_child(
+        self, child: zmq.asyncio.Socket, child_identity: str
+    ) -> list[Response]:
         """Receive and handle all ready messages from a child channel.
 
         A child sends an ack (delivery) then a response (completion), so a
@@ -269,9 +272,15 @@ class Agent:
             if child_response is None:
                 # A consumed ack; continue draining.
                 continue
-            if self._delegated.pop(child_response.correlation_id, None) is not None:
-                await self._send(child_response)
-            drained.append(child_response)
+            delegated = self._delegated.pop(child_response.correlation_id, None)
+            if delegated is not None:
+                # The parent re-verifies the child's value on the upward path
+                # before accepting responsibility (the correctness spine).
+                drained.append(
+                    await self._relay_verified(child_response, child_identity)
+                )
+            else:
+                drained.append(child_response)
         return drained
 
     @staticmethod
@@ -281,6 +290,36 @@ class Agent:
         poller.register(child, zmq.POLLIN)
         events = dict(await poller.poll(0))
         return events.get(child) == zmq.POLLIN
+
+    async def _relay_verified(
+        self, child_response: Response, child_identity: str
+    ) -> Response:
+        """Verify a delegated child's value on the upward path and relay it up.
+
+        This is the agent-protocol form of the correctness spine: a parent
+        verifies a child's response against its own verifier before accepting
+        responsibility for it. If the child claimed verified but the value fails
+        the parent's configured verifier, the response is demoted to an explicit,
+        audited failure — never a verified success. The (possibly demoted)
+        response is relayed up to the parent.
+        """
+        if (
+            child_response.verified
+            and self._verifier is not None
+            and not self._verify(child_response.value, self._verifier)
+        ):
+            child_response = Response(
+                correlation_id=child_response.correlation_id,
+                kind=RESPONSE_ERROR,
+                verified=False,
+                node=self.identity,
+                error=(
+                    f"child {child_identity!r} returned a value that failed the "
+                    "parent's verifier"
+                ),
+            )
+        await self._send(child_response)
+        return child_response
 
     def _maybe_delegate(self, directive: Directive) -> str | None:
         """Return the named child a run directive should be delegated to, else None.
@@ -342,6 +381,8 @@ class Agent:
         """
         payload = directive.payload
         self._rules = tuple(payload.get("rules", ()))
+        verifier = payload.get("verifier")
+        self._verifier = verifier if isinstance(verifier, str) else self._verifier
         for name in payload.get("tasks", ()):
             entry = _resolve_entry(name)
             self._registry.register_entry(entry)
