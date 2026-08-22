@@ -74,6 +74,7 @@ with FbpDriver() as driver:          # inproc, offline, deterministic
 | `resolve(name)` | `resolve` | return a capability's recorded location |
 | `configure(...)` | `configure` | set the root's rules, task allowlist, verifier |
 | `configure_child(id, ...)` | — | parent provides a spawned child's context |
+| `configure_provider(child, provider)` | — | attach an opt-in model backend to a `model` child (composition-time, in-process) |
 | `run(task, args, child=)` | `run` | execute, or delegate to a named child |
 | `run_plan(steps)` | `run` (each) | run a deterministic sequence of `run` steps, failing closed on the first unverified one |
 | `spawn(id, endpoint=)` | `spawn` | provision a real child agent |
@@ -282,7 +283,9 @@ with FbpDriver() as d:
 - **Source references**: every response carries `sources` (the model id), so a
   non-deterministic result is auditable with citations.
 - **Deterministic by default**: the stub provider is offline and CI-safe. A real
-  provider (`ModelProvider`) is an opt-in hook (`set_provider`) that never
+  provider (callable `provider(prompt, **kwargs)` or a `.complete(...)` object,
+  e.g. the hardened `OptionalRealModelProvider`) is an opt-in hook — wired via
+  `d.configure_provider(child, provider)` at composition time — that never
   relaxes verification.
 
 ### Determinism rating + approved rules (determinize-then-decide)

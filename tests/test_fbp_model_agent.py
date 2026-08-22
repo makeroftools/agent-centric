@@ -59,3 +59,65 @@ class TestModelAgent:
             assert r.verified is True
             result = driver.replay_session()
             assert result["ok"] is True, result["failed"]
+
+    def test_configure_provider_wires_callable(self) -> None:
+        """A plain callable provider (e.g. the hardened OptionalRealModelProvider)
+        can be attached via the driver surface, and its output is used."""
+
+        def _backend(prompt: str, **kwargs):
+            return f"REAL[{prompt}]".upper()
+
+        with FbpDriver() as driver:
+            driver.spawn("model", kind="model")
+            resp = driver.configure_provider("model", _backend)
+            assert resp.verified is True
+            r = driver.run(TASK_MODEL, {"prompt": "hi"}, child="model")
+            assert r.verified is True
+            assert r.value == "REAL[HI]"
+
+    def test_configure_provider_wires_complete_method(self) -> None:
+        """A provider object with a ``.complete`` method works too."""
+
+        class MyBackend:
+            def complete(self, prompt: str, **kwargs):
+                return f"complete:{prompt}"
+
+        with FbpDriver() as driver:
+            driver.spawn("model", kind="model")
+            assert driver.configure_provider("model", MyBackend()).verified is True
+            r = driver.run(TASK_MODEL, {"prompt": "yo"}, child="model")
+            assert r.verified is True
+            assert r.value == "complete:yo"
+
+    def test_configure_provider_keeps_verification_spine(self) -> None:
+        """A real provider output is still re-verified by the parent; a failing
+        verifier demotes it (a real provider never relaxes the spine)."""
+        from agent_centric.fbp import register_callable
+
+        def _reject(_v):
+            return False
+
+        register_callable("no_verify2", _reject)
+        with FbpDriver() as driver:
+            driver.spawn("model", kind="model")
+            driver.register("no_verify2", _reject)
+            driver.configure(verifiers=("no_verify2",), verifier="no_verify2")
+            driver.configure_provider(
+                "model", lambda prompt: "model-output"
+            )
+            r = driver.run(TASK_MODEL, {"prompt": "x"}, child="model")
+            assert r.verified is False
+            assert r.error is not None
+
+    def test_configure_provider_fails_closed_on_unknown_child(self) -> None:
+        with FbpDriver() as driver:
+            resp = driver.configure_provider("ghost", lambda p: "x")
+            assert resp.verified is False
+            assert "no spawned child" in (resp.error or "")
+
+    def test_configure_provider_fails_closed_on_non_model(self) -> None:
+        with FbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            resp = driver.configure_provider("store", lambda p: "x")
+            assert resp.verified is False
+            assert "not a model agent" in (resp.error or "")

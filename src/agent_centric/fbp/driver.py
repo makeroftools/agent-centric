@@ -51,6 +51,8 @@ from .message import (
     DIRECTIVE_STATE_GET,
     DIRECTIVE_STATE_SET,
     MESSAGE_DIRECTIVE,
+    RESPONSE_ERROR,
+    RESPONSE_OK,
     Response,
 )
 
@@ -637,6 +639,47 @@ class FbpDriver:
             if trajectory is not None
             else None,
             store_keys=store_keys,
+        )
+
+    def configure_provider(self, child: str, provider: Any) -> Response:
+        """Attach an opt-in model backend to a spawned ``model`` child.
+
+        A convenience for wiring a real (or custom) provider to a ``ModelAgent``
+        without reaching into private internals. The provider may be a callable
+        ``provider(prompt, **kwargs) -> str`` (e.g. the hardened
+        ``OptionalRealModelProvider``) or an object with a
+        ``.complete(prompt, **kwargs) -> str`` method. It never relaxes
+        verification — the parent still re-verifies the model's output on the
+        upward path.
+
+        This is an in-process composition-time hook (the provider is a local
+        object, not serialisable across the wire), so it does not enter the
+        durable directive ledger — the provider itself is supplied by the operator
+        at composition time.
+        """
+        from .model_agent import ModelAgent
+
+        child_agent = self._root.children.get(child)
+        if child_agent is None:
+            return self._provider_error(child, "no spawned child")
+        if not isinstance(child_agent, ModelAgent):
+            return self._provider_error(child, f"child {child!r} is not a model agent")
+        child_agent.set_provider(provider)
+        return Response(
+            correlation_id="configure-provider",
+            kind=RESPONSE_OK,
+            verified=True,
+            node=self._root.identity,
+        )
+
+    def _provider_error(self, child: str, message: str) -> Response:
+        """A fail-closed response for a configure_provider that could not apply."""
+        return Response(
+            correlation_id="configure-provider",
+            kind=RESPONSE_ERROR,
+            verified=False,
+            node=self._root.identity,
+            error=f"cannot configure provider on child {child!r}: {message}",
         )
 
     # -- execution ---------------------------------------------------------

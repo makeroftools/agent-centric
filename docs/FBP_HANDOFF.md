@@ -74,7 +74,7 @@ These are captured in code (ModelAgent, determinism/auto-accept) and docs.
 ## Easy-UX driver (`FbpDriver`) and CLI
 
 - `FbpDriver` (`fbp/driver.py`) is the synchronous easy-UX layer: `register`,
-  `resolve`, `configure`, `configure_child`, `run`, `run_plan`, `spawn`, `ping`,
+  `resolve`, `configure`, `configure_child`, `configure_provider`, `run`, `run_plan`, `spawn`, `ping`,
   `kill`, `state_set`/`state_get`, `audit`, `reconstruct_audit`, `ledger`,
   `replay`, `replay_session`, `summary`, `load_ledger`/`replay_ledger`, plus the
   read-only inspection helpers `tree()` and `store_keys(child)`.
@@ -159,9 +159,13 @@ grants, store key allowlist, and configured capabilities/verifier/rules) and
   pre-compilation.
 
 **Still open:**
-- Wire a real `ModelProvider` (behind `set_provider`) with source citations
-  (must never relax the correctness spine).
+- ✔ Implemented this session: `FbpDriver.configure_provider(child, provider)` —
+  wire an opt-in model backend to a spawned `model` child at composition time,
+  accepting either a callable `provider(prompt, **kwargs)` (e.g. the hardened
+  `OptionalRealModelProvider`) or a `.complete(...)` object. It never relaxes
+  the correctness spine. The generic provider-wiring path is complete;
+  reachable real endpoints remain an operator deployment concern (network/keys).
 - Distribute the model catalogue + define the closed-source/closed model policy
-  gate.
+  gate (moved to the spun-out AC Router app).
 - Commit-to-push when the lead lifts the do-not-push rule (58 unpushed).
 - Later: consider making FBP `main` after picking it clean (per the lead).

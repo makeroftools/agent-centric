@@ -120,7 +120,7 @@ uv run agent-centric fbp --transport ipc # local inter-process
 | **Intake (ported from main)** | `draft_from_file` (json/csv/txt/pdf), `draft_from_email`, `draft_from_pdf_text` — offline, deterministic, read-only → **unverified** drafts. |
 | **Registry maintenance** | `bills_mark_paid` / `bills_mark_status` — explicit status updates; paid bills drop out of the open calendar. |
 | **Allowlisted workspace** | `WorkspaceFS` mediates file access under an explicit allowlist — traversal and disallowed paths fail closed, no deletion, no implicit dir creation. |
-| **Model agent (LLM as an ordinary agent)** | `ModelAgent` (kind `model`) serves a `model` run-task; other agents delegate to it over the protocol, and its output is re-verified by the parent, audited, and carries the model id as a source. Deterministic stub by default; a real provider is an opt-in hook that never relaxes verification. |
+| **Model agent (LLM as an ordinary agent)** | `ModelAgent` (kind `model`) serves a `model` run-task; other agents delegate to it over the protocol, and its output is re-verified by the parent, audited, and carries the model id as a source. Deterministic stub by default; an opt-in provider (callable or `OptionalRealModelProvider`) can be attached via `FbpDriver.configure_provider(child, provider)` — never relaxes verification. |
 | **CPM capability** | Deterministic, read-only critical-path / slack analysis (a pure function, not an agent). |
 | **Tree-audit reconstruction** | Rebuilds every causal chain per correlation id from the tree's stores — audit as computational proof. |
 | **Deterministic replay** | Re-runs recorded runs (local and delegated, tree rebuilt) and verifies outcomes — re-verification after the fact. |

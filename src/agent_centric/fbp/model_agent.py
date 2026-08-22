@@ -43,9 +43,15 @@ class ModelProvider(Protocol):
     A provider takes a prompt (and optional structured args) and returns a
     string. It is the *only* place a real, non-deterministic model may be
     reached; the default is a deterministic stub.
+
+    Two shapes are accepted so the existing hardened real provider (which is a
+    callable ``__call__(prompt) -> str``) works directly:
+
+    - a ``.complete(prompt, **kwargs) -> str`` method, or
+    - a plain callable ``provider(prompt, **kwargs) -> str``.
     """
 
-    def complete(self, prompt: str, **kwargs: Any) -> str: ...
+    def __call__(self, prompt: str, **kwargs: Any) -> str: ...
 
 
 def _stub_complete(prompt: str, **_kwargs: Any) -> str:
@@ -79,8 +85,22 @@ class ModelAgent(Agent):
         return super()._handle(directive)
 
     def set_provider(self, provider: ModelProvider) -> None:
-        """Wire an opt-in real model backend (never relaxes verification)."""
+        """Wire an opt-in model backend (never relaxes verification).
+
+        Accepts either a callable ``__call__(prompt, **kwargs) -> str`` (e.g.
+        the hardened ``OptionalRealModelProvider``) or an object with a
+        ``.complete(prompt, **kwargs) -> str`` method. The correctness spine is
+        untouched: the parent still re-verifies the output on the upward path.
+        """
         self._provider = provider
+
+    @staticmethod
+    def _invoke_provider(provider: Any, prompt: str, kwargs: dict[str, Any]) -> str:
+        """Call a provider supporting either ``.complete`` or ``__call__``."""
+        complete = getattr(provider, "complete", None)
+        if callable(complete):
+            return str(complete(prompt, **kwargs))
+        return str(provider(prompt, **kwargs))
 
     def _op_model(self, directive: Directive) -> Response:
         """Serve a model completion, attaching the model id as a source.
@@ -96,7 +116,9 @@ class ModelAgent(Agent):
             return self._error(directive, "model requires a non-empty 'prompt'")
         provider = self._provider
         if provider is not None:
-            output = provider.complete(prompt, **{k: v for k, v in args.items() if k != "prompt"})
+            output = self._invoke_provider(
+                provider, prompt, {k: v for k, v in args.items() if k != "prompt"}
+            )
         else:
             output = _stub_complete(prompt)
         return Response(
