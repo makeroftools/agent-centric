@@ -211,6 +211,13 @@ with FbpDriver() as d:
 This exercises the correctness spine where it matters most — **no unverified
 money/dates** — end to end, deterministically and auditably.
 
+**Registry maintenance.** `bills_mark_paid` / `bills_mark_status` are explicit,
+mediated, verified status updates through the single-writer store child
+(closed status set `open`/`paid`/`void`/`overdue`). They keep the calendar
+correct: a bill marked paid drops out of the open agenda. `mark_bill_status` is
+a pure, deterministic merge — it never changes money/dates and never implicitly
+re-accepts an intake draft.
+
 ### Intake capabilities (ported from the Manager line)
 
 Pure, deterministic, offline intake capabilities (registered callables) that

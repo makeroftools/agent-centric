@@ -39,13 +39,14 @@ agents).
 
 ## Current git state
 - **Branch:** `agent-centric-fbp`; **working tree clean**.
-- **HEAD:** `80c3c4d` = `feat(fbp): CLI demonstrates agent-level file intake; docs`.
+- **HEAD:** `9a74acc` = `feat(fbp): registry maintenance - mark paid / mark status`.
 - **Pushed:** up through `7b1979f` (`feat(fbp): bills loop - first real
-  end-to-end FBP graph`). **Unpushed (28):** the older commits plus replay
+  end-to-end FBP graph`). **Unpushed (30):** the older commits plus replay
   state isolation, transport-resolve bills store endpoint, replay per-run
   verifier resolution, durable directive ledger, auto re-seeding, run_plan,
-  operator summary, the PDF / structured-intake / email capability ports,
-  and BillsAgent intake tasks (see `git log origin/agent-centric-fbp..HEAD`).
+  operator summary, PDF / structured-intake / email capability ports,
+  BillsAgent intake tasks, and registry maintenance (see
+  `git log origin/agent-centric-fbp..HEAD`).
 - Standing rule: **do not push unless the lead explicitly says push.**
 
 ## What's built (the full arc)
@@ -61,6 +62,7 @@ agents).
 | **Deterministic replay** | `FbpDriver.replay()` / `replay_session()` | Re-run recorded local runs (or the whole sequence, incl. delegated runs, rebuilding the tree) and verify outcomes match (re-verification after the fact). Full-tree replay isolates on-disk state *and* trajectory (fresh temp paths), so stateful trees replay cleanly without touching the original stores. Replay faithfully resolves per-run verifiers (and delegated-store state paths). |
 | **Durable directive ledger** | `fbp/ledger.py`, `FbpDriver(ledger_path=)`, `replay_ledger` | Crash-safe, recoverable replay: a session recorded to a durable directive ledger (explicit grant) is re-verifiable after the process is gone via `agent-centric fbp-replay`. `replay_ledger` auto-imports the registry manifest to restore callables (importable module.qualname); non-importable ones are reported for manual seeding. |
 | **Intake capabilities (ported from main)** | `fbp/pdf_intake.py`, `fbp/intake.py`, `fbp/bills_agent.py` | Deterministic, offline, read-only intake into **unverified** drafts: `draft_from_pdf_text` (embedded PDF text), `draft_from_file` (json/csv/txt/pdf), `draft_from_email` (fetched email). **BillsAgent** also serves them as run-tasks (`bills_intake_file`/`_email`/`_pdf`), so intake -> human accept -> registry is reachable over the protocol and replayable. All require the human `bills_accept` gate; malformed/incomplete sources fail closed (no invented facts, no auto-enter). |
+| **Registry maintenance (ported from main)** | `fbp/bills.py` (`mark_bill_status`), `fbp/bills_agent.py` | `bills_mark_paid` / `bills_mark_status` are explicit, mediated status updates through the single-writer store (closed status set); `mark_bill_status` is a pure merge that never changes money/dates or re-accepts intake, and paid bills drop out of the open calendar. |
 
 ## Easy-UX driver (`FbpDriver`) and CLI
 - `FbpDriver` (`fbp/driver.py`) is the synchronous, easy-UX layer: `register`,
@@ -77,7 +79,7 @@ agents).
 - Example: `examples/fbp_durability_demo.py`.
 
 ## Validation
-- `uv run pytest` → **567 passed**; `uv run ruff check .` clean; `uv run mypy src` clean (72 source files).
+- `uv run pytest` → **570 passed**; `uv run ruff check .` clean; `uv run mypy src` clean (72 source files).
 
 ## Key invariants to never break (FBP)
 - **No unverified success; fail-closed everywhere; deterministic control.
