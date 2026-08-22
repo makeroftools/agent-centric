@@ -113,6 +113,72 @@ class TestMediatedSpawnDelegation:
             assert resp.error is not None
 
 
+class TestStoreAgent:
+    """A StoreAgent is a single-writer registry over a StateStore, reached
+    through the parent's mediated delegation, bounded by a key allowlist."""
+
+    def test_store_agent_serves_read_and_write(self, tmp_path: Path) -> None:
+        with FbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store",
+                state=str(tmp_path / "store.db"),
+                store_keys=("bill-b3", "bill-b4"),
+            )
+            ok = driver.run(
+                "store_set",
+                {"key": "bill-b3", "value": {"status": "paid"}},
+                child="store",
+            )
+            assert ok.verified is True
+            ok2 = driver.run(
+                "store_set",
+                {"key": "bill-b3", "value": {"status": "paid"}},
+                child="store",
+            )  # idempotent replay
+            assert ok2.verified is True
+            got = driver.run("store_get", {"key": "bill-b3"}, child="store")
+            assert got.verified is True
+            assert got.value["status"] == "paid"
+            assert got.node == "store"
+
+    def test_store_agent_rejects_ungranted_key(self, tmp_path: Path) -> None:
+        with FbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store",
+                state=str(tmp_path / "store.db"),
+                store_keys=("bill-b3",),
+            )
+            # bill-b9 is not on the grant allowlist -> fail closed.
+            resp = driver.run(
+                "store_set",
+                {"key": "bill-b9", "value": {"status": "open"}},
+                child="store",
+            )
+            assert resp.verified is False
+            assert "not granted" in (resp.error or "")
+
+    def test_store_agent_is_durable_across_reopen(self, tmp_path: Path) -> None:
+        state_path = tmp_path / "store.db"
+        with FbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store", state=str(state_path), store_keys=("bill-b3",)
+            )
+            driver.run(
+                "store_set",
+                {"key": "bill-b3", "value": {"amount_cents": 12345}},
+                child="store",
+            )
+        # Durable: reopen the StoreAgent's file directly.
+        from agent_centric.fbp import store
+
+        st = store.open_state(state_path)
+        assert st.get("bill-b3")["amount_cents"] == 12345
+        st.close()
+
+
 class TestLifecycle:
     def test_ping(self) -> None:
         with FbpDriver() as driver:

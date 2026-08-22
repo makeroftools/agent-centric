@@ -511,12 +511,22 @@ class Agent:
         if isinstance(trajectory_path, str) and trajectory_path:
             self._trajectory_path = trajectory_path
             self._trajectory_store = _store.open_trajectory(trajectory_path)
+        # Allow subclasses (e.g. StoreAgent) to consume configure fields they own.
+        self._configure_extra(payload)
         return Response(
             correlation_id=directive.correlation_id,
             kind=RESPONSE_OK,
             verified=True,
             node=self.identity,
         )
+
+    def _configure_extra(self, payload: dict[str, Any]) -> None:
+        """Subclass hook: consume configure fields beyond the base grant.
+
+        The base agent ignores unknown configure fields; domain agents (like
+        ``StoreAgent``) override this to pick up grant-specific fields (e.g. a
+        key allowlist) without re-implementing configure.
+        """
 
     def _register_capability(self, directive: Directive) -> Response:
         """Handle a ``register`` directive: record capability metadata.
@@ -778,7 +788,8 @@ class Agent:
 
         child_socket = self._context.socket(zmq.ROUTER)
         child_socket.bind(self._endpoint(child_endpoint))
-        child = Agent(
+        child_cls = self._child_class_for(payload.get("kind"))
+        child = child_cls(
             AgentConfig(
                 identity=child_identity,
                 parent_endpoint=child_endpoint,
@@ -796,6 +807,21 @@ class Agent:
             node=self.identity,
         )
 
+    @staticmethod
+    def _child_class_for(kind: Any) -> type[Agent]:
+        """Resolve a spawned child's concrete class from its ``kind``.
+
+        A spawn directive may name a domain child kind (e.g. ``store``). Only
+        built-in, vetted classes are resolved here; an unknown kind fails
+        closed (returns the base ``Agent``) rather than ever instantiating an
+        arbitrary class. The base agent is the default.
+        """
+        if kind == "store":
+            from .store_agent import StoreAgent
+
+            return StoreAgent
+        return Agent
+
     def configure_child(
         self,
         identity: str,
@@ -804,12 +830,20 @@ class Agent:
         verifiers: tuple[str, ...] = (),
         rules: tuple[str, ...] = (),
         verifier: str | None = None,
+        state: str | None = None,
+        state_read_only: bool = False,
+        trajectory: str | None = None,
+        store_keys: tuple[str, ...] = (),
     ) -> Response:
         """Configure a spawned child (the parent provides the child's context).
 
         This is the parent-mediated form of ``configure`` for a child the parent
         spawned: the parent builds the child's configure directive and applies
         it. It fails closed if ``identity`` is not a spawned child.
+
+        Beyond the task/verifier/rule grant, the parent may grant durable
+        stores (``state``/``trajectory``) and, for a ``StoreAgent`` child, a
+        key allowlist (``store_keys``) bounding which keys it may serve.
         """
         child = self._child_agents.get(identity)
         if child is None:
@@ -827,6 +861,13 @@ class Agent:
         }
         if verifier is not None:
             payload["verifier"] = verifier
+        if state is not None:
+            payload["state"] = state
+            payload["state_read_only"] = state_read_only
+        if trajectory is not None:
+            payload["trajectory"] = trajectory
+        if store_keys:
+            payload["store_keys"] = list(store_keys)
         return child._configure(
             Directive(
                 correlation_id="configure-child",

@@ -270,6 +270,10 @@ class FbpDriver:
         verifiers: tuple[str, ...] = (),
         rules: tuple[str, ...] = (),
         verifier: str | None = None,
+        state: str | None = None,
+        state_read_only: bool = False,
+        trajectory: str | None = None,
+        store_keys: tuple[str, ...] = (),
     ) -> Response:
         """Configure a spawned child (the parent provides the child's context)."""
         return self._root.configure_child(
@@ -278,6 +282,10 @@ class FbpDriver:
             verifiers=verifiers,
             rules=rules,
             verifier=verifier,
+            state=state,
+            state_read_only=state_read_only,
+            trajectory=trajectory,
+            store_keys=store_keys,
         )
 
     # -- execution ---------------------------------------------------------
@@ -305,23 +313,28 @@ class FbpDriver:
             payload["child"] = child
         return self._roundtrip(DIRECTIVE_RUN, payload, prefix="run")
 
-    def spawn(self, identity: str, endpoint: str | None = None) -> Response:
+    def spawn(
+        self,
+        identity: str,
+        endpoint: str | None = None,
+        *,
+        kind: str | None = None,
+    ) -> Response:
         """Provision a real child agent (mediated spawn).
 
         Args:
             identity: The child agent's identity.
             endpoint: The child's endpoint. If omitted (or a bare name), it is
-                resolved against the driver's transport so callers need not
-                know transport-specific addressing (over ``tcp`` a distinct
-                localhost port is assigned per child).
+                resolved against the driver's transport.
+            kind: An optional domain child kind (e.g. ``store`` to spawn a
+                ``StoreAgent``). Defaults to the base ``Agent``.
         """
         if endpoint is None or "://" not in endpoint:
             endpoint = self._child_endpoint(identity)
-        return self._roundtrip(
-            DIRECTIVE_SPAWN,
-            {"identity": identity, "endpoint": endpoint},
-            prefix="spawn",
-        )
+        payload: dict[str, Any] = {"identity": identity, "endpoint": endpoint}
+        if kind is not None:
+            payload["kind"] = kind
+        return self._roundtrip(DIRECTIVE_SPAWN, payload, prefix="spawn")
 
     def _child_endpoint(self, identity: str) -> str:
         """Return a transport-appropriate child endpoint for ``identity``."""

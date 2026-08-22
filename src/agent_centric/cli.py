@@ -640,6 +640,29 @@ def _cmd_fbp(transport: str) -> int:
         tr.close()
         print(f"durable: state bill-b3={_durable!r} audit_rows={_rows}")
 
+        # Store/registry agent: a single-writer resource reached via delegation.
+        # Reconfigure with no verifier so the store's (non-numeric) values are
+        # not re-verified-and-demoted by the parent on relay.
+        driver._root._verifier = None
+        driver.spawn("store", kind="store")
+        driver.configure_child(
+            "store",
+            state=f"{_workdir}/store.db",
+            store_keys=("bill-c1", "bill-c2"),
+        )
+        driver.run(
+            "store_set", {"key": "bill-c1", "value": {"due": "2026-10-01"}},
+            child="store",
+        )
+        stored = driver.run("store_get", {"key": "bill-c1"}, child="store")
+        denied = driver.run(
+            "store_set", {"key": "bill-zz", "value": 1}, child="store"
+        )
+        print(
+            f"store   : store_get bill-c1={stored.value!r} "
+            f"ungranted_key_denied={denied.verified is False}"
+        )
+
         return 0 if local.verified and delegated.verified else 1
 
 

@@ -57,6 +57,7 @@ from .node import AgentNode, Node
 from .node import Response as NodeResponse
 from .shell import Shell
 from .store import StateStore, StoreError, TrajectoryStore, open_state, open_trajectory
+from .store_agent import STORE_GET, STORE_SET, StoreAgent
 
 __all__ = [
     # Agent
@@ -104,4 +105,7 @@ __all__ = [
     "StoreError",
     "open_state",
     "open_trajectory",
+    "StoreAgent",
+    "STORE_GET",
+    "STORE_SET",
 ]
