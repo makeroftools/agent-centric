@@ -225,3 +225,11 @@ examples/.trajectories/
 
 # Standalone repos spun out of this project (separate git histories)
 /repositories/
+
+# Runtime ZeroMQ IPC socket endpoints (created when the FBP demo runs over
+# ``ipc://``; ephemeral, never committed). ``children-*`` are per-child sockets;
+# ``root`` / ``store`` / ``bills-store`` are demo endpoints.
+/children-*
+/root
+/store
+/bills-store
