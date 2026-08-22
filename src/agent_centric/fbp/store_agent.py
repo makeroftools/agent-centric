@@ -40,6 +40,7 @@ from .message import (
 # The run-task names this store agent serves.
 STORE_GET = "store_get"
 STORE_SET = "store_set"
+STORE_KEYS = "store_keys"
 
 
 class StoreAgent(Agent):
@@ -58,6 +59,8 @@ class StoreAgent(Agent):
                 return self._op_store_set(directive)
             if task == STORE_GET:
                 return self._op_store_get(directive)
+            if task == STORE_KEYS:
+                return self._op_store_keys(directive)
         return super()._handle(directive)
 
     def _configure_extra(self, payload: dict[str, Any]) -> None:
@@ -123,6 +126,31 @@ class StoreAgent(Agent):
             correlation_id=directive.correlation_id,
             kind=RESPONSE_RESULT,
             value=value,
+            verified=True,
+            node=self.identity,
+        )
+
+    def _op_store_keys(self, directive: Directive) -> Response:
+        """Return the granted keys that currently exist in the store.
+
+        Mediated, audited, and bounded by the key allowlist: only keys the
+        parent granted (and that exist) are returned, sorted deterministically.
+        Letting a consumer list keys through the grant (rather than reach into
+        the store directly) keeps every read governed and audited.
+        """
+        store = self._state_store
+        if store is None:
+            return self._error(directive, "store agent has no granted state store")
+        try:
+            all_keys = store.keys()  # tuple of all stored keys
+            served = [k for k in all_keys if self._is_served(k)]
+            existing = tuple(sorted(served))
+        except _store.StoreError as exc:
+            return self._error(directive, f"store read failed: {exc}")
+        return Response(
+            correlation_id=directive.correlation_id,
+            kind=RESPONSE_RESULT,
+            value=existing,
             verified=True,
             node=self.identity,
         )

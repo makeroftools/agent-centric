@@ -77,7 +77,7 @@ from .node import Response as NodeResponse
 from .pdf_intake import draft_from_pdf_text, extract_text
 from .shell import Shell
 from .store import StateStore, StoreError, TrajectoryStore, open_state, open_trajectory
-from .store_agent import STORE_GET, STORE_SET, StoreAgent
+from .store_agent import STORE_GET, STORE_KEYS, STORE_SET, StoreAgent
 from .workspace import (
     DIRECTORY,
     FILE,
@@ -136,6 +136,7 @@ __all__ = [
     "StoreAgent",
     "STORE_GET",
     "STORE_SET",
+    "STORE_KEYS",
     # CPM: a read-only, deterministic capability (not an agent)
     "CpmAnalysis",
     "CpmNode",

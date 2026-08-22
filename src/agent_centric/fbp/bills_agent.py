@@ -272,9 +272,17 @@ class BillsAgent(Agent):
         if store_child is None:
             return self._error(directive, "bills agent has no store child")
         store = cast(StoreAgent, store_child)
-        cur = store._state_store.get(bill_id) if store._state_store is not None else None
-        if not isinstance(cur, dict):
+        # Read the current bill through the store child (mediated, grant-bound).
+        cur_resp = store._op_store_get(
+            Directive(
+                correlation_id=f"{directive.correlation_id}:store-get",
+                kind=DIRECTIVE_RUN,
+                payload={"task": "store_get", "args": {"key": bill_id}},
+            )
+        )
+        if not cur_resp.verified or not isinstance(cur_resp.value, dict):
             return self._error(directive, f"{task}: bill {bill_id!r} not in registry")
+        cur = cur_resp.value
         try:
             updated = mark_bill_status(cur, status, note=note)
         except BillsError as exc:
@@ -313,17 +321,27 @@ class BillsAgent(Agent):
         if store_child is None:
             return self._error(directive, "bills agent has no store child")
         store = cast(StoreAgent, store_child)
-        # Read the whole registry through the store child.
+        # Read the whole registry through the store child (mediated, grant-bound).
+        keys_resp = store._op_store_keys(
+            Directive(
+                correlation_id=f"{directive.correlation_id}:store-keys",
+                kind=DIRECTIVE_RUN,
+                payload={"task": "store_keys", "args": {}},
+            )
+        )
+        if not keys_resp.verified:
+            return self._error(directive, f"registry read failed: {keys_resp.error}")
         registry: dict[str, dict[str, Any]] = {}
-        state_store = store._state_store
-        if state_store is not None:
-            try:
-                for key in state_store.keys():  # noqa: SIM118 - StateStore is not a dict
-                    value = state_store.get(key)
-                    if isinstance(value, dict):
-                        registry[key] = value
-            except Exception as exc:  # noqa: BLE001 - fail closed, never silent
-                return self._error(directive, f"registry read failed: {exc}")
+        for key in (keys_resp.value or ()):
+            resp = store._op_store_get(
+                Directive(
+                    correlation_id=f"{directive.correlation_id}:store-get",
+                    kind=DIRECTIVE_RUN,
+                    payload={"task": "store_get", "args": {"key": key}},
+                )
+            )
+            if resp.verified and isinstance(resp.value, dict):
+                registry[key] = resp.value
         try:
             agenda = project_calendar(registry, from_date, to_date)
         except BillsError as exc:

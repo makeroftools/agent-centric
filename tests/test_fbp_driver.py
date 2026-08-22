@@ -238,6 +238,40 @@ class TestStoreAgent:
             assert got.value["status"] == "paid"
             assert got.node == "store"
 
+            # store_keys lists only granted keys that exist.
+            keys = driver.run("store_keys", {}, child="store")
+            assert keys.verified is True
+            assert keys.value == ["bill-b3"]  # JSON wire -> list
+
+    def test_store_keys_only_serves_granted(self, tmp_path: Path) -> None:
+        """store_keys must never reveal a non-granted key, even one present in
+        the underlying store file."""
+        from agent_centric.fbp import store as store_mod
+
+        path = str(tmp_path / "store.db")
+        # Write a key that is NOT granted, directly into the store file.
+        st = store_mod.open_state(path)
+        st.set("secret-key", {"x": 1}, fingerprint="direct")
+        st.close()
+
+        with FbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store", state=path, store_keys=("bill-b3",)
+            )
+            # A granted key the store agent writes.
+            ok = driver.run("store_set", {"key": "bill-b3", "value": {"s": 1}}, child="store")
+            assert ok.verified is True
+
+            keys = driver.run("store_keys", {}, child="store")
+            assert keys.verified is True
+            # The ungranted key is never revealed through the grant.
+            assert keys.value == ["bill-b3"]
+
+            # An ungranted key cannot be read through the grant either.
+            denied = driver.run("store_get", {"key": "secret-key"}, child="store")
+            assert denied.verified is False
+
     def test_store_agent_rejects_ungranted_key(self, tmp_path: Path) -> None:
         with FbpDriver() as driver:
             driver.spawn("store", kind="store")
