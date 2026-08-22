@@ -39,13 +39,14 @@ agents).
 
 ## Current git state
 - **Branch:** `agent-centric-fbp`; **working tree clean**.
-- **HEAD:** `95b3998` = `docs(fbp): refresh handoff to current branch state`.
+- **HEAD:** `988b49a` = `fix(fbp): transport-resolve the bills store child endpoint`.
 - **Pushed:** up through `7b1979f` (`feat(fbp): bills loop - first real
-  end-to-end FBP graph`). **Unpushed (7):** `8ae8f6f` (tree-audit
+  end-to-end FBP graph`). **Unpushed (9):** `8ae8f6f` (tree-audit
   reconstruction), `33960e1` (deterministic replay), `72695d5` (session
   handoff), `022ad15` (replay_session — full-tree/delegated replay),
-  `0f95db2` (spec & protocol contract sync), `95b3998` (this handoff refresh),
-  plus the current working-tree change (replay state isolation).
+  `0f95db2` (spec & protocol contract sync), `95b3998` (handoff refresh),
+  `e7790a7` (replay state isolation), `988b49a` (transport-resolve the bills
+  store child endpoint).
 - Standing rule: **do not push unless the lead explicitly says push.**
 
 ## What's built (the full arc)
@@ -71,7 +72,7 @@ agents).
 - Example: `examples/fbp_durability_demo.py`.
 
 ## Validation
-- `uv run pytest` → **526 passed**; `uv run ruff check .` clean; `uv run mypy src` clean (69 source files).
+- `uv run pytest` → **528 passed**; `uv run ruff check .` clean; `uv run mypy src` clean (69 source files).
 
 ## Key invariants to never break (FBP)
 - **No unverified success; fail-closed everywhere; deterministic control.
