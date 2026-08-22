@@ -84,8 +84,25 @@ def register_callable(
         name: The name directives will use to reference the callable.
         fn: The callable to register.
         source_url: The source location (URL) of the callable, for chain audit.
+
+    When ``fn`` is a plain, importable function (has a real module and qualified
+    name), its import location is recorded so a later process can re-create the
+    callable from source (cross-process replay without re-seeding by hand).
     """
-    _REGISTRY[name] = RegistryEntry(name=name, callable=fn, source_url=source_url)
+    module = getattr(fn, "__module__", "") or ""
+    qualname = getattr(fn, "__qualname__", "") or ""
+    if module == "__main__" or not module:
+        # A REPL/script-defined function is not reliably importable; record only
+        # the in-memory callable (no importable source).
+        module = ""
+        qualname = ""
+    _REGISTRY[name] = RegistryEntry(
+        name=name,
+        callable=fn,
+        source_url=source_url,
+        module=module,
+        qualname=qualname,
+    )
 
 
 class Agent:

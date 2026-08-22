@@ -430,6 +430,27 @@ class TestDurableLedger:
         assert result["runs"] == 2
         assert result["passed"] == 2
 
+    def test_replay_ledger_auto_seeds_importable_callables(
+        self, tmp_path: Path
+    ) -> None:
+        """replay_ledger re-seeds importable callables from the ledger
+        manifest, so cross-process replay needs no manual registration."""
+        ledger_path = tmp_path / "session.ledger.db"
+        with FbpDriver(ledger_path=str(ledger_path)) as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            driver.run("double", {"value": 21})
+
+        # The module-level registry is empty (no manual seeding). replay_ledger
+        # must import _double from its recorded module.qualname and re-verify.
+        from agent_centric.fbp import agent as _agent
+
+        _agent._REGISTRY.clear()
+        result = replay_ledger(str(ledger_path))
+        assert result["ok"] is True, result["failed"]
+        assert result["passed"] == result["runs"]
+        assert "double" in result["seeded_callables"]
+
     def test_replay_ledger_covers_delegated_stateful_tree(
         self, tmp_path: Path
     ) -> None:

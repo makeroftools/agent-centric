@@ -24,6 +24,7 @@ offline-testable over ``inproc://``.
 from __future__ import annotations
 
 import asyncio
+import importlib
 import json
 import os
 import tempfile
@@ -244,7 +245,13 @@ class FbpDriver:
         register_callable(name, fn, source_url=source_url)
         self._root._registry.register_entry(_resolve_entry(name))
         if self._ledger_store is not None:
-            self._ledger_store.record_callable(name=name, source_url=source_url)
+            entry = _resolve_entry(name)
+            self._ledger_store.record_callable(
+                name=name,
+                source_url=source_url,
+                module=entry.module,
+                qualname=entry.qualname,
+            )
 
     def resolve(self, name: str) -> Response:
         """Return the passive-catalog location for a named capability."""
@@ -773,6 +780,33 @@ def _noop(*_args: Any, **_kwargs: Any) -> Any:
     return None
 
 
+def _seed_entry_from_source(name: str, info: dict[str, str]) -> bool:
+    """Register ``name`` by importing the recorded module.qualname.
+
+    Returns True if the callable was imported and registered in the module-level
+    catalog (so the replayed tree can resolve it). Returns False if the manifest
+    has no importable source or the import fails (the caller can seed manually).
+    """
+    module = info.get("module", "")
+    qualname = info.get("qualname", "")
+    if not module or not qualname:
+        return False
+    try:
+        mod = importlib.import_module(module)
+    except (ImportError, ModuleNotFoundError):
+        return False
+    obj: Any = mod
+    try:
+        for part in qualname.split("."):
+            obj = getattr(obj, part)
+    except AttributeError:
+        return False
+    if not callable(obj):
+        return False
+    register_callable(name, obj, source_url=info.get("source_url", ""))
+    return True
+
+
 def load_ledger(ledger_path: str | os.PathLike[str]) -> dict[str, dict[str, Any]]:
     """Load a durable directive ledger into the in-memory replay shape.
 
@@ -803,11 +837,12 @@ def load_ledger(ledger_path: str | os.PathLike[str]) -> dict[str, dict[str, Any]
 
 def ledger_callables(
     ledger_path: str | os.PathLike[str],
-) -> dict[str, str]:
+) -> dict[str, dict[str, str]]:
     """Return the registry manifest recorded in a durable ledger.
 
-    Returns ``{name: source_url}`` — the callables the recording session
-    registered, so a fresh process knows *what* to seed to re-resolve directives.
+    Returns ``{name: {source_url, module, qualname}}`` — the callables the
+    recording session registered, so a fresh process knows *what* to seed (and
+    how to import them) to re-resolve directives.
     """
     store = _ledger.DirectiveLedger(Path(ledger_path))
     store.open()
@@ -829,11 +864,22 @@ def replay_ledger(
     process is gone by re-issuing every directive on a fresh, state-isolated
     tree. Returns the same shape as ``FbpDriver.replay_session``.
 
-    The original callables cannot cross the wire, so they must already be
-    registered in this process's module-level registry (via
-    ``register_callable`` / ``driver.register``). The ledger records the names
-    that are required, so a caller can re-seed them deterministically.
+    The original callables cannot cross the wire, so ``replay_ledger`` re-seeds
+    them from the ledger's registry manifest: for each recorded callable it
+    imports the recorded ``module.qualname`` and registers it by name. Callables
+    without an importable source (e.g. REPL closures) cannot be auto-restored;
+    the manifest still records their name and source URL for a caller to seed
+    manually.
     """
     entries = load_ledger(ledger_path)
+    manifest = ledger_callables(ledger_path)
+    seeded: list[str] = []
+    missing: list[str] = []
+    for name, info in manifest.items():
+        ok = _seed_entry_from_source(name, info)
+        (seeded if ok else missing).append(name)
     with FbpDriver(transport=transport, endpoint=endpoint) as fresh:
-        return fresh.replay_session(entries=entries)
+        result = fresh.replay_session(entries=entries)
+        result["seeded_callables"] = seeded
+        result["missing_callables"] = missing
+        return result

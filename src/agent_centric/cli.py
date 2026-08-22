@@ -579,6 +579,13 @@ def _fbp_odd(value: Any) -> bool:
     return isinstance(value, int) and value % 2 == 1
 
 
+def _fbp_cpm(nodes: Any) -> Any:
+    """Deterministic critical-path analysis as a registered capability."""
+    from agent_centric.fbp.critical_path import cpm_from_dict
+
+    return cpm_from_dict(nodes).to_dict()
+
+
 def _seed_fbp_callables(fbp: Any) -> None:
     """Register the deterministic demo callables in the module-level registry.
 
@@ -590,11 +597,7 @@ def _seed_fbp_callables(fbp: Any) -> None:
     fbp.register_callable("double", _fbp_double, source_url="file:///tasks/double")
     fbp.register_callable("even", _fbp_even)
     fbp.register_callable("odd", _fbp_odd)
-    from agent_centric.fbp.critical_path import cpm_from_dict
-
-    fbp.register_callable(
-        "cpm", lambda nodes: cpm_from_dict(nodes).to_dict()
-    )
+    fbp.register_callable("cpm", _fbp_cpm)
 
 
 def _fbp_endpoint(transport: str) -> str:
@@ -716,9 +719,7 @@ def _cmd_fbp(transport: str, ledger: Path | None = None) -> int:
 
         # CPM: a read-only, deterministic capability (a registered callable,
         # not an agent — it is a pure observation, not a unit of work).
-        from agent_centric.fbp.critical_path import cpm_from_dict
-
-        driver.register("cpm", lambda nodes: cpm_from_dict(nodes).to_dict())
+        driver.register("cpm", _fbp_cpm)
         driver.configure(tasks=("cpm",))
         cpm = driver.run(
             "cpm",
@@ -793,8 +794,10 @@ def _cmd_fbp_replay(ledger_path: Path, transport: str) -> int:
     """
     import agent_centric.fbp as fbp
 
-    # The original callables cannot cross the wire, so re-seed the deterministic
-    # demo set before replaying (the ledger records these names with sources).
+    # ``replay_ledger`` re-seeds the recorded callables from the ledger's
+    # registry manifest (importing module.qualname). The deterministic demo set
+    # is still re-registered here when available, keeping manual seeding the
+    # documented fallback for non-importable callables.
     _seed_fbp_callables(fbp)
     endpoint = _fbp_endpoint(transport)
     try:

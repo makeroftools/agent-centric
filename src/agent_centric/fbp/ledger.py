@@ -92,7 +92,9 @@ class DirectiveLedger:
         conn.execute(
             "CREATE TABLE IF NOT EXISTS callables ("
             "  name TEXT PRIMARY KEY,"
-            "  source_url TEXT NOT NULL DEFAULT ''"
+            "  source_url TEXT NOT NULL DEFAULT '',"
+            "  module TEXT NOT NULL DEFAULT '',"
+            "  qualname TEXT NOT NULL DEFAULT ''"
             ")"
         )
 
@@ -155,30 +157,41 @@ class DirectiveLedger:
         )
         conn.commit()
 
-    def record_callable(self, *, name: str, source_url: str = "") -> None:
+    def record_callable(
+        self, *, name: str, source_url: str = "", module: str = "", qualname: str = ""
+    ) -> None:
         """Record a registered callable in the ledger's registry manifest.
 
         The registry manifest lets a later process re-register the same callable
         names (by source) so cross-process replay can re-resolve directives. The
         callable itself cannot cross the wire (JSON), so a replay must seed the
-        same callables — the manifest records *what* to seed and from where.
+        same callables — the manifest records *what* to seed and from where
+        (``module``/``qualname`` give an importable source).
         """
         conn = self._require()
         conn.execute(
-            "INSERT OR REPLACE INTO callables (name, source_url) VALUES (?, ?)",
-            (name, source_url),
+            "INSERT OR REPLACE INTO callables (name, source_url, module, qualname) "
+            "VALUES (?, ?, ?, ?)",
+            (name, source_url, module, qualname),
         )
         conn.commit()
 
-    def callables(self) -> dict[str, str]:
-        """Return the registry manifest: {name: source_url} in sorted order."""
+    def callables(self) -> dict[str, dict[str, str]]:
+        """Return the registry manifest: {name: {source_url, module, qualname}}.
+
+        Ordered by name for determinism.
+        """
         conn = self._require()
         rows = conn.execute(
-            "SELECT name, source_url FROM callables ORDER BY name"
+            "SELECT name, source_url, module, qualname FROM callables ORDER BY name"
         ).fetchall()
-        out: dict[str, str] = {}
-        for name, source_url in rows:
-            out[name] = source_url
+        out: dict[str, dict[str, str]] = {}
+        for name, source_url, module, qualname in rows:
+            out[name] = {
+                "source_url": source_url,
+                "module": module,
+                "qualname": qualname,
+            }
         return out
 
     # -- reads ---------------------------------------------------------------

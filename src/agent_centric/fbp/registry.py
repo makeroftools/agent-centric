@@ -21,6 +21,7 @@ trajectory records *which* callable ran, so the system is fully auditable.
 
 from __future__ import annotations
 
+import importlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -39,12 +40,18 @@ class RegistryEntry:
         callable: An optional in-process callable (stub convenience only; the
             full design stores only metadata and location, and other agents
             fetch/compile/run as their own directives allow).
+        module / qualname: An importable reconstructor for the callable (when
+            ``fn`` is a plain, named function). This lets a later process re-
+            create the callable from source so cross-process replay can resolve
+            directives without re-seeding by hand.
     """
 
     name: str
     source_url: str = ""
     kind: str = "python"
     callable: CallableT | None = field(default=None, repr=False)
+    module: str = ""
+    qualname: str = ""
 
 
 class Registry:
@@ -87,3 +94,29 @@ class Registry:
     def names(self) -> tuple[str, ...]:
         """Return the sorted registered names."""
         return tuple(sorted(self._entries))
+
+    def callable_from_source(self, name: str) -> CallableT | None:
+        """Reconstruct a callable from its recorded importable source.
+
+        If the entry recorded a ``module``/``qualname`` (a plain named function),
+        import it so a fresh process can re-resolve the callable without
+        re-seeding by hand. Returns None if the entry has no callable and no
+        importable source.
+        """
+        entry = self._entries.get(name)
+        if entry is None:
+            return None
+        if entry.callable is not None:
+            return entry.callable
+        if not entry.module or not entry.qualname:
+            return None
+        try:
+            mod = importlib.import_module(entry.module)
+        except ImportError:
+            return None
+        obj: Any = mod
+        for part in entry.qualname.split("."):
+            obj = getattr(obj, part, None)
+            if obj is None:
+                return None
+        return obj if callable(obj) else None
