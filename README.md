@@ -63,10 +63,10 @@ treats *correctness under autonomy* as the core problem:
   failure — never a silent success.
 
 **The platform itself is deterministic.** Non-deterministic tools (a model, a
-free-form parser) are inputs to the platform, never trusted authorities: their
-output is a suspect to be captured, re-derived, and verified against a
-deterministic check. Determinism is a feature of the *platform*; it is not
-diluted by the tools it uses.
+free-form parser) are inputs to the platform — useful, but not treated as
+authoritative: their output is a suspect to be captured, re-derived, and checked
+against a deterministic rule before it counts. Determinism is a feature of the
+*platform*; it is not diluted by the tools it uses.
 
 The non-negotiable rules that govern every decision in this repository live in
 [`PRINCIPLES.md`](PRINCIPLES.md).
@@ -131,7 +131,7 @@ The **`agent-centric-fbp`** branch is a rooted, recursive **tree of agents** wit
 | Capability | What it guarantees |
 | --- | --- |
 | **Protocol + transport parity** | One enforced wire contract on `inproc://` / `tcp://` / `ipc://`. |
-| **Correctness spine** | A parent re-verifies a child on the way up; self-claimed `verified` never trusted. |
+| **Correctness spine** | A parent re-verifies a child on the way up; a child's self-claim is not conclusive on its own. |
 | **Durable single-writer state** | `StateStore` + `TrajectoryStore`; persistence is always an explicit grant. |
 | **Bills loop** | intake → human review only where there's non-determinism → registry → verified calendar. |
 | **Intake** | `draft_from_file` / `_email` / `_pdf_text` → unverified drafts. |

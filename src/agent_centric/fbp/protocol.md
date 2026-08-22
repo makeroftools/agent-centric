@@ -113,8 +113,8 @@ outcome, regardless of arrival order.
 routes a ``run`` directive to a child, it re-verifies the child's returned
 value against the **parent's own configured verifier** before relaying it up. A
 child that claims ``verified`` but returns a value the parent cannot verify is
-demoted to an explicit, audited failure — it is never accepted as a verified
-success. A child's self-reported ``verified`` alone is never trusted on the
+demoted to an explicit, audited failure — it is not accepted as a verified
+success. A child's self-reported ``verified`` alone is not conclusive on the
 upward path.
 
 ## 6. Idempotency

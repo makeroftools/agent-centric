@@ -55,7 +55,7 @@ agents).
 | Area | File(s) | What it guarantees |
 |------|---------|--------------------|
 | **Protocol + transport parity** | `fbp/message.py`, `fbp/agent.py` | Versioned, enforced directive/response contract over `inproc`/`tcp`/`ipc`; ack-retry; fail-closed on malformed input. |
-| **Correctness spine** | `fbp/agent.py` | Parent re-verifies a child's value on the way up; a child's self-claimed `verified` is never trusted. |
+| **Correctness spine** | `fbp/agent.py` | Parent re-verifies a child's value on the way up; a child's self-claimed `verified` is not conclusive on its own. |
 | **Durable state** | `fbp/store.py` | `StateStore` (single-writer key/value, idempotent by fingerprint) + `TrajectoryStore` (append-only, write-once audit). Separate files, on-demand. |
 | **Store/registry agent** | `fbp/store_agent.py` | Single-writer durable resource; key-allowlist grant; ungranted keys fail closed. |
 | **CPM (capability, not agent)** | `fbp/critical_path.py` | Deterministic, read-only critical-path/slack analysis. |

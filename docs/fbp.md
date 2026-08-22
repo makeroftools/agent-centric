@@ -23,7 +23,7 @@ Practical consequences, all enforced:
 - **parent provides context** — a parent configures its child's task allowlist
   and verifier (`configure_child`).
 - **correctness spine** — a parent re-verifies a child's value on the way up;
-  a child's own `verified` claim is never trusted.
+  a child's own `verified` claim is not conclusive on its own.
 - **fail-closed** — a malformed directive or an unknown delegation target is an
   explicit error, never a silent route.
 

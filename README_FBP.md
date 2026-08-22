@@ -42,9 +42,10 @@ tree recorded exactly where and why it failed.
 "DeepSeek V4 Flash" agent, …) is just another capability in the tree. Other
 agents **delegate to it through the normal directive/response protocol** when a
 task warrants judgment — but its output is treated like any other child's value:
-re-verified by each parent's verifier, audited, and never trusted on its own
-word. That is exactly the "deterministic platform first" rule in action: use the
-non-deterministic tool, verify it deterministically, never let it stand alone.
+re-verified by each parent's verifier, audited, and not treated as conclusive
+on its own word. That is exactly the "deterministic platform first" rule in
+action: use the non-deterministic tool, verify it deterministically, don't let
+its word alone be the answer.
 
 ---
 
@@ -55,7 +56,7 @@ built around four non-negotiable guarantees:
 
 - **🔒 No unverified success.** `Response.verified` is `True` *only* if the
   value passed every verifier on the upward path. A child's self-claimed
-  `verified` is never trusted.
+  `verified` is not conclusive on its own.
 - **🚪 Fail-closed everywhere.** Malformed directives, unknown targets,
   ungranted store keys, malformed intake, cyclic CPM, replay mismatch — all
   become explicit, audited errors. Nothing crashes, nothing is silent.
@@ -113,7 +114,7 @@ uv run agent-centric fbp --transport ipc # local inter-process
 | Capability | What it guarantees |
 | --- | --- |
 | **Protocol + transport parity** | One versioned, enforced directive/response contract on `inproc://`, `tcp://`, `ipc://`. The transport is a property of the *channel*, never of the logic. |
-| **Correctness spine** | Parent re-verifies a child's value on the way up; a self-claimed `verified` is never trusted. |
+| **Correctness spine** | Parent re-verifies a child's value on the way up; a self-claimed `verified` is not conclusive on its own. |
 | **Durable single-writer state** | `StateStore` (keyed, fingerprint-idempotent) + `TrajectoryStore` (append-only audit). Persistence is always an explicit grant — never silent. |
 | **Bills loop** | intake treats ambiguous output as a **hint**, derives a deterministic method wherever possible, and only the irreducible residue reaches the human → registry → verified calendar. |
 | **Intake (ported from main)** | `draft_from_file` (json/csv/txt/pdf), `draft_from_email`, `draft_from_pdf_text` — offline, deterministic, read-only → **unverified** drafts. |
