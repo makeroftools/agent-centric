@@ -28,6 +28,7 @@ from .bills import (
     mark_bill_status,
     project_calendar,
 )
+from .determinism import Rule, RuleSet, resolve_with_rules
 from .intake import draft_from_file
 from .message import (
     DIRECTIVE_RUN,
@@ -45,6 +46,7 @@ TASK_INTAKE_FILE = "bills_intake_file"
 TASK_INTAKE_EMAIL = "bills_intake_email"
 TASK_INTAKE_PDF = "bills_intake_pdf"
 TASK_ACCEPT = "bills_accept"
+TASK_ACCEPT_DETERMINISTIC = "bills_accept_deterministic"
 TASK_CALENDAR = "bills_calendar"
 TASK_MARK_PAID = "bills_mark_paid"
 TASK_MARK_STATUS = "bills_mark_status"
@@ -76,6 +78,28 @@ _STORE_CHILD = "store"
 class BillsAgent(Agent):
     """A coordinating agent that drives the bills loop over its store child."""
 
+    def __init__(self, config: Any) -> None:
+        super().__init__(config)
+        # Approved deterministic extraction rules (granted via configure). When a
+        # draft matches an approved rule, accept can proceed deterministically
+        # without a fresh human gate (the rule is the human's prior authorization).
+        self._rule_set = RuleSet()
+
+    def _configure_extra(self, payload: dict[str, Any]) -> None:
+        """Pick up the granted deterministic rules from a configure directive."""
+        raw_rules = payload.get("rules", ())
+        if isinstance(raw_rules, (list, tuple)):
+            for rr in raw_rules:
+                if isinstance(rr, dict) and isinstance(rr.get("id"), str):
+                    self._rule_set.add(
+                        Rule(
+                            id=rr["id"],
+                            domain=str(rr.get("domain", "")),
+                            method=str(rr.get("method", "")),
+                            matcher=dict(rr.get("matcher", {}) or {}),
+                        )
+                    )
+
     def _handle(self, directive: Directive) -> Response:
         if directive.kind == DIRECTIVE_RUN:
             task = directive.payload.get("task")
@@ -85,6 +109,8 @@ class BillsAgent(Agent):
                 return self._op_intake_source(directive, task)
             if task == TASK_ACCEPT:
                 return self._op_accept(directive)
+            if task == TASK_ACCEPT_DETERMINISTIC:
+                return self._op_accept_deterministic(directive)
             if task == TASK_CALENDAR:
                 return self._op_calendar(directive)
             if task in (TASK_MARK_PAID, TASK_MARK_STATUS):
@@ -248,7 +274,54 @@ class BillsAgent(Agent):
             node=self.identity,
         )
 
-    # -- registry maintenance (explicit, mediated status updates) ------------
+    def _op_accept_deterministic(self, directive: Directive) -> Response:
+        """Promote a draft to a registry bill **only when an approved rule
+        matches** — deterministic auto-accept, attributable to the rule.
+
+        The human authorizes a ``Rule`` once (granted via configure); when
+        intake matches that rule, the accept proceeds deterministically, with the
+        rule id recorded as the source. When no rule matches, it fails closed
+        back to human review (``bills_accept``) — never an unverified write.
+        """
+        args = self._run_args(directive)
+        draft = args.get("draft")
+        if not isinstance(draft, dict):
+            return self._error(directive, "bills_accept_deterministic requires a 'draft' dict")
+        resolved, rule = resolve_with_rules(draft, self._rule_set)
+        if rule is None:
+            return self._error(
+                directive,
+                "no approved rule matches; requires human review (bills_accept)",
+            )
+        try:
+            bill = accept_draft(draft)
+        except BillsError as exc:
+            return self._error(directive, f"bills_accept_deterministic rejected: {exc}")
+        # Persist through the store child, attributing the rule id as a source.
+        store_child = self._child_agents.get(_STORE_CHILD)
+        if store_child is None:
+            return self._error(directive, "bills agent has no store child")
+        store = cast(StoreAgent, store_child)
+        key = bill["id"]
+        store_resp = store._op_store_set(
+            Directive(
+                correlation_id=f"{directive.correlation_id}:store",
+                kind=DIRECTIVE_RUN,
+                payload={"task": "store_set", "args": {"key": key, "value": bill}},
+            )
+        )
+        if not store_resp.verified:
+            return self._error(directive, f"registry write failed: {store_resp.error}")
+        return Response(
+            correlation_id=directive.correlation_id,
+            kind=RESPONSE_OK,
+            value=key,
+            sources=[{"kind": "rule", "id": rule.id}],
+            verified=True,
+            node=self.identity,
+        )
+
+    # -- registry maintenance (explicit, mediated status updates) --------------------
 
     def _op_mark_status(self, directive: Directive, task: str) -> Response:
         """Update a registry bill's status (explicit, mediated, verified).

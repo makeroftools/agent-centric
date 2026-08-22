@@ -654,6 +654,69 @@ class TestBillsMaintenance:
         st.close()
 
 
+class TestDeterministicAccept:
+    """Deterministic auto-accept: an approved rule lets a matching draft enter
+    the registry without a fresh human gate; a non-matching draft routes back to
+    human review (fail-closed)."""
+
+    def _setup(self, driver, tmp_path, keys=("b1",), rules=()):
+        driver.spawn("bills", kind="bills")
+        driver.run(
+            "bills_setup",
+            {"state": str(tmp_path / "registry.json"), "store_keys": list(keys)},
+            child="bills",
+        )
+        driver.configure_child("bills", rules=tuple(rules))
+
+    def _draft(self, bid="b1", vendor="GasCo"):
+        return {
+            "id": bid, "vendor": vendor,
+            "amount_cents": 12345, "due_date": "2026-10-01",
+        }
+
+    def test_matching_rule_auto_accepts(self, tmp_path: Path) -> None:
+        from agent_centric.fbp import FbpDriver, store
+        from agent_centric.fbp.bills_agent import (
+            TASK_ACCEPT_DETERMINISTIC,
+        )
+
+        with FbpDriver() as driver:
+            self._setup(
+                driver, tmp_path,
+                rules=[{"id": "r-gasco", "domain": "vendor",
+                        "method": "from_vendor", "matcher": {"vendor": "GasCo"}}],
+            )
+            resp = driver.run(
+                TASK_ACCEPT_DETERMINISTIC, {"draft": self._draft()}, child="bills"
+            )
+            assert resp.verified is True
+            # The result is attributable to the approved rule.
+            assert resp.sources == [{"kind": "rule", "id": "r-gasco"}]
+
+        st = store.open_state(tmp_path / "registry.json")
+        assert st.get("b1")["status"] == "open"
+        st.close()
+
+    def test_no_rule_routes_to_review(self, tmp_path: Path) -> None:
+        from agent_centric.fbp import FbpDriver, store
+        from agent_centric.fbp.bills_agent import TASK_ACCEPT_DETERMINISTIC
+
+        with FbpDriver() as driver:
+            self._setup(driver, tmp_path, keys=("b2",))
+            resp = driver.run(
+                TASK_ACCEPT_DETERMINISTIC,
+                {"draft": self._draft(bid="b2", vendor="UnknownCo")},
+                child="bills",
+            )
+            # No rule matches -> fail closed to human review, nothing written.
+            assert resp.verified is False
+            assert "human review" in (resp.error or "")
+
+        st = store.open_state(tmp_path / "registry.json")
+        assert st.get("b1") is None
+        st.close()
+
+
 class TestAuditReconstruction:
     """The driver reconstructs the full audit chain per correlation id across
     the tree (audit as proof), including delegated parent-child relay hops."""
