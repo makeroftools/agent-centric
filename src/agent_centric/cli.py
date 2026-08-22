@@ -801,6 +801,25 @@ def _cmd_fbp(transport: str, ledger: Path | None = None) -> int:
         print(f"intake  : file draft verified={f_draft.verified} "
               f"accepted={f_accepted.verified}")
 
+        # Registry maintenance: mark the first bill paid (drops out of the open
+        # calendar), then re-project the agenda.
+        paid = driver.run("bills_mark_paid", {"id": "bill-d1"}, child="bills")
+        agenda2 = driver.run(
+            "bills_calendar",
+            {"from_date": "2026-10-01", "to_date": "2026-10-31"},
+            child="bills",
+        )
+        print(
+            f"maintain: mark_paid={paid.verified} "
+            f"status={paid.value.get('status') if paid.verified else None}"
+        )
+        open_ids = (
+            [e["id"] for e in agenda2.value.get("entries", [])]
+            if agenda2.verified
+            else []
+        )
+        print(f"maintain: open_after_paid={open_ids}")
+
         # Audit as proof + deterministic replay of a local run.
         chains = driver.reconstruct_audit()
         relay_count = sum(

@@ -25,6 +25,7 @@ from .bills import (
     BillsError,
     accept_draft,
     draft_from_intake,
+    mark_bill_status,
     project_calendar,
 )
 from .intake import draft_from_file
@@ -45,6 +46,8 @@ TASK_INTAKE_EMAIL = "bills_intake_email"
 TASK_INTAKE_PDF = "bills_intake_pdf"
 TASK_ACCEPT = "bills_accept"
 TASK_CALENDAR = "bills_calendar"
+TASK_MARK_PAID = "bills_mark_paid"
+TASK_MARK_STATUS = "bills_mark_status"
 TASK_SETUP = "bills_setup"
 
 
@@ -84,6 +87,8 @@ class BillsAgent(Agent):
                 return self._op_accept(directive)
             if task == TASK_CALENDAR:
                 return self._op_calendar(directive)
+            if task in (TASK_MARK_PAID, TASK_MARK_STATUS):
+                return self._op_mark_status(directive, task)
             if task == TASK_SETUP:
                 return self._op_setup(directive)
         return super()._handle(directive)
@@ -239,6 +244,58 @@ class BillsAgent(Agent):
             correlation_id=directive.correlation_id,
             kind=RESPONSE_OK,
             value=key,
+            verified=True,
+            node=self.identity,
+        )
+
+    # -- registry maintenance (explicit, mediated status updates) ------------
+
+    def _op_mark_status(self, directive: Directive, task: str) -> Response:
+        """Update a registry bill's status (explicit, mediated, verified).
+
+        This is the other explicit registry write besides ``bills_accept``. It
+        reads the current bill through the store child, applies the pure
+        ``mark_bill_status`` merge, and writes back through the single-writer
+        store. It never changes money/dates and never implicitly re-accepts an
+        intake draft; an unknown status or missing bill fails closed.
+        """
+        args = self._run_args(directive)
+        bill_id = args.get("id")
+        if not isinstance(bill_id, str) or not bill_id:
+            return self._error(directive, f"{task} requires a 'id' (bill id)")
+        status = "paid" if task == TASK_MARK_PAID else args.get("status")
+        if not isinstance(status, str) or not status:
+            return self._error(directive, f"{task} requires a 'status'")
+        note = args.get("note") or ""
+
+        store_child = self._child_agents.get(_STORE_CHILD)
+        if store_child is None:
+            return self._error(directive, "bills agent has no store child")
+        store = cast(StoreAgent, store_child)
+        cur = store._state_store.get(bill_id) if store._state_store is not None else None
+        if not isinstance(cur, dict):
+            return self._error(directive, f"{task}: bill {bill_id!r} not in registry")
+        try:
+            updated = mark_bill_status(cur, status, note=note)
+        except BillsError as exc:
+            return self._error(directive, f"{task} rejected: {exc}")
+        # Persist through the store child (single-writer mediation).
+        store_resp = store._op_store_set(
+            Directive(
+                correlation_id=f"{directive.correlation_id}:store",
+                kind=DIRECTIVE_RUN,
+                payload={
+                    "task": "store_set",
+                    "args": {"key": bill_id, "value": updated},
+                },
+            )
+        )
+        if not store_resp.verified:
+            return self._error(directive, f"registry update failed: {store_resp.error}")
+        return Response(
+            correlation_id=directive.correlation_id,
+            kind=RESPONSE_RESULT,
+            value=updated,
             verified=True,
             node=self.identity,
         )

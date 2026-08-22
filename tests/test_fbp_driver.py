@@ -400,6 +400,114 @@ class TestBillsLoop:
             assert resp.error is not None
 
 
+class TestBillsMaintenance:
+    """Registry maintenance: explicit, mediated status updates that keep the
+    calendar correct (paid bills drop out of the open agenda)."""
+
+    def _accept(self, driver, tmp_path, bid: str = "b1") -> None:
+        from agent_centric.fbp.bills_agent import TASK_ACCEPT, TASK_INTAKE
+
+        draft = driver.run(
+            TASK_INTAKE,
+            {
+                "draft": {
+                    "id": bid,
+                    "vendor": "GasCo",
+                    "amount_cents": 12345,
+                    "due_date": "2026-10-01",
+                }
+            },
+            child="bills",
+        )
+        driver.run(TASK_ACCEPT, {"draft": draft.value}, child="bills")
+
+    def test_mark_paid_updates_registry_and_calendar(self, tmp_path: Path) -> None:
+        from agent_centric.fbp import FbpDriver, store
+        from agent_centric.fbp.bills_agent import (
+            TASK_CALENDAR,
+            TASK_MARK_PAID,
+            TASK_SETUP,
+        )
+
+        with FbpDriver() as driver:
+            driver.spawn("bills", kind="bills")
+            driver.run(
+                TASK_SETUP,
+                {"state": str(tmp_path / "registry.json"), "store_keys": ["b1"]},
+                child="bills",
+            )
+            self._accept(driver, tmp_path)
+
+            before = driver.run(
+                TASK_CALENDAR,
+                {"from_date": "2026-10-01", "to_date": "2026-10-31"},
+                child="bills",
+            )
+            assert before.verified is True
+            assert [e["id"] for e in before.value["entries"]] == ["b1"]
+
+            paid = driver.run(TASK_MARK_PAID, {"id": "b1"}, child="bills")
+            assert paid.verified is True
+            assert paid.value["status"] == "paid"
+
+            cal = driver.run(
+                TASK_CALENDAR,
+                {"from_date": "2026-10-01", "to_date": "2026-10-31"},
+                child="bills",
+            )
+            assert cal.value["entries"] == []
+
+        st = store.open_state(tmp_path / "registry.json")
+        assert st.get("b1")["status"] == "paid"
+        st.close()
+
+    def test_mark_status_validates_and_fails_closed(self, tmp_path: Path) -> None:
+        from agent_centric.fbp.bills_agent import (
+            TASK_MARK_PAID,
+            TASK_MARK_STATUS,
+            TASK_SETUP,
+        )
+
+        with FbpDriver() as driver:
+            driver.spawn("bills", kind="bills")
+            driver.run(
+                TASK_SETUP,
+                {"state": str(tmp_path / "registry.json"), "store_keys": ["b1"]},
+                child="bills",
+            )
+            self._accept(driver, tmp_path)
+
+            bad = driver.run(TASK_MARK_STATUS, {"id": "b1", "status": "bogus"}, child="bills")
+            assert bad.verified is False
+            missing = driver.run(TASK_MARK_PAID, {"id": "nope"}, child="bills")
+            assert missing.verified is False
+
+    def test_mark_status_note_and_mark_void(self, tmp_path: Path) -> None:
+        from agent_centric.fbp import store
+        from agent_centric.fbp.bills_agent import TASK_MARK_STATUS, TASK_SETUP
+
+        with FbpDriver() as driver:
+            driver.spawn("bills", kind="bills")
+            driver.run(
+                TASK_SETUP,
+                {"state": str(tmp_path / "registry.json"), "store_keys": ["b1"]},
+                child="bills",
+            )
+            self._accept(driver, tmp_path)
+            r = driver.run(
+                TASK_MARK_STATUS,
+                {"id": "b1", "status": "void", "note": "overcharged"},
+                child="bills",
+            )
+            assert r.verified is True
+            assert r.value["status"] == "void"
+            assert r.value["note"] == "overcharged"
+
+        st = store.open_state(tmp_path / "registry.json")
+        assert st.get("b1")["status"] == "void"
+        st.close()
+
+
 class TestAuditReconstruction:
     """The driver reconstructs the full audit chain per correlation id across
     the tree (audit as proof), including delegated parent-child relay hops."""

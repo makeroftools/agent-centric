@@ -136,6 +136,34 @@ def accept_draft(draft: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# The allowed bill statuses (deterministic, closed set).
+ALLOWED_STATUSES = ("open", "paid", "void", "overdue")
+
+
+def mark_bill_status(bill: dict[str, Any], status: str, *, note: str = "") -> dict[str, Any]:
+    """The registry-maintenance status update (a pure, deterministic merge).
+
+    Returns a ball with its ``status`` set to a member of ``ALLOWED_STATUSES``,
+    preserving every other field. ``note`` (e.g. a payment reference) is attached
+    if given. An unknown status fails closed (``BillsError``).
+
+    This is explicit and mediated: it only ever mutates ``status`` (and an
+    optional ``note``); it never implicitly re-accepts an intake draft or changes
+    money/dates.
+    """
+    if not isinstance(status, str) or status not in ALLOWED_STATUSES:
+        raise BillsError(
+            f"invalid status {status!r} (allowed: {', '.join(ALLOWED_STATUSES)})"
+        )
+    if not isinstance(bill, dict) or not bill.get("id"):
+        raise BillsError("mark_status requires a well-formed registry bill")
+    updated = dict(bill)
+    updated["status"] = status
+    if note:
+        updated["note"] = note
+    return updated
+
+
 def project_calendar(
     registry: dict[str, dict[str, Any]], from_date: str, to_date: str
 ) -> dict[str, Any]:
