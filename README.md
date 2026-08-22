@@ -1,182 +1,197 @@
-# Agent-centric
+# 🧭 Agent-centric
 
-**A deterministic, agent-centric system for governed, verifiable agents.**
+**A deterministic system for governed, verifiable agents — where the topology is
+the governance.**
 
-Agent-centric is an **abstract, general-purpose agent system** — not a trading
-system. Trading / automated-trading concerns are non-relevant to this project.
+Agent-centric is an **abstract, general-purpose agent system**. It is a
+local-first core built around one idea: an **Agent** is simultaneously a worker
+to its parent and a manager to its children, and together they form a rooted,
+recursive **tree**. Work flows **down** as directives; verified responses and
+responsibility bubble **up**. Every step is recorded, and every tool and model
+call is mediated.
 
-It is a local-first, in-process core built around one abstract concept: the
-**Agent**. There is no central Manager; the architecture is a tree of agents,
-where each agent is simultaneously a worker to its parent and a manager to its
-children. Work flows down as **directives**; verified responses bubble up.
-Every step is recorded in a durable, append-only audit trajectory, and every
-tool and model call is mediated.
-
-This is the **v0.29 preliminary release** — a minimal but complete harness,
-built across Volleys 001–029. It reflects what exists in the codebase, not an
-aspirational platform.
-
-> **Session continuity:** new sessions should read [`HANDOFF.md`](HANDOFF.md)
-> first (authoritative one-pager), then [`KERNEL.md`](KERNEL.md) and
-> [`STATUS.md`](STATUS.md).
-
-```
-Zed (Agent Panel) ──ACP──▶ agent-centric-acp (adapter) ──▶ agent tree ──▶ agents / tools / MCP
-```
+> This repository currently hosts **two lines**: the `main` branch carries the
+> prior **Manager-line** (a central `AgentManager`), and this
+> `agent-centric-fbp` branch carries the **FBP subsystem** — the rooted,
+> manager-less tree that is the active architecture. This README is oriented to
+> the FBP branch while keeping `main`'s Manager-line documented below.
 
 ---
 
-## Why it exists
+## 📦 Badges
 
-Autonomous agents are only useful if you can trust what they did. Agent-centric
+![Python](https://img.shields.io/badge/python-3.13-blue)
+![Tests](https://img.shields.io/badge/tests-579%20passed-brightgreen)
+![Lint](https://img.shields.io/badge/ruff-passing-brightgreen)
+![Types](https://img.shields.io/badge/mypy-clean-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Status](https://img.shields.io/badge/status-active-important)
+
+---
+
+## 🗺️ Table of contents
+
+- [Why it exists](#star2-why-it-exists)
+- [How to think about it (conceptual)](#thinking-how-to-think-about-it)
+- [How it compares to other agent harnesses](#balance_scale-how-it-compares-to-other-agent-harnesses)
+- [The FBP subsystem](#zap-the-fbp-subsystem)
+- [The bills loop — the mission-critical arc](#receipt-the-bills-loop)
+- [Quick start](#rocket-quick-start)
+- [Use from Zed (ACP)](#electric_plug-use-from-zed-acp)
+- [The Manager-line (main branch)](#building_construction-the-manager-line-main)
+- [Operator path](#desktop_computer-operator-path)
+- [Correctness posture](#shield-correctness-posture)
+- [Layout](#open_file_folder-layout)
+- [References](#book-references)
+- [License](#scroll-license)
+
+---
+
+## ⭐ Why it exists
+
+Autonomous agents are only useful if you can **trust what they did**. Agent-centric
 treats *correctness under autonomy* as the core problem:
 
-- **No unverified success.** A task terminates in a verified result or an
+- 🔒 **No unverified success.** A task terminates in a verified result or an
   explicit, audited failure — there is no ambiguous third state.
-- **Deterministic control plane.** Given identical inputs and a deterministic
-  agent, the Manager reproduces the same trajectory and outcome.
-- **Full auditability.** Every step, tool/model call, policy decision, resource
-  use, and cancellation is recorded durably and reconstructible after restart.
-- **Fail-closed by default.** Anything unexpected is an explicit, recorded
+- 🎯 **Deterministic control plane.** Identical inputs + a deterministic agent
+  ⇒ the same trajectory and outcome, every time.
+- 🧾 **Full auditability.** Every step, tool call, policy decision, and
+  cancellation is recorded durably and reconstructible after restart.
+- 🚪 **Fail-closed by default.** Anything unexpected is an explicit, recorded
   failure — never a silent success.
 
-The non-negotiable rules are recorded in [`PRINCIPLES.md`](PRINCIPLES.md), which
-governs every decision in this repository.
+The non-negotiable rules that govern every decision in this repository live in
+[`PRINCIPLES.md`](PRINCIPLES.md).
 
 ---
 
-## What v0.29 includes
+## 💭 How to think about it
 
-| Area | What's implemented |
-| --- | --- |
-| **Manager** | Deterministic `AgentManager`: register, select (by name or capability), run, summarise, replay. |
-| **Contracts** | Versioned, strongly-typed contracts for tasks, results, trajectories, tools, pipelines, parallel, policy, model, summary, replay, critical path, bills, workspace, email, intake, and bills-registry (incl. registry maintenance). |
-| **Registry** | In-process, deterministic agent registry with capability-based selection. |
-| **Tools** | Local tools (`to_upper`, `add`, `bill_total`) plus a Manager-mediated **MCP adapter**, **allowlisted workspace tools**, **read-only email tools**, and **bills-registry tools** (read / calendar / **upsert / mark-paid / mark-status maintenance**); grants and policy enforced by the Manager. |
-| **Model path** | Mediated `llm_complete` tool; deterministic stub by default; an optional, hardened real-provider path. |
-| **Composition** | Sequential pipelines, parallel fan-out/join, and nested sequential-as-parallel — all Manager-orchestrated. |
-| **Governance** | Policy (allow/deny), hard resource envelopes, cooperative cancellation, per-step budgets. |
-| **Isolation** | Optional subprocess execution; silent-hang bounded, forced-kill recorded, no zombies. |
-| **Observability** | Deterministic trajectory summary, replay verification, and read-only critical-path (CPM) analysis. |
-| **Specialty agents** | A **bills** agent, a **workspace** agent, a **read-only email** agent, an **intake** agent (inventory + unverified drafts + explicit accept), and a **bills-registry** agent (deterministic agenda projection + governed registry maintenance). |
-| **Operator CLI** | `agent-centric` with `run`, `summarise`, and `replay-verify`. |
-| **Editor bridge** | Thin ACP adapter (`agent-centric-acp`) so Agent-centric runs as an External Agent in Zed. |
+Most agent frameworks give you a **flat pool of agents** and a **central
+orchestrator** that decides who runs when. Agent-centric turns that upside down:
 
-Full history and guarantees live in [`STATUS.md`](STATUS.md) and
-[`KERNEL.md`](KERNEL.md).
+> **There is no central manager. The topology *is* the governance.**
 
----
+Picture a tree. The **root** is the shell — the origin of work and the final owner
+of responsibility. Work travels from the root, **down** the branches, to the
+leaves. Each node tries to resolve a task itself; if it can't, it delegates to its
+children, handing them the **context** they need (rules, verifiers, allowed
+tasks). When a child answers, each parent **re-verifies that child's value**
+before accepting responsibility for it and passing it back up.
 
-## The FBP subsystem (agent-centric, flow-based)
-
-The **`agent-centric-fbp`** branch adds a separate, additive architecture: a
-rooted, recursive **tree of agents** with **no central manager** — the topology
-*is* the governance. Work travels **down**; responses and responsibility bubble
-**up**, each parent **re-verifying a child's value** before accepting it (the
-correctness spine). A task terminates in a **verified result or an explicit,
-audited failure**.
-
-Features, all validated by the test suite and reachable via an easy-UX
-`FbpDriver`:
-
-| Property | Meaning |
-| --- | --- |
-| **Directive/response protocol** | Versioned, enforced wire contract on `inproc://` / `tcp://` / `ipc://`. |
-| **registry-as-agent** | `register`/`resolve` capabilities as directives; a passive catalog serving *locations*, never code. |
-| **Correctness spine** | A parent re-verifies a child's value on the way up; a child's self-claimed `verified` is never trusted. |
-| **Mediated spawn + delegation** | A parent provisions a real child `Agent` and routes a named child; unknown targets fail closed. |
-| **Side-effect idempotency** | Replays keyed by full directive fingerprint; correlation reuse fails closed. |
-| **Fail-closed robustness** | Malformed directives are explicit errors; the poll loop never crashes. |
-| **Chain audit** | Every response carries the `source` of the callable that produced it. |
-| **Easy UX** | `FbpDriver` — synchronous driver that hides sockets/frames/loop; plus `agent-centric fbp` CLI and `examples/fbp_demo.py`. |
-
-```python
-from agent_centric.fbp import FbpDriver
-
-def double(x: int) -> int:
-    return x * 2
-
-def even(v) -> bool:
-    return isinstance(v, int) and v % 2 == 0
-
-with FbpDriver() as d:                  # inproc, offline
-    d.register("double", double)
-    d.configure(tasks=("double",), verifiers=("even",), verifier="even")
-    assert d.run("double", {"value": 21}).verified is True  # 42
-    d.spawn("child")
-    d.configure_child("child", tasks=("double",))
-    r = d.run("double", {"value": 21}, child="child")     # delegated & re-verified
+```mermaid
+flowchart TD
+    Root["Shell / root"] -->|"context: rules, verifier, tasks"| Bills["BillsAgent"]
+    Bills -->|"configures + delegates"| Store["StoreAgent"]
+    Store -->|"verified value"| Bills
+    Bills -->|"re-verified value"| Root
 ```
 
-Run the demo:
+The result is a **recursive verification hierarchy**: every node is governed by its
+parent, and trust is re-established at every hop on the way up. A child that
+claims `verified` but returns a value its parent can't confirm is **demoted to an
+explicit, audited failure** — never a silent win.
+
+This is what makes the system mission-appropriate: it can be trusted to carry
+**money and schedule** through a human-gated pipeline, because the correctness
+spine holds at every level of the tree.
+
+---
+
+## ⚖️ How it compares to other agent harnesses
+
+| Dimension | **Agent-centric (FBP)** | Classic manager / orchestrator | LangChain / semantic-OMRE | Autogen-ish multi-agent |
+| --- | --- | --- | --- | --- |
+| **Governance** | Topology: parent governs child | Central `Manager` object | Pipeline/composable steps | Chat-based role distribution |
+| **Trust model** | Re-verified on every hop upward | Manager stamps verified | Per-stage determined by the runner | Conversational, loosely verified |
+| **State** | Single-writer, durable, idempotent grants | Single-writer trajectory | In-process memory | In-memory, non-durable |
+| **Replay** | Deterministic + crash-safe durable replay | Deterministic replay | Not a first-class concern | Not first-class |
+| **Underlying graph** | Rooted tree (recursive, deterministic) | Manager-drawn composition | Directed graph | Ad-hoc graph |
+
+The table is deliberately honest: it describes *aspirations* vs. today's concrete
+capabilities. The FBP column lists what is **implemented and tested**; the
+others are representative sketches.
+
+---
+
+## ⚡ The FBP subsystem
+
+The **`agent-centric-fbp`** branch is a rooted, recursive **tree of agents** with
+**no central manager**. It is run through a synchronous, easy-UX `FbpDriver`.
+
+| Capability | What it guarantees |
+| --- | --- |
+| **Protocol + transport parity** | One enforced wire contract on `inproc://` / `tcp://` / `ipc://`. |
+| **Correctness spine** | A parent re-verifies a child on the way up; self-claimed `verified` never trusted. |
+| **Durable single-writer state** | `StateStore` + `TrajectoryStore`; persistence is always an explicit grant. |
+| **Bills loop** | intake → human-gated accept → registry → verified calendar. |
+| **Intake** | `draft_from_file` / `_email` / `_pdf_text` → unverified drafts. |
+| **Registry maintenance** | `bills_mark_paid` / `bills_mark_status` → paid bills leave the calendar. |
+| **Allowlisted workspace** | Fail-closed file access under an explicit allowlist. |
+| **Tree-audit proof** | Reconstruct every causal chain per correlation id. |
+| **Deterministic + crash-safe replay** | Durable ledger, auto-seeded, verifies after the process is gone. |
+| **Plans + observation** | `run_plan`, `summary()` / `summarise_ledger`. |
+
+Run the whole story:
 
 ```sh
-uv run agent-centric fbp              # inproc (default)
+uv run agent-centric fbp
 uv run agent-centric fbp --transport tcp
 uv run agent-centric fbp --transport ipc
 ```
 
-See [`docs/fbp.md`](docs/fbp.md) and the specs in
-`src/agent_centric/fbp/{spec,protocol}.md` for full detail.
-
-> **New:** an attractive, story-led deep-dive of the whole subsystem lives in
-> [`README_FBP.md`](README_FBP.md).
+Deep dive: [`README_FBP.md`](README_FBP.md) and [`docs/fbp.md`](docs/fbp.md).
 
 ---
 
-## What it is not
+## 🧾 The bills loop — the mandatory arc
 
-These are **explicit non-goals** for v0.21 (see also [`KERNEL.md`](KERNEL.md)):
+Money and schedule, with a **human in the loop** — nothing auto-accepts:
 
-- Messaging fabric (ZeroMQ / NATS / etc.) or any network transport.
-- Multi-tenancy, distribution, or cloud concerns.
-- A2A agent mesh or a discovery marketplace.
-- A Rust core or native reimplementation.
-- Deep workflow graphs, cyclic/dynamic workflows, or durable workflow engines.
-- Bit-exact replay of live non-deterministic model calls (replay applies to
-  deterministic configurations only).
-- A UI or operator dashboard.
-- Full coding-agent parity in the editor bridge (see the Zed notes below).
-
-These are deferred intentionally: the harness prefers adapters and backends over
-changing Manager semantics.
-
----
-
-## Quick start
-
-Requires Python ≥ 3.13 and [uv](https://docs.astral.sh/uv/).
-
-```sh
-uv sync --extra dev       # install the package and dev dependencies
-uv run pytest             # run the control-plane invariant tests
-uv run ruff check .       # lint
-uv run mypy               # type check the source package
+```mermaid
+flowchart LR
+    A[file / email / PDF] --> B[UNVERIFIED draft]
+    B -->|human gate| C[bills_accept]
+    C -->|single-writer| D[durable registry]
+    D --> E[verified calendar]
+    D --> F[bills_mark_paid]
 ```
 
-Run the end-to-end demo or the operator CLI:
+---
 
-```sh
-uv run python examples/demo.py
-uv run agent-centric run          # run the deterministic demo task set
+## 🚀 Quick start
+
+Requires Python **≥ 3.13** and [uv](https://docs.astral.sh/uv/).
+
+```bash
+uv sync --extra dev
+uv run pytest
+uv run ruff check .
+uv run mypy
 ```
 
-The `agent-centric` CLI is **local-only and fail-closed** — it never starts a
-network service, never reads credentials, and exits non-zero on any failure.
+Run the FBP demo or the operator CLI:
+
+```bash
+uv run agent-centric fbp
+uv run agent-centric run
+```
+
+The CLI is **local-only and fail-closed** — it never starts a network service,
+never reads credentials, and exits non-zero on any failure.
 
 ---
 
-## Use from Zed (ACP)
+## 🔌 Use from Zed (ACP)
 
 Agent-centric can appear as an **External Agent** in Zed via the Agent Client
-Protocol (ACP). The adapter (`agent_centric.acp`) is a client-facing transport
-only: every prompt is routed through the Manager, and no ACP path can produce a
-verified success that bypasses it.
+Protocol (ACP). Every prompt routes through the tree/Manager; no ACP path can
+produce a verified success that bypasses the verification spine.
 
-### 1. Configure the agent server
+### Configure the agent server
 
-Add an entry to Zed's `settings.json` (Zed → Settings → Agents). The command
-must match the real console script name, `agent-centric-acp`:
+Add to Zed's `settings.json` (Zed → Settings → Agents):
 
 ```json
 {
@@ -190,548 +205,89 @@ must match the real console script name, `agent-centric-acp`:
 }
 ```
 
-If `uv run` is not desirable, point directly at the console script in the venv
-(the name is `agent-centric-acp`, same as above).
-
-### 2. Start a thread
-
-Open the **Agents Panel** in Zed (Agent Panel), choose **Agent-centric** as the
-agent, and start a new thread. Each thread opens an ACP session; one process
-owns one Manager that is shared across sessions in that process.
-
-### 3. Try these prompts (v0.21 routing)
-
-Prompts map to deterministic demo tasks. The expected outputs below were
-produced by a live run:
-
-| You type | Manager routing | Verified output |
-| --- | --- | --- |
-| `hello world` | reverse (default) | `dlrow olleh` |
-| `upper hello` | mediated `to_upper` tool | `HELLO` |
-| `counter hello l` | counter agent | `2` |
-| `model hello` | stub model (`llm_complete`) | `stub response` |
-
-Each reply streams back the **verified output and its trajectory id** (or a
-clear fail-closed message).
-
-### v1 limits (honest)
-
-- **Not a full coding agent.** No diffs, slash commands, nested sub-agents, or
-  rich following — this is a thin governed harness bridge.
-- **Cancel-during-run is limited.** `session/cancel` is tracked per session, but
-  the synchronous Manager run is not pre-emptible mid-turn; a cancel arriving
-  before the next prompt causes it to be refused at start.
-- **The Manager still governs.** No filesystem, shell, or arbitrary tool access
-  is exposed from the ACP layer — only what the Manager grants for that task.
-  Model/MCP output stays untrusted until verified.
+Start a thread in the **Agents Panel**, pick **Agent-centric**, and try prompts
+that map to deterministic demo tasks.
 
 ---
 
-## Operator path
+## 🏗️ The Manager-line (main branch)
+
+The `main` branch still carries the prior **Manager-driven** architecture — an
+`AgentManager` that mediates every tool/model call, policy, envelope, and
+verification. It is manager-orchestrated and shares the same "no unverified
+success, fail-closed, full audit, deterministic" posture. It is intact and
+contained on `main`; this FBP branch builds the future.
+
+---
+
+## 💻 Operator path
 
 `agent-centric` is a local, fail-closed operator CLI.
-
-### Commands
 
 | Command | Purpose |
 | --- | --- |
 | `run` | Run the deterministic demo task set and persist trajectories. |
 | `summarise <id>` | Print a trajectory's deterministic summary. |
 | `replay-verify <id>` | Re-run the demo task and verify equivalence. |
+| `fbp` | Drive the FBP demo (`--transport inproc|tcp|ipc`, `--ledger <path>`). |
+| `fbp-summary <path>` | Operator readout of a durable FBP ledger. |
+| `fbp-replay <path>` | Re-verify an FBP ledger in a fresh process. |
 
-`--store <dir>` (a global option, before the command) selects the durable
-trajectory store. When omitted it defaults to `examples/.trajectories`.
-
-```sh
-uv run agent-centric --store examples/.trajectories run
-```
-
-Output:
-
-```
-demo-counter: VERIFIED output=4 trajectory_id=demo-counter#0
-demo-reverse: VERIFIED output='cirtnec-tnega' trajectory_id=demo-reverse#1
-demo-tool: VERIFIED output='MEDIATED TOOLS' trajectory_id=demo-tool#2
-demo-model: VERIFIED output='stub response' trajectory_id=demo-model#3
-demo-pipeline: VERIFIED output='NOITISOPMOC LAITNEUQES' trajectory_id=demo-pipeline#4
-demo-bills: VERIFIED output={'line_subtotal_cents': 2750, 'discount_cents': 275, 'taxable_amount_cents': 2475, 'tax_cents': 124, 'grand_total_cents': 2599} trajectory_id=demo-bills#5
-demo-workspace: VERIFIED output={'relative_path': 'invoices/note.txt', 'kind': 'file', 'content': 'hello workspace'} trajectory_id=demo-workspace#6
-demo-email: VERIFIED output={'folder': 'INBOX', 'limit': 10, 'count': 1, 'messages': [{'id': 'm1', 'folder': 'INBOX', 'subject': 'Hello', 'from_address': 'a@example.test', 'date': '2026-08-01'}]} trajectory_id=demo-email#7
-demo-bills-calendar: VERIFIED output={'from_date': '2026-09-01', 'to_date': '2026-09-30', 'include_paid': False, 'count': 2, 'entries': [{'due_date': '2026-09-01', 'bill_id': 'b1', 'vendor': 'NetCo', 'amount_cents': 3000, 'status': 'due'}, {'due_date': '2026-09-10', 'bill_id': 'b3', 'vendor': 'PowerCo', 'amount_cents': 5000, 'status': 'due'}], 'total_outstanding_cents': 8000} trajectory_id=demo-bills-calendar#8
-```
-
-Trajectories are durable, append-only JSON-lines files (hex-named `.jsonl`)
-under the store directory.
-
-### One "inspect a run" flow
+Example:
 
 ```sh
-# 1. run the demo set and note a trajectory id
-uv run agent-centric run
-# 2. summarise a run by id
-uv run agent-centric summarise demo-reverse#1
-# 3. re-run it and verify the fresh trajectory is equivalent
-uv run agent-centric replay-verify demo-reverse#1
+uv run agent-centric fbp --ledger ses.db      # record a session durably
+uv run agent-centric fbp-summary ses.db       # observe it
+uv run agent-centric fbp-replay ses.db        # re-verify 18/18 runs
 ```
 
-`summarise` and `replay-verify` are fail-closed: a missing id exits non-zero
-with a clear message.
+---
+
+## 🛡 Correctness posture
+
+- **Model and tool outputs are untrusted until verified.**
+- **Verification is real**, re-derived from the payload — never a stub.
+- **Failure is first-class**: verification, policy, envelope, tool denial, child
+  crash — all explicit, audited.
+- **Real providers are opt-in**; CI default is the deterministic stub (no
+  network, no credentials).
+- **Replay is read-only** and deterministic.
 
 ---
 
-## Core execution model
-
-There are exactly two roles:
-
-- **The Agent Manager** — the deterministic control plane. It owns authority:
-  mediation, policy, resource envelopes, trajectory recording, verification, and
-  cancellation. It never *is* an agent and never runs unchecked agent code in a
-  privileged path.
-- **The agent** — a thin, governed component. It takes a payload, a step budget,
-  and a set of *granted* tools; it yields steps and tool requests; it finally
-  returns an output that the Manager verifies.
-
-A minimal single-agent run:
-
-```python
-from agent_centric import AgentManager
-from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-
-manager = AgentManager()
-manager.register(AgentComponentManifest(
-    version=AgentManifestVersion.V2,
-    name="reverse",
-    entry_point="agent_centric.agents.reverse:create_reverse_agent",
-    description="Reverses a string.",
-))
-
-task = TaskSpecification(
-    version=TaskSpecVersion.V3,
-    task_id="demo",
-    agent_name="reverse",
-    payload={"text": "agent-centric"},
-    envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
-)
-
-outcome = manager.run(task)        # task selects an agent, payload, envelope, grants
-if outcome.result is not None:     # only after the verification gate passed
-    print(outcome.result.output)
-else:
-    print(outcome.failure)         # explicit, audited failure
-```
-
-**Agents never gain the ability to spawn or directly invoke one another.** All
-composition is orchestrated by the Manager.
-
----
-
-## Public surface
-
-The public API is deliberate and minimal. Top-level exports include
-`AgentManager`, the core contracts, the execution backends
-(`InProcessBackend` / `SubprocessBackend`), the trajectory stores,
-`summarise` / `replay` / `verify_replay`, and `analyse_critical_path`. The
-package is marked typed via `py.typed`; sub-package `__init__` files define
-explicit `__all__` and don't leak internal helpers.
-
-- **Contracts** — `agent_centric.contracts` (task, result, trajectory, tool,
-  pipeline, parallel, policy, model, summary, replay, critical-path, manifest,
-  capability).
-- **Manager & control plane** — `agent_centric.control_plane` (AgentManager,
-  registry, tools, verifier, trajectory store, execution backends, summary,
-  replay, CPM).
-- **Agents** — `agent_centric.agents` (thin interface + built-in agents).
-- **Providers** — `agent_centric.providers` (stub / failing stub / optional real).
-
----
-
-## Extending (short)
-
-The kernel is designed to grow via **adapters and backends**, not by changing
-Manager semantics. Start with the versioned contracts in
-[`agent_centric/contracts/`](src/agent_centric/contracts) and the freeze note in
-[`KERNEL.md`](KERNEL.md).
-
-Register an agent (a manifest + a callable factory) and grant a tool on the
-task:
-
-```python
-from agent_centric import AgentManager
-from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-
-manager = AgentManager()
-manager.register(AgentComponentManifest(
-    version=AgentManifestVersion.V2,
-    name="case_tool",
-    entry_point="agent_centric.agents.case_tool:create_case_tool_agent",
-    description="Uppercases a string via a mediated tool.",
-))
-
-# Grant the "to_upper" tool for this task; the Manager mediates and records it.
-task = TaskSpecification(
-    version=TaskSpecVersion.V3,
-    task_id="upper-demo",
-    agent_name="case_tool",
-    payload={"text": "hello"},
-    envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
-    granted_tools=("to_upper",),
-)
-
-outcome = manager.run(task)
-print(outcome.result.output if outcome.result else outcome.failure)  # HELLO
-```
-
-All of the code above is real and smoke-checked against the public API.
-
----
-
-## Correctness posture
-
-- **Model and MCP outputs are untrusted until verified.** A tool returning data
-  is never a verified result on its own; the mandatory verification gate still
-  applies.
-- **Verification is real, not a stub.** The default verifier re-derives the
-  expected output from the task payload and compares it to the agent's output.
-- **Resource bounds are hard**, not advisory: overall timeout, step limit, and
-  optional per-step budget are enforced by the Manager.
-- **Failure is first-class.** Every failure mode — verification, policy,
-  envelope exhaustion, cancellation, tool denial, MCP/provider error, child
-  crash, or store error — is an explicit, audited failure.
-- **Real providers are opt-in.** CI and default operation use the deterministic
-  stub only (no network, no credentials). Enabling a real provider requires
-  explicit configuration and does not relax verification.
-- **Replay is read-only.** Replay never mutates the stored audit record and
-  applies only to deterministic configurations.
-
-The correctness guarantees are demonstrated across the test suite
-(`tests/`) and documented volley-by-volley in [`STATUS.md`](STATUS.md).
-
----
-
-## Layout (simplified)
+## 📂 Layout
 
 ```
 PRINCIPLES.md          Non-negotiable governing rules
-KERNEL.md              v0 kernel freeze note (guarantees, out-of-scope, versioning)
-STATUS.md              Volley history 001–026 + correctness evidence
+KERNEL.md              v0 kernel freeze note
+STATUS.md              Volley history + correctness evidence
+README_FBP.md          The FBP deep-dive (this branch)
 src/agent_centric/
-  __init__.py          Public surface
-  contracts/           Versioned, strongly-typed contracts
-  agents/              Thin agent interface + built-in agents
-  control_plane/       AgentManager, registry, tools, verifier,
-                       trajectory store, backends, summary, replay, CPM
-  providers/           Stub + optional real model providers
-  acp.py               Thin ACP adapter (Zed bridge)
-tests/                 Invariant tests across every volley
-examples/demo.py       End-to-end demonstration
-```
-
-See [`KERNEL.md`](KERNEL.md) for the authoritative freeze boundaries.
-
----
-
-## Tool & model mediation
-
-Agents access external capabilities **only through the Manager**. An agent
-yields a `ToolRequest`; the Manager validates the grant, executes or rejects,
-records the request and outcome as ordered steps, and sends a `ToolResult` back.
-This applies identically to:
-
-- **Local tools** — deterministic, side-effect-free functions.
-- **MCP tools** — exposed through a thin Manager-mediated adapter
-  (`McpToolAdapter`), never agent-direct; real servers are not required for CI
-  (an in-process fake double is used in tests).
-- **Model calls** — the `llm_complete` tool, mediated and recorded; output is
-  untrusted until verified.
-
-Policy can allow or deny any tool, agent, or capability. Tool calls consume the
-task step budget. Enforcement stays entirely in the Manager.
-
----
-
-## Versioning / preliminary-release status
-
-The package is versioned as a kernel milestone aligned with volley depth:
-**`0.26.0`** (26 volleys delivered). This is a **preliminary release** — the
-v0.25 kernel is complete but APIs may evolve before a stable 1.0. See
-[`KERNEL.md`](KERNEL.md) for the versioning scheme and freeze boundaries.
-
----
-
-## The bills-registry + calendar agent (Volley 025)
-
-A deterministic **bills-registry + calendar** agent maintains a canonical local
-bills registry in the allowlisted workspace and answers **what is due when**.
-The registry lives at `bills/registry.json` (an allowlisted path,
-`bills_registry.v1`): each record has `id`, `vendor`, `amount_cents` (integer
-cents), an ISO `due_date`, and optional `status` (`due`/`paid`/`skipped`) and
-`category`. Projection is purely deterministic — no model is involved. By
-paid`). By
-default only unpaid bills (`due`/`skipped`) appear; `include_paid=True` also
-includes `paid`. Entries are ordered by due date then bill id, with a total
-outstanding sum. Recurrence is omitted in v1 (documented as future);
-maintenance (upsert / mark-paid) is delivered in Volley 028 above.
-
-Example registry:
-
-```json
-{
-  "version": "bills_registry.v1",
-  "bills": [
-    {"id": "b1", "vendor": "NetCo", "amount_cents": 3000, "due_date": "2026-09-01", "status": "due"},
-    {"id": "b2", "vendor": "WaterCo", "amount_cents": 2000, "due_date": "2026-09-05", "status": "paid"}
-  ]
-}
-```
-
-Example agenda request (what is due in September, excluding paid):
-
-```python
-from agent_centric import AgentManager
-from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-
-manager = AgentManager()
-manager.register(AgentComponentManifest(
-    version=AgentManifestVersion.V2,
-    name="bills_registry",
-    entry_point="agent_centric.agents.bills_registry:create_bills_registry_agent",
-    description="Reads the bills registry and projects a deterministic agenda.",
-))
-
-task = TaskSpecification(
-    version=TaskSpecVersion.V5,
-    task_id="bills-cal",
-    agent_name="bills_registry",
-    payload={
-        "operation": "calendar",
-        "registry": {"version": "bills_registry.v1", "bills": [
-            {"id": "b1", "vendor": "NetCo", "amount_cents": 3000, "due_date": "2026-09-01", "status": "due"},
-        ]},
-        "from_date": "2026-09-01",
-        "to_date": "2026-09-30",
-        "include_paid": False,
-    },
-    envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
-    granted_tools=("bills_calendar",),
-)
-
-outcome = manager.run(task)
-print(outcome.result.output if outcome.result else outcome.failure)  # total=3000
-```
-
-### Registry maintenance (Volley 028): upsert + mark paid
-
-The same `bills_registry` agent (capability `bills.maintain.v1`) also performs
-**explicit, mediated, verified** registry mutations through governed tools:
-
-- `bills_registry_upsert` (add or replace a bill by `id` with fully validated
-  vendor / amount in integer cents / ISO due date / optional status & category).
-- `bills_registry_mark_paid` (set `status=paid` for a given id; fails closed on
-  a missing id).
-- `bills_registry_mark_status` (shared status code path for `due`/`paid`/
-  `skipped`).
-
-How it stays safe:
-
-- Mutations persist **only** through the allowlisted `bills/registry.json` path
-  after validation, and the merged registry must still validate (integer cents
-  and valid dates only).
-- Maintenance **never** implicitly accepts intake drafts and never auto-pulls
-  from drafts; it operates only on the registry.
-- The verifier recomputes the expected upsert / status update from the payload
-  and the pre-mutation registry, so a disallowed, invalid, or failed mutation is
-  never a verified success.
-- The calendar projection stays correct when run after maintenance (paid bills
-  are excluded by default; outstanding totals recompute).
-
-```python
-# operation: "upsert" | "mark_paid" | "mark_status"   (capability bills.maintain.v1)
-# upsert requires the bills_registry_upsert tool grant; status updates require
-# the matching mark_paid / mark_status grant.
+  fbp/                 The FBP subsystem (active)
+  contracts/           Versioned contracts
+  control_plane/       Manager (main) control plane
+examples/              Demos
+tests/                 Invariants across every volley
 ```
 
 ---
 
-## The read-only email specialty agent (Volley 024)
+## 📚 References
 
-A deterministic **read-only email** agent lists or fetches messages through the
-Manager's mediated `email_list` / `email_fetch` tools. It is strictly read-only:
-no send, delete, move, or mailbox-destructive operations. Verification is real
-(structural consistency): the output must match the requested operation, a list
-must be bounded by its limit, and a fetch must echo the requested message id.
-
-**Sensitivity note — email is sensitive.** Credentials are read from environment
-variables (host / user / password or app token) and **never** appear in a task
-payload, an agent prompt, or a trajectory. Errors from the real gateway are
-redacted of any known secret before they can be recorded. A trajectory records
-the message metadata (id, folder, subject, from, date) exactly as structured
-results; it does not dump full bodies into step descriptions.
-
-**Configuration (real IMAP, opt-in and off by default):**
-
-| Env var | Purpose |
+| Doc | What it's for |
 | --- | --- |
-| `META_HARNESS_EMAIL_HOST` | IMAP host (e.g. a Mail-in-a-Box mailbox). |
-| `META_HARNESS_EMAIL_USER` | Mailbox user. |
-| `META_HARNESS_EMAIL_PASSWORD` | Mailbox password or app token. |
-| `META_HARNESS_EMAIL_ENABLED` | Set to truthy (e.g. `1`) to opt in. |
-| `META_HARNESS_EMAIL_FOLDERS` | Optional comma-separated folder allowlist. |
-
-Missing host/user/password raises a clear fail-closed error; no network call is
-made unless explicitly enabled, so CI never touches a mailbox. All tests use the
-deterministic `FakeEmailGateway`.
-
-**Non-goals (explicit):** no SMTP send, no delete/move/flag-as-destructive bulk
-ops, no full mail-client UX, no PDF/bill auto-ingest from attachments, no cloud
-SaaS mail provider as primary.
+| [`docs/fbp.md`](docs/fbp.md) | FBP easy-UX driver companion. |
+| [`src/agent_centric/fbp/spec.md`](src/agent_centric/fbp/spec.md) | FBP architecture spec. |
+| [`src/agent_centric/fbp/protocol.md`](src/agent_centric/fbp/protocol.md) | FBP wire contract. |
+| [`README_FBP.md`](README_FBP.md) | Story-led FBP deep-dive. |
+| [`PRINCIPLES.md`](PRINCIPLES.md) | Non-negotiable rules. |
+| [`KERNEL.md`](KERNEL.md) | v0 freeze note + versioning. |
+| [`STATUS.md`](STATUS.md) | Volley-by-volley history + correctness evidence. |
+| [`HANDOFF.md`](HANDOFF.md) | Session continuity one-pager (main). |
+| [`docs/FBP_HANDOFF.md`](docs/FBP_HANDOFF.md) | Session continuity one-pager (FBP). |
 
 ---
 
-## Specialty agents: bills (022) and workspace (023)
+## 📄 License
 
-### Bills (Volley 022)
-
-A narrow, deterministic **bills** agent accepts a structured bill in and produces
-deterministic totals out. Money math is integer-only (minor units / cents) with
-an explicit half-up rounding rule, so totals are exact and replayable — no cloud
-model is involved. Verification is real: the Manager independently recomputes
-the expected totals from the payload and rejects bad or missing data.
-
-```python
-from agent_centric import AgentManager
-from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-
-manager = AgentManager()
-manager.register(AgentComponentManifest(
-    version=AgentManifestVersion.V2,
-    name="bills",
-    entry_point="agent_centric.agents.bills:create_bills_agent",
-    description="Computes deterministic totals for a structured bill.",
-))
-
-task = TaskSpecification(
-    version=TaskSpecVersion.V5,
-    task_id="bill-demo",
-    agent_name="bills",
-    payload={
-        "lines": [
-            {"description": "widget", "quantity": 2, "unit_price_cents": 1000},
-            {"description": "gadget", "quantity": 3, "unit_price_cents": 250},
-        ],
-        "discount_bps": 1000,
-        "tax_bps": 500,
-    },
-    envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
-    granted_tools=("bill_total",),
-)
-
-outcome = manager.run(task)
-print(outcome.result.output if outcome.result else outcome.failure)  # grand_total_cents=2599
-```
-
-A malformed bill (empty/missing `lines`, non-integer or negative quantities or
-prices, out-of-range rates) is rejected explicitly and fails closed — it never
-produces a verified result.
-
-### Workspace (Volley 023)
-
-A deterministic **workspace** agent operates on a local, allowlisted workspace
-through the Manager. The workspace is a root directory plus an explicit
-`WorkspaceLayout` allowlist of relative paths; the mediated file tools
-(`list_workspace`, `read_workspace_file`, `write_workspace_file`,
-`create_workspace_dir`) reject any path not on the allowlist (fail-closed). No
-deletion, rename, or arbitrary traversal is possible, so an agent never gains
-broad filesystem powers. Verification is real: the Manager recomputes the
-expected result (operation, path, and for writes content) from the payload.
-
-```python
-from agent_centric import AgentManager
-from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
-from agent_centric.contracts.task import ResourceEnvelope, TaskSpecification, TaskSpecVersion
-from agent_centric.contracts.workspace import WorkspaceLayout
-from agent_centric.control_plane.tools import ToolRegistry
-from agent_centric.control_plane.workspace import Workspace, register_workspace_tools
-
-workspace = Workspace("ws", WorkspaceLayout(files=("invoices/note.txt",), directories=("invoices",)))
-tools = ToolRegistry()
-register_workspace_tools(tools, workspace)
-workspace.create_workspace_dir("invoices")
-
-manager = AgentManager(tools=tools)
-manager.register(AgentComponentManifest(
-    version=AgentManifestVersion.V2,
-    name="workspace",
-    entry_point="agent_centric.agents.workspace:create_workspace_agent",
-    description="Performs an allowlisted workspace operation via mediated file tools.",
-))
-
-task = TaskSpecification(
-    version=TaskSpecVersion.V5,
-    task_id="ws-demo",
-    agent_name="workspace",
-    payload={"operation": "write", "relative_path": "invoices/note.txt", "content": "hello workspace"},
-    envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
-    granted_tools=("write_workspace_file",),
-)
-
-outcome = manager.run(task)
-print(outcome.result.output if outcome.result else outcome.failure)  # content='hello workspace'
-```
-
-A path outside the allowlist, or a failed/disallowed workspace operation, fails
-closed and never produces a verified result.
-
----
-
-## Dump intake (Volley 026 / 027 / 029)
-
-Drop files in an allowlisted `inbox/` (or fetch an email), get a deterministic
-inventory, produce **unverified** bill drafts, and explicitly **accept** only the
-rows you approve into the bills registry. No silent financial commits: inventory,
-drafts, and email-draft never touch the registry; accept is a separate,
-grant-gated operation.
-
-- **Structured sources (Volley 026):** `.json`/`.csv` + simple `.txt` key-value
-  fragments.
-- **PDF documents (Volley 027):** embedded-text extraction from simple PDFs
-  (dependency-free, offline, fixture-testable). Extracted vendor / amount / due
-  date are parsed **only into an unverified `BillDraft`**; a PDF with no usable
-  embedded text fails closed (no draft is invented). No OCR, no cloud APIs, no
-  network.
-- **Email → unverified draft (Volley 029):** a fetched email message (subject +
-  body) is parsed locally into unverified `BillDraft` rows via the read-only
-  `intake_email_draft` tool. Weak/absent content fails closed to no draft (no
-  invented facts). It is read-only (no send/delete) and its grant is separate
-  from both `email_fetch` and `intake_accept`.
-- **Limits:** there is **no unsupervised calendar from PDFs/email** — extracted
-  facts stay unverified until a human accepts them, and only the accepted
-  registry drives the calendar. PDFs that are scanned images (no embedded text)
-  are not parsed, and email drafting does not auto-organize or auto-accept.
-
-```python
-# capability: intake.inventory.v1 / intake.draft_bills.v1 /
-#             intake.draft_from_email.v1 / intake.accept_bills.v1
-# operation: "inventory" | "drafts" | "draft_from_email" | "accept"
-# draft_from_email requires the intake_email_draft tool (read-only);
-# accept requires the intake_accept tool and an explicit accept_ids list.
-```
-
-## Roadmap posture
-
-**Use first; enhance on demand.** The harness is intentionally minimal. New
-capabilities will be added only when driven by demonstrated need, and will
-prefer adapters and backends over changing Manager semantics. The planned
-specialty agent sequence was bills → workspace → email; with the read-only email
-agent now delivered, the next step is any follow-up the architect directs under
-the same fail-closed rules (candidate: PDF/bill auto-ingest from email
-attachments, explicitly deferred beyond this volley).
-
----
-
-## License
-
-MPL-2.0 — see [`LICENSE`](LICENSE).
+[MIT](LICENSE).
