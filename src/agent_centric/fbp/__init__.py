@@ -29,7 +29,13 @@ from .bills_agent import BillsAgent
 from .config import AgentConfig
 from .context import Context, Verifier
 from .critical_path import CpmAnalysis, CpmError, CpmNode, analyse_cpm, cpm_from_dict
-from .driver import FbpDriver
+from .driver import (
+    FbpDriver,
+    ledger_callables,
+    load_ledger,
+    replay_ledger,
+)
+from .ledger import DirectiveLedger
 from .message import (
     DIRECTIVE_AUDIT,
     DIRECTIVE_CONFIGURE,
@@ -129,4 +135,9 @@ __all__ = [
     "AuditChain",
     "ChainEvent",
     "reconstruct_chains",
+    # Durable, recoverable directive ledger (crash-safe replay)
+    "DirectiveLedger",
+    "load_ledger",
+    "ledger_callables",
+    "replay_ledger",
 ]

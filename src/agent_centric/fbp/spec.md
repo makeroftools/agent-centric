@@ -185,13 +185,19 @@ Implemented here (pure, offline-testable, deterministic):
   trajectory) granted to the replayed tree is remapped to a fresh temp path, so
   stateful trees (e.g. the bills loop) replay cleanly and replay never touches
   the original store files.
+- **Durable, recoverable directive ledger** — a driver may be granted a
+  durable, append-only, order-preserving `DirectiveLedger` (`ledger.py`) via
+  ``ledger_path``; every directive + outcome + registry manifest is persisted,
+  so a fresh process can `replay_ledger`/`load_ledger` the session (crash-safe
+  re-verification after the fact).
 
 **Deferred (deliberate; optional adapters):**
 
 - Compile-on-demand from a resolved source URL (the execution clamp behind the catalog).
 - FastAPI UI/API layer (adds a dependency).
 - Real concurrency / multi-channel routing.
-- A durable git-backed directive ledger / cross-process directive queue.
+- A durable git-backed directive ledger / cross-process directive queue (the
+  SQLite ledger covers recoverable replay; a git-backed queue is still future).
 - Multi-language runtimes over the ZeroMQ protocol.
 
 These are deliberately deferred so the foundation can be proven correct,

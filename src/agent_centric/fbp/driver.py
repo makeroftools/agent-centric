@@ -29,11 +29,13 @@ import os
 import tempfile
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import zmq
 import zmq.asyncio
 
+from . import ledger as _ledger
 from .agent import Agent, _resolve_entry, register_callable
 from .audit import AuditChain
 from .config import AgentConfig
@@ -77,6 +79,7 @@ class FbpDriver:
         transport: str = "inproc",
         identity: str = "root",
         replay_state_isolate: bool = False,
+        ledger_path: str | None = None,
     ) -> None:
         self._transport = transport
         # When replaying a full session, on-disk state grants are redirected to
@@ -86,6 +89,15 @@ class FbpDriver:
         self._replay_state_isolate = replay_state_isolate
         self._replay_tmpdir: tempfile.TemporaryDirectory[str] | None = None
         self._replay_paths: dict[str, str] = {}
+        # An optional durable directive ledger (an explicit grant — a path the
+        # caller chooses). When given, every directive is persisted so a later
+        # process can re-open the ledger and replay (re-verify) the session
+        # after the fact. When None, the ledger is in-memory only (as before).
+        self._ledger_store = (
+            _ledger.DirectiveLedger(ledger_path) if ledger_path is not None else None
+        )
+        if self._ledger_store is not None:
+            self._ledger_store.open()
         self._endpoint = f"{transport}://{endpoint}"
         # The driver owns a private, dedicated event loop. It is set as the
         # current loop so ZeroMQ's async sockets resolve the right loop (in
@@ -126,6 +138,9 @@ class FbpDriver:
         self._root_socket.close(0)
         self._context.term()
         self._loop.close()
+        if self._ledger_store is not None:
+            self._ledger_store.close()
+            self._ledger_store = None
         if self._replay_tmpdir is not None:
             self._replay_tmpdir.cleanup()
             self._replay_tmpdir = None
@@ -157,8 +172,13 @@ class FbpDriver:
         """
         correlation_id = self._correlation(prefix)
         # Record the directive in the ledger so it can be replayed later
-        # (deterministic re-verification after the fact).
+        # (deterministic re-verification after the fact). This is also persisted
+        # to the durable ledger store when one is granted.
         self._ledger[correlation_id] = {"kind": kind, "payload": payload}
+        if self._ledger_store is not None:
+            self._ledger_store.append(
+                correlation_id=correlation_id, kind=kind, payload=payload
+            )
         directive_frames = [
             self._root.identity.encode(),
             correlation_id.encode(),
@@ -175,11 +195,16 @@ class FbpDriver:
             for response in responses:
                 if response.correlation_id == correlation_id:
                     # Record the terminal outcome for deterministic replay.
-                    self._ledger[correlation_id]["response"] = {
+                    outcome = {
                         "terminal": response.kind,
                         "terminal_value": response.value,
                         "terminal_error": response.error,
                     }
+                    self._ledger[correlation_id]["response"] = outcome
+                    if self._ledger_store is not None:
+                        self._ledger_store.set_outcome(
+                            correlation_id=correlation_id, outcome=outcome
+                        )
                     return response
             if attempt < attempts:
                 time.sleep(self._settle_delay)
@@ -218,6 +243,8 @@ class FbpDriver:
         """
         register_callable(name, fn, source_url=source_url)
         self._root._registry.register_entry(_resolve_entry(name))
+        if self._ledger_store is not None:
+            self._ledger_store.record_callable(name=name, source_url=source_url)
 
     def resolve(self, name: str) -> Response:
         """Return the passive-catalog location for a named capability."""
@@ -397,7 +424,9 @@ class FbpDriver:
                 "terminal_error": resp.error,
             }
 
-    def replay_session(self) -> dict[str, Any]:
+    def replay_session(
+        self, entries: dict[str, dict[str, Any]] | None = None
+    ) -> dict[str, Any]:
         """Replay the full recorded directive sequence and verify every run.
 
         This is the general form of replay: it re-issues every recorded
@@ -407,10 +436,18 @@ class FbpDriver:
         delegated ``run`` directives, which a single-record replay cannot
         (they need the child topology in place).
 
+        Args:
+            entries: Optional entries to replay (from a reopened durable
+                ledger). When None, replays this session's own in-memory
+                ledger. The keys are correlation ids; values are the recorded
+                ``{kind, payload, response, _child}`` dicts.
+
         Returns:
             ``{"total": int, "runs": int, "passed": int, "failed":
             [{correlation_id, recorded, replayed, diff}], "ok": bool}``.
         """
+        ledger_entries = self._ledger if entries is None else entries
+
         # Issue order: correlation ids are ``{prefix}-{seq}``; sort by seq.
         def _seq_of(cid: str) -> int:
             try:
@@ -418,7 +455,7 @@ class FbpDriver:
             except (ValueError, IndexError):
                 return 0
 
-        ordered = sorted(self._ledger.items(), key=lambda kv: _seq_of(kv[0]))
+        ordered = sorted(ledger_entries.items(), key=lambda kv: _seq_of(kv[0]))
         run_directives = [
             (cid, d) for cid, d in ordered if d["kind"] == DIRECTIVE_RUN
         ]
@@ -495,6 +532,7 @@ class FbpDriver:
         verifiers: tuple[str, ...] = (),
         rules: tuple[str, ...] = (),
         verifier: str | None = None,
+        clear_verifier: bool = False,
         state: str | None = None,
         state_read_only: bool = False,
         trajectory: str | None = None,
@@ -505,6 +543,9 @@ class FbpDriver:
         Args:
             tasks/verifiers/rules/verifier: The task allowlist, verifier list,
                 hard rules, and default verifier for the root agent.
+            clear_verifier: If true, clear the root's default verifier (so
+                delegated non-numeric values are not demoted on relay). This is
+                recorded in the ledger and replayed faithfully.
             state: Optional durable state file path grant (a single-writer
                 key/value store the agent owns).
             state_read_only: If true, open the state store read-only (read-only
@@ -519,6 +560,8 @@ class FbpDriver:
         }
         if verifier is not None:
             payload["verifier"] = verifier
+        if clear_verifier:
+            payload["_clear_verifier"] = True
         if state is not None:
             payload["state"] = self._isolate_state_path(state)
             payload["state_read_only"] = state_read_only
@@ -562,6 +605,10 @@ class FbpDriver:
         if verifier is not None:
             payload["extra"]["verifier"] = verifier
         self._ledger[cid] = {"kind": "configure", "payload": payload, "_child": True}
+        if self._ledger_store is not None:
+            self._ledger_store.append(
+                correlation_id=cid, kind="configure", payload=payload, child=True
+            )
 
         return self._root.configure_child(
             identity,
@@ -724,3 +771,69 @@ def _outcome_diff(a: dict[str, Any] | None, b: dict[str, Any] | None) -> dict[st
 def _noop(*_args: Any, **_kwargs: Any) -> Any:
     """A safe fallback callable (should never run in practice)."""
     return None
+
+
+def load_ledger(ledger_path: str | os.PathLike[str]) -> dict[str, dict[str, Any]]:
+    """Load a durable directive ledger into the in-memory replay shape.
+
+    Returns a ``{correlation_id: {kind, payload, response, _child}}`` mapping
+    (the inputs to ``FbpDriver.replay_session``). Read-only — the ledger is not
+    modified. Fails closed (raises) if the ledger cannot be read.
+    """
+    store = _ledger.DirectiveLedger(Path(ledger_path))
+    if not Path(ledger_path).is_file():
+        raise FileNotFoundError(f"no ledger file at {ledger_path}")
+    store.open()
+    try:
+        out: dict[str, dict[str, Any]] = {}
+        for row in store.all():
+            entry: dict[str, Any] = {
+                "kind": row["kind"],
+                "payload": row["payload"],
+            }
+            if row["response"] is not None:
+                entry["response"] = row["response"]
+            if row.get("_child"):
+                entry["_child"] = True
+            out[row["correlation_id"]] = entry
+        return out
+    finally:
+        store.close()
+
+
+def ledger_callables(
+    ledger_path: str | os.PathLike[str],
+) -> dict[str, str]:
+    """Return the registry manifest recorded in a durable ledger.
+
+    Returns ``{name: source_url}`` — the callables the recording session
+    registered, so a fresh process knows *what* to seed to re-resolve directives.
+    """
+    store = _ledger.DirectiveLedger(Path(ledger_path))
+    store.open()
+    try:
+        return store.callables()
+    finally:
+        store.close()
+
+
+def replay_ledger(
+    ledger_path: str | os.PathLike[str],
+    transport: str = "inproc",
+    endpoint: str = "root",
+) -> dict[str, Any]:
+    """Re-open a durable directive ledger and replay (re-verify) it.
+
+    This is the crash-safe recovery path: a session recorded to a durable
+    ledger (via ``FbpDriver(ledger_path=...)``) can be re-verified after the
+    process is gone by re-issuing every directive on a fresh, state-isolated
+    tree. Returns the same shape as ``FbpDriver.replay_session``.
+
+    The original callables cannot cross the wire, so they must already be
+    registered in this process's module-level registry (via
+    ``register_callable`` / ``driver.register``). The ledger records the names
+    that are required, so a caller can re-seed them deterministically.
+    """
+    entries = load_ledger(ledger_path)
+    with FbpDriver(transport=transport, endpoint=endpoint) as fresh:
+        return fresh.replay_session(entries=entries)

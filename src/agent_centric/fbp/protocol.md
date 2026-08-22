@@ -232,3 +232,10 @@ to the replayed tree (via ``configure``, ``configure_child``, or a ``run``
 payload) is remapped to a fresh temp path, so the replayed tree starts from a
 clean slate and never reads or writes the original store files — stateful
 trees replay cleanly and replay is side-effect-free on real data.
+
+A driver may also be granted a **durable directive ledger** (``ledger_path``, an
+explicit grant): a append-only, order-preserving store of every directive +
+outcome + a registry manifest of the callables registered. A later process can
+``replay_ledger``/``load_ledger`` it to re-verify the whole session after the
+process is gone (crash-safe recovery). Callables themselves cannot cross the
+wire, so the manifest records the names (and source URLs) a replay must re-seed.

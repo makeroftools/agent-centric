@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from agent_centric.fbp import FbpDriver, register_callable
+from agent_centric.fbp import (
+    DirectiveLedger,
+    FbpDriver,
+    register_callable,
+    replay_ledger,
+)
 
 
 def _double(value: int) -> int:
@@ -191,6 +196,28 @@ class TestReplaySession:
             assert result["ok"] is True, result["failed"]
             assert result["passed"] == result["runs"]
 
+    def test_replay_session_clears_verifier_faithfully(self) -> None:
+        """A ``configure(clear_verifier=True)`` must be recorded and reproduced
+        on replay, so delegate results are not spuriously demoted."""
+        register_callable("double", _double)
+        register_callable("even", _even)
+        with FbpDriver() as driver:
+            driver.register("double", _double)
+            driver.register("even", _even)
+            driver.configure(
+                tasks=("double",), verifiers=("even",), verifier="even"
+            )
+            driver.spawn("child")
+            driver.configure_child("child", tasks=("double",), verifier=None)
+            driver.configure(clear_verifier=True)
+            # Without a verifier, a delegated even result is not demoted.
+            r = driver.run("double", {"value": 21}, child="child")
+            assert r.verified is True and r.node == "child"
+
+            result = driver.replay_session()
+            assert result["ok"] is True, result["failed"]
+            assert result["passed"] == result["runs"]
+
 
 class TestReplaySessionStateIsolation:
     """Full-tree replay must isolate on-disk state so stateful trees (e.g.
@@ -364,3 +391,83 @@ class TestReplaySessionStateIsolation:
             after = store.open_trajectory(audit_path)
             assert after.count() == before_count
             after.close()
+
+
+class TestDurableLedger:
+    """A durable, recoverable directive ledger: a session can be recorded to
+    disk and re-verified (replayed) by a later process."""
+
+    def test_records_and_reopens_session(self, tmp_path: Path) -> None:
+        ledger_path = tmp_path / "session.ledger.db"
+        with FbpDriver(ledger_path=str(ledger_path)) as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            r = driver.run("double", {"value": 21})
+            assert r.verified is True and r.value == 42
+
+        # Reopen the ledger and inspect it (read-only).
+        with DirectiveLedger(ledger_path) as ledger:
+            entries = ledger.all()
+            assert ledger.count() == 2  # configure + run
+            assert entries[-1]["correlation_id"].startswith("run-")
+            assert entries[-1]["payload"]["task"] == "double"
+            assert entries[-1]["response"]["terminal"] == "result"
+            assert entries[-1]["response"]["terminal_value"] == 42
+
+    def test_replay_ledger_reverifies_session(self, tmp_path: Path) -> None:
+        """A fresh process reopens the durable ledger and re-verifies every
+        run outcome (crash-safe recovery)."""
+        ledger_path = tmp_path / "session.ledger.db"
+        with FbpDriver(ledger_path=str(ledger_path)) as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            driver.run("double", {"value": 21})
+            driver.run("double", {"value": 5})
+
+        # Replay from the persisted ledger (fresh driver, isolated state).
+        result = replay_ledger(str(ledger_path))
+        assert result["ok"] is True, result["failed"]
+        assert result["runs"] == 2
+        assert result["passed"] == 2
+
+    def test_replay_ledger_covers_delegated_stateful_tree(
+        self, tmp_path: Path
+    ) -> None:
+        """A durable ledger of a stateful delegated run (bills) replays cleanly
+        after the driver is gone, without touching the original store."""
+        from agent_centric.fbp import store
+        from agent_centric.fbp.bills_agent import TASK_ACCEPT, TASK_INTAKE
+
+        ledger_path = tmp_path / "session.ledger.db"
+        registry = tmp_path / "registry.db"
+        with FbpDriver(ledger_path=str(ledger_path)) as driver:
+            driver.spawn("bills", kind="bills")
+            driver.run(
+                "bills_setup",
+                {"state": str(registry), "store_keys": ["b1"]},
+                child="bills",
+            )
+            draft = driver.run(
+                TASK_INTAKE,
+                {
+                    "draft": {
+                        "id": "b1",
+                        "vendor": "GasCo",
+                        "amount_cents": 12345,
+                        "due_date": "2026-10-01",
+                    }
+                },
+                child="bills",
+            )
+            driver.run(TASK_ACCEPT, {"draft": draft.value}, child="bills")
+
+        # Replay from the persisted ledger: the stateful bills tree must
+        # re-verify cleanly.
+        result = replay_ledger(str(ledger_path))
+        assert result["ok"] is True, result["failed"]
+        assert result["runs"] >= 2
+
+        # The original registry is untouched by the replay.
+        st = store.open_state(registry)
+        assert st.get("b1")["status"] == "open"
+        st.close()

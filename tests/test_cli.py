@@ -83,3 +83,24 @@ class TestCliEntryPoint:
         import agent_centric.__main__ as m  # noqa: F401
 
         assert callable(m.main)
+
+
+class TestCliFbp:
+    """The FBP subcommand and durable-ledger replay (crash-safe recovery)."""
+
+    def test_fbp_records_and_replays_durable_ledger(self, tmp_path: Path) -> None:
+        ledger = tmp_path / "session.ledger.db"
+        code, _ = _run(tmp_path, "fbp", "--ledger", str(ledger))
+        assert code == 0
+        assert ledger.exists()
+
+        # Replay the durable ledger (a fresh ``main`` invocation re-seeds the
+        # module-level callable registry, simulating a fresh process).
+        code, out = _run(tmp_path, "fbp-replay", str(ledger))
+        assert code == 0, out
+        assert "passed=12" in out
+        assert "failed=0" in out
+
+    def test_fbp_replay_missing_ledger_fails_closed(self, tmp_path: Path) -> None:
+        code, out = _run(tmp_path, "fbp-replay", str(tmp_path / "nope.db"))
+        assert code == 1

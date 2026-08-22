@@ -511,8 +511,13 @@ class Agent:
         """
         payload = directive.payload
         self._rules = tuple(payload.get("rules", ()))
-        verifier = payload.get("verifier")
-        self._verifier = verifier if isinstance(verifier, str) else self._verifier
+        # ``verifier`` may be absent (keep current), a name (set it), or an
+        # explicit None (clear it). A ``_clear_verifier`` flag distinguishes an
+        # explicit clear from an absent key.
+        if payload.get("_clear_verifier"):
+            self._verifier = None
+        elif isinstance(payload.get("verifier"), str):
+            self._verifier = payload["verifier"]
         for name in payload.get("tasks", ()):
             entry = _resolve_entry(name)
             self._registry.register_entry(entry)

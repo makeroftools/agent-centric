@@ -546,28 +546,70 @@ def _build_parser() -> argparse.ArgumentParser:
         default="inproc",
         help="Transport to prove the protocol over (default: inproc).",
     )
+    p_fbp.add_argument(
+        "--ledger",
+        type=Path,
+        default=None,
+        help="Optional durable directive-ledger path to record the demo session to.",
+    )
+
+    p_fbp_replay = sub.add_parser(
+        "fbp-replay",
+        help="Re-open a durable directive ledger and re-verify (replay) it.",
+    )
+    p_fbp_replay.add_argument("ledger_path", type=Path, help="The durable ledger file.")
+    p_fbp_replay.add_argument(
+        "--transport",
+        choices=("inproc", "tcp", "ipc"),
+        default="inproc",
+        help="Transport to replay over (default: inproc).",
+    )
     return parser
 
 
-def _cmd_fbp(transport: str) -> int:
+def _fbp_double(value: int) -> int:
+    return value * 2
+
+
+def _fbp_even(value: Any) -> bool:
+    return isinstance(value, int) and value % 2 == 0
+
+
+def _fbp_odd(value: Any) -> bool:
+    return isinstance(value, int) and value % 2 == 1
+
+
+def _seed_fbp_callables(fbp: Any) -> None:
+    """Register the deterministic demo callables in the module-level registry.
+
+    These are needed both to drive the live demo and to re-resolve directives
+    when a durable ledger is replayed in a fresh process. The names match what
+    the demo's directives reference (double/even/odd/cpm), so a replayed ledger
+    re-resolves them deterministically.
+    """
+    fbp.register_callable("double", _fbp_double, source_url="file:///tasks/double")
+    fbp.register_callable("even", _fbp_even)
+    fbp.register_callable("odd", _fbp_odd)
+    from agent_centric.fbp.critical_path import cpm_from_dict
+
+    fbp.register_callable(
+        "cpm", lambda nodes: cpm_from_dict(nodes).to_dict()
+    )
+
+
+def _cmd_fbp(transport: str, ledger: Path | None = None) -> int:
     """Drive the FBP subsystem demo over the directive/response protocol.
 
     Uses the high-level ``FbpDriver`` (the easy-UX layer) to prove the core
     properties on a real tree: registry-as-agent, configure, local run,
     mediated spawn + delegation, the correctness spine (parent re-verifies a
     child's value on the way up), and fail-closed delegation. All offline; the
-    transport exercises ``inproc``/``tcp``/``ipc``.
+    transport exercises ``inproc``/``tcp``/``ipc``. When ``ledger`` is given, the
+    session is recorded to a durable directive ledger (recoverable replay).
     """
     import agent_centric.fbp as fbp
 
-    def _double(value: int) -> int:
-        return value * 2
-
-    def _even(value: Any) -> bool:
-        return isinstance(value, int) and value % 2 == 0
-
-    def _odd(value: Any) -> bool:
-        return isinstance(value, int) and value % 2 == 1
+    _seed_fbp_callables(fbp)
 
     # A transport-appropriate root endpoint: "inproc" uses a bare name;
     # "tcp" needs host:port; "ipc" needs a path. Child endpoints are
@@ -582,10 +624,13 @@ def _cmd_fbp(transport: str) -> int:
     from agent_centric.fbp import open_state, open_trajectory
 
     _workdir = tempfile.mkdtemp(prefix="agent-centric-fbp-")
-    with fbp.FbpDriver(transport=transport, endpoint=endpoint) as driver:
-        driver.register("double", _double, source_url="file:///tasks/double")
-        driver.register("even", _even)
-        driver.register("odd", _odd)
+    driver_kwargs: dict[str, Any] = {}
+    if ledger is not None:
+        driver_kwargs["ledger_path"] = str(ledger)
+    with fbp.FbpDriver(transport=transport, endpoint=endpoint, **driver_kwargs) as driver:
+        driver.register("double", _fbp_double, source_url="file:///tasks/double")
+        driver.register("even", _fbp_even)
+        driver.register("odd", _fbp_odd)
         driver.configure(
             tasks=("double",),
             verifiers=("even", "odd"),
@@ -641,9 +686,10 @@ def _cmd_fbp(transport: str) -> int:
         print(f"durable: state bill-b3={_durable!r} audit_rows={_rows}")
 
         # Store/registry agent: a single-writer resource reached via delegation.
-        # Reconfigure with no verifier so the store's (non-numeric) values are
-        # not re-verified-and-demoted by the parent on relay.
-        driver._root._verifier = None
+        # Clear the root verifier (a recorded directive) so the store's
+        # (non-numeric) values are not re-verified-and-demoted by the parent on
+        # relay — and so replay reproduces it faithfully.
+        driver.configure(clear_verifier=True)
         driver.spawn("store", kind="store")
         driver.configure_child(
             "store",
@@ -733,6 +779,33 @@ def _cmd_fbp(transport: str) -> int:
         return 0 if local.verified and delegated.verified and replay["passed"] else 1
 
 
+def _cmd_fbp_replay(ledger_path: Path, transport: str) -> int:
+    """Re-open a durable directive ledger and re-verify (replay) it.
+
+    This is the crash-safe recovery path: a session recorded to a durable
+    ledger (via ``fbp --ledger <path>``) is re-issued on a fresh, state-isolated
+    tree and every run outcome compared to the recorded one.
+    """
+    import agent_centric.fbp as fbp
+
+    # The original callables cannot cross the wire, so re-seed the deterministic
+    # demo set before replaying (the ledger records these names with sources).
+    _seed_fbp_callables(fbp)
+    try:
+        result = fbp.replay_ledger(str(ledger_path), transport=transport)
+    except FileNotFoundError:
+        print(f"ledger  : no ledger file at {ledger_path}")
+        return 1
+    print(
+        f"ledger  : total={result['total']} runs={result['runs']} "
+        f"passed={result['passed']} failed={len(result['failed'])}"
+    )
+    for f in result["failed"]:
+        print(f"  FAIL run_id={f.get('run_id')} diff={f.get('diff')}")
+    return 0 if result["ok"] else 1
+
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point. Returns the process exit code."""
     args = _build_parser().parse_args(argv)
@@ -743,7 +816,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "replay-verify":
         return _cmd_replay_verify(args.store, args.trajectory_id)
     if args.command == "fbp":
-        return _cmd_fbp(args.transport)
+        return _cmd_fbp(args.transport, ledger=args.ledger)
+    if args.command == "fbp-replay":
+        return _cmd_fbp_replay(args.ledger_path, args.transport)
     raise AssertionError(f"unhandled command: {args.command}")
 
 
