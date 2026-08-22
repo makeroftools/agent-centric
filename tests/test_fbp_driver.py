@@ -344,6 +344,50 @@ class TestBillsLoop:
             assert resp.error is not None
 
 
+class TestAuditReconstruction:
+    """The driver reconstructs the full audit chain per correlation id across
+    the tree (audit as proof), including delegated parent-child relay hops."""
+
+    def test_reconstructs_local_chain(self, tmp_path: Path) -> None:
+        with FbpDriver() as driver:
+            driver.configure(trajectory=str(tmp_path / "root.db"))
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            r = driver.run("double", {"value": 21})
+            assert r.verified is True
+
+            chains = driver.reconstruct_audit()
+            # The run chain (kind result, value 42) is recovered.
+            run_chains = [
+                c for c in chains if c["terminal"] == "result" and c["terminal_value"] == 42
+            ]
+            assert run_chains, "should reconstruct the verified run chain"
+
+    def test_reconstructs_delegated_parent_child_chain(self, tmp_path: Path) -> None:
+        with FbpDriver() as driver:
+            driver.configure(trajectory=str(tmp_path / "root_traj.db"))
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            driver.spawn("child")
+            driver.configure_child(
+                "child", tasks=("double",), trajectory=str(tmp_path / "child_traj.db")
+            )
+            r = driver.run("double", {"value": 21}, child="child")
+            assert r.verified is True
+
+            chains = driver.reconstruct_audit()
+            # Find the chain that ended in the child's verified 42 result.
+            hit = None
+            for c in chains:
+                if c["terminal_value"] == 42 and c["verified"]:
+                    hit = c
+                    break
+            assert hit is not None, "should reconstruct the delegated chain"
+            nodes = [(e["node"], e["kind"]) for e in hit["events"]]
+            # child produced the result; root recorded the relay hop.
+            assert ("child", "result") in nodes and ("root", "relay") in nodes
+
+
 class TestLifecycle:
     def test_ping(self) -> None:
         with FbpDriver() as driver:

@@ -23,6 +23,7 @@ adapters (see ``spec.md`` and ``protocol.md``).
 """
 
 from .agent import Agent, register_callable
+from .audit import AuditChain, ChainEvent, reconstruct_chains
 from .bills import BillsError, accept_draft, bill_total, draft_from_intake, project_calendar
 from .bills_agent import BillsAgent
 from .config import AgentConfig
@@ -124,4 +125,8 @@ __all__ = [
     "draft_from_intake",
     "accept_draft",
     "project_calendar",
+    # Read-only tree-audit reconstruction (audit as proof)
+    "AuditChain",
+    "ChainEvent",
+    "reconstruct_chains",
 ]

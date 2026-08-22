@@ -222,6 +222,26 @@ class FbpDriver:
         """Return the root agent's local audit record (the chain's local start)."""
         return self._roundtrip(DIRECTIVE_AUDIT, {}, prefix="audit")
 
+    def reconstruct_audit(self) -> list[dict[str, Any]]:
+        """Reconstruct the full audit chain per correlation id across the tree.
+
+        Gathers every descendant agent's trajectory store and reconstructs the
+        causal chains (audit as proof). Read-only and deterministic.
+        """
+        from .audit import reconstruct_chains
+
+        stores: dict[str, Any] = {}
+
+        def _collect(agent: Any) -> None:
+            if agent._trajectory_store is not None:
+                stores[agent.identity] = agent._trajectory_store
+            for child in agent.children.values():
+                _collect(child)
+
+        _collect(self._root)
+        chains = reconstruct_chains(stores)
+        return [c.to_dict() for c in chains]
+
     # -- configuration -----------------------------------------------------
 
     def configure(

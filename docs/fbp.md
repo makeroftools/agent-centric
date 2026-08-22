@@ -197,6 +197,29 @@ with FbpDriver() as d:
 This exercises the correctness spine where it matters most — **no unverified
 money/dates** — end to end, deterministically and auditably.
 
+### Tree-audit reconstruction (audit as proof)
+
+`reconstruct_chains` (`audit.py`) is a read-only **capability** that turns the
+chain-audit machinery into something you can *prove* with. Each agent records
+its local activity; each parent records a `relay` hop when it accepts a child's
+verified response. The observer gathers every descendant's trajectory store and
+reconstructs the **full causal chain per correlation id** — the directive's
+path down the tree and the verified result (or audited failure) that bubbled
+up.
+
+```python
+chains = driver.reconstruct_audit()   # list[ChainEvent-dict], one per corr id
+for c in chains:
+    # c["correlation_id"], c["verified"], c["terminal"], c["terminal_value"],
+    # c["events"] -> [{"node", "kind", "verified", "value", "parent"}, ...]
+```
+
+- **Read-only**: a pure function over the stores; never mutates anything.
+- **Deterministic**: identical stores → identical chains.
+- **Proof-oriented**: `c["verified"]` is True only if every hop in the chain is
+  verified — so you can assert *why* a result is trustworthy, not just that it
+  was recorded.
+
 ### Transports
 
 `FbpDriver(transport=...)` runs the exact same protocol over:
