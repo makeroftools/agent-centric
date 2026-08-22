@@ -259,11 +259,29 @@ content = ws.read_text("bills/registry.json").content     # -> the JSON
 listing = ws.list_prefix("inbox/")                        # files in inbox/
 ```
 
-- **Fail-closed**: any path not on the allowlist — including any traversal that
-escapes the workspace root — is an explicit `WorkspaceError`. **No deletion**
-and **no implicit directory creation** (a write needs an already-existing,
-allowlisted parent). This is the trust/security boundary for a managed agent
-environment.
+- **Fail-closed**: any path not on the allowlist — including any traversals that
+escape the workspace root — is an explicit `WorkspaceError`. **No deletion**
+and **no implicit directory creation** (a missing parent). This is the
+trust/security boundary for a managed agent environment.
+
+### Model agent (LLM as an ordinary agent)
+
+A `ModelAgent` (`model_agent.py`, spawn kind `model`) serves a `model` run-task:
+
+```python
+with FbpDriver() as d:
+    d.spawn("model", kind="model")
+    r = d.run("model", {"prompt": "hello"}, child="model")  # deterministic stub
+    # r.verified True; r.sources[0] == {"kind": "model", "id": "stub-model"}
+```
+
+- **An ordinary child**: other agents delegate to it over the normal protocol;
+  its output is re-verified by the parent (correctness spine) and audited.
+- **Source references**: every response carries `sources` (the model id), so a
+  non-deterministic result is auditable with citations.
+- **Deterministic by default**: the stub provider is offline and CI-safe. A real
+  provider (`ModelProvider`) is an opt-in hook (`set_provider`) that never
+  relaxes verification.
 
 ### Tree-audit reconstruction (audit as proof)
 
