@@ -39,15 +39,15 @@ agents).
 
 ## Current git state
 - **Branch:** `agent-centric-fbp`; **working tree clean**.
-- **HEAD:** present working tree = replay per-run-verifier resolution (uncommitted).
+- **HEAD:** `454b873` = `fix(fbp): resolve per-run verifiers during replay`.
 - **Pushed:** up through `7b1979f` (`feat(fbp): bills loop - first real
-  end-to-end FBP graph`). **Unpushed (9):** `8ae8f6f` (tree-audit
+  end-to-end FBP graph`). **Unpushed (10):** `8ae8f6f` (tree-audit
   reconstruction), `33960e1` (deterministic replay), `72695d5` (session
   handoff), `022ad15` (replay_session — full-tree/delegated replay),
   `0f95db2` (spec & protocol contract sync), `95b3998` (handoff refresh),
   `e7790a7` (replay state isolation), `988b49a` (transport-resolve the bills
-  store child endpoint), `7141640` (handoff refresh), plus the working-tree
-  change (replay per-run-verifier resolution).
+  store child endpoint), `7141640` (handoff refresh), `454b873` (replay
+  per-run-verifier resolution).
 - Standing rule: **do not push unless the lead explicitly says push.**
 
 ## What's built (the full arc)
