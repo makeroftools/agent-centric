@@ -22,6 +22,8 @@ Real distribution (``tcp://``/``ipc://``) and a FastAPI layer are deferred
 adapters (see ``spec.md`` and ``protocol.md``).
 """
 
+from __future__ import annotations
+
 from .agent import Agent, register_callable
 from .audit import AuditChain, ChainEvent, reconstruct_chains
 from .bills import (
@@ -195,3 +197,10 @@ __all__ = [
     "DEFAULT_HOST",
     "DEFAULT_PORT",
 ]
+
+
+# The FBP source tree, used by the ``fbp-web --reload`` dev watcher.
+from pathlib import Path  # noqa: E402  (kept at the end, after __all__)
+
+_FBP_DIR = Path(__file__).resolve().parent
+

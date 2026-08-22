@@ -42,7 +42,7 @@ DEFAULT_PORT = 8790
 OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 # The model served by the landing page's model agent when a real provider is
 # wired. Overridable via ``OPENROUTER_MODEL``.
-DEFAULT_OPENROUTER_MODEL = "openai/gpt-4o-mini"
+DEFAULT_OPENROUTER_MODEL = "deepseek/deepseek-v4-flash-0731"
 # Env var holding the OpenRouter API key (never hardcoded).
 OPENROUTER_API_KEY_ENV = "OPENROUTER_API_KEY"
 OPENROUTER_MODEL_ENV = "OPENROUTER_MODEL"
@@ -377,11 +377,16 @@ _PAGE_CSS = "\n".join([
     ".actions a { display:inline-block; margin-right:.6rem;",
     "  padding:.5rem .9rem; background:#0057ff; color:#fff; text-decoration:none; }",
     ".invariants li { margin:.25rem 0; } .error { color:#b00020; } .note { color:#555; }",
+    ".spinner { display:inline-block; width:1rem; height:1rem; border:2px solid #ccc;",
+    "  border-top-color:#0057ff; border-radius:50%; animation:spin .6s linear infinite;",
+    "  vertical-align:middle; margin-left:.5rem; }",
+    "@keyframes spin { to { transform: rotate(360deg); } }",
+    "#model-result { white-space:pre-wrap; }",
 ])
 
 # The model text-box client script (kept out of the f-string so its JS object
 # braces are not mistaken for f-string interpolations).
-_MODEL_JS = """\
+_MODEL_JS = r"""\
 <script>
   document.getElementById('model-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -389,7 +394,10 @@ _MODEL_JS = """\
     const sel = document.getElementById('model-select');
     const model = sel ? sel.value : '';
     const out = document.getElementById('model-result');
-    out.textContent = '...';
+    const spin = document.getElementById('model-spinner');
+    out.textContent = "";
+    out.className = 'note';
+    if (spin) spin.style.display = 'inline-block';
     try {
       const r = await fetch('/model', {
         method: 'POST',
@@ -403,9 +411,13 @@ _MODEL_JS = """\
         out.textContent = badge + src + '\n' + data.text;
       } else {
         out.textContent = 'error: ' + (data.error || 'unknown');
+        out.className = 'error';
       }
     } catch (err) {
       out.textContent = 'request failed: ' + err;
+      out.className = 'error';
+    } finally {
+      if (spin) spin.style.display = 'none';
     }
   });
 </script>
@@ -487,6 +499,7 @@ The answer shows its <b>verified</b> status and model <b>source</b>.</p>
   <textarea id='model-prompt' rows='3' cols='60' placeholder='Ask the model...'></textarea>
   <br/>
   <button type='submit'>Ask</button>
+  <span id='model-spinner' class='spinner' style='display:none'></span>
 </form>
 <pre id='model-result' class='note'></pre>
 {_MODEL_JS}

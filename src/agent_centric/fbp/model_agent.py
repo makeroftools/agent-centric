@@ -105,11 +105,18 @@ class ModelAgent(Agent):
 
     @staticmethod
     def _invoke_provider(provider: Any, prompt: str, kwargs: dict[str, Any]) -> str:
-        """Call a provider supporting either ``.complete`` or ``__call__``."""
+        """Call a provider supporting either ``.complete`` or ``__call__``.
+
+        Provider results may be a plain ``str`` or a ``ModelResponse``; both are
+        normalised to the text so the platform's value is the answer, not an
+        object repr.
+        """
         complete = getattr(provider, "complete", None)
-        if callable(complete):
-            return str(complete(prompt, **kwargs))
-        return str(provider(prompt, **kwargs))
+        result = (
+            complete(prompt, **kwargs) if callable(complete) else provider(prompt, **kwargs)
+        )
+        text = getattr(result, "text", result)
+        return str(text)
 
     def _op_model(self, directive: Directive) -> Response:
         """Serve a model completion, attaching the model id as a source.

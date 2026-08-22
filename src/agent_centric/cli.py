@@ -581,6 +581,23 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Open a browser at the landing page on startup.",
     )
+    p_fbp_web.add_argument(
+        "--reload",
+        action="store_true",
+        help="Watch the FBP source tree and auto-restart the server on changes "
+        "(dev convenience; loopback-only).",
+    )
+
+    p_fbp_web_kill = sub.add_parser(
+        "fbp-web-kill",
+        help="Stop a running fbp-web server (by port, default 8790).",
+    )
+    p_fbp_web_kill.add_argument(
+        "--port",
+        type=int,
+        default=8790,
+        help="Port of the running server to stop (default: 8790).",
+    )
 
     p_fbp_replay = sub.add_parser(
         "fbp-replay",
@@ -943,14 +960,27 @@ def _cmd_fbp(transport: str, ledger: Path | None = None) -> int:
         return 0 if local.verified and delegated.verified and replay["passed"] else 1
 
 
-def _cmd_fbp_web(*, host: str = "127.0.0.1", port: int = 8790, open_browser: bool = False) -> int:
+def _cmd_fbp_web(
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8790,
+    open_browser: bool = False,
+    reload: bool = False,
+) -> int:
     """Serve a local, actionable landing page for the FBP subsystem.
 
     Binds a stdlib ``http.server`` on loopback (fail-closed: never exposed
     beyond the local machine) and renders a live landing page against an
     in-process ``FbpDriver``. The page is read/verify-only and never mutates
     durable state. Blocks until interrupted (Ctrl-C).
+
+    With ``reload=True`` the server runs as a child process that is restarted
+    whenever the FBP source tree changes (a dev convenience so edits are picked
+    up without a manual restart).
     """
+    if reload:
+        return _fbp_web_reload(host=host, port=port, open_browser=open_browser)
+
     from agent_centric.fbp.web import serve
 
     try:
@@ -959,6 +989,211 @@ def _cmd_fbp_web(*, host: str = "127.0.0.1", port: int = 8790, open_browser: boo
         print(f"fbp-web: could not bind {host}:{port}: {exc}", file=sys.stderr)
         return 1
     return 0
+
+
+def _fbp_web_reload(*, host: str, port: int, open_browser: bool) -> int:
+    """Run ``fbp-web`` as a child process, restarting it on source changes.
+
+    A tiny, stdlib-only dev loop: it spawns ``python -m agent_centric fbp-web``
+    as a child, watches the FBP source tree, and restarts the child whenever a
+    ``.py`` file changes. The child inherits the current environment (so
+    ``OPENROUTER_API_KEY`` / ``OPENROUTER_MODEL`` are honoured). Ctrl-C stops
+    both the watcher and the child.
+    """
+    import os
+    import subprocess
+    import time
+
+    from agent_centric.fbp import _FBP_DIR
+
+    child: subprocess.Popen[Any] | None = None
+
+    # If an fbp-web server (that we can positively identify) already owns the
+    # port, take it over so `--reload` is idempotent and convenient. We only
+    # kill when we can confirm it is one of ours; an unrelated process on the
+    # port is left untouched (fail-closed).
+    _fbp_kill_stale_web(port)
+
+    def _spawn() -> subprocess.Popen[Any]:
+        cmd = [
+            sys.executable,
+            "-m",
+            "agent_centric",
+            "fbp-web",
+            "--host",
+            str(host),
+            "--port",
+            str(port),
+        ]
+        if open_browser:
+            cmd.append("--open")
+        return subprocess.Popen(
+            cmd,
+            cwd=os.getcwd(),
+            env=os.environ.copy(),
+        )
+
+    def _stop(child: subprocess.Popen[Any] | None) -> None:
+        if child is None:
+            return
+        child.terminate()
+        try:
+            child.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.wait()
+
+    try:
+        child = _spawn()
+        print(f"fbp-web: watching {_FBP_DIR} for changes (Ctrl-C to stop)")
+        while True:
+            time.sleep(1.0)
+            if child.poll() is not None:
+                # Child exited on its own (e.g. bind error). Surface and stop.
+                print(
+                    f"fbp-web: server exited with code {child.returncode}; stopping.",
+                    file=sys.stderr,
+                )
+                return child.returncode or 1
+            if _fbp_tree_changed(_FBP_DIR):
+                print("fbp-web: change detected; restarting...")
+                _stop(child)
+                child = _spawn()
+    except KeyboardInterrupt:
+        print("\nfbp-web: stopping.")
+        _stop(child)
+        return 0
+
+
+def _fbp_tree_changed(root: Path, *, interval: float = 1.0) -> bool:
+    """Return True if any ``.py`` file under ``root`` changed since last call.
+
+    Uses (mtime, size) snapshots; cheap and adequate for a dev reload loop.
+    ``interval`` is the minimum time between checks (avoids a busy loop).
+    """
+    import time
+
+    state = _fbp_watch_state
+    if state["snapshot"] is None:
+        state["snapshot"] = _fbp_snapshot(root)
+        state["last"] = time.monotonic()
+        return False
+    now = time.monotonic()
+    if now - state["last"] < interval:
+        return False
+    state["last"] = now
+    snap = _fbp_snapshot(root)
+    prev = state["snapshot"]
+    changed = prev is not None and snap != prev
+    state["snapshot"] = snap
+    return changed
+
+
+# Module-level state for the reload watcher (avoids function-attribute typing).
+_fbp_watch_state: dict[str, Any] = {"snapshot": None, "last": 0.0}
+
+
+def _fbp_snapshot(root: Path) -> dict[str, tuple[int, int]]:
+    """Snapshot (mtime, size) of every ``.py`` file under ``root``."""
+    snap: dict[str, tuple[int, int]] = {}
+    for p in root.rglob("*.py"):
+        try:
+            st = p.stat()
+        except OSError:
+            continue
+        snap[str(p)] = (st.st_mtime_ns, st.st_size)
+    return snap
+
+
+def _cmd_fbp_web_kill(*, port: int = 8790) -> int:
+    """Stop a running ``fbp-web`` server bound to ``port``.
+
+    Finds the process listening on the given loopback port and terminates it.
+    Uses ``psutil`` when available; otherwise falls back to ``lsof``/``fuser``.
+    Returns 0 if a server was stopped, 1 if none was found.
+    """
+    import os
+    import signal
+
+    pid = _pid_on_port(port)
+    if pid is None:
+        print(f"fbp-web-kill: no server found on port {port}.")
+        return 1
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        print(f"fbp-web-kill: process {pid} already gone.")
+        return 1
+    print(f"fbp-web-kill: stopped server on port {port} (pid {pid}).")
+    return 0
+
+
+def _pid_on_port(port: int) -> int | None:
+    """Return the PID listening on ``port`` (loopback), or None."""
+    import subprocess
+
+    try:
+        import psutil  # type: ignore[import-untyped]
+    except ImportError:
+        psutil = None
+
+    if psutil is not None:
+        for conn in psutil.net_connections(kind="inet"):
+            if conn.laddr and conn.laddr.port == port and conn.status == "LISTEN":
+                pid = conn.pid
+                return int(pid) if pid is not None else None
+        return None
+
+    # Fallback: lsof -ti :<port> (macOS/Linux).
+    try:
+        out = subprocess.run(
+            ["lsof", "-ti", f":{port}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.strip()
+    except OSError:
+        return None
+    if not out:
+        return None
+    try:
+        return int(out.splitlines()[0])
+    except ValueError:
+        return None
+
+
+def _fbp_kill_stale_web(port: int) -> None:
+    """Kill a running ``fbp-web`` server on ``port``, if we can identify it.
+
+    Used by ``--reload`` to take the port over. We only terminate the process if
+    we can confirm it is one of ours (an ``agent-centric fbp-web`` command); if
+    the port is owned by something else or we cannot tell, we leave it alone
+    (fail-closed) so unrelated services are never harmed.
+    """
+    import os
+    import signal
+
+    pid = _pid_on_port(port)
+    if pid is None:
+        return
+
+    # The child server is started via ``python -m agent_centric fbp-web``; match
+    # on the cmdline so we never kill an unrelated service bound to the port.
+    try:
+        with open(f"/proc/{pid}/cmdline", "rb") as fh:
+            cmdline = fh.read().replace(b"\x00", b" ").decode("utf-8", errors="replace")
+    except OSError:
+        cmdline = ""
+    if "agent_centric" not in cmdline or "fbp-web" not in cmdline:
+        print(
+            f"fbp-web: port {port} is in use by a non-fbp process (pid {pid}); "
+            "leaving it untouched. Stop it yourself or pick another --port.",
+            file=sys.stderr,
+        )
+        return
+
+    os.kill(pid, signal.SIGTERM)
+    print(f"fbp-web: port {port} owned by a prior fbp-web (pid {pid}); taking it over.")
 
 
 def _cmd_fbp_replay(ledger_path: Path, transport: str) -> int:
@@ -1023,7 +1258,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "fbp":
         return _cmd_fbp(args.transport, ledger=args.ledger)
     if args.command == "fbp-web":
-        return _cmd_fbp_web(host=args.host, port=args.port, open_browser=args.open)
+        return _cmd_fbp_web(
+            host=args.host, port=args.port, open_browser=args.open, reload=args.reload
+        )
+    if args.command == "fbp-web-kill":
+        return _cmd_fbp_web_kill(port=args.port)
     if args.command == "fbp-replay":
         return _cmd_fbp_replay(args.ledger_path, args.transport)
     if args.command == "fbp-summary":

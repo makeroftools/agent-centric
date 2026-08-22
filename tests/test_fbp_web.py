@@ -83,6 +83,29 @@ class TestModelRoute:
         assert model_agent._model_id == "openai/gpt-5"
         server._driver.close()
 
+    def test_model_agent_text_from_real_provider_is_plain(self) -> None:
+        """A real provider returning a ``ModelResponse`` yields the plain text
+        as the response value, not the object repr (regression: the box must
+        show the answer, not ``ModelResponse(text=...)``)."""
+        from agent_centric.contracts import ModelResponse
+        from agent_centric.fbp.model_agent import ModelAgent
+
+        server = FbpLandingServer()
+        driver = server._driver
+        driver.spawn("model", kind="model")
+        model_agent: ModelAgent = driver._root.children["model"]
+
+        class _Provider:
+            def __call__(self, prompt: str, **kwargs: object) -> ModelResponse:
+                return ModelResponse(text=f"real answer to {prompt}")
+
+        model_agent.set_provider(_Provider())
+        resp = driver.run("model", {"prompt": "hello"}, child="model")
+        assert resp.verified is True
+        assert resp.value == "real answer to hello"
+        assert "ModelResponse(" not in resp.value
+        server._driver.close()
+
     def test_parse_model_body_plain_prompt(self) -> None:
         assert _parse_model_body("hello world") == ("hello world", "")
 
