@@ -306,10 +306,13 @@ resolved, rule = resolve_with_rules(
 - A human (or analyser) authorizes a `Rule` once; `resolve_with_rules` then
   auto-resolves matching intake deterministically (attributable to the rule),
   and only non-matching (irreducible) residue reaches the human.
-- **Bills integration:** a `BillsAgent` granted approved rules (via
-  `configure_child(rules=...)`) serves `bills_accept_deterministic`, which
-  auto-accepts a draft only when a rule matches (recording the rule id as the
-  source); a non-matching draft fails closed back to human `bills_accept`.
+- **Bills integration:** a `BillsAgent` serves `bills_accept_deterministic`,
+  which auto-accepts a draft only when an approved rule matches (recording the
+  rule id as the source); a non-matching draft fails closed back to human
+  `bills_accept`. Rules are granted via `configure_child(rules=...)` **and/or**
+  persisted durably via `bills_rule_add` (stored grant-bound in the registry's
+  single-writer store) — so an authorized rule keeps auto-accepting matching
+  intake across restarts without re-granting.
 
 ### Tree-audit reconstruction (audit as proof)
 
