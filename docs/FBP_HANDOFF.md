@@ -1,136 +1,141 @@
 # HANDOFF — Agent-centric FBP subsystem (branch `agent-centric-fbp`)
 
-**Prepared for a new session thread.** Facts are current as of this handoff.
+**Prepared by the Lead Architect so a new session can resume with full context.**
+Facts are current as of this handoff (verified live).
 
 > **Read first:** `src/agent_centric/fbp/spec.md` (architecture) and
 > `src/agent_centric/fbp/protocol.md` (wire contract), then `docs/fbp.md`
 > (easy-UX driver + capabilities), then this file.
-> `HANDOFF.md` at the repo root describes the *older* `main`-branch Manager
-> system and is **not** the current work; the FBP subsystem is the active
-> branch.
+> `README_FBP.md` is the story-led, human-friendly deep-dive of the branch.
+> `docs/FBP_HANDOFF.md` is this file. `HANDOFF.md` at repo root describes the
+> *older* `main`-branch Manager system and is **not** the current work.
 
-## What Agent-centric FBP is
+## State (verified this session)
 
-A rooted, recursive **tree of agents** with **no central manager** — the
-topology *is* the governance. Work travels **down**; responses and
-responsibility bubble **up**, each parent **re-verifying a child's value**
-before accepting it (the correctness spine). A task terminates in a **verified
-result or an explicit, audited failure** — never a silent third state.
-
-Agents speak a versioned **directive/response protocol** over ZeroMQ
-(`inproc://`, `tcp://`, `ipc://`). The registry is a passive capability
-catalog; CPM and audit reconstruction are pure, read-only **capabilities** (not
-agents).
-
-## Standards (non-negotiable)
-- **No unverified success.** `Response.verified` is True only if the value
-  passed every verifier on the upward path.
-- **Fail-closed everywhere.** Malformed directives, unknown delegation targets,
-  ungranted store keys, malformed domain input, cyclic CPM, replay mismatch —
-  all become explicit, audited errors, never silent outcomes or crashes.
-- **Deterministic by construction.** Identical directives + identical context
-  → identical results. No auto-generated keys/timestamps on the auditable path.
-- **Idempotent.** A replayed directive returns the cached result (keyed by the
-  full fingerprint) rather than re-executing or double-writing.
-- **Full auditability.** Every agent records its local activity; every parent
-  records a `relay` hop. The tree audit is reconstructible and replayable.
-- **Persistence is an explicit grant.** Stores open only via `configure`
-  `state=`/`trajectory=`; an agent never silently writes a file.
-
-## Current git state
 - **Branch:** `agent-centric-fbp`; **working tree clean**.
-- **HEAD:** `315df22` = `docs(fbp): document deterministic auto-accept via approved rules`.
-- **Pushed:** up through `7b1979f` (`feat(fbp): bills loop - first real
-  end-to-end FBP graph`). **Unpushed (53):** the older commits plus grant-bound
-  registry reads, the softened correctness-spine docs, source references on
-  non-deterministic output, the **ModelAgent** (LLM as an ordinary agent),
-  determinism rating + approved-rule registry, and deterministic auto-accept
-  via approved rules (see `git log origin/agent-centric-fbp..HEAD`).
+- **HEAD:** `27276c5` = `feat(fbp): full production-arc runnable example`.
+- **Pushed:** up through `7b1979f` (origin/FBP). **Unpushed (57 commits)** — see
+  `git log origin/agent-centric-fbp..HEAD`.
+- **Validation:** `uv run pytest` → **598 passed**; `uv run ruff check .` clean;
+  `uv run mypy src` clean (**75 source files**).
+- **Git topology:** `main` is **fully contained** in the FBP branch (0 divergent
+  commits). Your instruction stands: **keep `main` as the GitHub default**; port
+  main's goodness into FBP (done for intake/workspace/maintenance), and only
+  later consider making FBP `main` after picking it clean.
 - Standing rule: **do not push unless the lead explicitly says push.**
 
-## What's built (the full arc)
+## The mission-critical positioning (the actual design north star)
+
+Agent-centric is **a deterministic platform first and foremost.** It *uses* —
+but never fully trusts — non-deterministic tools (LLMs, free-form parsers):
+
+1. A non-deterministic output is a **hint**, not an answer. We derive a
+   deterministic method to every degree possible.
+2. The only genuine **irreducible residue** goes to a human.
+3. The human-authorization becomes a **deterministic rule** that runs
+   unattended thereafter ("authorize once, run after restart").
+4. LLMs are **ordinary agents** in the tree — delegated to over the normal
+   protocol, re-verified by the parent (correctness spine), and their output
+   carries **source references**, so it is auditable with citations.
+5. **never let a self-claimed `verified` stand alone** → softened to: a child's
+   `verified` is *not conclusive on its own*.
+
+These are captured in code (ModelAgent, determinism/auto-accept) and docs.
+
+## What's built (the full arc, all implemented + tested)
+
 | Area | File(s) | What it guarantees |
 |------|---------|--------------------|
 | **Protocol + transport parity** | `fbp/message.py`, `fbp/agent.py` | Versioned, enforced directive/response contract over `inproc`/`tcp`/`ipc`; ack-retry; fail-closed on malformed input. |
 | **Correctness spine** | `fbp/agent.py` | Parent re-verifies a child's value on the way up; a child's self-claimed `verified` is not conclusive on its own. |
-| **Durable state** | `fbp/store.py` | `StateStore` (single-writer key/value, idempotent by fingerprint) + `TrajectoryStore` (append-only, write-once audit). Separate files, on-demand. |
-| **Store/registry agent** | `fbp/store_agent.py` | Single-writer durable resource; key-allowlist grant; ungranted keys fail closed. |
+| **Durable single-writer state** | `fbp/store.py` | `StateStore` (single-writer, fingerprint-idempotent) + `TrajectoryStore` (append-only audit). Explicit grants only. |
+| **Store/registry agent** | `fbp/store_agent.py` | Single-writer durable resource; key-allowlist grant; **grant-bound reads** (`store_keys`, `store_get`) + writes. Ungranted keys fail closed. |
 | **CPM (capability, not agent)** | `fbp/critical_path.py` | Deterministic, read-only critical-path/slack analysis. |
-| **Bills loop (real graph)** | `fbp/bills.py`, `fbp/bills_agent.py` | Intake → human-gated accept → durable registry → verified calendar. No unverified money/dates; no auto-accept. |
-| **Tree-audit reconstruction** | `fbp/audit.py` | Round-reconstructs every causal chain per correlation id (audit as proof). |
-| **Deterministic replay** | `FbpDriver.replay()` / `replay_session()` | Re-run recorded local runs (or the whole sequence, incl. delegated runs, rebuilding the tree) and verify outcomes match (re-verification after the fact). Full-tree replay isolates on-disk state *and* trajectory (fresh temp paths), so stateful trees replay cleanly without touching the original stores. Replay faithfully resolves per-run verifiers (and delegated-store state paths). |
-| **Durable directive ledger** | `fbp/ledger.py`, `FbpDriver(ledger_path=)`, `replay_ledger` | Crash-safe, recoverable replay: a session recorded to a durable directive ledger (explicit grant) is re-verifiable after the process is gone via `agent-centric fbp-replay`. `replay_ledger` auto-imports the registry manifest to restore callables (importable module.qualname); non-importable ones are reported for manual seeding. |
-| **Intake capabilities (ported from main)** | `fbp/pdf_intake.py`, `fbp/intake.py`, `fbp/bills_agent.py` | Deterministic, offline, read-only intake into **unverified** drafts: `draft_from_pdf_text` (embedded PDF text), `draft_from_file` (json/csv/txt/pdf), `draft_from_email` (fetched email). **BillsAgent** also serves them as run-tasks (`bills_intake_file`/`_email`/`_pdf`), so intake -> human accept -> registry is reachable over the protocol and replayable. All require the human `bills_accept` gate; malformed/incomplete sources fail closed (no invented facts, no auto-enter). |
-| **Registry maintenance (ported from main)** | `fbp/bills.py` (`mark_bill_status`), `fbp/bills_agent.py` | `bills_mark_paid` / `bills_mark_status` are explicit, mediated status updates through the single-writer store (closed status set); `mark_bill_status` is a pure merge that never changes money/dates or re-accepts intake, and paid bills drop out of the open calendar. |
-| **Allowlisted workspace (ported from main)** | `fbp/workspace.py` | `WorkspaceFS` mediates file access strictly under an explicit allowlist (files/dirs/prefixes), fail-closed on any disallowed or traversal-escaping path, no deletion, no implicit dir creation. The trust/security boundary for a managed agent environment. |
-| **Source references on output** | `fbp/message.py`, `fbp/agent.py`, `fbp/store.py`, `fbp/audit.py` | `Response.sources` carries structured source references (model id, documents) on non-deterministic output; preserved through relays and the trajectory audit, surfaced in reconstructed chains. `FbpDriver.run(sources=...)`. |
-| **Model agent (LLM as an ordinary agent)** | `fbp/model_agent.py` | Spawn kind `model` serves a `model` run-task; other agents delegate to it over the protocol and its output is re-verified by the parent, audited, source-referenced. Deterministic stub by default; `ModelProvider` is an opt-in hook that never relaxes verification. |
-| **Determinism + auto-accept** | `fbp/determinism.py`, `fbp/bills_agent.py` | `score_determinism`/`Rule`/`RuleSet` rate and resolve ambiguity; `bills_accept_deterministic` auto-accepts a draft only when an approved rule matches (rule id as source), else routes to human review (no unverified write). |
+| **Bills loop (real graph)** | `fbp/bills.py`, `fbp/bills_agent.py` | Intake → human-gated accept (or deterministic auto-accept) → durable registry → verified calendar → maintenance. No unverified money/dates. |
+| **Intake (ported from main)** | `fbp/pdf_intake.py`, `fbp/intake.py` | `draft_from_file` (json/csv/txt/pdf), `draft_from_email`, `draft_from_pdf_text` — offline, deterministic, → **unverified** drafts. |
+| **Registry maintenance** | `fbp/bills.py` (`mark_bill_status`) | `bills_mark_paid` / `bills_mark_status` — explicit, mediated status updates; paid bills leave the open calendar. |
+| **Allowlisted workspace (ported from main)** | `fbp/workspace.py` | `WorkspaceFS` grants path access under an explicit allowlist; fail-closed on traversal/disallowed; no deletion. |
+| **Tree-audit reconstruction** | `fbp/audit.py` | Reconstructs full causal chain per correlation id (audit as proof), incl. source references. |
+| **Deterministic replay** | `FbpDriver.replay()` / `replay_session()` | Re-run recorded runs (local + delegated) and verify outcomes; isolates on-disk state, resolves per-run verifiers. |
+| **Durable crash-safe replay** | `fbp/ledger.py`, `load_ledger`/`replay_ledger` | Durable directive ledger + registry manifest; `replay_ledger` auto-seeds callables and re-verifies in a fresh process. |
+| **Operator summary** | `FbpDriver.summary()` / `summarise_ledger` | Deterministic per-kind/per-run readout; `ok` only if every run verified. |
+| **Plans + progress** | `FbpDriver.run_plan(on_step=...)` | Deterministic sequence, fail-closed on first unverified, streams per-step progress. |
+| **Source references on output** | `fbp/message.py`, drivers | `Response.sources` on non-deterministic output; preserved through relays/audit/chains; `FbpDriver.run(sources=...)`. |
+| **Model agent (LLM as ordinary agent)** | `fbp/model_agent.py` | Spawn kind `model`; `run("model", ...)`; deterministic stub default; `ModelProvider` opt-in hook (never relaxes verification). |
+| **Determinism + auto-accept** | `fbp/determinism.py`, `fbp/bills_agent.py` | `score_determinism`, `Rule`/`RuleSet`; `bills_accept_deterministic` auto-accepts **only when an approved rule matches** (rule id as source), else falls back to human review. |
+| **Durable approved rules** | `fbp/bills_agent.py` (`bills_rule_add`) | Rules persisted in the single-writer store; auto-accept works across restarts ("authorize once, run after restart"). |
 
 ## Easy-UX driver (`FbpDriver`) and CLI
-- `FbpDriver` (`fbp/driver.py`) is the synchronous, easy-UX layer: `register`,
-  `resolve`, `configure`, `configure_child`, `run`, `spawn`, `ping`, `kill`,
-  `state_set`/`state_get`, `audit`, `reconstruct_audit`, `ledger`, `replay`,
-  `replay_session`, `run_plan`, `summary` (and `load_ledger`/`ledger_callables`/
-  `replay_ledger`/`summarise_ledger` for the durable ledger).
+
+- `FbpDriver` (`fbp/driver.py`) is the synchronous easy-UX layer: `register`,
+  `resolve`, `configure`, `configure_child`, `run`, `run_plan`, `spawn`, `ping`,
+  `kill`, `state_set`/`state_get`, `audit`, `reconstruct_audit`, `ledger`,
+  `replay`, `replay_session`, `summary`, `load_ledger`/`replay_ledger`.
 - CLI: `agent-centric fbp [--transport inproc|tcp|ipc] [--ledger <path>]`
-  demonstrates the whole stack (protocol, correctness spine, durable state +
-  chain audit, store agent, CPM, bills loop, plan execution, audit
-  reconstruction, deterministic replay); `agent-centric fbp-replay <path>`
-  re-verifies a durable ledger in a fresh process; `agent-centric fbp-summary
-  <path>` gives an operator-facing summary.
-- Example: `examples/fbp_durability_demo.py`.
+  drives the whole stack (protocol, spine, durable state, store agent, CPM,
+  bills loop, intake, maintenance, model agent, determinism, audit, replay);
+  `agent-centric fbp-summary <path>`; `agent-centric fbp-replay <path>`.
+- Example: `examples/fbp_arc_demo.py` (runnable end-to-end production arc);
+  `examples/fbp_demo.py`, `examples/fbp_durability_demo.py`.
 
 ## Validation
-- `uv run pytest` → **597 passed**; `uv run ruff check .` clean; `uv run mypy src` clean (75 source files).
-- CLI output streams **line-buffered** so piped operator output is visible live.
 
-## Key invariants to never break (FBP)
+- `uv run pytest` → **598 passed** · `uv run ruff check .` clean ·
+  `uv run mypy src` clean (75 source files).
+- Cross-transport durable replay verified live: **19/19 runs on inproc, ipc, tcp**.
+- Full production arc demo: model-delegate → durable-rule auto-accept (rule id
+  as source) → verified calendar → **crash-safe replay (6/6)**.
+
+## Standing invariants (never break)
+
 - **No unverified success; fail-closed everywhere; deterministic control.
-- **Persistence is an explicit grant; store writes are single-writer and
+- **Persistence is an explicit grant; store writes single-writer and
   fingerprint-idempotent; no auto-generated ids.
-- **Human-gated accept only** for money/registry writes; intake never
-  auto-accepts.
-- **CPM and audit/replay are read-only capabilities, not agents** — an agent
-  is defined by the correctness spine; a pure function isn't a unit of work.
-- **Public-surface additive only** — prefer capabilities/adapters over changing
-  agent semantics.
+- **Human-gated** (or rule-authorized-deterministic) only for money/registry
+  writes; intake never auto-accepts unruled.
+- **We never rely on a non-deterministic output directly** — determinize first;
+  only irreducible residue reaches a human; LLM outputs carry source refs.
+- **CPM, audit, and replay are read-only capabilities, not agents.**
+- **Public-surface additive only.**
 
 ## Architecture map (FBP)
-- `src/agent_centric/fbp/` — `agent.py` (core Agent + typed `_spawn` kinds),
-  `driver.py` (easy-UX), `message.py`, `store.py`, `store_agent.py`,
-  `bills.py`, `bills_agent.py`, `critical_path.py`, `audit.py`, `shell.py`,
-  `node.py`, `context.py`, `registry.py`, `config.py`, plus `spec.md` /
-  `protocol.md`.
-- Package exported from `agent_centric` (aliased `Fbp*` names) and re-exported
-  from `agent_centric.fbp`.
 
-## Tooling / validation commands
+- `src/agent_centric/fbp/` — `agent.py`, `driver.py`, `message.py`,
+  `store.py`, `store_agent.py`, `model_agent.py`, `determinism.py`,
+  `bills.py`, `bills_agent.py`, `pdf_intake.py`, `intake.py`, `workspace.py`,
+  `critical_path.py`, `audit.py`, `ledger.py`, `shell.py`, `node.py`,
+  `context.py`, `registry.py`, `config.py`, plus `spec.md` / `protocol.md`.
+- Public surface re-exported from `agent_centric` (aliased `Fbp*`) and
+  `agent_centric.fbp`.
+
+## Tooling / commands
+
 ```sh
 uv sync --extra dev
-uv run pytest                 # 522 passed (as of this handoff)
+uv run pytest                 # 598 passed (as of this handoff)
 uv run ruff check .           # clean
-uv run mypy src               # clean, 69 files
-uv run agent-centric fbp      # drive the FBP demo over inproc
+uv run mypy src               # clean, 75 files
+uv run agent-centric fbp      # drive the FBP demo (inproc)
 uv run agent-centric fbp --transport tcp|ipc
+uv run python examples/fbp_arc_demo.py   # full production arc example
 ```
 
 ## Honest non-goals / limits
-- FBP is on `agent-centric-fbp`, **not** merged to `main` (which is the older
-  Manager system). No cross-pollination has been done.
-- Replay covers local and delegated `run` directives recorded in the ledger;
-  full-tree replay **isolates on-disk state** (fresh temp paths for replayed
-  store grants), so stateful trees like bills replay cleanly and replay never
-  touches the original store files. Durable-ledger replay **auto-re-seeds** the
-  recorded callables from the manifest (importing module.qualname); only
-  non-importable callables (REPL closures/lambdas) need manual seeding, and are
-  reported in `missing_callables`.
-- No FastAPI UI, no multi-language runtime, no durable git-backed directive
-  ledger yet (the SQLite ledger covers recoverable replay; a git-backed queue
-  is still future — all deferred per spec.md).
-- `docs/fbp.md` is the living companion doc; keep it current with new
-  capabilities.
+
+- FBP is on `agent-centric-fbp`, **not** merged to `main`. `main` stays the
+  GitHub default. No cross-pollination of FBP internals into main.
+- Replay + durable ledger: full-tree replay reuses on-disk store paths by
+  default; durable-ledger replay **isolates** state (fresh temp grants).
+- No FastAPI UI, no multi-language runtime, no git-backed ledger queue
+  (deferred per spec.md).
+- Model agent uses a **deterministic stub** by default (CI-safe). A real
+  `ModelProvider` is a future opt-in; it must never relax verification.
+- `docs/fbp.md` and `README_FBP.md` are living docs; keep them current.
 
 ## Suggested next (optional)
-- Merge FBP to `main` (or deliberately keep it separate) once the lead
-  decides.
+
+- Wire a real `ModelProvider` (behind `set_provider`) with source citations.
+- Add read-only inspection convenience (e.g. discover granted store keys) for
+  the operator.
+- Do a commit-to-push when the lead lifts the do-not-push rule (57 unpushed).
+- Later: consider making FBP `main` after picking it clean (per the lead).
