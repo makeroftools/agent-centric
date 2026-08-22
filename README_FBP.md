@@ -5,6 +5,9 @@
 > bubbles **up** — each parent **re-verifying its child's value** before it
 > accepts it. A task ends in a **verified result or an explicit, audited
 > failure** — never a silent third state.
+> **The platform is deterministic first and foremost.** Non-deterministic tools
+> are inputs we *use* — never authorities we fully trust; only a deterministic
+> check can make a result count.
 
 `agent-centric-fbp` is the flow-based, agent-centric branch of the
 Agent-centric system. It is a **mission-critical, automated backbone** built for

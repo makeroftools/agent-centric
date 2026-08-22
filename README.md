@@ -3,12 +3,13 @@
 **A deterministic system for governed, verifiable agents — where the topology is
 the governance.**
 
-Agent-centric is an **abstract, general-purpose agent system**. It is a
-local-first core built around one idea: an **Agent** is simultaneously a worker
-to its parent and a manager to its children, and together they form a rooted,
-recursive **tree**. Work flows **down** as directives; verified responses and
-responsibility bubble **up**. Every step is recorded, and every tool and model
-call is mediated.
+Agent-centric is **a deterministic platform first and foremost.** It is an
+abstract, general-purpose agent system: a local-first core built around one
+idea — an **Agent** is simultaneously a worker to its parent and a manager to
+its children, and together they form a rooted, recursive **tree**. Work flows
+**down** as directives; verified responses and responsibility bubble **up**.
+The platform *uses* — but never fully trusts — non-deterministic tools; only a
+deterministic check can ever make a result count.
 
 > This repository currently hosts **two lines**: the `main` branch carries the
 > prior **Manager-line** (a central `AgentManager`), and this
@@ -60,6 +61,12 @@ treats *correctness under autonomy* as the core problem:
   cancellation is recorded durably and reconstructible after restart.
 - 🚪 **Fail-closed by default.** Anything unexpected is an explicit, recorded
   failure — never a silent success.
+
+**The platform itself is deterministic.** Non-deterministic tools (a model, a
+free-form parser) are inputs to the platform, never trusted authorities: their
+output is a suspect to be captured, re-derived, and verified against a
+deterministic check. Determinism is a feature of the *platform*; it is not
+diluted by the tools it uses.
 
 The non-negotiable rules that govern every decision in this repository live in
 [`PRINCIPLES.md`](PRINCIPLES.md).
