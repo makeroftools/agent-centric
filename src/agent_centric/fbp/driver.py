@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import tempfile
 import time
 from collections.abc import Callable
 from typing import Any
@@ -74,8 +76,16 @@ class FbpDriver:
         endpoint: str = "root",
         transport: str = "inproc",
         identity: str = "root",
+        replay_state_isolate: bool = False,
     ) -> None:
         self._transport = transport
+        # When replaying a full session, on-disk state grants are redirected to
+        # fresh temp paths so the replayed tree never reads or writes the
+        # original (live) store files. This makes stateful trees (e.g. bills)
+        # replay cleanly and keeps replay side-effect-free on real data.
+        self._replay_state_isolate = replay_state_isolate
+        self._replay_tmpdir: tempfile.TemporaryDirectory[str] | None = None
+        self._replay_paths: dict[str, str] = {}
         self._endpoint = f"{transport}://{endpoint}"
         # The driver owns a private, dedicated event loop. It is set as the
         # current loop so ZeroMQ's async sockets resolve the right loop (in
@@ -116,6 +126,9 @@ class FbpDriver:
         self._root_socket.close(0)
         self._context.term()
         self._loop.close()
+        if self._replay_tmpdir is not None:
+            self._replay_tmpdir.cleanup()
+            self._replay_tmpdir = None
 
     def __enter__(self) -> FbpDriver:
         return self
@@ -396,23 +409,33 @@ class FbpDriver:
         ]
         failed: list[dict[str, Any]] = []
 
-        with self.__class__() as fresh:
+        with self.__class__(replay_state_isolate=True) as fresh:
             for cid, directive in ordered:
                 payload = directive["payload"]
                 if directive.get("_child") is True:
                     # A recorded child-configure: reconstitute the child on the
-                    # fresh tree via configure_child.
+                    # fresh tree via configure_child. The fresh driver's state
+                    # isolation remaps the granted store path, so the replayed
+                    # child never touches the original on-disk store.
                     fresh.configure_child(
                         payload["identity"], **payload["extra"]
                     )
                     continue
                 if directive["kind"] in (DIRECTIVE_CONFIGURE, DIRECTIVE_SPAWN):
-                    # Re-issue on the fresh driver to rebuild the tree.
+                    # Re-issue on the fresh driver to rebuild the tree. A root
+                    # configure's state grant is remapped to a fresh temp path
+                    # (isolation), so the replayed root never touches the
+                    # original on-disk store.
+                    if directive["kind"] == DIRECTIVE_CONFIGURE:
+                        payload = fresh._remap_state_paths(payload)
                     fresh._roundtrip(directive["kind"], payload, prefix="replay")
                     continue
                 if directive["kind"] != DIRECTIVE_RUN:
                     continue
-                # A run outcome we will verify (delegated or local).
+                # A run outcome we will verify (delegated or local). A run's
+                # state grant (e.g. ``bills_setup``'s ``args.state``) is also
+                # remapped so the replayed tree reads a fresh, isolated store.
+                payload = fresh._remap_state_paths(payload)
                 recorded = directive.get("response")
                 try:
                     resp = fresh._roundtrip(
@@ -482,10 +505,10 @@ class FbpDriver:
         if verifier is not None:
             payload["verifier"] = verifier
         if state is not None:
-            payload["state"] = state
+            payload["state"] = self._isolate_state_path(state)
             payload["state_read_only"] = state_read_only
         if trajectory is not None:
-            payload["trajectory"] = trajectory
+            payload["trajectory"] = self._isolate_state_path(trajectory)
         return self._roundtrip(DIRECTIVE_CONFIGURE, payload, prefix="configure")
 
     def configure_child(
@@ -517,10 +540,10 @@ class FbpDriver:
             "store_keys": list(store_keys),
         }}
         if state is not None:
-            payload["extra"]["state"] = state
+            payload["extra"]["state"] = self._isolate_state_path(state)
             payload["extra"]["state_read_only"] = state_read_only
         if trajectory is not None:
-            payload["extra"]["trajectory"] = trajectory
+            payload["extra"]["trajectory"] = self._isolate_state_path(trajectory)
         if verifier is not None:
             payload["extra"]["verifier"] = verifier
         self._ledger[cid] = {"kind": "configure", "payload": payload, "_child": True}
@@ -531,9 +554,11 @@ class FbpDriver:
             verifiers=verifiers,
             rules=rules,
             verifier=verifier,
-            state=state,
+            state=self._isolate_state_path(state) if state is not None else None,
             state_read_only=state_read_only,
-            trajectory=trajectory,
+            trajectory=self._isolate_state_path(trajectory)
+            if trajectory is not None
+            else None,
             store_keys=store_keys,
         )
 
@@ -594,6 +619,56 @@ class FbpDriver:
             return f"tcp://127.0.0.1:{port}"
         name = f"children-{identity}"
         return f"{self._transport}://{name}"
+
+    def _isolate_state_path(self, path: str) -> str:
+        """Redirect an on-disk state grant to a fresh temp path during replay.
+
+        When ``replay_state_isolate`` is set (full-tree replay), every state
+        path granted to the replayed tree is rewritten into a private temp
+        directory. The replayed tree therefore never reads or writes the
+        original (live) store files, so stateful trees (e.g. bills) replay
+        cleanly and replay stays side-effect-free on real data.
+
+        The mapping is deterministic per original path: the same original path
+        always maps to the same temp path within a single replay session, so
+        the replayed tree's topology (which shares one store file across
+        agents) is preserved exactly.
+        """
+        if not self._replay_state_isolate:
+            return path
+        if self._replay_tmpdir is None:
+            self._replay_tmpdir = tempfile.TemporaryDirectory(
+                prefix="agent-centric-fbp-replay-"
+            )
+        if path not in self._replay_paths:
+            self._replay_paths[path] = os.path.join(
+                self._replay_tmpdir.name, f"store-{len(self._replay_paths)}"
+            )
+        return self._replay_paths[path]
+
+    def _remap_state_paths(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Return a copy of ``payload`` with every on-disk store grant remapped.
+
+        Store paths can arrive in a ``configure`` payload (``payload["state"]``,
+        ``payload["trajectory"]``) or inside a ``run`` payload's ``args``
+        (e.g. ``bills_setup`` grants the registry path via ``args["state"]``).
+        During an isolated replay, both are rewritten to fresh temp paths so the
+        replayed tree never touches the original store files. The mapping is
+        deterministic per original path, so a store shared across agents maps to
+        one temp path.
+        """
+        out = dict(payload)
+        for key in ("state", "trajectory"):
+            if isinstance(out.get(key), str):
+                out[key] = self._isolate_state_path(out[key])
+        args = out.get("args")
+        if isinstance(args, dict):
+            args = dict(args)
+            for key in ("state", "trajectory"):
+                if isinstance(args.get(key), str):
+                    args[key] = self._isolate_state_path(args[key])
+            out["args"] = args
+        return out
 
     # -- liveness / teardown ------------------------------------------------
 

@@ -226,4 +226,9 @@ only if every hop on the way up verified.
 payload + terminal response). Deterministic replay re-runs the recorded
 sequence — including delegated runs, with the tree topology rebuilt — and
 compares outcomes, so the system is re-verifiable after the fact. Any
-divergence is an explicit, fail-closed report, never noise.
+divergence is an explicit, fail-closed report, never noise. Full-tree replay
+**isolates on-disk state**: every store path (state *and* trajectory) granted
+to the replayed tree (via ``configure``, ``configure_child``, or a ``run``
+payload) is remapped to a fresh temp path, so the replayed tree starts from a
+clean slate and never reads or writes the original store files — stateful
+trees replay cleanly and replay is side-effect-free on real data.

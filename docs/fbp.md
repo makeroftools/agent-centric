@@ -250,6 +250,16 @@ goes — and verifies every `run` outcome, **including delegated directives**:
 r = driver.replay_session()   # {"total", "runs", "passed", "failed", "ok"}
 ```
 
+**State isolation.** Full-tree replay runs on a fresh driver with on-disk state
+**isolated**: every store path granted to the replayed tree (via `configure`,
+`configure_child`, or a `run` payload such as `bills_setup`'s `args.state`) is
+remapped to a fresh temp path. The replayed tree therefore starts from a clean
+slate and never reads or writes the original (live) store files — so stateful
+trees like the bills loop replay cleanly, and replay is side-effect-free on real
+data. Both `state` and `trajectory` (audit) grants are isolated. The mapping is
+deterministic per original path, so a store shared across agents maps to a
+single temp path and the replayed topology is preserved.
+
 ### Transports
 
 `FbpDriver(transport=...)` runs the exact same protocol over:

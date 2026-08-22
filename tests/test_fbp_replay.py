@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from agent_centric.fbp import FbpDriver, register_callable
 
 
@@ -138,3 +140,177 @@ class TestReplaySession:
             # The non-deterministic task diverges on replay and is flagged.
             assert result["ok"] is False
             assert len(result["failed"]) >= 1
+
+
+class TestReplaySessionStateIsolation:
+    """Full-tree replay must isolate on-disk state so stateful trees (e.g.
+    bills) replay cleanly and never touch the original store files."""
+
+    def test_stateful_bills_tree_replays_cleanly(self, tmp_path: Path) -> None:
+        from agent_centric.fbp.bills_agent import (
+            TASK_ACCEPT,
+            TASK_CALENDAR,
+            TASK_INTAKE,
+        )
+
+        registry = tmp_path / "registry.db"
+        with FbpDriver() as driver:
+            driver.spawn("bills", kind="bills")
+            driver.run(
+                "bills_setup",
+                {"state": str(registry), "store_keys": ["b1"]},
+                child="bills",
+            )
+            draft = driver.run(
+                TASK_INTAKE,
+                {
+                    "draft": {
+                        "id": "b1",
+                        "vendor": "GasCo",
+                        "amount_cents": 12345,
+                        "due_date": "2026-10-01",
+                    }
+                },
+                child="bills",
+            )
+            assert draft.verified is True
+            accepted = driver.run(TASK_ACCEPT, {"draft": draft.value}, child="bills")
+            assert accepted.verified is True
+            cal = driver.run(
+                TASK_CALENDAR,
+                {"from_date": "2026-10-01", "to_date": "2026-10-31"},
+                child="bills",
+            )
+            assert cal.verified is True
+
+            # The stateful tree replays cleanly (every run outcome matches).
+            result = driver.replay_session()
+            assert result["ok"] is True, result["failed"]
+            assert result["runs"] >= 3
+            assert result["passed"] == result["runs"]
+
+    def test_replay_does_not_touch_original_store(self, tmp_path: Path) -> None:
+        from agent_centric.fbp.bills_agent import (
+            TASK_ACCEPT,
+            TASK_INTAKE,
+        )
+
+        registry = tmp_path / "registry.db"
+        with FbpDriver() as driver:
+            driver.spawn("bills", kind="bills")
+            driver.run(
+                "bills_setup",
+                {"state": str(registry), "store_keys": ["b1"]},
+                child="bills",
+            )
+            draft = driver.run(
+                TASK_INTAKE,
+                {
+                    "draft": {
+                        "id": "b1",
+                        "vendor": "GasCo",
+                        "amount_cents": 12345,
+                        "due_date": "2026-10-01",
+                    }
+                },
+                child="bills",
+            )
+            driver.run(TASK_ACCEPT, {"draft": draft.value}, child="bills")
+
+            # Snapshot the original store's row count before replay.
+            from agent_centric.fbp import store
+
+            before = store.open_state(registry)
+            before_count = before.count()
+            before.close()
+
+            driver.replay_session()
+
+            # The original store is untouched: same row count, and the replay
+            # did not re-write or mutate it.
+            after = store.open_state(registry)
+            assert after.count() == before_count
+            assert after.get("b1")["status"] == "open"
+            after.close()
+
+    def test_replay_starts_from_clean_slate(self, tmp_path: Path) -> None:
+        """Isolation gives the replayed tree a fresh store, so drift in the
+        original store after recording cannot make replay diverge."""
+        from agent_centric.fbp import store
+        from agent_centric.fbp.bills_agent import (
+            TASK_ACCEPT,
+            TASK_CALENDAR,
+            TASK_INTAKE,
+        )
+
+        registry = tmp_path / "registry.db"
+        with FbpDriver() as driver:
+            driver.spawn("bills", kind="bills")
+            driver.run(
+                "bills_setup",
+                {"state": str(registry), "store_keys": ["b1", "b2"]},
+                child="bills",
+            )
+            draft = driver.run(
+                TASK_INTAKE,
+                {
+                    "draft": {
+                        "id": "b1",
+                        "vendor": "GasCo",
+                        "amount_cents": 12345,
+                        "due_date": "2026-10-01",
+                    }
+                },
+                child="bills",
+            )
+            driver.run(TASK_ACCEPT, {"draft": draft.value}, child="bills")
+            cal = driver.run(
+                TASK_CALENDAR,
+                {"from_date": "2026-10-01", "to_date": "2026-10-31"},
+                child="bills",
+            )
+            assert [e["id"] for e in cal.value["entries"]] == ["b1"]
+
+            # Drift: a concurrent writer adds an unrelated bill to the original
+            # registry after the session was recorded.
+            st = store.open_state(registry)
+            st.set(
+                "b2",
+                {
+                    "id": "b2",
+                    "vendor": "PostCo",
+                    "amount_cents": 999,
+                    "due_date": "2026-10-05",
+                    "status": "open",
+                },
+                fingerprint="drift",
+            )
+            st.close()
+
+            # Replay must still pass: the replayed tree reads a fresh, isolated
+            # store, so the drifted b2 never leaks into the replayed calendar.
+            result = driver.replay_session()
+            assert result["ok"] is True, result["failed"]
+            assert result["passed"] == result["runs"]
+
+    def test_replay_isolates_trajectory_audit(self, tmp_path: Path) -> None:
+        """The replayed tree must not write to the original trajectory file."""
+        from agent_centric.fbp import store
+
+        audit_path = tmp_path / "audit.db"
+        with FbpDriver() as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",), trajectory=str(audit_path))
+            driver.run("double", {"value": 21})
+
+            before = store.open_trajectory(audit_path)
+            before_count = before.count()
+            before.close()
+
+            driver.replay_session()
+
+            # The original trajectory is untouched: replay wrote to an isolated
+            # temp audit, not the original file.
+            after = store.open_trajectory(audit_path)
+            assert after.count() == before_count
+            after.close()

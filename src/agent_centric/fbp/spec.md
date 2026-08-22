@@ -181,6 +181,10 @@ Implemented here (pure, offline-testable, deterministic):
 - **Deterministic replay** — `FbpDriver.replay` / `replay_session` re-run the
   recorded directive ledger (including delegated runs, with the tree topology
   rebuilt) and compare outcomes, so the system is re-verifiable after the fact.
+  Full-tree replay **isolates on-disk state**: every store path (state *and*
+  trajectory) granted to the replayed tree is remapped to a fresh temp path, so
+  stateful trees (e.g. the bills loop) replay cleanly and replay never touches
+  the original store files.
 
 **Deferred (deliberate; optional adapters):**
 

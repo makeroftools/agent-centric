@@ -39,12 +39,13 @@ agents).
 
 ## Current git state
 - **Branch:** `agent-centric-fbp`; **working tree clean**.
-- **HEAD:** `0f95db2` = `docs(fbp): update spec and protocol contracts`.
+- **HEAD:** `95b3998` = `docs(fbp): refresh handoff to current branch state`.
 - **Pushed:** up through `7b1979f` (`feat(fbp): bills loop - first real
-  end-to-end FBP graph`). **Unpushed (5):** `8ae8f6f` (tree-audit
-  reconstruction), `33960e1` (deterministic replay), `72695d5` (this handoff),
-  `022ad15` (replay_session — full-tree/delegated replay), `0f95db2` (spec &
-  protocol contract sync).
+  end-to-end FBP graph`). **Unpushed (7):** `8ae8f6f` (tree-audit
+  reconstruction), `33960e1` (deterministic replay), `72695d5` (session
+  handoff), `022ad15` (replay_session — full-tree/delegated replay),
+  `0f95db2` (spec & protocol contract sync), `95b3998` (this handoff refresh),
+  plus the current working-tree change (replay state isolation).
 - Standing rule: **do not push unless the lead explicitly says push.**
 
 ## What's built (the full arc)
@@ -57,7 +58,7 @@ agents).
 | **CPM (capability, not agent)** | `fbp/critical_path.py` | Deterministic, read-only critical-path/slack analysis. |
 | **Bills loop (real graph)** | `fbp/bills.py`, `fbp/bills_agent.py` | Intake → human-gated accept → durable registry → verified calendar. No unverified money/dates; no auto-accept. |
 | **Tree-audit reconstruction** | `fbp/audit.py` | Round-reconstructs every causal chain per correlation id (audit as proof). |
-| **Deterministic replay** | `FbpDriver.replay()` / `replay_session()` | Re-run recorded local runs (or the whole sequence, incl. delegated runs, rebuilding the tree) and verify outcomes match (re-verification after the fact). |
+| **Deterministic replay** | `FbpDriver.replay()` / `replay_session()` | Re-run recorded local runs (or the whole sequence, incl. delegated runs, rebuilding the tree) and verify outcomes match (re-verification after the fact). Full-tree replay isolates on-disk state *and* trajectory (fresh temp paths), so stateful trees replay cleanly without touching the original stores. |
 
 ## Easy-UX driver (`FbpDriver`) and CLI
 - `FbpDriver` (`fbp/driver.py`) is the synchronous, easy-UX layer: `register`,
@@ -70,7 +71,7 @@ agents).
 - Example: `examples/fbp_durability_demo.py`.
 
 ## Validation
-- `uv run pytest` → **522 passed**; `uv run ruff check .` clean; `uv run mypy src` clean (69 source files).
+- `uv run pytest` → **526 passed**; `uv run ruff check .` clean; `uv run mypy src` clean (69 source files).
 
 ## Key invariants to never break (FBP)
 - **No unverified success; fail-closed everywhere; deterministic control.
@@ -106,15 +107,14 @@ uv run agent-centric fbp --transport tcp|ipc
 - FBP is on `agent-centric-fbp`, **not** merged to `main` (which is the older
   Manager system). No cross-pollination has been done.
 - Replay covers local and delegated `run` directives recorded in the ledger;
-  stateful directives that open on-disk stores are recorded but not isolated
-  from the original paths on replay.
+  full-tree replay now **isolates on-disk state** (fresh temp paths for replayed
+  store grants), so stateful trees like bills replay cleanly and replay never
+  touches the original store files.
 - No FastAPI UI, no multi-language runtime, no durable git-backed directive
   ledger yet (all deferred per spec.md).
 - `docs/fbp.md` is the living companion doc; keep it current with new
   capabilities.
 
 ## Suggested next (optional)
-- Make full-tree replay isolate on-disk state (fresh temp paths for replayed
-  store grants), so stateful trees (e.g. bills) replay cleanly.
 - Merge FBP to `main` (or deliberately keep it separate) once the lead
   decides.
