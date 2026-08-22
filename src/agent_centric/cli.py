@@ -597,6 +597,15 @@ def _seed_fbp_callables(fbp: Any) -> None:
     )
 
 
+def _fbp_endpoint(transport: str) -> str:
+    """A transport-appropriate root endpoint for the FBP driver/CLI."""
+    return {
+        "inproc": "root",
+        "tcp": "127.0.0.1:5599",
+        "ipc": "/tmp/agent-centric-fbp-root",
+    }[transport]
+
+
 def _cmd_fbp(transport: str, ledger: Path | None = None) -> int:
     """Drive the FBP subsystem demo over the directive/response protocol.
 
@@ -614,11 +623,7 @@ def _cmd_fbp(transport: str, ledger: Path | None = None) -> int:
     # A transport-appropriate root endpoint: "inproc" uses a bare name;
     # "tcp" needs host:port; "ipc" needs a path. Child endpoints are
     # resolved by the driver against the same transport.
-    endpoint = {
-        "inproc": "root",
-        "tcp": "127.0.0.1:5599",
-        "ipc": "/tmp/agent-centric-fbp-root",
-    }[transport]
+    endpoint = _fbp_endpoint(transport)
     import tempfile
 
     from agent_centric.fbp import open_state, open_trajectory
@@ -791,8 +796,11 @@ def _cmd_fbp_replay(ledger_path: Path, transport: str) -> int:
     # The original callables cannot cross the wire, so re-seed the deterministic
     # demo set before replaying (the ledger records these names with sources).
     _seed_fbp_callables(fbp)
+    endpoint = _fbp_endpoint(transport)
     try:
-        result = fbp.replay_ledger(str(ledger_path), transport=transport)
+        result = fbp.replay_ledger(
+            str(ledger_path), transport=transport, endpoint=endpoint
+        )
     except FileNotFoundError:
         print(f"ledger  : no ledger file at {ledger_path}")
         return 1

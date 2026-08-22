@@ -104,3 +104,14 @@ class TestCliFbp:
     def test_fbp_replay_missing_ledger_fails_closed(self, tmp_path: Path) -> None:
         code, out = _run(tmp_path, "fbp-replay", str(tmp_path / "nope.db"))
         assert code == 1
+
+    def test_fbp_replay_over_transports(self, tmp_path: Path) -> None:
+        """Durable ledger replay works over ipc and tcp (the endpoint is
+        resolved per transport, not a bare inproc-style name)."""
+        for transport in ("ipc", "tcp"):
+            ledger = tmp_path / f"session-{transport}.ledger.db"
+            code, _ = _run(tmp_path, "fbp", "--transport", transport, "--ledger", str(ledger))
+            assert code == 0
+            code, out = _run(tmp_path, "fbp-replay", str(ledger), "--transport", transport)
+            assert code == 0, out
+            assert "failed=0" in out
