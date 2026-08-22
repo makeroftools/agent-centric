@@ -68,8 +68,47 @@ with FbpDriver() as driver:          # inproc, offline, deterministic
 | `configure_child(id, ...)` | — | parent provides a spawned child's context |
 | `run(task, args, child=)` | `run` | execute, or delegate to a named child |
 | `spawn(id, endpoint=)` | `spawn` | provision a real child agent |
+| `state_get(key)` | `state_get` | read from the agent's durable state store |
+| `state_set(key, value)` | `state_set` | idempotently write to the durable state store |
+| `audit()` | `audit` | return the agent's local audit record |
 | `ping()` | `ping` | liveness |
 | `kill()` | `kill` | teardown |
+
+### Durable state + audit (on-demand, separate files)
+
+An agent may opt into persistence via `configure`, each as its own SQLite file,
+created on demand (an explicit grant — never a silent write):
+
+```python
+with FbpDriver() as d:
+    d.configure(
+        state="registry.state.db",      # mutable, single-writer key/value
+        trajectory="agent.audit.db",   # append-only, write-once local audit
+    )
+    d.state_set("bill-b3", {"status": "paid"})
+    got = d.state_get("bill-b3")
+    audit = d.audit()                  # the local start of chain audit
+```
+
+- **State** is a **mutable, authoritative, single-writer** key/value store the
+  agent owns (a resource). Writes are **idempotent, keyed by the directive
+  fingerprint** — replaying a directive reapplies the same row; a distinct
+  directive is a real update. **No auto-generated keys** (keys arrive in the
+  directive), so replay rebuilds identical content.
+- **Trajectory/audit** is **append-only and write-once**, keyed by the
+  correlation id. It is the **local start of chain audit**: each agent records
+  its own activity (configure, every run outcome, every state op).
+- **Chain audit starts locally and is completed by each parent.** When a parent
+  accepts a delegated child's verified response, it records a **`relay` hop**
+  in its own audit naming the child — so an operator can reconstruct the full
+  parent→child chain (child's `result` + parent's `relay` share the
+  correlation id).
+- **Read-only grants** close the write path (a store-opened read-only
+  refuses writes fail-closed).
+
+Both state and trajectory can be controlled by a domain-specific agent (they're
+just directives over the protocol), so a store/registry agent can own a
+resource and serve it to others under grant.
 
 ### Transports
 

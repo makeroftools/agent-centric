@@ -39,6 +39,9 @@ DIRECTIVE_PING = "ping"
 DIRECTIVE_KILL = "kill"
 DIRECTIVE_REGISTER = "register"
 DIRECTIVE_RESOLVE = "resolve"
+DIRECTIVE_STATE_GET = "state_get"
+DIRECTIVE_STATE_SET = "state_set"
+DIRECTIVE_AUDIT = "audit"
 _DIRECTIVE_KINDS = frozenset(
     {
         DIRECTIVE_CONFIGURE,
@@ -48,6 +51,9 @@ _DIRECTIVE_KINDS = frozenset(
         DIRECTIVE_KILL,
         DIRECTIVE_REGISTER,
         DIRECTIVE_RESOLVE,
+        DIRECTIVE_STATE_GET,
+        DIRECTIVE_STATE_SET,
+        DIRECTIVE_AUDIT,
     }
 )
 

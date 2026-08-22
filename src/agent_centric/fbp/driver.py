@@ -35,12 +35,15 @@ import zmq.asyncio
 from .agent import Agent, _resolve_entry, register_callable
 from .config import AgentConfig
 from .message import (
+    DIRECTIVE_AUDIT,
     DIRECTIVE_CONFIGURE,
     DIRECTIVE_KILL,
     DIRECTIVE_PING,
     DIRECTIVE_RESOLVE,
     DIRECTIVE_RUN,
     DIRECTIVE_SPAWN,
+    DIRECTIVE_STATE_GET,
+    DIRECTIVE_STATE_SET,
     MESSAGE_DIRECTIVE,
     Response,
 )
@@ -198,6 +201,27 @@ class FbpDriver:
             DIRECTIVE_RESOLVE, {"name": name}, prefix="resolve"
         )
 
+    def state_set(self, key: str, value: Any) -> Response:
+        """Idempotently persist ``value`` at ``key`` in the root's state store.
+
+        A replayed directive (same key/value/fingerprint) is a no-op; a
+        distinct directive is a real update. Requires a state store granted via
+        ``configure(state=...)``.
+        """
+        return self._roundtrip(
+            DIRECTIVE_STATE_SET,
+            {"key": key, "value": value},
+            prefix="state-set",
+        )
+
+    def state_get(self, key: str) -> Response:
+        """Return the value at ``key`` from the root's durable state store."""
+        return self._roundtrip(DIRECTIVE_STATE_GET, {"key": key}, prefix="state-get")
+
+    def audit(self) -> Response:
+        """Return the root agent's local audit record (the chain's local start)."""
+        return self._roundtrip(DIRECTIVE_AUDIT, {}, prefix="audit")
+
     # -- configuration -----------------------------------------------------
 
     def configure(
@@ -207,8 +231,23 @@ class FbpDriver:
         verifiers: tuple[str, ...] = (),
         rules: tuple[str, ...] = (),
         verifier: str | None = None,
+        state: str | None = None,
+        state_read_only: bool = False,
+        trajectory: str | None = None,
     ) -> Response:
-        """Configure the root agent's rules, task allowlist, and verifier."""
+        """Configure the root agent's rules, task allowlist, verifier, and
+        optional durable stores.
+
+        Args:
+            tasks/verifiers/rules/verifier: The task allowlist, verifier list,
+                hard rules, and default verifier for the root agent.
+            state: Optional durable state file path grant (a single-writer
+                key/value store the agent owns).
+            state_read_only: If true, open the state store read-only (read-only
+                grant; writes fail closed).
+            trajectory: Optional durable trajectory file path grant (an
+                append-only local audit — the start of chain audit).
+        """
         payload: dict[str, Any] = {
             "tasks": list(tasks),
             "verifiers": list(verifiers),
@@ -216,6 +255,11 @@ class FbpDriver:
         }
         if verifier is not None:
             payload["verifier"] = verifier
+        if state is not None:
+            payload["state"] = state
+            payload["state_read_only"] = state_read_only
+        if trajectory is not None:
+            payload["trajectory"] = trajectory
         return self._roundtrip(DIRECTIVE_CONFIGURE, payload, prefix="configure")
 
     def configure_child(

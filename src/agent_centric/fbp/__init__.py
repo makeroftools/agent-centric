@@ -27,6 +27,7 @@ from .config import AgentConfig
 from .context import Context, Verifier
 from .driver import FbpDriver
 from .message import (
+    DIRECTIVE_AUDIT,
     DIRECTIVE_CONFIGURE,
     DIRECTIVE_KILL,
     DIRECTIVE_PING,
@@ -34,6 +35,8 @@ from .message import (
     DIRECTIVE_RESOLVE,
     DIRECTIVE_RUN,
     DIRECTIVE_SPAWN,
+    DIRECTIVE_STATE_GET,
+    DIRECTIVE_STATE_SET,
     MESSAGE_ACK,
     MESSAGE_DIRECTIVE,
     MESSAGE_RESPONSE,
@@ -53,6 +56,7 @@ from .message import (
 from .node import AgentNode, Node
 from .node import Response as NodeResponse
 from .shell import Shell
+from .store import StateStore, StoreError, TrajectoryStore, open_state, open_trajectory
 
 __all__ = [
     # Agent
@@ -75,6 +79,9 @@ __all__ = [
     "DIRECTIVE_KILL",
     "DIRECTIVE_REGISTER",
     "DIRECTIVE_RESOLVE",
+    "DIRECTIVE_STATE_GET",
+    "DIRECTIVE_STATE_SET",
+    "DIRECTIVE_AUDIT",
     "RESPONSE_OK",
     "RESPONSE_RESULT",
     "RESPONSE_ERROR",
@@ -91,4 +98,10 @@ __all__ = [
     "Node",
     "NodeResponse",
     "Shell",
+    # Durable, on-demand persistence (state + trajectory/audit)
+    "StateStore",
+    "TrajectoryStore",
+    "StoreError",
+    "open_state",
+    "open_trajectory",
 ]

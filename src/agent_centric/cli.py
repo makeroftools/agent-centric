@@ -577,14 +577,30 @@ def _cmd_fbp(transport: str) -> int:
         "tcp": "127.0.0.1:5599",
         "ipc": "/tmp/agent-centric-fbp-root",
     }[transport]
+    import tempfile
+
+    from agent_centric.fbp import open_state, open_trajectory
+
+    _workdir = tempfile.mkdtemp(prefix="agent-centric-fbp-")
     with fbp.FbpDriver(transport=transport, endpoint=endpoint) as driver:
         driver.register("double", _double, source_url="file:///tasks/double")
         driver.register("even", _even)
         driver.register("odd", _odd)
-        driver.configure(tasks=("double",), verifiers=("even", "odd"))
+        driver.configure(
+            tasks=("double",),
+            verifiers=("even", "odd"),
+            state=f"{_workdir}/state.db",
+            trajectory=f"{_workdir}/audit.db",
+        )
 
         local = driver.run("double", {"value": 21})
         print(f"local  : {local.kind} verified={local.verified} value={local.value!r}")
+
+        # Durable state: write, replay, and read back idempotently.
+        driver.state_set("bill-b3", {"status": "paid", "amount_cents": 12345})
+        driver.state_set("bill-b3", {"status": "paid", "amount_cents": 12345})  # replay
+        got = driver.state_get("bill-b3")
+        print(f"state  : bill-b3 -> {got.value!r} verified={got.verified}")
 
         driver.spawn("child")
         driver.configure_child("child", tasks=("double",))
@@ -609,6 +625,20 @@ def _cmd_fbp(transport: str) -> int:
         print(
             f"unknown : {unknown.kind} verified={unknown.verified} error={unknown.error!r}"
         )
+
+        # Local audit = start of chain audit.
+        audit = driver.audit()
+        relays = [r for r in audit.value if r["kind"] == "relay"]
+        print(f"audit  : {len(audit.value)} events, {len(relays)} relay hop(s) recorded")
+
+        # Durability: reopen the stores after the driver is gone.
+        st = open_state(f"{_workdir}/state.db")
+        _durable = st.get("bill-b3")
+        st.close()
+        tr = open_trajectory(f"{_workdir}/audit.db")
+        _rows = tr.count()
+        tr.close()
+        print(f"durable: state bill-b3={_durable!r} audit_rows={_rows}")
 
         return 0 if local.verified and delegated.verified else 1
 

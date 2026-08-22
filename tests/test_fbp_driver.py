@@ -15,6 +15,7 @@ No network, no daemons — the driver is deterministic and offline-testable.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -123,6 +124,73 @@ class TestLifecycle:
         with FbpDriver() as driver:
             driver.spawn("child")
             assert "child" in driver._root.children
+
+
+class TestDurableStateAndAudit:
+    """The driver exposes durable state and local audit over the wire:
+    state is persisted idempotently and read back; the audit records the
+    agent's local activity as the start of chain audit."""
+
+    def test_state_set_and_get(self, tmp_path: Path) -> None:
+        state_path = tmp_path / "state.db"
+        with FbpDriver() as driver:
+            driver.configure(state=str(state_path))
+            ok = driver.state_set("b3", {"status": "paid"})
+            assert ok.verified is True
+            got = driver.state_get("b3")
+            assert got.verified is True
+            assert got.value["status"] == "paid"
+        # Durable: re-open and read the same state.
+        from agent_centric.fbp import store
+
+        st = store.open_state(state_path)
+        assert st.get("b3")["status"] == "paid"
+        st.close()
+
+    def test_state_get_ungranted_fails_closed(self) -> None:
+        with FbpDriver() as driver:
+            resp = driver.state_get("b3")
+            assert resp.verified is False
+            assert resp.error is not None
+
+    def test_audit_records_local_activity(self, tmp_path: Path) -> None:
+        traj_path = tmp_path / "traj.db"
+        with FbpDriver() as driver:
+            driver.configure(trajectory=str(traj_path))
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            driver.run("double", {"value": 21})
+            audit = driver.audit()
+            assert audit.verified is True
+            # The run's verified result is recorded locally — the chain's start.
+            expected = ("result", 42)
+            assert any(
+                (row["kind"], row["value"]) == expected for row in audit.value
+            )
+
+    def test_parent_records_relay_hop_for_delegated_child(self, tmp_path: Path) -> None:
+        """Chain audit is reconstructible end-to-end: a parent records the
+        child-response it accepted (a ``relay`` hop), sharing the correlation
+        id, so an operator can follow child "result" + parent "relay"."""
+        traj_path = tmp_path / "traj.db"
+        with FbpDriver() as driver:
+            driver.configure(trajectory=str(traj_path))
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            driver.spawn("child")
+            driver.configure_child("child", tasks=("double",))
+            delegated = driver.run("double", {"value": 21}, child="child")
+            assert delegated.verified is True
+            assert delegated.value == 42
+
+            # The parent's local audit includes a relay hop naming the child.
+            audit = driver.audit()
+            assert audit.verified is True
+            relays = [row for row in audit.value if row["kind"] == "relay"]
+            assert relays, "parent should record a relay hop for the delegated child"
+            assert relays[0]["node"] == "root"
+            assert relays[0]["parent"] == "child"
+            assert relays[0]["value"] == 42
 
 
 class TestTransportParity:

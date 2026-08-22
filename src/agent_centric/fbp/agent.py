@@ -18,13 +18,16 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from contextlib import suppress
 from typing import Any
 
 import zmq
 import zmq.asyncio
 
+from . import store as _store
 from .config import AgentConfig
 from .message import (
+    DIRECTIVE_AUDIT,
     DIRECTIVE_CONFIGURE,
     DIRECTIVE_KILL,
     DIRECTIVE_PING,
@@ -32,6 +35,8 @@ from .message import (
     DIRECTIVE_RESOLVE,
     DIRECTIVE_RUN,
     DIRECTIVE_SPAWN,
+    DIRECTIVE_STATE_GET,
+    DIRECTIVE_STATE_SET,
     MESSAGE_ACK,
     MESSAGE_DIRECTIVE,
     MESSAGE_RESPONSE,
@@ -113,6 +118,13 @@ class Agent:
         # correlation_id -> child_identity, for mediated delegation awaiting a
         # child response to verify (via the parent's own verifier) and route up.
         self._delegated: dict[str, str] = {}
+        # Durable, on-demand persistence (parent-provisioned paths). ``None``
+        # until ``configure`` grants a path; opening a store is an explicit,
+        # audited grant that never happens silently.
+        self._state_path: str | None = None
+        self._trajectory_path: str | None = None
+        self._state_store: _store.StateStore | None = None
+        self._trajectory_store: _store.TrajectoryStore | None = None
 
     @property
     def identity(self) -> str:
@@ -152,6 +164,12 @@ class Agent:
         for child in self._children.values():
             child.close(0)
         self._children.clear()
+        if self._state_store is not None:
+            self._state_store.close()
+            self._state_store = None
+        if self._trajectory_store is not None:
+            self._trajectory_store.close()
+            self._trajectory_store = None
         if self._parent is not None:
             self._parent.close(0)
             self._parent = None
@@ -295,10 +313,12 @@ class Agent:
                 f"delegation target {delegated!r} is not a spawned child",
             )
             await self._send(response)
+            self._record_local(directive, response)
             return response
         # Not delegatable (no child named): handle locally.
         response = self._handle(directive)
         await self._send(response)
+        self._record_local(directive, response)
         return response
 
     async def _drain_child(
@@ -365,8 +385,39 @@ class Agent:
                     "parent's verifier"
                 ),
             )
+        self._record_relay(child_response, child_identity)
         await self._send(child_response)
         return child_response
+
+    def _record_relay(self, response: Response, child_identity: str) -> None:
+        """Record the parent's acceptance of a child's verified response.
+
+        This completes *chain* audit: the parent, on the upward path, records
+        the child-response it re-verified and accepted responsibility for. The
+        local trajectory of the parent records ``relay`` kinds pointing at the
+        child that produced the value, so an operator can reconstruct the full
+        parent-child chain (child's own ``result`` record + the parent's
+        ``relay`` record share the correlation id).
+
+        A parent records nothing extra when it has no trajectory store. A
+        write-once collision (the same correlation id already recorded locally)
+        is suppressed rather than crashing the poll loop.
+        """
+        store = self._trajectory_store
+        if store is None:
+            return
+        with suppress(_store.StoreError):
+            store.record(
+                correlation_id=response.correlation_id,
+                kind="relay",
+                node=self.identity,
+                verified=response.verified,
+                value=response.value,
+                error=response.error,
+                source=response.source,
+                fingerprint=f"relay|{self.identity}|{child_identity}",
+                parent=child_identity,
+            )
 
     def _maybe_delegate(self, directive: Directive) -> str | None:
         """Return the named child a run directive should be delegated to, else None.
@@ -400,6 +451,12 @@ class Agent:
             return self._register_capability(directive)
         if directive.kind == DIRECTIVE_RESOLVE:
             return self._resolve_capability(directive)
+        if directive.kind == DIRECTIVE_STATE_SET:
+            return self._state_set(directive)
+        if directive.kind == DIRECTIVE_STATE_GET:
+            return self._state_get(directive)
+        if directive.kind == DIRECTIVE_AUDIT:
+            return self._audit(directive)
         if directive.kind == DIRECTIVE_PING:
             return Response(
                 correlation_id=directive.correlation_id,
@@ -440,6 +497,20 @@ class Agent:
         for name in payload.get("verifiers", ()):
             entry = _resolve_entry(name)
             self._registry.register_entry(entry)
+        # Durable, on-demand persistence, granted by the parent via paths. A
+        # state path opens a single-writer store; a trajectory path opens an
+        # append-only audit. Both are explicit grants — an agent never silently
+        # writes a file. `read_only` lets an agent read (never write) state.
+        state_path = payload.get("state")
+        if isinstance(state_path, str) and state_path:
+            self._state_path = state_path
+            self._state_store = _store.open_state(
+                state_path, read_only=bool(payload.get("state_read_only", False))
+            )
+        trajectory_path = payload.get("trajectory")
+        if isinstance(trajectory_path, str) and trajectory_path:
+            self._trajectory_path = trajectory_path
+            self._trajectory_store = _store.open_trajectory(trajectory_path)
         return Response(
             correlation_id=directive.correlation_id,
             kind=RESPONSE_OK,
@@ -547,6 +618,88 @@ class Agent:
         self._used_keys.add(key)
         return response
 
+    def _state_get(self, directive: Directive) -> Response:
+        """Return a value from this agent's durable state store.
+
+        Requires a durable state store granted via ``configure``; otherwise it
+        fails closed (an agent with no state grant cannot read state). Reads are
+        never implicitly persisted — state is only ever the resource an agent
+        owns.
+        """
+        store = self._state_store
+        if store is None:
+            return self._error(directive, "no durable state store configured")
+        key = directive.payload.get("key")
+        if not isinstance(key, str) or not key:
+            return self._error(directive, "state_get requires a 'key'")
+        try:
+            value = store.get(key)
+        except _store.StoreError as exc:
+            return self._error(directive, f"state read failed: {exc}")
+        if value is None:
+            return self._error(directive, f"state key {key!r} not found")
+        return Response(
+            correlation_id=directive.correlation_id,
+            kind=RESPONSE_RESULT,
+            value=value,
+            verified=True,
+            node=self.identity,
+        )
+
+    def _state_set(self, directive: Directive) -> Response:
+        """Idempotently write a value into this agent's durable state store.
+
+        The write is keyed by the full directive fingerprint (correlation id +
+        kind + payload), so a replayed directive reapplies the same row rather
+        than double-writing; a genuine update uses a distinct directive. If the
+        agent has no writable state grant it fails closed — an agent never
+        silently persists.
+        """
+        store = self._state_store
+        if store is None:
+            return self._error(directive, "no durable state store configured")
+        key = directive.payload.get("key")
+        value = directive.payload.get("value")
+        if not isinstance(key, str) or not key:
+            return self._error(directive, "state_set requires a 'key'")
+        fingerprint = "|".join(self._fingerprint(directive))
+        if self._fingerprint(directive) in self._results:
+            # Same directive already applied; idempotent reapply -> ok.
+            return Response(
+                correlation_id=directive.correlation_id,
+                kind=RESPONSE_OK,
+                verified=True,
+                node=self.identity,
+            )
+        try:
+            store.set(key, value, fingerprint=fingerprint)
+        except _store.StoreError as exc:
+            return self._error(directive, f"state write failed: {exc}")
+        return Response(
+            correlation_id=directive.correlation_id,
+            kind=RESPONSE_OK,
+            verified=True,
+            node=self.identity,
+        )
+
+    def _audit(self, directive: Directive) -> Response:
+        """Return this agent's local audit record (the local start of the chain).
+
+        The full chain audit is assembled by connecting each agent's local
+        record as verified responses bubble up the tree; this directive returns
+        the fragment rooted at this agent.
+        """
+        store = self._trajectory_store
+        if store is None:
+            return self._error(directive, "no durable trajectory store configured")
+        return Response(
+            correlation_id=directive.correlation_id,
+            kind=RESPONSE_RESULT,
+            value=store.all(),
+            verified=True,
+            node=self.identity,
+        )
+
     @staticmethod
     def _fingerprint(directive: Directive) -> tuple[str, str, str]:
         """A stable identity for a directive: correlation id + kind + canonic payload.
@@ -567,6 +720,31 @@ class Agent:
         if verifier is None:
             return False
         return bool(verifier(value))
+
+    def _record_local(self, directive: Directive, response: Response) -> None:
+        """Append this directive's outcome to the agent's local audit (if any).
+
+        This is where *chain* audit begins: each agent records its own local
+        activity. If the agent has a trajectory store (granted via configure),
+        every executed directive is appended under its correlation id; a
+        write-once conflict fails closed (an audited error is recorded rather
+        than a silent duplicate). Audit is local-first and durable.
+        """
+        store = self._trajectory_store
+        if store is None:
+            return
+        with suppress(_store.StoreError):
+            store.record(
+                correlation_id=directive.correlation_id,
+                kind=response.kind,
+                node=self.identity,
+                verified=response.verified,
+                value=response.value,
+                error=response.error,
+                source=response.source,
+                fingerprint="|".join(self._fingerprint(directive)),
+                parent=self._config.parent_endpoint,
+            )
 
     def _spawn(self, directive: Directive) -> Response:
         """Spawn a child agent as prescribed by the directive.
