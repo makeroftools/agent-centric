@@ -429,6 +429,17 @@ tree that exercises every property above and exits non-zero on any failure.
 `agent-centric fbp-replay <path>` re-verifies a durable ledger; `agent-centric
 fbp-summary <path>` gives an operator-facing summary.
 
+## Full arc demo
+
+`examples/fbp_arc_demo.py` runs the whole production story in one command:
+model-as-agent (delegated, source-referenced), intake as a hint, a durable
+approved rule auto-accepting a matching draft, a verified calendar, and
+crash-safe replay of the whole session in a fresh process.
+
+```sh
+u run python examples/fbp_arc_demo.py
+```
+
 ## Guarantees
 
 - **No unverified success.** `Response.verified` is True only if the value
