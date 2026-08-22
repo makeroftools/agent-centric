@@ -32,7 +32,7 @@ from .bills import (
     mark_bill_status,
     project_calendar,
 )
-from .bills_agent import TASK_ACCEPT_DETERMINISTIC, BillsAgent
+from .bills_agent import TASK_ACCEPT_DETERMINISTIC, TASK_RULE_ADD, BillsAgent
 from .config import AgentConfig
 from .context import Context, Verifier
 from .critical_path import CpmAnalysis, CpmError, CpmNode, analyse_cpm, cpm_from_dict
@@ -157,6 +157,7 @@ __all__ = [
     # Bills loop (real end-to-end FBP graph)
     "BillsAgent",
     "TASK_ACCEPT_DETERMINISTIC",
+    "TASK_RULE_ADD",
     "BillsError",
     "bill_total",
     "draft_from_intake",

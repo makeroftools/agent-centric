@@ -716,6 +716,58 @@ class TestDeterministicAccept:
         assert st.get("b1") is None
         st.close()
 
+    def test_rule_persistence_via_bills_rule_add(self, tmp_path: Path) -> None:
+        """An approved rule persisted via bills_rule_add works for later
+        deterministic auto-accept, surviving a fresh driver (durable)."""
+        from agent_centric.fbp import FbpDriver, store
+        from agent_centric.fbp.bills_agent import (
+            TASK_ACCEPT_DETERMINISTIC,
+            TASK_INTAKE,
+            TASK_RULE_ADD,
+        )
+
+        registry = tmp_path / "registry.json"
+        # Session 1: add a durable rule.
+        with FbpDriver() as driver:
+            driver.spawn("bills", kind="bills")
+            driver.run(
+                "bills_setup",
+                {"state": str(registry), "store_keys": ["b1"]},
+                child="bills",
+            )
+            add = driver.run(
+                TASK_RULE_ADD,
+                {"rule": {"id": "r-1", "domain": "vendor", "method": "mv",
+                            "matcher": {"vendor": "DurableCo"}}},
+                child="bills",
+            )
+            assert add.verified is True
+
+        # Session 2: a fresh driver (no configure_child rules) auto-accepts via
+        # the persisted rule.
+        with FbpDriver() as driver:
+            driver.spawn("bills", kind="bills")
+            driver.run(
+                "bills_setup",
+                {"state": str(registry), "store_keys": ["b1"]},
+                child="bills",
+            )
+            draft = driver.run(
+                TASK_INTAKE,
+                {"draft": {"id": "b1", "vendor": "DurableCo",
+                            "amount_cents": 100, "due_date": "2026-10-01"}},
+                child="bills",
+            )
+            auto = driver.run(
+                TASK_ACCEPT_DETERMINISTIC, {"draft": draft.value}, child="bills"
+            )
+            assert auto.verified is True
+            assert auto.sources == [{"kind": "rule", "id": "r-1"}]
+
+        st = store.open_state(registry)
+        assert st.get("b1")["status"] == "open"
+        st.close()
+
 
 class TestAuditReconstruction:
     """The driver reconstructs the full audit chain per correlation id across

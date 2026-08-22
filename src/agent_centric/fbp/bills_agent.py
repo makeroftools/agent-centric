@@ -47,6 +47,7 @@ TASK_INTAKE_EMAIL = "bills_intake_email"
 TASK_INTAKE_PDF = "bills_intake_pdf"
 TASK_ACCEPT = "bills_accept"
 TASK_ACCEPT_DETERMINISTIC = "bills_accept_deterministic"
+TASK_RULE_ADD = "bills_rule_add"
 TASK_CALENDAR = "bills_calendar"
 TASK_MARK_PAID = "bills_mark_paid"
 TASK_MARK_STATUS = "bills_mark_status"
@@ -73,6 +74,8 @@ def _b64decode(text: str) -> bytes:
 
 # The store child's identity (spawned by this agent).
 _STORE_CHILD = "store"
+# The reserved store key holding the approved deterministic rules (granted).
+_RULES_KEY = "__rules"
 
 
 class BillsAgent(Agent):
@@ -111,6 +114,8 @@ class BillsAgent(Agent):
                 return self._op_accept(directive)
             if task == TASK_ACCEPT_DETERMINISTIC:
                 return self._op_accept_deterministic(directive)
+            if task == TASK_RULE_ADD:
+                return self._op_rule_add(directive)
             if task == TASK_CALENDAR:
                 return self._op_calendar(directive)
             if task in (TASK_MARK_PAID, TASK_MARK_STATUS):
@@ -122,6 +127,36 @@ class BillsAgent(Agent):
     def _run_args(self, directive: Directive) -> dict[str, Any]:
         args = directive.payload.get("args")
         return args if isinstance(args, dict) else dict(directive.payload)
+
+    def _store_child(self, directive: Directive) -> StoreAgent | None:
+        """The single-writer store child, or None (fail closed with a message)."""
+        child = self._child_agents.get(_STORE_CHILD)
+        if child is None:
+            return None
+        return cast(StoreAgent, child)
+
+    def _load_rules_from_store(self) -> None:
+        """Reload approved rules persisted in the store (durable rules)."""
+        child = self._child_agents.get(_STORE_CHILD)
+        if child is None:
+            return
+        store = cast(StoreAgent, child)
+        if store._state_store is None:
+            return
+        raw = store._state_store.get(_RULES_KEY)
+        if isinstance(raw, list):
+            # Merge durable rules into the set (idempotent), so configure-granted
+            # rules coexist with rules persisted via bills_rule_add.
+            for rr in raw:
+                if isinstance(rr, dict) and isinstance(rr.get("id"), str):
+                    self._rule_set.add(
+                        Rule(
+                            id=rr["id"],
+                            domain=str(rr.get("domain", "")),
+                            method=str(rr.get("method", "")),
+                            matcher=dict(rr.get("matcher", {}) or {}),
+                        )
+                    )
 
     # -- setup: provision + configure the durable store child --------------
 
@@ -136,6 +171,9 @@ class BillsAgent(Agent):
         args = self._run_args(directive)
         state_path = args.get("state")
         store_keys = tuple(args.get("store_keys", ()))
+        # The rules key is always granted so approved rules can be persisted.
+        if _RULES_KEY not in store_keys:
+            store_keys = store_keys + (_RULES_KEY,)
         if not isinstance(state_path, str) or not state_path:
             return self._error(directive, "bills_setup requires a 'state' path")
         if self._child_agents.get(_STORE_CHILD) is None:
@@ -287,6 +325,9 @@ class BillsAgent(Agent):
         draft = args.get("draft")
         if not isinstance(draft, dict):
             return self._error(directive, "bills_accept_deterministic requires a 'draft' dict")
+        # Durable rules: reload any persisted in the store so a restart keeps
+        # authorized rules working (granted via configure is merged in below).
+        self._load_rules_from_store()
         resolved, rule = resolve_with_rules(draft, self._rule_set)
         if rule is None:
             return self._error(
@@ -317,6 +358,54 @@ class BillsAgent(Agent):
             kind=RESPONSE_OK,
             value=key,
             sources=[{"kind": "rule", "id": rule.id}],
+            verified=True,
+            node=self.identity,
+        )
+
+    def _op_rule_add(self, directive: Directive) -> Response:
+        """Persist an approved deterministic rule durably (via the store child).
+
+        The human authorizes a rule once; it is stored in the single-writer store
+        under the reserved rules key, so deterministic auto-accept keeps working
+        across restarts without re-granting. Merge is idempotent by rule id.
+        """
+        args = self._run_args(directive)
+        rr = args.get("rule") or args
+        if not isinstance(rr, dict) or not isinstance(rr.get("id"), str):
+            return self._error(directive, "bills_rule_add requires a rule mapping with an 'id'")
+        store_child = self._child_agents.get(_STORE_CHILD)
+        if store_child is None:
+            return self._error(directive, "bills agent has no store child")
+        store = cast(StoreAgent, store_child)
+        if store._state_store is None:
+            return self._error(directive, "bills agent has no state store")
+        # Load existing durable rules, add (or replace by id), persist.
+        raw = store._state_store.get(_RULES_KEY)
+        rules = list(raw) if isinstance(raw, list) else []
+        rules = [r for r in rules if not (isinstance(r, dict) and r.get("id") == rr["id"])]
+        rules.append(rr)
+        store_resp = store._op_store_set(
+            Directive(
+                correlation_id=f"{directive.correlation_id}:store",
+                kind=DIRECTIVE_RUN,
+                payload={"task": "store_set", "args": {"key": _RULES_KEY, "value": rules}},
+            )
+        )
+        if not store_resp.verified:
+            return self._error(directive, f"rules write failed: {store_resp.error}")
+        # Update the in-memory set too, so it applies without a reload.
+        self._rule_set.add(
+            Rule(
+                id=rr["id"],
+                domain=str(rr.get("domain", "")),
+                method=str(rr.get("method", "")),
+                matcher=dict(rr.get("matcher", {}) or {}),
+            )
+        )
+        return Response(
+            correlation_id=directive.correlation_id,
+            kind=RESPONSE_OK,
+            value=rr["id"],
             verified=True,
             node=self.identity,
         )
