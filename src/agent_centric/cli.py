@@ -715,7 +715,22 @@ def _cmd_fbp(transport: str) -> int:
             f"calendar_total_cents={agenda.value.get('total_cents') if agenda.verified else None}"
         )
 
-        return 0 if local.verified and delegated.verified else 1
+        # Audit as proof + deterministic replay of a local run.
+        chains = driver.reconstruct_audit()
+        relay_count = sum(
+            1 for c in chains for e in c.get("events", []) if e["kind"] == "relay"
+        )
+        print(f"audit   : {len(chains)} chains reconstructed, {relay_count} relay hop(s)")
+        # Replay the first local (non-delegated) run directive for a faithful check.
+        local_run = next(
+            (cid for cid, d in driver.ledger().items()
+             if d["kind"] == "run" and "child" not in d["payload"]),
+            None,
+        )
+        replay = driver.replay(target=local_run) if local_run else {"passed": False}
+        print(f"replay  : passed={replay['passed']}")
+
+        return 0 if local.verified and delegated.verified and replay["passed"] else 1
 
 
 def main(argv: list[str] | None = None) -> int:

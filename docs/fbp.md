@@ -220,6 +220,27 @@ for c in chains:
   verified — so you can assert *why* a result is trustworthy, not just that it
   was recorded.
 
+### Deterministic replay (re-verification after the fact)
+
+`FbpDriver.replay()` extends audit from *reconstruction* to *re-verification*.
+Every directive the driver issues is recorded in a **ledger** (kind + payload +
+terminal response). `replay()` re-runs a recorded local `run` against a fresh,
+storeless driver — the same deterministic task — and compares the fresh outcome
+to the recorded one:
+
+```python
+ledger = driver.ledger()                # {corr_id: {"kind", "payload", "response"}}
+r = driver.replay(target=<corr_id>)    # or None for the latest local run
+# r["passed"] True iff fresh outcome == recorded outcome
+# r["recorded"] / r["replayed"] / r["diff"]
+```
+
+- **Sound because deterministic**: identical directive + identical task =>
+  identical result, so a divergence flags a real change (fragile or
+  non-deterministic callable, or environment drift), never noise.
+- **Fail-closed**: an unknown target or a missing task is an explicit "not
+  passed", never a silent match.
+
 ### Transports
 
 `FbpDriver(transport=...)` runs the exact same protocol over:

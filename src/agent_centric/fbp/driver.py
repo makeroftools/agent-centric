@@ -33,6 +33,7 @@ import zmq
 import zmq.asyncio
 
 from .agent import Agent, _resolve_entry, register_callable
+from .audit import AuditChain
 from .config import AgentConfig
 from .message import (
     DIRECTIVE_AUDIT,
@@ -96,6 +97,7 @@ class FbpDriver:
         self._root.init()
         self._seq = 0
         self._child_base = 0
+        self._ledger: dict[str, dict[str, Any]] = {}
         # Over ``tcp``/``ipc`` the DEALER link connects asynchronously; retry a
         # bounded number of times with a short settle before giving up.
         self._settle_attempts = 5
@@ -141,6 +143,9 @@ class FbpDriver:
         cached result rather than re-executing).
         """
         correlation_id = self._correlation(prefix)
+        # Record the directive in the ledger so it can be replayed later
+        # (deterministic re-verification after the fact).
+        self._ledger[correlation_id] = {"kind": kind, "payload": payload}
         directive_frames = [
             self._root.identity.encode(),
             correlation_id.encode(),
@@ -156,6 +161,12 @@ class FbpDriver:
             responses = self._poll_tree_bounded()
             for response in responses:
                 if response.correlation_id == correlation_id:
+                    # Record the terminal outcome for deterministic replay.
+                    self._ledger[correlation_id]["response"] = {
+                        "terminal": response.kind,
+                        "terminal_value": response.value,
+                        "terminal_error": response.error,
+                    }
                     return response
             if attempt < attempts:
                 time.sleep(self._settle_delay)
@@ -241,6 +252,122 @@ class FbpDriver:
         _collect(self._root)
         chains = reconstruct_chains(stores)
         return [c.to_dict() for c in chains]
+
+    def ledger(self) -> dict[str, dict[str, Any]]:
+        """Return a copy of the recorded directive ledger.
+
+        Each logged directive is ``{correlation_id: {"kind": str, "payload": dict}}``
+        as issued this session — the inputs to deterministic replay.
+        """
+        return dict(self._ledger)
+
+    def reconstruct_audit_chains(self) -> tuple[AuditChain, ...]:
+        """Return the reconstructed chains (dataclasses) for the current tree."""
+        from .audit import reconstruct_chains
+
+        stores: dict[str, Any] = {}
+
+        def _collect(agent: Any) -> None:
+            if agent._trajectory_store is not None:
+                stores[agent.identity] = agent._trajectory_store
+            for child in agent.children.values():
+                _collect(child)
+
+        _collect(self._root)
+        return reconstruct_chains(stores)
+
+    def replay(self, target: str | None = None) -> dict[str, Any]:
+        """Re-run a recorded ``run`` directive (or the latest) and compare.
+
+        Deterministic re-verification after the fact: re-issues the recorded
+        ``run`` directive against a fresh, storeless driver (so no write-once
+        audit collision) and compares the fresh response to the recorded
+        terminal outcome. This is sound because ``run`` tasks are registered
+        callables in the module-level catalog, so a fresh driver resolves and
+        executes the same deterministic task.
+
+        Args:
+            target: A correlation id to replay, or None for the latest ``run``.
+
+        Returns:
+            ``{"correlation_id", "recorded", "replayed", "passed",
+            "diff"}``.
+        """
+        runs = [
+            (cid, d) for cid, d in self._ledger.items() if d["kind"] == DIRECTIVE_RUN
+        ]
+        if not runs:
+            return {
+                "passed": False,
+                "diff": "no run directive recorded",
+                "correlation_id": None,
+                "recorded": None,
+                "replayed": None,
+            }
+        if target is not None:
+            chosen = [(cid, d) for cid, d in runs if cid == target]
+            if not chosen:
+                return {
+                    "passed": False,
+                    "diff": "unknown correlation id",
+                    "correlation_id": target,
+                    "recorded": None,
+                    "replayed": None,
+                }
+        else:
+            chosen = [runs[-1]]
+        cid, directive = chosen[0]
+        payload = dict(directive["payload"])
+
+        recorded = directive.get("response")
+        fresh = self._replay_run(payload)
+        passed = recorded is not None and fresh is not None and _same_outcome(
+            recorded, fresh
+        )
+        diff = None if passed else _outcome_diff(recorded, fresh)
+        return {
+            "correlation_id": cid,
+            "passed": passed,
+            "recorded": recorded,
+            "replayed": fresh,
+            "diff": diff,
+        }
+
+    def _replay_run(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        """Re-run a run directive's task against a fresh driver and return the
+        fresh terminal response dict, or None on failure.
+
+        The fresh root is configured with the original task allowlist and
+        verifier so it can resolve the same deterministic task. The callable is
+        the module-registered one (already in the catalog via ``register``).
+        """
+        task = payload.get("task")
+        if not isinstance(task, str):
+            return None
+        try:
+            entry = _resolve_entry(task)
+        except KeyError:
+            return None
+        fresh_verifier = self._root._verifier
+        with self.__class__() as fresh:
+            try:
+                fresh.register(task, entry.callable if entry.callable else _noop)
+                cfg_payload: dict[str, Any] = {"tasks": [task]}
+                if fresh_verifier is not None:
+                    cfg_payload["verifier"] = fresh_verifier
+                fresh._roundtrip(DIRECTIVE_CONFIGURE, cfg_payload, prefix="replay-cfg")
+                resp = fresh._roundtrip(
+                    DIRECTIVE_RUN,
+                    payload,
+                    prefix="replay",
+                )
+            except Exception:  # noqa: BLE001 - fail closed, never silent
+                return None
+            return {
+                "terminal": resp.kind,
+                "terminal_value": resp.value,
+                "terminal_error": resp.error,
+            }
 
     # -- configuration -----------------------------------------------------
 
@@ -375,3 +502,33 @@ class FbpDriver:
     def kill(self) -> Response:
         """Kill the root agent (teardown)."""
         return self._roundtrip(DIRECTIVE_KILL, {}, prefix="kill")
+
+
+def _same_outcome(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """True if two outcome dicts are equivalent (terminal kind, value, error)."""
+    return (
+        a.get("terminal") == b.get("terminal")
+        and a.get("terminal_value") == b.get("terminal_value")
+        and a.get("terminal_error") == b.get("terminal_error")
+    )
+
+
+def _outcome_diff(a: dict[str, Any] | None, b: dict[str, Any] | None) -> dict[str, Any]:
+    """A human-readable description of how two outcomes differ."""
+    if a is None or b is None:
+        return {"recorded": a, "replayed": b, "reason": "missing outcome"}
+    diffs = {
+        field: (av, bv)
+        for field, av, bv in (
+            ("terminal", a.get("terminal"), b.get("terminal")),
+            ("terminal_value", a.get("terminal_value"), b.get("terminal_value")),
+            ("terminal_error", a.get("terminal_error"), b.get("terminal_error")),
+        )
+        if av != bv
+    }
+    return {"recorded": a, "replayed": b, "differences": diffs}
+
+
+def _noop(*_args: Any, **_kwargs: Any) -> Any:
+    """A safe fallback callable (should never run in practice)."""
+    return None
