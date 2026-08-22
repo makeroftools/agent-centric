@@ -663,6 +663,19 @@ def _cmd_fbp(transport: str, ledger: Path | None = None) -> int:
             f"value={delegated.value!r} node={delegated.node!r}"
         )
 
+        # A deterministic plan (sequence of run steps) fails closed on the first
+        # unverified step; here all steps verify.
+        plan = driver.run_plan(
+            [
+                {"task": "double", "args": {"value": 21}},
+                {"task": "double", "args": {"value": 5}, "child": "child"},
+            ]
+        )
+        print(
+            f"plan    : ok={plan['ok']} completed={plan['completed']} "
+            f"values={[r['value'] for r in plan['results']]}"
+        )
+
         # Correctness spine on the upward path: root's verifier demotes the
         # child's even result to an explicit failure.
         driver.configure(verifier="odd")

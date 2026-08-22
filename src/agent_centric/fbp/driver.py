@@ -656,6 +656,54 @@ class FbpDriver:
             payload["child"] = child
         return self._roundtrip(DIRECTIVE_RUN, payload, prefix="run")
 
+    def run_plan(
+        self,
+        steps: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Run a deterministic sequence of ``run`` steps; fail closed on the
+        first unverified one.
+
+        Each step is ``{"task": str, "args": dict, "verifier": str?,
+        "child": str?}``. Steps execute strictly in order; each is a normal
+        ``run`` directive (so it is recorded in the ledger and replayable). If
+        any step is unverified or raises, execution stops and the plan returns
+        ``ok=False`` with the failing step — never a partial silent success.
+
+        Returns:
+            ``{"ok": bool, "results": [{"step", "task", "verified",
+            "value", "error"}], "completed": int, "failed": dict?}``.
+        """
+        if not isinstance(steps, list) or not steps:
+            raise ValueError("run_plan requires a non-empty 'steps' list")
+        results: list[dict[str, Any]] = []
+        for idx, step in enumerate(steps):
+            task = step.get("task")
+            if not isinstance(task, str):
+                raise ValueError(f"plan step {idx} requires a 'task' string")
+            resp = self.run(
+                task,
+                step.get("args") or {},
+                verifier=step.get("verifier"),
+                child=step.get("child"),
+            )
+            results.append(
+                {
+                    "step": idx,
+                    "task": task,
+                    "verified": resp.verified,
+                    "value": resp.value,
+                    "error": resp.error,
+                }
+            )
+            if not resp.verified:
+                return {
+                    "ok": False,
+                    "results": results,
+                    "completed": idx,
+                    "failed": results[-1],
+                }
+        return {"ok": True, "results": results, "completed": len(results), "failed": None}
+
     def spawn(
         self,
         identity: str,

@@ -56,6 +56,14 @@ with FbpDriver() as driver:          # inproc, offline, deterministic
 
     delegated = driver.run("double", {"value": 21}, child="child")
     # routed down to the child, re-verified up; .node == "child"
+
+    # Run a deterministic plan (sequence of run steps); fails closed on the
+    # first unverified step.
+    plan = driver.run_plan([
+        {"task": "double", "args": {"value": 21}},
+        {"task": "double", "args": {"value": 5}, "child": "child"},
+    ])
+    # plan["ok"] True; plan["results"][i]["value"] 42 / 10
 ```
 
 ### Method map
@@ -67,6 +75,7 @@ with FbpDriver() as driver:          # inproc, offline, deterministic
 | `configure(...)` | `configure` | set the root's rules, task allowlist, verifier |
 | `configure_child(id, ...)` | — | parent provides a spawned child's context |
 | `run(task, args, child=)` | `run` | execute, or delegate to a named child |
+| `run_plan(steps)` | `run` (each) | run a deterministic sequence of `run` steps, failing closed on the first unverified one |
 | `spawn(id, endpoint=)` | `spawn` | provision a real child agent |
 | `state_get(key)` | `state_get` | read from the agent's durable state store |
 | `state_set(key, value)` | `state_set` | idempotently write to the durable state store |

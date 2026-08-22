@@ -98,7 +98,7 @@ class TestCliFbp:
         # module-level callable registry, simulating a fresh process).
         code, out = _run(tmp_path, "fbp-replay", str(ledger))
         assert code == 0, out
-        assert "passed=12" in out
+        assert "passed=14" in out
         assert "failed=0" in out
 
     def test_fbp_replay_missing_ledger_fails_closed(self, tmp_path: Path) -> None:

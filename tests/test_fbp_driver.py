@@ -77,6 +77,62 @@ class TestRunLocal:
             assert resp.error is not None
 
 
+class TestRunPlan:
+    """run_plan executes a deterministic sequence of run steps, failing closed
+    on the first unverified one."""
+
+    def test_all_verified(self) -> None:
+        with FbpDriver() as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            result = driver.run_plan(
+                [
+                    {"task": "double", "args": {"value": 21}},
+                    {"task": "double", "args": {"value": 5}},
+                ]
+            )
+            assert result["ok"] is True
+            assert result["completed"] == 2
+            assert [r["value"] for r in result["results"]] == [42, 10]
+
+    def test_fails_closed_on_first_unverified(self) -> None:
+        with FbpDriver() as driver:
+            driver.register("double", _double)
+            driver.register("odd", _odd)
+            driver.configure(tasks=("double",), verifiers=("odd",), verifier="odd")
+            result = driver.run_plan(
+                [
+                    {"task": "double", "args": {"value": 21}},  # 42 even -> fails
+                    {"task": "double", "args": {"value": 1}},
+                ]
+            )
+            assert result["ok"] is False
+            assert result["completed"] == 0
+            assert result["failed"]["verified"] is False
+            assert result["failed"]["error"] is not None
+
+    def test_plan_is_replayable(self) -> None:
+        """A plan's runs are normal run directives, recorded in the ledger and
+        replayed by replay_session."""
+        with FbpDriver() as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            driver.run_plan(
+                [
+                    {"task": "double", "args": {"value": 21}},
+                    {"task": "double", "args": {"value": 5}},
+                ]
+            )
+            result = driver.replay_session()
+            assert result["ok"] is True, result["failed"]
+            assert result["runs"] == 2
+
+    def test_empty_plan_fails_closed(self) -> None:
+        with FbpDriver() as driver, pytest.raises(ValueError, match="non-empty"):
+            driver.run_plan([])
+
+
+
 class TestMediatedSpawnDelegation:
     def test_spawn_and_delegate(self) -> None:
         with FbpDriver() as driver:
