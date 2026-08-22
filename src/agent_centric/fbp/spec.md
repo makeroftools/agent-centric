@@ -187,9 +187,10 @@ Implemented here (pure, offline-testable, deterministic):
   the original store files.
 - **Durable, recoverable directive ledger** — a driver may be granted a
   durable, append-only, order-preserving `DirectiveLedger` (`ledger.py`) via
-  ``ledger_path``; every directive + outcome + registry manifest is persisted,
-  so a fresh process can `replay_ledger`/`load_ledger` the session (crash-safe
-  re-verification after the fact).
+  ``ledger_path``; every directive + outcome + registry manifest (including
+  importable ``module.qualname``) is persisted, so a fresh process can
+  `replay_ledger`/`load_ledger` the session (crash-safe re-verification after
+  the fact). `replay_ledger` auto-imports the manifest to restore callables.
 
 **Deferred (deliberate; optional adapters):**
 

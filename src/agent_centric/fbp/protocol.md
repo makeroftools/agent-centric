@@ -238,4 +238,6 @@ explicit grant): a append-only, order-preserving store of every directive +
 outcome + a registry manifest of the callables registered. A later process can
 ``replay_ledger``/``load_ledger`` it to re-verify the whole session after the
 process is gone (crash-safe recovery). Callables themselves cannot cross the
-wire, so the manifest records the names (and source URLs) a replay must re-seed.
+wire, so the manifest records the names, source URLs, and importable
+``module.qualname``; ``replay_ledger`` auto-imports these to restore the
+callables, reporting any with no importable source for manual seeding.

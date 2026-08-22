@@ -63,7 +63,7 @@ agents).
 | **Bills loop (real graph)** | `fbp/bills.py`, `fbp/bills_agent.py` | Intake → human-gated accept → durable registry → verified calendar. No unverified money/dates; no auto-accept. |
 | **Tree-audit reconstruction** | `fbp/audit.py` | Round-reconstructs every causal chain per correlation id (audit as proof). |
 | **Deterministic replay** | `FbpDriver.replay()` / `replay_session()` | Re-run recorded local runs (or the whole sequence, incl. delegated runs, rebuilding the tree) and verify outcomes match (re-verification after the fact). Full-tree replay isolates on-disk state *and* trajectory (fresh temp paths), so stateful trees replay cleanly without touching the original stores. Replay faithfully resolves per-run verifiers (and delegated-store state paths). |
-| **Durable directive ledger** | `fbp/ledger.py`, `FbpDriver(ledger_path=)`, `replay_ledger` | Crash-safe, recoverable replay: a session recorded to a durable directive ledger (explicit grant) is re-verifiable after the process is gone via `agent-centric fbp-replay`. Includes a registry manifest for re-seeding callables. |
+| **Durable directive ledger** | `fbp/ledger.py`, `FbpDriver(ledger_path=)`, `replay_ledger` | Crash-safe, recoverable replay: a session recorded to a durable directive ledger (explicit grant) is re-verifiable after the process is gone via `agent-centric fbp-replay`. `replay_ledger` auto-imports the registry manifest to restore callables (importable module.qualname); non-importable ones are reported for manual seeding. |
 
 ## Easy-UX driver (`FbpDriver`) and CLI
 - `FbpDriver` (`fbp/driver.py`) is the synchronous, easy-UX layer: `register`,
@@ -115,11 +115,15 @@ uv run agent-centric fbp --transport tcp|ipc
 - FBP is on `agent-centric-fbp`, **not** merged to `main` (which is the older
   Manager system). No cross-pollination has been done.
 - Replay covers local and delegated `run` directives recorded in the ledger;
-  full-tree replay now **isolates on-disk state** (fresh temp paths for replayed
+  full-tree replay **isolates on-disk state** (fresh temp paths for replayed
   store grants), so stateful trees like bills replay cleanly and replay never
-  touches the original store files.
+  touches the original store files. Durable-ledger replay **auto-re-seeds** the
+  recorded callables from the manifest (importing module.qualname); only
+  non-importable callables (REPL closures/lambdas) need manual seeding, and are
+  reported in `missing_callables`.
 - No FastAPI UI, no multi-language runtime, no durable git-backed directive
-  ledger yet (all deferred per spec.md).
+  ledger yet (the SQLite ledger covers recoverable replay; a git-backed queue
+  is still future — all deferred per spec.md).
 - `docs/fbp.md` is the living companion doc; keep it current with new
   capabilities.
 

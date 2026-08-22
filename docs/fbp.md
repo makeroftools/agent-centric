@@ -275,11 +275,14 @@ result = replay_ledger("session.ledger.db")   # same shape as replay_session()
 
 The ledger is append-only and order-preserving (a monotonic sequence), so a
 reopened ledger replays identically. It also records a **registry manifest**
-(name + source URL) of the callables the session registered, so a fresh process
-knows what to re-seed (callables cannot cross the wire). `replay_ledger` runs on
-a state-isolated tree. The CLI exposes this as `agent-centric fbp --ledger <path>`
-to record, then `agent-centric fbp-replay <path>` to re-verify in a fresh
-process.
+(name + source URL + importable module/qualname) of the callables the session
+registered. **`replay_ledger` auto-re-seeds** importable callables by importing
+the recorded `module.qualname`, so a fresh process re-verifies the session with
+no manual registration. A callable with no importable source (e.g. a REPL
+closure/lambda) is reported in `missing_callables` for the caller to seed manually.
+`replay_ledger` runs on a state-isolated tree. The CLI exposes this as
+`agent-centric fbp --ledger <path>` to record, then `agent-centric fbp-replay
+<path>` to re-verify in a fresh process.
 
 ### Transports
 
