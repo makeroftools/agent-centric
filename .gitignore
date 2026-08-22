@@ -222,3 +222,6 @@ examples/.trajectories/
 
 # Zed editor-local state (never committed)
 .zed/
+
+# Standalone repos spun out of this project (separate git histories)
+/repositories/

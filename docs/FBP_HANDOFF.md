@@ -10,10 +10,10 @@ Facts are current as of this handoff (verified live).
 > `docs/FBP_HANDOFF.md` is this file. `HANDOFF.md` at repo root describes the
 > *older* `main`-branch Manager system and is **not** the current work.
 >
-> **Design intent (docs, not yet built):** `docs/AC_ROUTER.md` (the AC Router
-> gateway) and `docs/AGENT_CONSTRUCTION_LAW.md` (agent construction law -
-> dynamic in the decision, deterministic in the execution). Read these when
-> picking up the router/catalog thread.
+> **Separate apps spun out** to their own repositories (scaffolds in
+> `repositories/`, gitignored — separate git histories): `repositories/ac-router`
+> (AC Router gateway) and `repositories/ac-platform` (agent construction law).
+> Those land the separate-app design material; this repo keeps only its own work.
 
 ## State (verified this session)
 
@@ -147,14 +147,16 @@ grants, store key allowlist, and configured capabilities/verifier/rules) and
 `FbpDriver.store_keys(child)` (grant-bounded, mediated key enumeration).
 `inspect :` lines in the CLI demo print these for the operator.
 
-**In flight as design (docs only, not yet built):**
-- AC Router (`docs/AC_ROUTER.md`) — an OpenRouter-style gateway, but a
-deterministic selector, never a correctness authority; separated
-knowledge-base (catalog side-car agent) from the router (pure callable wrapped
-in an agent facet).
-- Agent Construction Law (`docs/AGENT_CONSTRUCTION_LAW.md`) — dynamic in the
-decision, deterministic in the execution; recipe→compiled three-tier model with
-registry agents; the sticky connection; adaptive pre-compilation.
+**In flight as separate apps (spun out to their own repos under
+`repositories/`, gitignored here):**
+- AC Router (`repositories/ac-router/docs/DESIGN.md`) — an OpenRouter-style
+  gateway, but a deterministic selector, never a correctness authority;
+  separated knowledge-base (catalog side-car agent) from the router (pure
+  callable wrapped in an agent facet).
+- AC Platform (`repositories/ac-platform/docs/AGENT_CONSTRUCTION_LAW.md`) —
+  dynamic in the decision, deterministic in the execution; recipe→compiled
+  three-tier model with registry agents; the sticky connection; adaptive
+  pre-compilation.
 
 **Still open:**
 - Wire a real `ModelProvider` (behind `set_provider`) with source citations
