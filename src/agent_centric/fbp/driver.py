@@ -369,6 +369,85 @@ class FbpDriver:
                 "terminal_error": resp.error,
             }
 
+    def replay_session(self) -> dict[str, Any]:
+        """Replay the full recorded directive sequence and verify every run.
+
+        This is the general form of replay: it re-issues every recorded
+        directive in issue order on a fresh driver, rebuilding the same tree
+        topology (spawn / configure / setup) as it goes, and compares each
+        ``run`` outcome to its recorded response. It therefore also covers
+        delegated ``run`` directives, which a single-record replay cannot
+        (they need the child topology in place).
+
+        Returns:
+            ``{"total": int, "runs": int, "passed": int, "failed":
+            [{correlation_id, recorded, replayed, diff}], "ok": bool}``.
+        """
+        # Issue order: correlation ids are ``{prefix}-{seq}``; sort by seq.
+        def _seq_of(cid: str) -> int:
+            try:
+                return int(cid.rsplit("-", 1)[1])
+            except (ValueError, IndexError):
+                return 0
+
+        ordered = sorted(self._ledger.items(), key=lambda kv: _seq_of(kv[0]))
+        run_directives = [
+            (cid, d) for cid, d in ordered if d["kind"] == DIRECTIVE_RUN
+        ]
+        failed: list[dict[str, Any]] = []
+
+        with self.__class__() as fresh:
+            for cid, directive in ordered:
+                payload = directive["payload"]
+                if directive.get("_child") is True:
+                    # A recorded child-configure: reconstitute the child on the
+                    # fresh tree via configure_child.
+                    fresh.configure_child(
+                        payload["identity"], **payload["extra"]
+                    )
+                    continue
+                if directive["kind"] in (DIRECTIVE_CONFIGURE, DIRECTIVE_SPAWN):
+                    # Re-issue on the fresh driver to rebuild the tree.
+                    fresh._roundtrip(directive["kind"], payload, prefix="replay")
+                    continue
+                if directive["kind"] != DIRECTIVE_RUN:
+                    continue
+                # A run outcome we will verify (delegated or local).
+                recorded = directive.get("response")
+                try:
+                    resp = fresh._roundtrip(
+                        DIRECTIVE_RUN, payload, prefix="replay-run"
+                    )
+                except Exception:  # noqa: BLE001 - fail closed, never silent
+                    failed.append(
+                        {"run_id": cid, "diff": "replay raised",
+                         "recorded": recorded, "replayed": None}
+                    )
+                    continue
+                replayed = {
+                    "terminal": resp.kind,
+                    "terminal_value": resp.value,
+                    "terminal_error": resp.error,
+                }
+                if recorded is not None and _same_outcome(recorded, replayed):
+                    continue
+                failed.append(
+                    {
+                        "run_id": cid,
+                        "recorded": recorded,
+                        "replayed": replayed,
+                        "diff": _outcome_diff(recorded, replayed),
+                    }
+                )
+
+        return {
+            "total": len(ordered),
+            "runs": len(run_directives),
+            "passed": len(run_directives) - len(failed),
+            "failed": failed,
+            "ok": not failed,
+        }
+
     # -- configuration -----------------------------------------------------
 
     def configure(
@@ -422,7 +501,30 @@ class FbpDriver:
         trajectory: str | None = None,
         store_keys: tuple[str, ...] = (),
     ) -> Response:
-        """Configure a spawned child (the parent provides the child's context)."""
+        """Configure a spawned child (the parent provides the child's context).
+
+        Records a synthetic configure directive in the ledger (keyed under a
+        child-specific correlation id) so ``replay_session`` can rebuild child
+        configuration for delegated runs.
+        """
+        # Record the child-configure so replay_session can reconstitute the child.
+        self._seq += 1
+        cid = f"configure-child-{self._seq}"
+        payload: dict[str, Any] = {"identity": identity, "extra": {
+            "tasks": list(tasks),
+            "verifiers": list(verifiers),
+            "rules": list(rules),
+            "store_keys": list(store_keys),
+        }}
+        if state is not None:
+            payload["extra"]["state"] = state
+            payload["extra"]["state_read_only"] = state_read_only
+        if trajectory is not None:
+            payload["extra"]["trajectory"] = trajectory
+        if verifier is not None:
+            payload["extra"]["verifier"] = verifier
+        self._ledger[cid] = {"kind": "configure", "payload": payload, "_child": True}
+
         return self._root.configure_child(
             identity,
             tasks=tasks,

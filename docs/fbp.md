@@ -241,6 +241,15 @@ r = driver.replay(target=<corr_id>)    # or None for the latest local run
 - **Fail-closed**: an unknown target or a missing task is an explicit "not
   passed", never a silent match.
 
+`replay_session()` is the general form: it re-issues the **whole recorded
+directive sequence** in order on a fresh driver — rebuilding the tree topology
+(spawn / configure / `configure_child`, recorded as synthetic entries) as it
+goes — and verifies every `run` outcome, **including delegated directives**:
+
+```python
+r = driver.replay_session()   # {"total", "runs", "passed", "failed", "ok"}
+```
+
 ### Transports
 
 `FbpDriver(transport=...)` runs the exact same protocol over:
