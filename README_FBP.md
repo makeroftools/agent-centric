@@ -127,7 +127,7 @@ uv run agent-centric fbp --transport ipc # local inter-process
 | **Durable, crash-safe replay** | A durable directive ledger (explicit grant) survives the process; `replay_ledger` auto-imports the registry manifest and re-verifies in a fresh process. |
 | **Plans + observation** | `run_plan` runs a deterministic sequence (fail-closed on the first unverified step) with per-step progress; `summary()`/`summarise_ledger` give an operator-facing readout. |
 | **Read-only inspection** | `tree()` returns a deterministic snapshot of the live agent tree (identity, kind, state/trajectory grants, store key allowlist, and configured capabilities/verifier/rules); `store_keys(child)` lists a `StoreAgent`'s granted, existing keys. A capability, not an agent — nothing is mutated. |
-| **Landing-page server** | `agent-centric fbp-web` serves a local, actionable landing page via stdlib `http.server` (loopback-only, read/verify-only): live agent tree, session summary, standing invariants, and one-click deterministic demo actions. No new dependency, no durable-state mutation. |
+| **Landing-page server** | `agent-centric fbp-web` serves a local, actionable landing page via stdlib `http.server` (loopback-only, read/verify-only): live agent tree, session summary, standing invariants, one-click deterministic demo actions, and a **model text box** that routes a prompt through the `model` agent to OpenRouter when `OPENROUTER_API_KEY` is set (deterministic stub otherwise). No durable-state mutation. |
 
 ---
 

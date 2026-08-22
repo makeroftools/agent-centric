@@ -9,7 +9,41 @@ port (the server is held in-process).
 
 from __future__ import annotations
 
-from agent_centric.fbp.web import FbpLandingServer, _grants, _render_landing, _render_ledger
+from agent_centric.fbp.web import (
+    FbpLandingServer,
+    _build_openrouter_provider,
+    _grants,
+    _render_landing,
+    _render_ledger,
+)
+
+
+class TestModelRoute:
+    def test_run_model_uses_stub_without_key(self, monkeypatch) -> None:
+        """Without an OpenRouter key the model agent serves the deterministic
+        stub (offline, CI-safe) — the box still works."""
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        server = FbpLandingServer()
+        result = server._run_model("hello")
+        assert result["ok"] is True
+        assert "stub response" in result["text"]
+        server._driver.close()
+
+    def test_build_provider_returns_none_without_key(self, monkeypatch) -> None:
+        """No key in the environment => no real provider (fail-closed to stub)."""
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        assert _build_openrouter_provider() is None
+
+    def test_build_provider_returns_provider_with_key(self, monkeypatch) -> None:
+        """With a key in the environment a real, enabled provider is built.
+
+        This only asserts the builder returns a provider (no network call); it
+        does not construct a server that would wire and invoke it."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+        provider = _build_openrouter_provider()
+        assert provider is not None
+        # The provider is enabled (opt-in satisfied by the key).
+        assert provider._enabled is True
 
 
 class TestGrantRender:
@@ -92,27 +126,37 @@ class TestLandingRender:
         json.dumps(server._page_state())  # must not raise
         server._driver.close()
 
-    def test_http_routes_serve_over_a_bound_port(self) -> None:
-        """End-to-end: the landing /ledger /state.json /health and /action/run
-        routes respond correctly over a bound stdlib HTTP server."""
+    def test_http_routes_serve_over_a_bound_port(self, monkeypatch) -> None:
+        """End-to-end: the landing /ledger /state.json /health /action/run and
+        /model routes respond correctly over a bound stdlib HTTP server."""
+        import asyncio
         import socket
         import threading
         import urllib.request
-        from http.server import ThreadingHTTPServer
+        from http.server import HTTPServer
 
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
         server = FbpLandingServer()
         handler = server._make_handler()
         s = socket.socket()
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
         s.close()
-        httpd = ThreadingHTTPServer(("127.0.0.1", port), handler)
-        t = threading.Thread(target=httpd.serve_forever, daemon=True)
+        httpd = HTTPServer(("127.0.0.1", port), handler)
+
+        def _serve() -> None:
+            # The driver's loop must be current in the serving thread so the
+            # model delegation path (which calls asyncio.get_event_loop) works.
+            asyncio.set_event_loop(server._driver._loop)
+            httpd.serve_forever()
+
+        t = threading.Thread(target=_serve, daemon=True)
         t.start()
         base = f"http://127.0.0.1:{port}"
         try:
             landing = urllib.request.urlopen(base + "/").read().decode()
             assert "Agent-Centric" in landing
+            assert "model-prompt" in landing  # the model text box is present
             state = urllib.request.urlopen(base + "/state.json").read().decode()
             assert '"tree"' in state
             ledger = urllib.request.urlopen(base + "/ledger").read().decode()
@@ -121,6 +165,13 @@ class TestLandingRender:
             assert '"ok": true' in health
             ran = urllib.request.urlopen(base + "/action/run").read().decode()
             assert "Agent-Centric" in ran
+            # The /model route answers (stub path when no key is set).
+            req = urllib.request.Request(base + "/model", data=b"hello", method="POST")
+            import json as _json
+
+            res = _json.loads(urllib.request.urlopen(req).read().decode())
+            assert res.get("ok") is True
+            assert "stub response" in res.get("text", "")
         finally:
             httpd.shutdown()
             httpd.server_close()
