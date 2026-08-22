@@ -25,7 +25,7 @@ adapters (see ``spec.md`` and ``protocol.md``).
 from .agent import Agent, register_callable
 from .config import AgentConfig
 from .context import Context, Verifier
-from .cpm_agent import CPM_TASK, CpmAgent
+from .critical_path import CpmAnalysis, CpmError, CpmNode, analyse_cpm, cpm_from_dict
 from .driver import FbpDriver
 from .message import (
     DIRECTIVE_AUDIT,
@@ -109,6 +109,10 @@ __all__ = [
     "StoreAgent",
     "STORE_GET",
     "STORE_SET",
-    "CpmAgent",
-    "CPM_TASK",
+    # CPM: a read-only, deterministic capability (not an agent)
+    "CpmAnalysis",
+    "CpmNode",
+    "CpmError",
+    "analyse_cpm",
+    "cpm_from_dict",
 ]

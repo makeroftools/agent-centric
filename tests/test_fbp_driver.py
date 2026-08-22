@@ -179,13 +179,17 @@ class TestStoreAgent:
         st.close()
 
 
-class TestCpmAgent:
-    """A CpmAgent is a read-only, deterministic critical-path service reached
-    through the parent's mediated delegation."""
+class TestCpmCapability:
+    """CPM is a read-only, deterministic *capability* (a registered callable),
+    not an agent: it is a pure observation, not a unit of work with
+    responsibility. It is reached as a local run task, not via delegation."""
 
-    def test_cpm_agent_returns_analysis(self) -> None:
+    def test_cpm_capability_returns_analysis(self) -> None:
+        from agent_centric.fbp.critical_path import cpm_from_dict
+
         with FbpDriver() as driver:
-            driver.spawn("cpm", kind="cpm")
+            driver.register("cpm", lambda nodes: cpm_from_dict(nodes).to_dict())
+            driver.configure(tasks=("cpm",))
             resp = driver.run(
                 "cpm",
                 {
@@ -196,17 +200,18 @@ class TestCpmAgent:
                         {"id": "d", "duration": 2, "depends_on": ["b", "c"]},
                     ]
                 },
-                child="cpm",
             )
             assert resp.verified is True
-            assert resp.node == "cpm"
             assert resp.value["duration"] == 7
             assert set(resp.value["critical_path"]) == {"a", "b", "d"}
             assert resp.value["slack"]["c"] == 1
 
-    def test_cpm_agent_fails_closed_on_cycle(self) -> None:
+    def test_cpm_capability_fails_closed_on_cycle(self) -> None:
+        from agent_centric.fbp.critical_path import cpm_from_dict
+
         with FbpDriver() as driver:
-            driver.spawn("cpm", kind="cpm")
+            driver.register("cpm", lambda nodes: cpm_from_dict(nodes).to_dict())
+            driver.configure(tasks=("cpm",))
             resp = driver.run(
                 "cpm",
                 {
@@ -215,20 +220,18 @@ class TestCpmAgent:
                         {"id": "b", "duration": 1, "depends_on": ["a"]},
                     ]
                 },
-                child="cpm",
             )
             assert resp.verified is False
             assert "cycle" in (resp.error or "")
 
-    def test_cpm_agent_is_read_only(self) -> None:
-        # A CpmAgent needs no state grant; it never writes anything.
+    def test_cpm_capability_is_read_only(self) -> None:
+        from agent_centric.fbp.critical_path import cpm_from_dict
+
+        # A pure capability needs no state grant and never writes anything.
         with FbpDriver() as driver:
-            driver.spawn("cpm", kind="cpm")
-            resp = driver.run(
-                "cpm",
-                {"nodes": [{"id": "x", "duration": 2}]},
-                child="cpm",
-            )
+            driver.register("cpm", lambda nodes: cpm_from_dict(nodes).to_dict())
+            driver.configure(tasks=("cpm",))
+            resp = driver.run("cpm", {"nodes": [{"id": "x", "duration": 2}]})
             assert resp.verified is True
             assert resp.value["duration"] == 2
 

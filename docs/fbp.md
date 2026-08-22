@@ -137,23 +137,28 @@ with FbpDriver() as d:
   operation is recorded in the store agent's local audit, and the parent
   re-verifies each relayed response.
 
-### CPM agent (read-only critical-path service)
+### CPM capability (read-only critical-path tool)
 
-`CpmAgent` (`cpm_agent.py`) makes Critical Path Method a first-class,
-deterministic, **read-only** service over the directive bus. It takes a network
-of activities (ids, durations, dependencies) and returns the critical path,
-per-node slack, and the minimum project duration — via a classic forward/backward
-pass. It never mutates anything and needs no state grant:
+Critical Path Method is a first-class, deterministic, **read-only** tool — a
+**capability** (a registered callable), **not an agent**. It is a pure
+observation, not a unit of work with responsibility, so it has no state to own,
+no children to manage, and nothing to verify. Any agent can `run` it as a
+registered task. It takes a network of activities (ids, durations, dependencies)
+and returns the critical path, per-node slack, and the minimum project duration
+via a classic forward/backward pass:
 
 ```python
+from agent_centric.fbp.critical_path import cpm_from_dict
+
 with FbpDriver() as d:
-    d.spawn("cpm", kind="cpm")
+    d.register("cpm", lambda nodes: cpm_from_dict(nodes).to_dict())
+    d.configure(tasks=("cpm",))
     r = d.run("cpm", {"nodes": [
         {"id": "a", "duration": 3},
         {"id": "b", "duration": 2, "depends_on": ["a"]},
         {"id": "c", "duration": 1, "depends_on": ["a"]},
         {"id": "d", "duration": 2, "depends_on": ["b", "c"]},
-    ]}, child="cpm")
+    ]})
     # r.value["duration"] == 7; critical_path == ["a", "b", "d"]; slack["c"] == 1
 ```
 

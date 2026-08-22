@@ -169,6 +169,31 @@ def analyse_cpm(nodes: list[CpmNode]) -> CpmAnalysis:
     )
 
 
+def cpm_from_dict(raw_nodes: list[Any]) -> CpmAnalysis:
+    """Analyse a network given as JSON-ready dicts (for the wire / a callable).
+
+    Each dict is ``{"id": str, "duration": number, "depends_on": [str, ...]}``.
+    Malformed shapes raise ``ValueError``; invalid networks raise ``CpmError``.
+    """
+    nodes: list[CpmNode] = []
+    for raw in raw_nodes:
+        if not isinstance(raw, dict):
+            raise ValueError(f"node is not a dict: {raw!r}")
+        nid = raw.get("id")
+        duration = raw.get("duration")
+        deps = raw.get("depends_on", ())
+        if not isinstance(nid, str) or not nid:
+            raise ValueError("node requires a string 'id'")
+        if not isinstance(duration, (int, float)) or isinstance(duration, bool):
+            raise ValueError(f"node {nid!r} requires a numeric 'duration'")
+        if not isinstance(deps, (list, tuple)):
+            raise ValueError(f"node {nid!r} 'depends_on' must be a list")
+        nodes.append(
+            CpmNode(id=nid, duration=duration, depends_on=tuple(str(d) for d in deps))
+        )
+    return analyse_cpm(nodes)
+
+
 def _topo_sort(nodes: list[CpmNode], by_id: dict[str, CpmNode]) -> list[str]:
     """A deterministic topological order (Kahn, tie-broken by sorted id)."""
     indegree = {nid: 0 for nid in by_id}
