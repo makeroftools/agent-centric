@@ -663,6 +663,25 @@ def _cmd_fbp(transport: str) -> int:
             f"ungranted_key_denied={denied.verified is False}"
         )
 
+        # CPM agent: a read-only, deterministic critical-path service.
+        driver.spawn("cpm", kind="cpm")
+        cpm = driver.run(
+            "cpm",
+            {
+                "nodes": [
+                    {"id": "a", "duration": 3},
+                    {"id": "b", "duration": 2, "depends_on": ["a"]},
+                    {"id": "c", "duration": 1, "depends_on": ["a"]},
+                    {"id": "d", "duration": 2, "depends_on": ["b", "c"]},
+                ]
+            },
+            child="cpm",
+        )
+        print(
+            f"cpm     : duration={cpm.value.get('duration') if cpm.verified else None} "
+            f"critical_path={cpm.value.get('critical_path') if cpm.verified else None}"
+        )
+
         return 0 if local.verified and delegated.verified else 1
 
 

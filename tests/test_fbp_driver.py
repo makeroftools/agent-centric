@@ -179,6 +179,60 @@ class TestStoreAgent:
         st.close()
 
 
+class TestCpmAgent:
+    """A CpmAgent is a read-only, deterministic critical-path service reached
+    through the parent's mediated delegation."""
+
+    def test_cpm_agent_returns_analysis(self) -> None:
+        with FbpDriver() as driver:
+            driver.spawn("cpm", kind="cpm")
+            resp = driver.run(
+                "cpm",
+                {
+                    "nodes": [
+                        {"id": "a", "duration": 3},
+                        {"id": "b", "duration": 2, "depends_on": ["a"]},
+                        {"id": "c", "duration": 1, "depends_on": ["a"]},
+                        {"id": "d", "duration": 2, "depends_on": ["b", "c"]},
+                    ]
+                },
+                child="cpm",
+            )
+            assert resp.verified is True
+            assert resp.node == "cpm"
+            assert resp.value["duration"] == 7
+            assert set(resp.value["critical_path"]) == {"a", "b", "d"}
+            assert resp.value["slack"]["c"] == 1
+
+    def test_cpm_agent_fails_closed_on_cycle(self) -> None:
+        with FbpDriver() as driver:
+            driver.spawn("cpm", kind="cpm")
+            resp = driver.run(
+                "cpm",
+                {
+                    "nodes": [
+                        {"id": "a", "duration": 1, "depends_on": ["b"]},
+                        {"id": "b", "duration": 1, "depends_on": ["a"]},
+                    ]
+                },
+                child="cpm",
+            )
+            assert resp.verified is False
+            assert "cycle" in (resp.error or "")
+
+    def test_cpm_agent_is_read_only(self) -> None:
+        # A CpmAgent needs no state grant; it never writes anything.
+        with FbpDriver() as driver:
+            driver.spawn("cpm", kind="cpm")
+            resp = driver.run(
+                "cpm",
+                {"nodes": [{"id": "x", "duration": 2}]},
+                child="cpm",
+            )
+            assert resp.verified is True
+            assert resp.value["duration"] == 2
+
+
 class TestLifecycle:
     def test_ping(self) -> None:
         with FbpDriver() as driver:

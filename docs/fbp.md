@@ -110,6 +110,59 @@ Both state and trajectory can be controlled by a domain-specific agent (they're
 just directives over the protocol), so a store/registry agent can own a
 resource and serve it to others under grant.
 
+### Store/registry agent (single-writer resource)
+
+`StoreAgent` (`store_agent.py`) is the concrete case: a domain agent that
+**owns** a `StateStore` and serves it to others over `run` operations
+(`STORE_SET`/`STORE_GET`) through the parent's mediated delegation. Only it
+writes its store; others reach it instead of the file directly, so there is no
+ungoverned concurrent access. Grants arrive via `configure`:
+
+```python
+with FbpDriver() as d:
+    d.spawn("store", kind="store")               # a real StoreAgent child
+    d.configure_child(
+        "store",
+        state="registry.db",
+        store_keys=("bill-b3", "bill-b4"),   # key allowlist (hard grant)
+    )
+    d.run("store_set", {"key": "bill-b3", "value": {"status": "paid"}}, child="store")
+    got = d.run("store_get", {"key": "bill-b3"}, child="store")
+```
+
+- **Single-writer**: only the store agent writes its state store.
+- **Grant via key allowlist**: a key not in `store_keys` fails closed (the
+  store does not serve arbitrary keys).
+- **Idempotent + audited**: writes are fingerprint-idempotent; every served
+  operation is recorded in the store agent's local audit, and the parent
+  re-verifies each relayed response.
+
+### CPM agent (read-only critical-path service)
+
+`CpmAgent` (`cpm_agent.py`) makes Critical Path Method a first-class,
+deterministic, **read-only** service over the directive bus. It takes a network
+of activities (ids, durations, dependencies) and returns the critical path,
+per-node slack, and the minimum project duration — via a classic forward/backward
+pass. It never mutates anything and needs no state grant:
+
+```python
+with FbpDriver() as d:
+    d.spawn("cpm", kind="cpm")
+    r = d.run("cpm", {"nodes": [
+        {"id": "a", "duration": 3},
+        {"id": "b", "duration": 2, "depends_on": ["a"]},
+        {"id": "c", "duration": 1, "depends_on": ["a"]},
+        {"id": "d", "duration": 2, "depends_on": ["b", "c"]},
+    ]}, child="cpm")
+    # r.value["duration"] == 7; critical_path == ["a", "b", "d"]; slack["c"] == 1
+```
+
+- **Deterministic**: identical input → identical output (stable topological
+  order, sorted tie-breaks).
+- **Read-only**: a pure function over the network; never writes a store.
+- **Fail-closed**: a cyclic, self-referential, or malformed network is an
+  explicit error, never an ambiguous result.
+
 ### Transports
 
 `FbpDriver(transport=...)` runs the exact same protocol over:

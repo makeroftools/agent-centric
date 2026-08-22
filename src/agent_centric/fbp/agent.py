@@ -820,6 +820,10 @@ class Agent:
             from .store_agent import StoreAgent
 
             return StoreAgent
+        if kind == "cpm":
+            from .cpm_agent import CpmAgent
+
+            return CpmAgent
         return Agent
 
     def configure_child(
