@@ -9,6 +9,11 @@ Facts are current as of this handoff (verified live).
 > `README_FBP.md` is the story-led, human-friendly deep-dive of the branch.
 > `docs/FBP_HANDOFF.md` is this file. `HANDOFF.md` at repo root describes the
 > *older* `main`-branch Manager system and is **not** the current work.
+>
+> **Design intent (docs, not yet built):** `docs/AC_ROUTER.md` (the AC Router
+> gateway) and `docs/AGENT_CONSTRUCTION_LAW.md` (agent construction law -
+> dynamic in the decision, deterministic in the execution). Read these when
+> picking up the router/catalog thread.
 
 ## State (verified this session)
 
@@ -59,6 +64,7 @@ These are captured in code (ModelAgent, determinism/auto-accept) and docs.
 | **Deterministic replay** | `FbpDriver.replay()` / `replay_session()` | Re-run recorded runs (local + delegated) and verify outcomes; isolates on-disk state, resolves per-run verifiers. |
 | **Durable crash-safe replay** | `fbp/ledger.py`, `load_ledger`/`replay_ledger` | Durable directive ledger + registry manifest; `replay_ledger` auto-seeds callables and re-verifies in a fresh process. |
 | **Operator summary** | `FbpDriver.summary()` / `summarise_ledger` | Deterministic per-kind/per-run readout; `ok` only if every run verified. |
+| **Read-only inspection** | `FbpDriver.tree()` / `store_keys(child)` | Deterministic snapshot of the live agent tree (identity, kind, state/trajectory grants, store key allowlist) and a mediated enumeration of a `StoreAgent`'s granted keys — a capability, not an agent; nothing is mutated. |
 | **Plans + progress** | `FbpDriver.run_plan(on_step=...)` | Deterministic sequence, fail-closed on first unverified, streams per-step progress. |
 | **Source references on output** | `fbp/message.py`, drivers | `Response.sources` on non-deterministic output; preserved through relays/audit/chains; `FbpDriver.run(sources=...)`. |
 | **Model agent (LLM as ordinary agent)** | `fbp/model_agent.py` | Spawn kind `model`; `run("model", ...)`; deterministic stub default; `ModelProvider` opt-in hook (never relaxes verification). |
@@ -70,7 +76,8 @@ These are captured in code (ModelAgent, determinism/auto-accept) and docs.
 - `FbpDriver` (`fbp/driver.py`) is the synchronous easy-UX layer: `register`,
   `resolve`, `configure`, `configure_child`, `run`, `run_plan`, `spawn`, `ping`,
   `kill`, `state_set`/`state_get`, `audit`, `reconstruct_audit`, `ledger`,
-  `replay`, `replay_session`, `summary`, `load_ledger`/`replay_ledger`.
+  `replay`, `replay_session`, `summary`, `load_ledger`/`replay_ledger`, plus the
+  read-only inspection helpers `tree()` and `store_keys(child)`.
 - CLI: `agent-centric fbp [--transport inproc|tcp|ipc] [--ledger <path>]`
   drives the whole stack (protocol, spine, durable state, store agent, CPM,
   bills loop, intake, maintenance, model agent, determinism, audit, replay);
@@ -80,7 +87,7 @@ These are captured in code (ModelAgent, determinism/auto-accept) and docs.
 
 ## Validation
 
-- `uv run pytest` → **598 passed** · `uv run ruff check .` clean ·
+- `uv run pytest` → **602 passed** · `uv run ruff check .` clean ·
   `uv run mypy src` clean (75 source files).
 - Cross-transport durable replay verified live: **19/19 runs on inproc, ipc, tcp**.
 - Full production arc demo: model-delegate → durable-rule auto-accept (rule id
@@ -112,7 +119,7 @@ These are captured in code (ModelAgent, determinism/auto-accept) and docs.
 
 ```sh
 uv sync --extra dev
-uv run pytest                 # 598 passed (as of this handoff)
+uv run pytest                 # 602 passed (as of this handoff)
 uv run ruff check .           # clean
 uv run mypy src               # clean, 75 files
 uv run agent-centric fbp      # drive the FBP demo (inproc)
@@ -134,8 +141,25 @@ uv run python examples/fbp_arc_demo.py   # full production arc example
 
 ## Suggested next (optional)
 
-- Wire a real `ModelProvider` (behind `set_provider`) with source citations.
-- Add read-only inspection convenience (e.g. discover granted store keys) for
-  the operator.
-- Do a commit-to-push when the lead lifts the do-not-push rule (57 unpushed).
+**Done this session** — read-only operator inspection:
+`FbpDriver.tree()` (live agent-tree snapshot: identity, kind, state/trajectory
+grants, store key allowlist, and configured capabilities/verifier/rules) and
+`FbpDriver.store_keys(child)` (grant-bounded, mediated key enumeration).
+`inspect :` lines in the CLI demo print these for the operator.
+
+**In flight as design (docs only, not yet built):**
+- AC Router (`docs/AC_ROUTER.md`) — an OpenRouter-style gateway, but a
+deterministic selector, never a correctness authority; separated
+knowledge-base (catalog side-car agent) from the router (pure callable wrapped
+in an agent facet).
+- Agent Construction Law (`docs/AGENT_CONSTRUCTION_LAW.md`) — dynamic in the
+decision, deterministic in the execution; recipe→compiled three-tier model with
+registry agents; the sticky connection; adaptive pre-compilation.
+
+**Still open:**
+- Wire a real `ModelProvider` (behind `set_provider`) with source citations
+  (must never relax the correctness spine).
+- Distribute the model catalogue + define the closed-source/closed model policy
+  gate.
+- Commit-to-push when the lead lifts the do-not-push rule (58 unpushed).
 - Later: consider making FBP `main` after picking it clean (per the lead).

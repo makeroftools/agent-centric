@@ -81,6 +81,8 @@ with FbpDriver() as driver:          # inproc, offline, deterministic
 | `state_set(key, value)` | `state_set` | idempotently write to the durable state store |
 | `audit()` | `audit` | return the agent's local audit record |
 | `summary()` | — | deterministic, operator-facing summary of the session's ledger |
+| `tree()` | — | read-only snapshot of the live agent tree (identity, kind, grants, capabilities/verifier/rules); operator discovery |
+| `store_keys(child)` | `store_keys` | enumerate a spawned `StoreAgent`'s granted, existing keys (mediated, audited) |
 | `ping()` | `ping` | liveness |
 | `kill()` | `kill` | teardown |
 

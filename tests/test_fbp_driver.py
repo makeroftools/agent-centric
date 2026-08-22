@@ -969,3 +969,70 @@ class TestTransportParity:
             assert cal.verified is True
             assert [e["id"] for e in cal.value["entries"]] == ["b1"]
             assert cal.value["total_cents"] == 12345
+
+class TestInspection:
+    """Read-only operator inspection: discover the live tree and its grants,
+    and enumerate a store agent's granted keys, without reaching into private
+    internals or mutating anything."""
+
+    def test_tree_reports_root_and_children(self, tmp_path: Path) -> None:
+        register_callable("double", _double)
+        with FbpDriver() as driver:
+            driver.spawn("child")
+            driver.configure_child("child", tasks=("double",))
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store",
+                state=str(tmp_path / "store.db"),
+                store_keys=("bill-b3",),
+                trajectory=str(tmp_path / "audit.db"),
+            )
+
+            tree = driver.tree()
+            ids = [n["identity"] for n in tree]
+            assert "root" in ids
+            assert "child" in ids
+            assert "store" in ids
+
+            by_id = {n["identity"]: n for n in tree}
+            # Root agent kind.
+            assert by_id["root"]["kind"] == "Agent"
+            # Store child is a StoreAgent with its granted keys.
+            assert by_id["store"]["kind"] == "StoreAgent"
+            assert by_id["store"]["store_keys"] == ["bill-b3"]
+            assert by_id["store"]["state"].endswith("store.db")
+            assert by_id["store"]["trajectory"].endswith("audit.db")
+            # A plain child has no store grant.
+            assert "state" not in by_id["child"]
+            # The child is authorized to run the 'double' task.
+            assert "double" in by_id["child"]["capabilities"]
+
+    def test_tree_is_deterministic_and_read_only(self, tmp_path: Path) -> None:
+        with FbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store", state=str(tmp_path / "s.db"), store_keys=("a", "b")
+            )
+            first = driver.tree()
+            second = driver.tree()
+            assert first == second  # deterministic snapshot
+            # tree() must not mutate or disturb the tree/liveness.
+            assert driver.ping().verified is True
+
+    def test_store_keys_convenience_lists_granted_existing(self, tmp_path: Path) -> None:
+        with FbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store", state=str(tmp_path / "s.db"), store_keys=("a", "b")
+            )
+            driver.run("store_set", {"key": "a", "value": 1}, child="store")
+            resp = driver.store_keys("store")
+            assert resp.verified is True
+            assert resp.value == ["a"]  # only existing + granted
+
+    def test_tree_reports_bills_kind(self, tmp_path: Path) -> None:
+        with FbpDriver() as driver:
+            driver.spawn("bills", kind="bills")
+            tree = driver.tree()
+            bills = next(n for n in tree if n["identity"] == "bills")
+            assert bills["kind"] == "BillsAgent"

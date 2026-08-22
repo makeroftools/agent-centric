@@ -126,6 +126,7 @@ uv run agent-centric fbp --transport ipc # local inter-process
 | **Deterministic replay** | Re-runs recorded runs (local and delegated, tree rebuilt) and verifies outcomes — re-verification after the fact. |
 | **Durable, crash-safe replay** | A durable directive ledger (explicit grant) survives the process; `replay_ledger` auto-imports the registry manifest and re-verifies in a fresh process. |
 | **Plans + observation** | `run_plan` runs a deterministic sequence (fail-closed on the first unverified step) with per-step progress; `summary()`/`summarise_ledger` give an operator-facing readout. |
+| **Read-only inspection** | `tree()` returns a deterministic snapshot of the live agent tree (identity, kind, state/trajectory grants, store key allowlist, and configured capabilities/verifier/rules); `store_keys(child)` lists a `StoreAgent`'s granted, existing keys. A capability, not an agent — nothing is mutated. |
 
 ---
 
@@ -177,7 +178,7 @@ re-verifiable after the process is gone.
 ```bash
 uv run agent-centric fbp --ledger ses.db    # record a session durably
 uv run agent-centric fbp-summary ses.db     # operator-facing readout (live)
-uv run agent-centric fbp-replay ses.db      # re-verify 18/18 runs in a fresh process
+uv run agent-centric fbp-replay ses.db      # re-verify every run in a fresh process
 ```
 
 The CLI streams **line-buffered**, so you see progress as it happens — even
@@ -223,4 +224,4 @@ contract are at `src/agent_centric/fbp/{spec,protocol}.md`.
 
 > **Status.** This is the **active** FBP subsystem on `agent-centric-fbp`.
 > `main` remains the default repo and the prior Manager-line stays contained
-> there. Nothing here claims more than the code and 579 passing tests prove.
+> there. Nothing here claims more than the code and 602 passing tests prove.

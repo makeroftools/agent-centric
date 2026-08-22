@@ -813,6 +813,63 @@ class FbpDriver:
             out["args"] = args
         return out
 
+    # -- inspection (read-only, deterministic; a capability, not an agent) ---
+
+    def tree(self) -> list[dict[str, Any]]:
+        """A read-only snapshot of the live agent tree (for the operator).
+
+        Walk the spawned children depth-first and return, for each agent, its
+        identity, concrete kind, granted state/trajectory paths, and — for a
+        ``StoreAgent`` — the key allowlist it was granted. Read-only and
+        deterministic: nothing is mutated and results are ordered by identity.
+        This lets an operator discover what a live tree holds without guessing
+        and without reaching into private socket/state internals.
+        """
+        agents: list[Any] = []
+
+        def _walk(agent: Any) -> None:
+            agents.append(agent)
+            for child in agent.children.values():
+                _walk(child)
+
+        _walk(self._root)
+        snapshot: list[dict[str, Any]] = []
+        for agent in sorted(agents, key=lambda a: a.identity):
+            info: dict[str, Any] = {"identity": agent.identity}
+            info["kind"] = type(agent).__name__
+            if getattr(agent, "_state_path", None) is not None:
+                info["state"] = agent._state_path
+            if getattr(agent, "_trajectory_path", None) is not None:
+                info["trajectory"] = agent._trajectory_path
+            grant = getattr(agent, "_store_keys", None)
+            if grant:
+                info["store_keys"] = sorted(grant)
+            # Configured grants: the registered task/verifier capability names,
+            # an explicit verifier (when set), and the hard rules (when any).
+            # Read-only — lets an operator see what an agent is *authorized* to
+            # run/serve without reaching into private internals.
+            registry_names = getattr(agent, "_registry", None)
+            if registry_names is not None and registry_names.names():
+                info["capabilities"] = list(registry_names.names())
+            verifier = getattr(agent, "_verifier", None)
+            if verifier:
+                info["verifier"] = verifier
+            rules = getattr(agent, "_rules", None)
+            if rules:
+                info["rules"] = sorted(rules)
+            snapshot.append(info)
+        return snapshot
+
+    def store_keys(self, child: str) -> Response:
+        """List the granted keys that exist in a spawned ``StoreAgent`` child.
+
+        A read-only convenience that delegates a ``store_keys`` run down to the
+        child, so the operator can discover which granted keys are present
+        without reaching into the store directly. Every read stays mediated,
+        audited, and bounded by the key allowlist (ungranted keys never leak).
+        """
+        return self.run("store_keys", {}, child=child)
+
     # -- liveness / teardown ------------------------------------------------
 
     def ping(self) -> Response:

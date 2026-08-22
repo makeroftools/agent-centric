@@ -748,6 +748,31 @@ def _cmd_fbp(transport: str, ledger: Path | None = None) -> int:
             f"ungranted_key_denied={denied.verified is False}"
         )
 
+        # Read-only operator inspection: discover the live tree and its grants,
+        # and enumerate the store's granted keys via the convenience. Nothing is
+        # mutated; the snapshot is deterministic.
+        tree = driver.tree()
+        for node in tree:
+            grants = []
+            if node.get("state"):
+                grants.append("state")
+            if node.get("trajectory"):
+                grants.append("trajectory")
+            if node.get("store_keys"):
+                grants.append(f"keys={node['store_keys']}")
+            if node.get("verifier"):
+                grants.append(f"verifier={node['verifier']}")
+            caps = node.get("capabilities") or []
+            detail = (
+                f"{node['identity']}({node['kind']})"
+                f" caps={caps}"
+                + (f" grants={grants}" if grants else "")
+            )
+            print(f"inspect : {detail}")
+        if stored.verified:
+            keys = driver.store_keys("store")
+            print(f"inspect : store agent granted keys={keys.value!r}")
+
         # CPM: a read-only, deterministic capability (a registered callable,
         # not an agent — it is a pure observation, not a unit of work).
         driver.register("cpm", _fbp_cpm)
