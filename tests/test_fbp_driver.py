@@ -380,6 +380,59 @@ class TestStoreAgent:
         assert st.get("bill-b3")["amount_cents"] == 12345
         st.close()
 
+    def test_store_agent_get_missing_key_fails_closed(self, tmp_path: Path) -> None:
+        """store_get on a granted but absent key fails closed (not found)."""
+        with FbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store", state=str(tmp_path / "s.db"), store_keys=("bk",)
+            )
+            resp = driver.run("store_get", {"key": "bk"}, child="store")
+            assert resp.verified is False
+            assert "not found" in (resp.error or "")
+
+    def test_store_get_requires_key_name(self, tmp_path: Path) -> None:
+        """A store_get without a key name fails closed."""
+        with FbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store", state=str(tmp_path / "s.db"), store_keys=("bk",)
+            )
+            resp = driver.run("store_get", {}, child="store")
+            assert resp.verified is False
+            assert "key" in (resp.error or "")
+
+    def test_store_ops_with_no_granted_store_fail_closed(self) -> None:
+        """A store agent configured without a state store cannot serve ops."""
+        with FbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            # No state grant and no store_keys.
+            resp = driver.run("store_get", {"key": "bk"}, child="store")
+            assert resp.verified is False
+            assert "no granted state store" in (resp.error or "")
+            resp2 = driver.run("store_keys", {}, child="store")
+            assert resp2.verified is False
+            assert "no granted state store" in (resp2.error or "")
+
+    def test_store_set_requires_key_and_value(self, tmp_path: Path) -> None:
+        """store_set without a key fails closed on a granted store."""
+        with FbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store", state=str(tmp_path / "s.db"), store_keys=("bk",)
+            )
+            resp = driver.run("store_set", {"value": 1}, child="store")
+            assert resp.verified is False
+            assert "key" in (resp.error or "")
+
+    def test_store_set_no_granted_store_fails_closed(self) -> None:
+        """store_set without a granted store fails closed."""
+        with FbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            resp = driver.run("store_set", {"key": "bk", "value": 1}, child="store")
+            assert resp.verified is False
+            assert "no granted state store" in (resp.error or "")
+
 
 class TestCpmCapability:
     """CPM is a read-only, deterministic *capability* (a registered callable),

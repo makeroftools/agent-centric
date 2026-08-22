@@ -1,8 +1,13 @@
 """PDF intake for the FBP subsystem: dependency-free embedded-text extraction.
 
 This is a port of ``main``'s deterministic, offline ``pdf_text`` capability into
-the FBP model as a pure **capability** (a registered callable, not an agent — it
+ the FBP model as a pure **capability** (a registered callable, not an agent — it
 is a read-only observation with no responsibility, no children, and no state).
+
+The embedded-text extraction itself is **shared** with ``main``'s
+``control_plane.pdf_text`` (one implementation, no divergence); this module adds
+the FBP-specific ``draft_from_pdf_text`` that turns extracted text into an
+**unverified** bill draft.
 
 It extracts plain text from *simple* PDFs that embed their text as content
 streams using ``Tj`` / ``TJ`` text-showing operators, with an optional Flate
@@ -22,113 +27,14 @@ enters the registry — no money or dates are ever auto-accepted.
 from __future__ import annotations
 
 import re
-import zlib
 from typing import Any
 
+from ..control_plane.pdf_text import extract_text
 from .bills import BillsError, draft_from_intake
 
-# The two leading bytes of a zlib header are 0x78 followed by one of a small
-# set of second bytes (0x01, 0x5E, 0x9C, 0xDA).
-_ZLIB_SECOND_BYTES = (0x01, 0x5E, 0x9C, 0xDA)
-
-
-def _is_zlib(data: bytes) -> bool:
-    return len(data) > 2 and data[0] == 0x78 and data[1] in _ZLIB_SECOND_BYTES
-
-
-def _decode_literal(s: bytes) -> bytes:
-    """Decode a PDF string literal body, unescaping backslash escapes.
-
-    Handles ``\n \r \t \b \f ( ) \\`` and octal ``\\ooo`` escapes. Returns raw
-    bytes (the caller decodes to text with error tolerance).
-    """
-    out = bytearray()
-    i = 0
-    n = len(s)
-    escapes = {ord("n"): ord("\n"), ord("r"): ord("\r"), ord("t"): ord("\t"),
-               ord("b"): ord("\b"), ord("f"): ord("\f"),
-               ord("("): ord("("), ord(")"): ord(")"), ord("\\"): ord("\\")}
-    while i < n:
-        b = s[i]
-        if b == ord("\\") and i + 1 < n:
-            nxt = s[i + 1]
-            if nxt in escapes:
-                out.append(escapes[nxt])
-                i += 2
-            elif 0o60 <= nxt <= 0o77:  # octal
-                digits = bytes(s[i + 1: i + 4])
-                if len(digits) == 3 and all(0o60 <= c <= 0o77 for c in digits):
-                    out.append(int(digits, 8))
-                    i += 4
-                else:
-                    out.append(nxt)
-                    i += 2
-            else:
-                out.append(nxt)
-                i += 2
-        else:
-            out.append(b)
-            i += 1
-    return bytes(out)
-
-
-def _collect_stream_tokens(blob: bytes) -> list[str]:
-    """Return decoded string literals found as ``(...) Tj`` / ``[...] TJ`` text."""
-    tokens: list[str] = []
-    i = 0
-    n = len(blob)
-    while i < n:
-        if blob[i] != ord("("):
-            i += 1
-            continue
-        j = i + 1
-        depth = 1
-        buf = bytearray()
-        while j < n and depth > 0:
-            c = blob[j]
-            if c == ord("\\"):
-                if j + 1 < n:
-                    buf.append(c)
-                    buf.append(blob[j + 1])
-                    j += 2
-                    continue
-                buf.append(c)
-                j += 1
-                continue
-            if c == ord("("):
-                depth += 1
-            elif c == ord(")"):
-                depth -= 1
-                if depth == 0:
-                    break
-            buf.append(c)
-            j += 1
-        decoded = _decode_literal(bytes(buf))
-        try:
-            tokens.append(decoded.decode("latin-1"))
-        except UnicodeDecodeError:  # pragma: no cover - very unusual
-            tokens.append(decoded.decode("latin-1", errors="replace"))
-        i = j + 1 if depth == 0 else n
-    return tokens
-
-
-def extract_text(pdf: bytes) -> str:
-    """Return embedded plain text from a simple PDF document.
-
-    Returns ``""`` if no parseable embedded text is found (fail closed).
-    """
-    chunks: list[str] = []
-    for match in re.finditer(rb"stream\r?\n(.*?)\r?\nendstream", pdf, re.DOTALL):
-        raw = match.group(1)
-        blob = raw
-        if _is_zlib(raw):
-            try:
-                blob = zlib.decompress(raw)
-            except zlib.error:
-                blob = raw
-        chunks.extend(_collect_stream_tokens(blob))
-    text = " ".join(chunks)
-    return re.sub(r"\s+", " ", text).strip()
+# Re-export the shared extractor so FBP consumers (intake, the package surface)
+# keep importing it from this module, as before the deduplication.
+__all__ = ["extract_text", "draft_from_pdf_text"]
 
 
 def draft_from_pdf_text(

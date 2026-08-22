@@ -86,6 +86,19 @@ class FbpLandingServer:
             },
         }
 
+    def _ledger_state(self) -> dict[str, Any]:
+        """A deterministic, read-only view of the driver's recorded ledger.
+
+        This is the operator-facing recovery surface: the per-kind directive
+        counts and run outcomes the driver recorded this session. Read-only —
+        nothing is mutated; it reflects the live in-process driver.
+        """
+        return {
+            "ledger": self._driver.ledger(),
+            "summary": self._driver.summary(),
+            "count": len(self._driver.ledger()),
+        }
+
     # -- server wiring -----------------------------------------------------
 
     def serve_forever(self) -> None:
@@ -129,6 +142,12 @@ class FbpLandingServer:
                     state = server._page_state()
                     state["last_action"] = run
                     self._send_html(_render_landing(state))
+                elif self.path == "/state.json":
+                    # Machine-readable snapshot: tree + summary + last action.
+                    self._send_json(server._page_state())
+                elif self.path == "/ledger":
+                    # Operator-facing durable-ledger readout (read-only).
+                    self._send_html(_render_ledger(server._ledger_state()))
                 elif self.path == "/health":
                     self._send_json({"ok": True, "server": f"{host}:{port}"})
                 else:
@@ -230,6 +249,8 @@ result or an explicit, audited failure</b> — never a silent third state.</p>
 <div class='actions'>
   <a href='/'>Refresh</a>
   <a href='/action/run'>Run a deterministic demo action</a>
+  <a href='/ledger'>View ledger</a>
+  <a href='/state.json'>state.json</a>
 </div>
 {action_note}
 {err}
@@ -263,6 +284,30 @@ def _grants(node: dict[str, Any]) -> str:
     if keys:
         parts.append(f"keys={keys}")
     return " ".join(f"<span class='pill'>{p}</span>" for p in parts) or "&mdash;"
+
+
+def _render_ledger(state: dict[str, Any]) -> str:
+    """Render the operator-facing ledger view (read-only, transitional)."""
+    summary = state.get("summary", {})
+    runs = summary.get("runs", [])
+    rows = "".join(
+        f"<tr><td>{r.get('correlation_id','')}</td><td>{r.get('task','')}</td>"
+        f"<td>{r.get('terminal','')}</td><td>{r.get('value','')}</td></tr>"
+        for r in runs
+    )
+    return f"""<!doctype html><html lang='en'><head><meta charset='utf-8'>
+<title>Agent-Centric FBP — Ledger</title>
+<style>{_PAGE_CSS}</style></head><body>
+<h1>Agent-Centric · FBP — Session Ledger</h1>
+<p><a href='/'>← Landing</a> · <a href='/state.json'>state.json</a></p>
+<h2>Runs</h2>
+<table><thead><tr><th>correlation_id</th><th>task</th>
+<th>terminal</th><th>value</th></tr></thead>
+<tbody>{rows if rows else '<tr><td colspan=4>no runs recorded</td></tr>'}</tbody></table>
+<p class='note'>Count: {state.get('count', 0)} directives recorded this session
+(read-only).</p>
+</body></html>
+"""
 
 
 def serve(

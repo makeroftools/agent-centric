@@ -318,6 +318,15 @@ class FbpDriver:
         """
         return _summarise_entries(self._ledger)
 
+    def status(self) -> dict[str, Any]:
+        """A single flat, operator-facing status snapshot for dashboards.
+
+        Combines the live tree and the session summary into one JSON-ready
+        structure: ``{tree: [...], summary: {...}}``. Read-only and
+        deterministic — never mutates anything.
+        """
+        return {"tree": self.tree(), "summary": self.summary()}
+
     def reconstruct_audit_chains(self) -> tuple[AuditChain, ...]:
         """Return the reconstructed chains (dataclasses) for the current tree."""
         from .audit import reconstruct_chains

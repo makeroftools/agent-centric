@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -544,4 +545,66 @@ class TestDurableLedger:
         # The original registry is untouched by the replay.
         st = store.open_state(registry)
         assert st.get("b1")["status"] == "open"
-        st.close()
+
+
+class TestDeterminismEvidence:
+    """First-class evidence for the core guarantee: same directives + same
+    context ⇒ identical results, and replay reproduces outcomes exactly across
+    a variety of payload shapes."""
+
+    def test_identical_directives_produce_identical_results(self) -> None:
+        """Two fresh drivers with the same registered callable + same directive
+        must produce byte-identical verified results (deterministic by
+        construction, not by luck)."""
+        register_callable("double", _double)
+        register_callable("even", _even)
+        outcomes: list[tuple[bool, Any]] = []
+        for _ in range(2):
+            with FbpDriver() as driver:
+                driver.register("double", _double)
+                driver.register("even", _even)
+                driver.configure(tasks=("double",), verifiers=("even",), verifier="even")
+                r = driver.run("double", {"value": 21})
+                outcomes.append((r.verified, r.value))
+        assert outcomes[0] == outcomes[1]
+        assert outcomes[0] == (True, 42)
+
+    def test_table_driven_payload_shapes_replay_exactly(self) -> None:
+        """A table of distinct payload shapes must each replay to the exact same
+        outcome — the replay guarantee holds across input diversity."""
+        register_callable("double", _double)
+        register_callable("even", _even)
+        payloads = [
+            {"value": 0},
+            {"value": 1},
+            {"value": 21},
+            {"value": 100},
+            {"value": -4},
+        ]
+        for payload in payloads:
+            with FbpDriver() as driver:
+                driver.register("double", _double)
+                driver.register("even", _even)
+                driver.configure(tasks=("double",), verifiers=("even",), verifier="even")
+                r = driver.run("double", payload)
+                assert r.verified is True
+                result = driver.replay()
+                assert result["passed"] is True
+                assert result["recorded"] == result["replayed"]
+
+    def test_replay_equivalence_is_exact_not_approximate(self) -> None:
+        """Replay must reproduce the recorded terminal kind, value, and error
+        exactly — not just 'close enough'."""
+        register_callable("double", _double)
+        register_callable("even", _even)
+        with FbpDriver() as driver:
+            driver.register("double", _double)
+            driver.register("even", _even)
+            driver.configure(tasks=("double",), verifiers=("even",), verifier="even")
+            driver.run("double", {"value": 21})
+            result = driver.replay()
+            rec = result["recorded"]
+            rep = result["replayed"]
+            assert rec["terminal"] == rep["terminal"] == "result"
+            assert rec["terminal_value"] == rep["terminal_value"] == 42
+            assert rec.get("terminal_error") == rep.get("terminal_error") is None

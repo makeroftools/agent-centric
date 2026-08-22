@@ -82,6 +82,7 @@ with FbpDriver() as driver:          # inproc, offline, deterministic
 | `state_set(key, value)` | `state_set` | idempotently write to the durable state store |
 | `audit()` | `audit` | return the agent's local audit record |
 | `summary()` | — | deterministic, operator-facing summary of the session's ledger |
+| `status()` | — | flat operator snapshot: `{tree, summary}` for dashboards |
 | `tree()` | — | read-only snapshot of the live agent tree (identity, kind, grants, capabilities/verifier/rules); operator discovery |
 | `store_keys(child)` | `store_keys` | enumerate a spawned `StoreAgent`'s granted, existing keys (mediated, audited) |
 | `ping()` | `ping` | liveness |
@@ -432,9 +433,10 @@ directive returns the cached result rather than re-executing).
 `agent-centric fbp [--transport inproc|tcp|ipc]` drives a deterministic demo
 tree that exercises every property above and exits non-zero on any failure.
 `agent-centric fbp-replay <path>` re-verifies a durable ledger; `agent-centric
-fbp-summary <path>` gives an operator-facing summary; `agent-centric fbp-web`
-serves a local, actionable landing page (stdlib `http.server`, loopback-only,
-read/verify-only) over an in-process `FbpDriver`.
+`agent-centric fbp-summary <path>` gives an operator-facing summary; `agent-centric
+fbp-web` serves a local, actionable landing page (stdlib `http.server`, loopback-only,
+read/verify-only) over an in-process `FbpDriver`, with routes `/`, `/action/run`,
+`/ledger`, `/state.json`, and `/health`.
 
 ## Full arc demo
 

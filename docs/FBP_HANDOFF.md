@@ -76,7 +76,7 @@ These are captured in code (ModelAgent, determinism/auto-accept) and docs.
 - `FbpDriver` (`fbp/driver.py`) is the synchronous easy-UX layer: `register`,
   `resolve`, `configure`, `configure_child`, `configure_provider`, `run`, `run_plan`, `spawn`, `ping`,
   `kill`, `state_set`/`state_get`, `audit`, `reconstruct_audit`, `ledger`,
-  `replay`, `replay_session`, `summary`, `load_ledger`/`replay_ledger`, plus the
+  `replay`, `replay_session`, `summary`, `status`, `load_ledger`/`replay_ledger`, plus the
   read-only inspection helpers `tree()` and `store_keys(child)`.
 - CLI: `agent-centric fbp [--transport inproc|tcp|ipc] [--ledger <path>]`
   drives the whole stack (protocol, spine, durable state, store agent, CPM,
@@ -89,8 +89,12 @@ These are captured in code (ModelAgent, determinism/auto-accept) and docs.
 
 ## Validation
 
-- `uv run pytest` → **602 passed** · `uv run ruff check .` clean ·
+- `uv run pytest` → **646 passed** · `uv run ruff check .` clean ·
   `uv run mypy src` clean (75 source files).
+- FBP coverage (`uv run pytest --cov=agent_centric.fbp --cov-report=term`):
+  ~88% and climbing; registry (97%) / store (93%) / bills (94%) / store_agent
+  (89%) / web (83%). A CI workflow (`.github/workflows/ci.yml`) runs
+  ruff + mypy + pytest on every push/PR.
 - Cross-transport durable replay verified live: **19/19 runs on inproc, ipc, tcp**.
 - Full production arc demo: model-delegate → durable-rule auto-accept (rule id
   as source) → verified calendar → **crash-safe replay (6/6)**.
