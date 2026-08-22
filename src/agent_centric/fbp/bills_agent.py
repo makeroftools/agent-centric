@@ -16,6 +16,8 @@ in the local audit, and re-verified on the way up. Nothing auto-accepts.
 
 from __future__ import annotations
 
+import base64
+import binascii
 from typing import Any, cast
 
 from .agent import Agent
@@ -25,6 +27,7 @@ from .bills import (
     draft_from_intake,
     project_calendar,
 )
+from .intake import draft_from_file
 from .message import (
     DIRECTIVE_RUN,
     DIRECTIVE_SPAWN,
@@ -37,9 +40,31 @@ from .store_agent import StoreAgent
 
 # Run-task names this agent serves.
 TASK_INTAKE = "bills_intake"
+TASK_INTAKE_FILE = "bills_intake_file"
+TASK_INTAKE_EMAIL = "bills_intake_email"
+TASK_INTAKE_PDF = "bills_intake_pdf"
 TASK_ACCEPT = "bills_accept"
 TASK_CALENDAR = "bills_calendar"
 TASK_SETUP = "bills_setup"
+
+
+# The pure intake capabilities (ported from main), imported lazily to avoid a
+# heavy import at module load in the base agent path.
+def _draft_from_email(message: dict[str, Any]) -> dict[str, Any]:
+    from .intake import draft_from_email
+
+    return draft_from_email(message)
+
+
+def _draft_from_pdf_text(pdf: bytes, source_path: str = "") -> dict[str, Any]:
+    from .intake import draft_from_file
+
+    return draft_from_file(pdf, source_path=source_path)
+
+
+def _b64decode(text: str) -> bytes:
+    """Decode a base64 string into bytes (transport-safe for the PDF intake)."""
+    return base64.b64decode(text, validate=False)
 
 # The store child's identity (spawned by this agent).
 _STORE_CHILD = "store"
@@ -53,6 +78,8 @@ class BillsAgent(Agent):
             task = directive.payload.get("task")
             if task == TASK_INTAKE:
                 return self._op_intake(directive)
+            if task in (TASK_INTAKE_FILE, TASK_INTAKE_EMAIL, TASK_INTAKE_PDF):
+                return self._op_intake_source(directive, task)
             if task == TASK_ACCEPT:
                 return self._op_accept(directive)
             if task == TASK_CALENDAR:
@@ -120,6 +147,53 @@ class BillsAgent(Agent):
             draft = draft_from_intake(raw)
         except BillsError as exc:
             return self._error(directive, f"bills_intake rejected: {exc}")
+        return Response(
+            correlation_id=directive.correlation_id,
+            kind=RESPONSE_RESULT,
+            value=draft,
+            verified=True,
+            node=self.identity,
+        )
+
+    def _op_intake_source(self, directive: Directive, task: str) -> Response:
+        """Intake a file / email / PDF source into an **unverified** draft.
+
+        Uses the pure intake capabilities (ported from main):
+        ``draft_from_file`` / ``draft_from_email`` / ``draft_from_pdf_text``.
+        The produced draft is unverified and still requires the human
+        ``bills_accept`` gate; a malformed or incomplete source fails closed.
+        """
+        args = self._run_args(directive)
+        try:
+            if task == TASK_INTAKE_FILE:
+                source_path = args.get("source_path") or ""
+                content = args.get("content")
+                if not isinstance(source_path, str) or not source_path:
+                    return self._error(directive, "bills_intake_file requires 'source_path'")
+                if not isinstance(content, str):
+                    return self._error(
+                        directive, "bills_intake_file requires 'content' (text)"
+                    )
+                draft = draft_from_file(content, source_path=source_path)
+            elif task == TASK_INTAKE_EMAIL:
+                message = args.get("message")
+                if not isinstance(message, dict):
+                    return self._error(directive, "bills_intake_email requires a 'message' dict")
+                draft = _draft_from_email(message)
+            else:  # TASK_INTAKE_PDF
+                source_path = args.get("source_path") or ""
+                b64 = args.get("pdf_b64")
+                if not isinstance(b64, str) or not b64:
+                    return self._error(
+                        directive, "bills_intake_pdf requires 'pdf_b64' (base64 string)"
+                    )
+                try:
+                    pdf = _b64decode(b64)
+                except (ValueError, binascii.Error):
+                    return self._error(directive, "bills_intake_pdf has invalid base64")
+                draft = _draft_from_pdf_text(pdf, source_path=source_path or "")
+        except BillsError as exc:
+            return self._error(directive, f"bills {task} rejected: {exc}")
         return Response(
             correlation_id=directive.correlation_id,
             kind=RESPONSE_RESULT,

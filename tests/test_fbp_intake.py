@@ -96,3 +96,119 @@ class TestDraftFromEmail:
 
         with pytest.raises(BillsError):
             draft_from_email({"folder": "inbox", "body": "x"})
+
+
+class TestBillsAgentIntake:
+    """The BillsAgent serves intake tasks (file/email/PDF) producing UNVERIFIED
+    drafts reachable over the protocol and recorded/replayable."""
+
+    def _setup(self, driver, tmp_path, keys):
+        from pathlib import Path
+
+        registry = Path(tmp_path) / "registry.db"
+        driver.spawn("bills", kind="bills")
+        driver.run(
+            "bills_setup",
+            {"state": str(registry), "store_keys": list(keys)},
+            child="bills",
+        )
+        return registry
+
+    def test_intake_file_and_accept(self, tmp_path) -> None:
+        from agent_centric.fbp import FbpDriver, store
+        from agent_centric.fbp.bills_agent import TASK_ACCEPT, TASK_INTAKE_FILE
+
+        with FbpDriver() as driver:
+            self._setup(driver, tmp_path, ["inbox/gasco.txt"])
+            draft = driver.run(
+                TASK_INTAKE_FILE,
+                {
+                    "source_path": "inbox/gasco.txt",
+                    "content": "vendor: GasCo\namount_cents: 12345\ndue_date: 2026-10-01\n",
+                },
+                child="bills",
+            )
+            assert draft.verified is True
+            assert draft.value["vendor"] == "GasCo"
+            assert "status" not in draft.value  # unverified
+
+            # Human-gated accept -> registry.
+            accepted = driver.run(TASK_ACCEPT, {"draft": draft.value}, child="bills")
+            assert accepted.verified is True
+
+        st = store.open_state(tmp_path / "registry.db")
+        assert st.get("inbox/gasco.txt")["status"] == "open"
+        st.close()
+
+    def test_intake_email_and_accept(self, tmp_path) -> None:
+        from agent_centric.fbp import FbpDriver, store
+        from agent_centric.fbp.bills_agent import TASK_ACCEPT, TASK_INTAKE_EMAIL
+
+        with FbpDriver() as driver:
+            self._setup(driver, tmp_path, ["m1:2026-10-01"])
+            draft = driver.run(
+                TASK_INTAKE_EMAIL,
+                {
+                    "message": {
+                        "folder": "inbox",
+                        "id": "m1",
+                        "subject": "Invoice",
+                        "body": "from GasCo amount 123.45 due date 2026-10-01",
+                    }
+                },
+                child="bills",
+            )
+            assert draft.verified is True
+            assert draft.value["amount_cents"] == 12345
+            accepted = driver.run(TASK_ACCEPT, {"draft": draft.value}, child="bills")
+            assert accepted.verified is True
+
+        st = store.open_state(tmp_path / "registry.db")
+        assert st.get("m1:2026-10-01")["status"] == "open"
+        st.close()
+
+    def test_intake_pdf_and_accept(self, tmp_path) -> None:
+        import base64
+
+        from agent_centric.fbp import FbpDriver, store
+        from agent_centric.fbp.bills_agent import TASK_ACCEPT, TASK_INTAKE_PDF
+
+        with FbpDriver() as driver:
+            self._setup(driver, tmp_path, ["inbox/gasco.pdf"])
+            draft = driver.run(
+                TASK_INTAKE_PDF,
+                {
+                    "source_path": "inbox/gasco.pdf",
+                    "pdf_b64": base64.b64encode(
+                        make_pdf("Total: 123.45 vendor: GasCo due date: 2026-10-01")
+                    ).decode("ascii"),
+                },
+                child="bills",
+            )
+            assert draft.verified is True
+            assert draft.value["vendor"] == "GasCo"
+            accepted = driver.run(TASK_ACCEPT, {"draft": draft.value}, child="bills")
+            assert accepted.verified is True
+
+        st = store.open_state(tmp_path / "registry.db")
+        assert st.get("inbox/gasco.pdf")["status"] == "open"
+        st.close()
+
+    def test_intake_calendar_replayable(self, tmp_path) -> None:
+        from agent_centric.fbp import FbpDriver
+        from agent_centric.fbp.bills_agent import TASK_ACCEPT, TASK_INTAKE_FILE
+
+        ledger_path = tmp_path / "ledger.db"
+        with FbpDriver(ledger_path=str(ledger_path)) as driver:
+            self._setup(driver, tmp_path, ["b1"])
+            draft = driver.run(
+                TASK_INTAKE_FILE,
+                {
+                    "source_path": "b1",
+                    "content": "vendor: NetCo\namount_cents: 3000\ndue_date: 2026-09-01\n",
+                },
+                child="bills",
+            )
+            driver.run(TASK_ACCEPT, {"draft": draft.value}, child="bills")
+            result = driver.replay_session()
+            assert result["ok"] is True, result["failed"]
