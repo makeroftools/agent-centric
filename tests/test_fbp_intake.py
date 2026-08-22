@@ -64,3 +64,35 @@ class TestDraftFromFile:
     def test_incomplete_fails_closed(self) -> None:
         with pytest.raises(BillsError):
             draft_from_file('{"vendor": "GasCo"}', source_path="inbox/a.json")
+
+
+class TestDraftFromEmail:
+    def test_email_builds_unverified_draft(self) -> None:
+        from agent_centric.fbp import draft_from_email
+
+        d = draft_from_email(
+            {
+                "folder": "inbox",
+                "id": "msg1",
+                "subject": "Invoice",
+                "body": "from GasCo amount 123.45 due date 2026-10-01",
+            }
+        )
+        assert d["vendor"] == "GasCo"
+        assert d["amount_cents"] == 12345
+        assert d["due_date"] == "2026-10-01"
+        assert "status" not in d  # unverified
+
+    def test_email_incomplete_fails_closed(self) -> None:
+        from agent_centric.fbp import draft_from_email
+
+        with pytest.raises(BillsError):
+            draft_from_email(
+                {"folder": "inbox", "id": "m2", "subject": "hi", "body": "no facts"}
+            )
+
+    def test_email_missing_id_fails_closed(self) -> None:
+        from agent_centric.fbp import draft_from_email
+
+        with pytest.raises(BillsError):
+            draft_from_email({"folder": "inbox", "body": "x"})

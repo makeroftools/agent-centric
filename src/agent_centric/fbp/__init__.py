@@ -36,7 +36,7 @@ from .driver import (
     replay_ledger,
     summarise_ledger,
 )
-from .intake import draft_from_file
+from .intake import draft_from_email, draft_from_file
 from .ledger import DirectiveLedger
 from .message import (
     DIRECTIVE_AUDIT,
@@ -149,4 +149,5 @@ __all__ = [
     "draft_from_pdf_text",
     # Structured intake (port of main's deterministic, offline heuristics)
     "draft_from_file",
+    "draft_from_email",
 ]

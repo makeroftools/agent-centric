@@ -93,6 +93,11 @@ _DUE_RE = re.compile(
     r"\b(?:due date|due|pay by)\s*[:]?\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\b",
     re.IGNORECASE,
 )
+_VENDOR_EMAIL_RE = re.compile(
+    r"\b(?:from|vendor|billed by)\s*[:.]?\s*"
+    r"([A-Za-z0-9&.'\-]+(?:\s+(?!total|amount|due|date)[A-Za-z0-9&.'\-]+){0,2})",
+    re.IGNORECASE,
+)
 
 
 def _parse_money(value: str) -> int | None:
@@ -180,3 +185,60 @@ def _as_text(content: bytes | str) -> str:
         return content.decode("utf-8")
     except UnicodeDecodeError:
         return content.decode("latin-1")
+
+
+def draft_from_email(message: dict[str, Any]) -> dict[str, Any]:
+    """Turn a fetched email message into an **unverified** bill draft.
+
+    Heuristics parse vendor / amount / due date from the (subject + body) text,
+    mirroring ``main``'s deterministic email intake. Read-only: this never
+    sends, deletes, or moves mail, and never writes the registry — the result
+    must pass the human ``bills_accept`` gate.
+
+    Args:
+        message: ``{"folder": str, "id": str, "subject": str, "body": str}``.
+
+    Raises:
+        BillsError: If the message is missing folder/id, or the text yields an
+            incomplete draft (fail closed — nothing is invented).
+    """
+    if not isinstance(message, dict):
+        raise BillsError("email draft source must be a message mapping")
+    folder = message.get("folder")
+    message_id = message.get("id")
+    if not isinstance(folder, str) or not folder:
+        raise BillsError("email message is missing a non-empty 'folder'")
+    if not isinstance(message_id, str) or not message_id:
+        raise BillsError("email message is missing a non-empty 'id'")
+    subject = message.get("subject") or ""
+    body = message.get("body") or ""
+    source_path = f"email://{folder}/{message_id}"
+    text = f"{subject} {body}"
+
+    amount_cents: int | None = None
+    due_date = ""
+    vendor = ""
+    m = _AMOUNT_RE.search(text)
+    if m:
+        amount_cents = _parse_money(m.group(1))
+    dm = _DUE_RE.search(text)
+    if dm:
+        due_date = dm.group(1)
+    vm = _VENDOR_EMAIL_RE.search(text)
+    if vm:
+        vendor = vm.group(1).strip()
+
+    if not vendor or amount_cents is None or not due_date:
+        raise BillsError(
+            f"{source_path}: email lacks a complete vendor/amount/due date "
+            "(fail closed - no draft invented)"
+        )
+    draft = draft_from_intake(
+        {
+            "id": f"{message_id}:{due_date}",
+            "vendor": vendor,
+            "amount_cents": amount_cents,
+            "due_date": due_date,
+        }
+    )
+    return draft
