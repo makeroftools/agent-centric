@@ -38,6 +38,14 @@ re-verifies results, and owns responsibility for its subtree. When a task
 finishes, either its value was verified on every step back to the root, or the
 tree recorded exactly where and why it failed.
 
+**LLMs have a place — as ordinary agents.** A model (a "Grok 4.6" agent, a
+"DeepSeek V4 Flash" agent, …) is just another capability in the tree. Other
+agents **delegate to it through the normal directive/response protocol** when a
+task warrants judgment — but its output is treated like any other child's value:
+re-verified by each parent's verifier, audited, and never trusted on its own
+word. That is exactly the "deterministic platform first" rule in action: use the
+non-deterministic tool, verify it deterministically, never let it stand alone.
+
 ---
 
 ## Why you should care
