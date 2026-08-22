@@ -183,6 +183,28 @@ class Agent:
             return ep
         return f"{self._config.transport}://{ep}"
 
+    def _child_endpoint(self, identity: str) -> str:
+        """Resolve a transport-appropriate endpoint for a child socket.
+
+        Over ``inproc``/``ipc`` a bare name works; over ``tcp`` the child binds
+        its own ROUTER at a distinct local port (deterministic per identity), so
+        a spawned child never binds an invalid ``tcp://<bare-name>`` address.
+        """
+        if self._config.transport == "tcp":
+            port = self._tcp_port_for(identity)
+            return f"tcp://127.0.0.1:{port}"
+        return f"{self._config.transport}://{identity}"
+
+    def _tcp_port_for(self, identity: str) -> int:
+        """A stable TCP port for a child identity (deterministic, per id).
+
+        Uses a dedicated range above the driver's children (5600+). The port is
+        derived from the identity string so the same identity always maps to the
+        same port, which keeps re-spawn/replay idempotent and deterministic.
+        """
+        base = 5800
+        return base + (sum(ord(ch) for ch in identity) % 800)
+
     async def _send(self, msg: Response) -> None:
         """Send a response up to the parent."""
         if self._parent is None:

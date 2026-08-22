@@ -493,3 +493,54 @@ class TestTransportParity:
             assert delegated.verified is True
             assert delegated.value == 42
             assert delegated.node == "child"
+
+    @pytest.mark.parametrize(
+        ("transport", "endpoint"),
+        [
+            ("tcp", "127.0.0.1:5599"),
+            ("ipc", "/tmp/agent-centric-fbp-driver-bills-test"),
+        ],
+    )
+    def test_nested_bills_loop_over_transport(
+        self, transport: str, endpoint: str, tmp_path: Path
+    ) -> None:
+        """The bills loop — which spawns its own store child internally — must
+        run identically over every transport. This is the regression that broke
+        ``tcp``: the store child's endpoint must be transport-resolved, not a
+        bare ``tcp://<name>`` address."""
+        from agent_centric.fbp.bills_agent import (
+            TASK_ACCEPT,
+            TASK_CALENDAR,
+            TASK_INTAKE,
+        )
+
+        with FbpDriver(transport=transport, endpoint=endpoint) as driver:
+            driver.spawn("bills", kind="bills")
+            driver.run(
+                "bills_setup",
+                {"state": str(tmp_path / "registry.db"), "store_keys": ["b1"]},
+                child="bills",
+            )
+            draft = driver.run(
+                TASK_INTAKE,
+                {
+                    "draft": {
+                        "id": "b1",
+                        "vendor": "GasCo",
+                        "amount_cents": 12345,
+                        "due_date": "2026-10-01",
+                    }
+                },
+                child="bills",
+            )
+            assert draft.verified is True
+            accepted = driver.run(TASK_ACCEPT, {"draft": draft.value}, child="bills")
+            assert accepted.verified is True
+            cal = driver.run(
+                TASK_CALENDAR,
+                {"from_date": "2026-10-01", "to_date": "2026-10-31"},
+                child="bills",
+            )
+            assert cal.verified is True
+            assert [e["id"] for e in cal.value["entries"]] == ["b1"]
+            assert cal.value["total_cents"] == 12345

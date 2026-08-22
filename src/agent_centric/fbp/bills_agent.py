@@ -87,7 +87,7 @@ class BillsAgent(Agent):
                     kind=DIRECTIVE_SPAWN,
                     payload={
                         "identity": _STORE_CHILD,
-                        "endpoint": f"bills-{_STORE_CHILD}",
+                        "endpoint": self._child_endpoint(_STORE_CHILD),
                         "kind": "store",
                     },
                 )
