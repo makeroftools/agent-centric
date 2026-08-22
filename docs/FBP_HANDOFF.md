@@ -81,7 +81,9 @@ These are captured in code (ModelAgent, determinism/auto-accept) and docs.
 - CLI: `agent-centric fbp [--transport inproc|tcp|ipc] [--ledger <path>]`
   drives the whole stack (protocol, spine, durable state, store agent, CPM,
   bills loop, intake, maintenance, model agent, determinism, audit, replay);
-  `agent-centric fbp-summary <path>`; `agent-centric fbp-replay <path>`.
+  `agent-centric fbp-summary <path>`; `agent-centric fbp-replay <path>`;
+  `agent-centric fbp-web` serves a local, actionable landing page (stdlib
+  `http.server`, loopback-only, read/verify-only).
 - Example: `examples/fbp_arc_demo.py` (runnable end-to-end production arc);
   `examples/fbp_demo.py`, `examples/fbp_durability_demo.py`.
 

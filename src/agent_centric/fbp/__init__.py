@@ -80,6 +80,8 @@ from .pdf_intake import draft_from_pdf_text, extract_text
 from .shell import Shell
 from .store import StateStore, StoreError, TrajectoryStore, open_state, open_trajectory
 from .store_agent import STORE_GET, STORE_KEYS, STORE_SET, StoreAgent
+from .web import DEFAULT_HOST, DEFAULT_PORT, FbpLandingServer
+from .web import serve as serve_landing
 from .workspace import (
     DIRECTORY,
     FILE,
@@ -187,4 +189,9 @@ __all__ = [
     "WorkspaceError",
     "FILE",
     "DIRECTORY",
+    # Landing-page server (stdlib http.server; local-only, actionable)
+    "FbpLandingServer",
+    "serve_landing",
+    "DEFAULT_HOST",
+    "DEFAULT_PORT",
 ]

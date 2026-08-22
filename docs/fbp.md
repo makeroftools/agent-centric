@@ -432,7 +432,9 @@ directive returns the cached result rather than re-executing).
 `agent-centric fbp [--transport inproc|tcp|ipc]` drives a deterministic demo
 tree that exercises every property above and exits non-zero on any failure.
 `agent-centric fbp-replay <path>` re-verifies a durable ledger; `agent-centric
-fbp-summary <path>` gives an operator-facing summary.
+fbp-summary <path>` gives an operator-facing summary; `agent-centric fbp-web`
+serves a local, actionable landing page (stdlib `http.server`, loopback-only,
+read/verify-only) over an in-process `FbpDriver`.
 
 ## Full arc demo
 

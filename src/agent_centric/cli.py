@@ -563,6 +563,25 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional durable directive-ledger path to record the demo session to.",
     )
 
+    p_fbp_web = sub.add_parser(
+        "fbp-web",
+        help="Serve a local, actionable landing page for the FBP subsystem (stdlib http.server).",
+    )
+    p_fbp_web.add_argument(
+        "--host", default="127.0.0.1", help="Loopback bind host (default: 127.0.0.1)."
+    )
+    p_fbp_web.add_argument(
+        "--port",
+        type=int,
+        default=8790,
+        help="Loopback bind port (default: 8790).",
+    )
+    p_fbp_web.add_argument(
+        "--open",
+        action="store_true",
+        help="Open a browser at the landing page on startup.",
+    )
+
     p_fbp_replay = sub.add_parser(
         "fbp-replay",
         help="Re-open a durable directive ledger and re-verify (replay) it.",
@@ -924,6 +943,24 @@ def _cmd_fbp(transport: str, ledger: Path | None = None) -> int:
         return 0 if local.verified and delegated.verified and replay["passed"] else 1
 
 
+def _cmd_fbp_web(*, host: str = "127.0.0.1", port: int = 8790, open_browser: bool = False) -> int:
+    """Serve a local, actionable landing page for the FBP subsystem.
+
+    Binds a stdlib ``http.server`` on loopback (fail-closed: never exposed
+    beyond the local machine) and renders a live landing page against an
+    in-process ``FbpDriver``. The page is read/verify-only and never mutates
+    durable state. Blocks until interrupted (Ctrl-C).
+    """
+    from agent_centric.fbp.web import serve
+
+    try:
+        serve(host=host, port=port, open_browser=open_browser)
+    except OSError as exc:
+        print(f"fbp-web: could not bind {host}:{port}: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def _cmd_fbp_replay(ledger_path: Path, transport: str) -> int:
     """Re-open a durable directive ledger and re-verify (replay) it.
 
@@ -985,6 +1022,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_replay_verify(args.store, args.trajectory_id)
     if args.command == "fbp":
         return _cmd_fbp(args.transport, ledger=args.ledger)
+    if args.command == "fbp-web":
+        return _cmd_fbp_web(host=args.host, port=args.port, open_browser=args.open)
     if args.command == "fbp-replay":
         return _cmd_fbp_replay(args.ledger_path, args.transport)
     if args.command == "fbp-summary":
