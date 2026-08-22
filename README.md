@@ -119,6 +119,9 @@ uv run agent-centric fbp --transport ipc
 See [`docs/fbp.md`](docs/fbp.md) and the specs in
 `src/agent_centric/fbp/{spec,protocol}.md` for full detail.
 
+> **New:** an attractive, story-led deep-dive of the whole subsystem lives in
+> [`README_FBP.md`](README_FBP.md).
+
 ---
 
 ## What it is not
