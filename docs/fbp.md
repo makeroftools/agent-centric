@@ -436,9 +436,11 @@ tree that exercises every property above and exits non-zero on any failure.
 `agent-centric fbp-summary <path>` gives an operator-facing summary; `agent-centric
 fbp-web` serves a local, actionable landing page (stdlib `http.server`, loopback-only,
 read/verify-only) over an in-process `FbpDriver`, with routes `/`, `/action/run`,
-`/model` (a text box that runs a prompt through the `model` agent — OpenRouter
-when `OPENROUTER_API_KEY` is set, deterministic stub otherwise), `/ledger`,
-`/state.json`, and `/health`.
+`/model` (a model box — dropdown + spinner — that runs a prompt through the `model`
+agent: OpenRouter when `OPENROUTER_API_KEY` is set, deterministic stub otherwise,
+showing `[verified]` status and model source), `/ledger`, `/state.json`, and
+`/health`. `fbp-web --reload` auto-restarts on source edits; `fbp-web-kill`
+stops the server on the port.
 
 ## Full arc demo
 

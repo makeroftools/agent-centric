@@ -25,9 +25,10 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `9aea719` = `feat(fbp): OpenRouter model text box on the landing page`.
-- **Pushed to origin:** up through `0c78394`. **Unpushed (1 commit):** `9aea719`
-  (the OpenRouter text box). Run `git log origin/agent-centric-fbp..HEAD`.
+- **HEAD:** `c9d5bcd` (commit below) on top of `db30e8a`. Both are local, **not
+  pushed** as of this handoff. The user said they will push this batch.
+- **Pushed to origin:** up through `0c78394`. Run
+  `git log origin/agent-centric-fbp..HEAD` to see the unpushed set.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule in effect for a long time: **do not push unless the lead
   explicitly says push.** (The lead has since been pushing directly themselves;
@@ -35,7 +36,7 @@ we are.
   relaxed, but confirm each time for a given commit.)
 
 ### Validation (run this session, all live)
-- `uv run pytest` → **649 passed**
+- `uv run pytest` → **658 passed** (was 649; added model-box regression tests)
 - `uv run ruff check .` → clean
 - `uv run mypy src` → clean (**76 source files**)
 - FBP coverage (`uv run pytest --cov=agent_centric.fbp --cov-report=term`) →
@@ -70,7 +71,7 @@ an OpenRouter-backed model text box on that page:
 | Determinism + auto-accept | `fbp/determinism.py`, `fbp/bills_agent.py` | `score_determinism`, `Rule`/`RuleSet`, `bills_accept_deterministic` only on an approved rule |
 | Durable approved rules | `fbp/bills_agent.py` (`bills_rule_add`) | rules persist; auto-accept across restarts — **"authorize once, run after restart"** |
 | **Landing-page server** | `fbp/web.py` | `agent-centric fbp-web`; stdlib `http.server`, loopback-only, read/verify-only; live tree, summary, invariants, actions |
-| **OpenRouter model text box** | `fbp/web.py` | `/model` POST route runs a prompt through the `model` agent → OpenRouter when `OPENROUTER_API_KEY` set, else deterministic stub |
+| **Model box (dropdown + spinner)** | `fbp/web.py` | `/model` POST runs a prompt through the `model` agent → OpenRouter when `OPENROUTER_API_KEY` set, else stub; model dropdown (`OPENROUTER_MODEL`), spinner, verified/source status |
 
 ### Easy-UX driver & CLI
 - `FbpDriver` API: `register`, `resolve`, `configure`, `configure_child`,
@@ -79,19 +80,25 @@ an OpenRouter-backed model text box on that page:
   `replay_session`, `summary`, `status`, `load_ledger`/`replay_ledger`,
   `tree()`, `store_keys(child)`.
 - CLI: `agent-centric fbp [--transport inproc|tcp|ipc] [--ledger <path>]`,
-  `fbp-summary <path>`, `fbp-replay <path>`, `fbp-web [--host --port --open]`.
+  `fbp-summary <path>`, `fbp-replay <path>`, `fbp-web [--host --port --open]`,
+  `fbp-web --reload` (auto-restart on source change), `fbp-web-kill [--port]`.
 - Examples: `examples/fbp_arc_demo.py`, `fbp_demo.py`, `fbp_durability_demo.py`.
 
 ### Tooling / commands
 ```sh
 uv sync --extra dev
-uv run pytest                  # 649 passed (as of this handoff)
+uv run pytest                  # 658 passed (as of this handoff)
 uv run ruff check .            # clean
 uv run mypy src                # clean, 76 source files
 uv run pytest --cov=agent_centric.fbp --cov-report=term   # ~88%
 uv run agent-centric fbp --transport inproc|tcp|ipc
 uv run agent-centric fbp-replay <ledger>   # re-verify a durable session
-uv run agent-centric fbp-web --open        # landing page (+ model text box)
+uv run agent-centric fbp-web                # landing page (stub model)
+uv run agent-centric fbp-web --reload      # auto-restart on source edits
+uv run agent-centric fbp-web-kill          # stop the server on the port
+# model selection:
+#   OPENROUTER_API_KEY  -> live OpenRouter (default deepseek/deepseek-v4-flash-0731)
+#   OPENROUTER_MODEL    -> comma-separated ids for the dropdown (default single)
 ```
 
 ### Standing invariants (never break)
@@ -137,9 +144,16 @@ of decisions and working style that a fresh session must inherit.
    a GitHub CI workflow, docs.
    → The CI workflow was **later removed** (see below); coverage evidence,
    dedup, and `status()` stayed.
-3. **OpenRouter model text box** (`9aea719`, CURRENT HEAD) — added a text box to
+3. **OpenRouter model text box** (`9aea719`) — added a text box to
    the landing page that runs a prompt through the `model` agent, to OpenRouter
    when an `OPENROUTER_API_KEY` env var is set, else the deterministic stub.
+4. **Model box done right + dev commands** (`c9d5bcd`) — fixed the box so it
+   actually works end-to-end: the JS `\n` bug that silently broke the whole
+   `<script>` (Ask did nothing, no spinner), normalized `ModelResponse` to its
+   plain text, added a spinner + red error styling, made `deepseek/deepseek-v4
+   -flash-0731` the default model, and added `fbp-web --reload` (auto-restart on
+   source edits) + `fbp-web-kill`. The model dropdown reads `OPENROUTER_MODEL`
+   (comma-separated).
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -183,7 +197,7 @@ of decisions and working style that a fresh session must inherit.
 
 ### Production/deploy gaps the user should resolve (explicit, not built)
 These are the honest reasons the project is **not yet "1.0 / production-ready"**
-despite 649 passing tests:
+despite 658 passing tests:
 - **Transport security:** over `tcp`/`ipc` the directive/response protocol is
   **unauthenticated** — no TLS, no authn/z. Fine for localhost/demo, not across
   a real trust boundary. (A documented trust boundary is the least we can add.)
@@ -196,16 +210,20 @@ despite 649 passing tests:
 These are listed in `STATUS.md`'s "out of scope / future volleys".
 
 ### Loose ends / immediate next actions
-- **Commit is unpushed:** `9aea719` (the OpenRouter text box) is local but not
-  on GitHub (remote is at `0c78394`, which is the coverage/hardening commit
-  minus CI). Ask the user if they want it pushed, or push with a clear note.
+- **Unpushed commits:** `db30e8a` (real-model payload fix + dropdown) and
+  `c9d5bcd` (model box end-to-end + reload/kill) are local but not on GitHub
+  (remote is at `0c78394`). The user said "I'll push" for the current batch.
+- **`OPENROUTER_MODEL` lives in the user's `~/.bashrc`** (out of the repo):
+  `deepseek/deepseek-v4-flash-0731,openai/gpt-4o-mini,anthropic/claude-3.5-son
+  net,meta-llama/llama-3.3-70b-instruct`. The `anthropic/claude-3.5-sonnet` id
+  404s on OpenRouter for this key (invalid slug); remove or correct it.
 - **docs/fbp.md / FBP_HANDOFF.md / README_FBP.md** are living docs — keep them
-  current (they now mention the model box).
-- **The `fbp-web` landing page** is live and runnable for a demo:
-  `uv run agent-centric fbp-web --open` (set `OPENROUTER_API_KEY` for a real
-  model; it fails closed to the deterministic stub otherwise).
-- Consider adding to the model box: model dropdown, streaming, showing verified
-  / source status next to the answer.
+  current (they now mention the model box, reload, kill).
+- **The `fbp-web` landing page** is live and runnable for a demo (set
+  `OPENROUTER_API_KEY` for a real model; it fails closed to the stub otherwise):
+  `uv run agent-centric fbp-web --reload`.
+- Future UX ideas for the model box: **streaming** answers as tokens arrive,
+  and a **chat-history** view (persist + show prior turns).
 
 ---
 
@@ -215,7 +233,9 @@ These are listed in `STATUS.md`'s "out of scope / future volleys".
 uv run agent-centric run                # deterministic demo
 uv run agent-centric fbp                # drive FBP demo (inproc)
 uv run agent-centric fbp --transport tcp | ipc
-uv run agent-centric fbp-web --open     # landing page + model box
+uv run agent-centric fbp-web            # landing page + model box
+uv run agent-centric fbp-web --reload   # auto-restart on source edits
+uv run agent-centric fbp-web-kill       # stop the server on the port
 uv run agent-centric fbp-replay sess.db
 uv run agent-centric fbp-summary sess.db
 uv run python examples/fbp_arc_demo.py
@@ -229,7 +249,7 @@ uv run python examples/fbp_arc_demo.py
 - Deterministic-first north star; LLM as ordinary agent; grants; fail-closed;
   no auto-pres ids.
 - The AC Router is spun out, gitignored, and **not** our work here.
-- Trust only what 649 tests prove and what is committed; say clearly when
+- Trust only what 658 tests prove and what is committed; say clearly when
   something is unverifiable or unpushed.
 
 ---
