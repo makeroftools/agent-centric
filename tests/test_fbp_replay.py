@@ -11,8 +11,16 @@ def _double(value: int) -> int:
     return value * 2
 
 
+def _triple(value: int) -> int:
+    return value * 3
+
+
 def _even(v) -> bool:
     return isinstance(v, int) and v % 2 == 0
+
+
+def _odd(v) -> bool:
+    return isinstance(v, int) and v % 2 == 1
 
 
 class TestReplay:
@@ -85,6 +93,28 @@ class TestReplay:
             # The fresh run raises, so outcomes differ (or the replay fails).
             assert result["passed"] is False or result["replayed"] is None
 
+    def test_replay_resolves_per_run_verifier(self) -> None:
+        """A run whose per-run verifier differs from the root default must
+        replay faithfully. Without registering the verifier on the fresh root,
+        a verified original would diverge into a spurious verification failure."""
+        register_callable("triple", _triple)
+        register_callable("odd", _odd)
+        register_callable("even", _even)
+        with FbpDriver() as driver:
+            driver.register("triple", _triple)
+            driver.register("odd", _odd)
+            driver.register("even", _even)
+            # Root default is 'even'; the run overrides to 'odd'. triple(7)=21 is
+            # odd, so the run is verified only under 'odd'.
+            driver.configure(
+                tasks=("triple",), verifiers=("even", "odd"), verifier="even"
+            )
+            r = driver.run("triple", {"value": 7}, verifier="odd")
+            assert r.verified is True and r.value == 21
+
+            result = driver.replay()
+            assert result["passed"] is True, result["diff"]
+
 
 class TestReplaySession:
     """replay_session re-issues the whole recorded directive sequence on a
@@ -140,6 +170,26 @@ class TestReplaySession:
             # The non-deterministic task diverges on replay and is flagged.
             assert result["ok"] is False
             assert len(result["failed"]) >= 1
+
+    def test_replay_session_resolves_per_run_verifier(self) -> None:
+        """replay_session must faithfully rebuild a session that used per-run
+        verifiers differing from the root default."""
+        register_callable("triple", _triple)
+        register_callable("odd", _odd)
+        register_callable("even", _even)
+        with FbpDriver() as driver:
+            driver.register("triple", _triple)
+            driver.register("odd", _odd)
+            driver.register("even", _even)
+            driver.configure(
+                tasks=("triple",), verifiers=("even", "odd"), verifier="even"
+            )
+            r = driver.run("triple", {"value": 7}, verifier="odd")
+            assert r.verified is True and r.value == 21
+
+            result = driver.replay_session()
+            assert result["ok"] is True, result["failed"]
+            assert result["passed"] == result["runs"]
 
 
 class TestReplaySessionStateIsolation:

@@ -362,9 +362,24 @@ class FbpDriver:
         except KeyError:
             return None
         fresh_verifier = self._root._verifier
+        # The run directive may carry its own per-run verifier (``payload["verifier"]``)
+        # distinct from the root default. Both must be resolvable on the fresh
+        # root, or a verified original would diverge into a spurious failure.
+        per_run_verifier = payload.get("verifier")
+        verifier_names = {
+            v for v in (fresh_verifier, per_run_verifier) if isinstance(v, str)
+        }
         with self.__class__() as fresh:
             try:
                 fresh.register(task, entry.callable if entry.callable else _noop)
+                for vname in verifier_names:
+                    try:
+                        ventry = _resolve_entry(vname)
+                    except KeyError:
+                        continue
+                    fresh.register(
+                        vname, ventry.callable if ventry.callable else _noop
+                    )
                 cfg_payload: dict[str, Any] = {"tasks": [task]}
                 if fresh_verifier is not None:
                     cfg_payload["verifier"] = fresh_verifier
