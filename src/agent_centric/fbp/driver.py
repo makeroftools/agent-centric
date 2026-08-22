@@ -667,6 +667,8 @@ class FbpDriver:
     def run_plan(
         self,
         steps: list[dict[str, Any]],
+        *,
+        on_step: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
         """Run a deterministic sequence of ``run`` steps; fail closed on the
         first unverified one.
@@ -676,6 +678,12 @@ class FbpDriver:
         ``run`` directive (so it is recorded in the ledger and replayable). If
         any step is unverified or raises, execution stops and the plan returns
         ``ok=False`` with the failing step — never a partial silent success.
+
+        Args:
+            steps: The ordered run steps to execute.
+            on_step: An optional per-step observer ``callable(result_dict)``
+                invoked as each step completes, so a long-running plan streams
+                progress to an operator before the final result is returned.
 
         Returns:
             ``{"ok": bool, "results": [{"step", "task", "verified",
@@ -694,15 +702,16 @@ class FbpDriver:
                 verifier=step.get("verifier"),
                 child=step.get("child"),
             )
-            results.append(
-                {
-                    "step": idx,
-                    "task": task,
-                    "verified": resp.verified,
-                    "value": resp.value,
-                    "error": resp.error,
-                }
-            )
+            result = {
+                "step": idx,
+                "task": task,
+                "verified": resp.verified,
+                "value": resp.value,
+                "error": resp.error,
+            }
+            results.append(result)
+            if on_step is not None:
+                on_step(result)
             if not resp.verified:
                 return {
                     "ok": False,

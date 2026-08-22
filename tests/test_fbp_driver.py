@@ -131,6 +131,46 @@ class TestRunPlan:
         with FbpDriver() as driver, pytest.raises(ValueError, match="non-empty"):
             driver.run_plan([])
 
+    def test_on_step_streams_progress(self) -> None:
+        """run_plan(on_step=...) streams each step's outcome as it completes."""
+        seen: list[str] = []
+
+        def observe(result: dict[str, Any]) -> None:
+            seen.append(f"{result['step']}:{result['task']}:{result['verified']}")
+
+        with FbpDriver() as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            result = driver.run_plan(
+                [
+                    {"task": "double", "args": {"value": 21}},
+                    {"task": "double", "args": {"value": 5}},
+                ],
+                on_step=observe,
+            )
+            assert result["ok"] is True
+            assert seen == ["0:double:True", "1:double:True"]
+
+    def test_on_step_sees_failing_step(self) -> None:
+        seen: list[str] = []
+
+        def observe(r: dict[str, Any]) -> None:
+            seen.append(f"{r['step']}:{r['verified']}")
+
+        with FbpDriver() as driver:
+            driver.register("double", _double)
+            driver.register("odd", _odd)
+            driver.configure(tasks=("double",), verifiers=("odd",), verifier="odd")
+            result = driver.run_plan(
+                [
+                    {"task": "double", "args": {"value": 21}},
+                    {"task": "double", "args": {"value": 1}},
+                ],
+                on_step=observe,
+            )
+            assert result["ok"] is False
+            assert seen == ["0:False"]  # only the failing step is streamed
+
 
 
 class TestMediatedSpawnDelegation:
