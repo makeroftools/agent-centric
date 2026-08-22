@@ -648,8 +648,15 @@ class FbpDriver:
         *,
         verifier: str | None = None,
         child: str | None = None,
+        sources: list[dict[str, Any]] | None = None,
     ) -> Response:
         """Run a task, optionally delegating to a named child.
+
+        Args:
+            sources: Optional source references to attach to the response
+                (e.g. the model id / documents that informed a non-deterministic
+                producer's output). They are carried on the response and the
+                audit; they are metadata, not task inputs.
 
         Returns:
             A ``Response``. If ``child`` is given and is a spawned child, the
@@ -662,6 +669,8 @@ class FbpDriver:
             payload["verifier"] = verifier
         if child is not None:
             payload["child"] = child
+        if sources is not None:
+            payload["sources"] = sources
         return self._roundtrip(DIRECTIVE_RUN, payload, prefix="run")
 
     def run_plan(

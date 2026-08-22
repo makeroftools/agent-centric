@@ -259,6 +259,7 @@ class Agent:
             "node": msg.node,
             "error": msg.error,
             "source": msg.source,
+            "sources": msg.sources,
             "protocol": msg.protocol,
         }
 
@@ -423,6 +424,7 @@ class Agent:
                     f"child {child_identity!r} returned a value that failed the "
                     "parent's verifier"
                 ),
+                sources=child_response.sources,
             )
         self._record_relay(child_response, child_identity)
         await self._send(child_response)
@@ -454,6 +456,7 @@ class Agent:
                 value=response.value,
                 error=response.error,
                 source=response.source,
+                sources=response.sources,
                 fingerprint=f"relay|{self.identity}|{child_identity}",
                 parent=child_identity,
             )
@@ -652,6 +655,14 @@ class Agent:
             return self._error(directive, f"unknown task {task_name!r}")
 
         source = self._registry.source(task_name) or ""
+        # A producer (e.g. an LLM agent) may declare source references for its
+        # non-deterministic output; they are carried on the response so the
+        # upward path and the audit can cite what informed it.
+        supplied_sources = directive.payload.get("sources")
+        if isinstance(supplied_sources, list):
+            sources: list[dict[str, Any]] | None = supplied_sources
+        else:
+            sources = None
 
         try:
             value = task(**args)
@@ -667,6 +678,7 @@ class Agent:
             node=self.identity,
             error=None if verified else f"verification failed for task {task_name!r}",
             source=source,
+            sources=sources,
         )
         self._results[fingerprint] = response
         self._used_keys.add(key)
@@ -796,6 +808,7 @@ class Agent:
                 value=response.value,
                 error=response.error,
                 source=response.source,
+                sources=response.sources,
                 fingerprint="|".join(self._fingerprint(directive)),
                 parent=self._config.parent_endpoint,
             )
@@ -1000,6 +1013,7 @@ class Agent:
             node=payload.get("node", identity),
             error=payload.get("error"),
             source=payload.get("source", ""),
+            sources=payload.get("sources"),
         )
         try:
             validate_response(msg)

@@ -51,6 +51,78 @@ class TestRegistryAsAgent:
             assert resp.error is not None
 
 
+class TestSourceReferences:
+    """Non-deterministic producers can attach source references to their output;
+    they flow through the response, relays, and the trajectory audit."""
+
+    def test_local_run_carries_sources(self) -> None:
+        with FbpDriver() as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            r = driver.run(
+                "double",
+                {"value": 21},
+                sources=[{"kind": "model", "id": "grok-4.6", "content_ref": "doc://pricing"}],
+            )
+            assert r.verified is True
+            assert r.sources == [
+                {"kind": "model", "id": "grok-4.6", "content_ref": "doc://pricing"}
+            ]
+
+    def test_delegated_run_preserves_sources_across_relay(self) -> None:
+        with FbpDriver() as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            driver.spawn("child")
+            driver.configure_child("child", tasks=("double",))
+            r = driver.run(
+                "double",
+                {"value": 21},
+                child="child",
+                sources=[{"kind": "model", "id": "ds-v4"}],
+            )
+            assert r.verified is True and r.node == "child"
+            # The child's sources survive the parent's relay up.
+            assert r.sources == [{"kind": "model", "id": "ds-v4"}]
+
+    def test_sources_recorded_in_audit(self, tmp_path: Path) -> None:
+        with FbpDriver() as driver:
+            driver.configure(trajectory=str(tmp_path / "audit.db"))
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            driver.run(
+                "double",
+                {"value": 21},
+                sources=[{"kind": "doc", "location": "file:///a.pdf"}],
+            )
+            audit = driver.audit().value
+            assert any(
+                e.get("sources") == [{"kind": "doc", "location": "file:///a.pdf"}]
+                for e in audit
+            )
+
+    def test_sources_surface_in_reconstructed_chain(self, tmp_path: Path) -> None:
+        """Audit-as-proof includes the source references on the reconstructed
+        chain for a non-deterministic producer."""
+        with FbpDriver() as driver:
+            driver.configure(trajectory=str(tmp_path / "root.db"))
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            driver.run(
+                "double",
+                {"value": 21},
+                sources=[{"kind": "model", "id": "grok-4.6"}],
+            )
+            chains = driver.reconstruct_audit()
+            assert any(
+                any(
+                    e.get("sources") == [{"kind": "model", "id": "grok-4.6"}]
+                    for e in chain["events"]
+                )
+                for chain in chains
+            )
+
+
 class TestRunLocal:
     def test_run_verified_task(self) -> None:
         with FbpDriver() as driver:

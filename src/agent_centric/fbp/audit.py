@@ -37,6 +37,7 @@ class ChainEvent:
         value: The (verified) value, if any.
         error: The explicit failure message, if any.
         parent: The node this event was relayed from (for relay hops).
+        sources: Source references attached to this hop, if any.
     """
 
     node: str
@@ -45,6 +46,7 @@ class ChainEvent:
     value: Any = None
     error: str | None = None
     parent: str = ""
+    sources: list[dict[str, Any]] | None = None
 
 
 @dataclass(frozen=True)
@@ -83,6 +85,7 @@ class AuditChain:
                     "value": e.value,
                     "error": e.error,
                     "parent": e.parent,
+                    "sources": e.sources,
                 }
                 for e in self.events
             ],
@@ -114,6 +117,7 @@ def reconstruct_chains(
                     value=row["value"],
                     error=row["error"],
                     parent=row["parent"],
+                    sources=row.get("sources"),
                 )
             )
 

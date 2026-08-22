@@ -186,10 +186,15 @@ class TrajectoryStore(_Base):
             "  value TEXT,"                  # JSON-encoded verified value
             "  error TEXT,"
             "  source TEXT NOT NULL DEFAULT '',"
+            "  sources TEXT,"                # JSON-encoded structured references
             "  fingerprint TEXT NOT NULL,"
             "  parent TEXT NOT NULL DEFAULT ''"
             ")"
         )
+        # Backfill a pre-existing trajectory that predates the sources column.
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(events)").fetchall()}
+        if "sources" not in cols:
+            conn.execute("ALTER TABLE events ADD COLUMN sources TEXT")
 
     def record(
         self,
@@ -201,6 +206,7 @@ class TrajectoryStore(_Base):
         value: Any = None,
         error: str | None = None,
         source: str = "",
+        sources: list[dict[str, Any]] | None = None,
         fingerprint: str = "",
         parent: str = "",
     ) -> None:
@@ -214,10 +220,11 @@ class TrajectoryStore(_Base):
                 f"correlation id {correlation_id!r} already recorded "
                 "(trajectory is write-once)"
             )
+        sources_json = _canonic(sources) if sources is not None else None
         conn.execute(
             "INSERT INTO events (correlation_id, kind, node, verified, value, "
-            "error, source, fingerprint, parent) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "error, source, sources, fingerprint, parent) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 correlation_id,
                 kind,
@@ -226,6 +233,7 @@ class TrajectoryStore(_Base):
                 _canonic(value) if value is not None else None,
                 error,
                 source,
+                sources_json,
                 fingerprint,
                 parent,
             ),
@@ -237,10 +245,10 @@ class TrajectoryStore(_Base):
         conn = self._require()
         rows = conn.execute(
             "SELECT correlation_id, kind, node, verified, value, error, source, "
-            "fingerprint, parent FROM events ORDER BY correlation_id"
+            "sources, fingerprint, parent FROM events ORDER BY correlation_id"
         ).fetchall()
         out: list[dict[str, Any]] = []
-        for cid, kind, node, verified, value, error, source, fp, parent in rows:
+        for cid, kind, node, verified, value, error, source, sources, fp, parent in rows:
             out.append(
                 {
                     "correlation_id": cid,
@@ -250,6 +258,7 @@ class TrajectoryStore(_Base):
                     "value": json.loads(value) if value is not None else None,
                     "error": error,
                     "source": source,
+                    "sources": json.loads(sources) if sources is not None else None,
                     "fingerprint": fp,
                     "parent": parent,
                 }

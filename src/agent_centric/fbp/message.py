@@ -127,6 +127,7 @@ class Response:
     node: str = ""
     error: str | None = None
     source: str = ""
+    sources: list[dict[str, Any]] | None = None
     protocol: str = PROTOCOL_VERSION
 
 
