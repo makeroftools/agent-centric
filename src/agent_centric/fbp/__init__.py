@@ -36,6 +36,7 @@ from .bills_agent import BillsAgent
 from .config import AgentConfig
 from .context import Context, Verifier
 from .critical_path import CpmAnalysis, CpmError, CpmNode, analyse_cpm, cpm_from_dict
+from .determinism import DeterminismRating, Rule, RuleSet, resolve_with_rules, score_determinism
 from .driver import (
     FbpDriver,
     ledger_callables,
@@ -144,6 +145,12 @@ __all__ = [
     "CpmError",
     "analyse_cpm",
     "cpm_from_dict",
+    # Determinism rating + approved rules (determinize-then-decide)
+    "DeterminismRating",
+    "Rule",
+    "RuleSet",
+    "score_determinism",
+    "resolve_with_rules",
     # Model agent (an LLM as an ordinary first-class agent)
     "ModelAgent",
     "TASK_MODEL",
