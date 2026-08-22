@@ -820,6 +820,10 @@ class Agent:
             from .store_agent import StoreAgent
 
             return StoreAgent
+        if kind == "bills":
+            from .bills_agent import BillsAgent
+
+            return BillsAgent
         return Agent
 
     def configure_child(

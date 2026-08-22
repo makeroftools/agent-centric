@@ -236,6 +236,114 @@ class TestCpmCapability:
             assert resp.value["duration"] == 2
 
 
+class TestBillsLoop:
+    """The bills loop end-to-end on the foundation: intake -> human-gated
+    accept -> durable single-writer registry -> verified calendar projection.
+    Topology: root -> bills -> store. Nothing auto-accepts; money stays
+    integer cents and dates ISO; malformed intake fails closed."""
+
+    def _setup(self, driver: Any, tmp_path: Path) -> None:
+        driver.spawn("bills", kind="bills")
+        driver.run(
+            "bills_setup",
+            {"state": str(tmp_path / "registry.db"), "store_keys": ["b1", "b2"]},
+            child="bills",
+        )
+
+    def test_full_loop(self, tmp_path: Path) -> None:
+        from agent_centric.fbp.bills_agent import (
+            TASK_ACCEPT,
+            TASK_CALENDAR,
+            TASK_INTAKE,
+        )
+
+        with FbpDriver() as driver:
+            self._setup(driver, tmp_path)
+
+            # 1. Intake an unverified draft.
+            draft = driver.run(
+                TASK_INTAKE,
+                {
+                    "draft": {
+                        "id": "b1",
+                        "vendor": "GasCo",
+                        "amount_cents": 12345,
+                        "due_date": "2026-10-01",
+                    }
+                },
+                child="bills",
+            )
+            assert draft.verified is True
+            assert draft.value["id"] == "b1"
+            # An intake draft is unverified: it has no registry 'status' yet.
+            assert "status" not in draft.value
+
+            # 2. Human-gated accept -> persisted to the registry via the store.
+            accepted = driver.run(TASK_ACCEPT, {"draft": draft.value}, child="bills")
+            assert accepted.verified is True
+
+            # 3. Calendar projection from the durable registry (b1 due 2026-10-01).
+            cal = driver.run(
+                TASK_CALENDAR,
+                {"from_date": "2026-10-01", "to_date": "2026-10-31"},
+                child="bills",
+            )
+            assert cal.verified is True
+            assert [e["id"] for e in cal.value["entries"]] == ["b1"]
+            assert cal.value["total_cents"] == 12345
+
+            # 4. The registry is durable on disk.
+            from agent_centric.fbp import store
+
+            st = store.open_state(tmp_path / "registry.db")
+            assert st.get("b1")["status"] == "open"
+            assert st.get("b1")["amount_cents"] == 12345
+            st.close()
+
+    def test_no_auto_accept(self, tmp_path: Path) -> None:
+        """Intake alone never writes the registry; only accept does."""
+        from agent_centric.fbp import store
+        from agent_centric.fbp.bills_agent import TASK_INTAKE
+
+        with FbpDriver() as driver:
+            self._setup(driver, tmp_path)
+            driver.run(
+                TASK_INTAKE,
+                {
+                    "draft": {
+                        "id": "b2",
+                        "vendor": "PostCo",
+                        "amount_cents": 999,
+                        "due_date": "2026-09-15",
+                    }
+                },
+                child="bills",
+            )
+        st = store.open_state(tmp_path / "registry.db")
+        assert st.get("b2") is None, "intake alone must not write the registry"
+        st.close()
+
+    def test_malformed_intake_fails_closed(self, tmp_path: Path) -> None:
+        from agent_centric.fbp.bills_agent import TASK_INTAKE
+
+        with FbpDriver() as driver:
+            self._setup(driver, tmp_path)
+            resp = driver.run(
+                TASK_INTAKE,
+                {
+                    "draft": {
+                        "id": "b3",
+                        "vendor": "X",
+                        "amount_cents": "NaN",
+                        "due_date": "not-a-date",
+                    }
+                },
+                child="bills",
+            )
+            assert resp.verified is False
+            assert resp.error is not None
+
+
 class TestLifecycle:
     def test_ping(self) -> None:
         with FbpDriver() as driver:

@@ -168,6 +168,35 @@ with FbpDriver() as d:
 - **Fail-closed**: a cyclic, self-referential, or malformed network is an
   explicit error, never an ambiguous result.
 
+### Bills loop (real end-to-end FBP graph)
+
+The bills loop is the first *real* demonstration of the foundation on a
+mission-relevant workflow. Topology: `root -> bills -> store`.
+
+- **`BillsAgent`** (`bills_agent.py`) is a coordinating agent that drives the
+  loop over a single-writer `StoreAgent` child (the durable registry). It
+  serves `bills_setup`, `bills_intake`, `bills_accept`, and `bills_calendar`.
+- **Pure domain functions** (`bills.py`) are registered capabilities:
+  `bill_total`, `draft_from_intake`, `accept_draft`, `project_calendar`.
+- **Human-gated accept**: a draft becomes a registry bill only via an explicit
+  `bills_accept`; nothing auto-accepts. Amounts are integer cents; dates are
+  ISO; malformed intake fails closed (no invented facts).
+- **Single-writer registry**: only the store child writes the registry file,
+  under a key allowlist; the BillsAgent reads/writes *through* it.
+
+```python
+with FbpDriver() as d:
+    d.spawn("bills", kind="bills")
+    d.run("bills_setup", {"state": "registry.db", "store_keys": ["b1"]}, child="bills")
+    draft = d.run("bills_intake", {"draft": {"id": "b1", "vendor": "GasCo",
+        "amount_cents": 12345, "due_date": "2026-10-01"}}, child="bills")
+    d.run("bills_accept", {"draft": draft.value}, child="bills")   # human-gated
+    cal = d.run("bills_calendar", {"from_date": "2026-10-01", "to_date": "2026-10-31"}, child="bills")
+```
+
+This exercises the correctness spine where it matters most — **no unverified
+money/dates** — end to end, deterministically and auditably.
+
 ### Transports
 
 `FbpDriver(transport=...)` runs the exact same protocol over:

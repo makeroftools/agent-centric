@@ -23,6 +23,8 @@ adapters (see ``spec.md`` and ``protocol.md``).
 """
 
 from .agent import Agent, register_callable
+from .bills import BillsError, accept_draft, bill_total, draft_from_intake, project_calendar
+from .bills_agent import BillsAgent
 from .config import AgentConfig
 from .context import Context, Verifier
 from .critical_path import CpmAnalysis, CpmError, CpmNode, analyse_cpm, cpm_from_dict
@@ -115,4 +117,11 @@ __all__ = [
     "CpmError",
     "analyse_cpm",
     "cpm_from_dict",
+    # Bills loop (real end-to-end FBP graph)
+    "BillsAgent",
+    "BillsError",
+    "bill_total",
+    "draft_from_intake",
+    "accept_draft",
+    "project_calendar",
 ]

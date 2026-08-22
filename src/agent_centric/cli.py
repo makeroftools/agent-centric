@@ -685,6 +685,36 @@ def _cmd_fbp(transport: str) -> int:
             f"critical_path={cpm.value.get('critical_path') if cpm.verified else None}"
         )
 
+        # Bills loop: intake -> human-gated accept -> durable registry -> calendar.
+        driver.spawn("bills", kind="bills")
+        driver.run(
+            "bills_setup",
+            {"state": f"{_workdir}/bills.db", "store_keys": ["bill-d1"]},
+            child="bills",
+        )
+        draft = driver.run(
+            "bills_intake",
+            {
+                "draft": {
+                    "id": "bill-d1",
+                    "vendor": "GasCo",
+                    "amount_cents": 12345,
+                    "due_date": "2026-10-01",
+                }
+            },
+            child="bills",
+        )
+        accepted = driver.run("bills_accept", {"draft": draft.value}, child="bills")
+        agenda = driver.run(
+            "bills_calendar",
+            {"from_date": "2026-10-01", "to_date": "2026-10-31"},
+            child="bills",
+        )
+        print(
+            f"bills   : accepted={accepted.verified} "
+            f"calendar_total_cents={agenda.value.get('total_cents') if agenda.verified else None}"
+        )
+
         return 0 if local.verified and delegated.verified else 1
 
 

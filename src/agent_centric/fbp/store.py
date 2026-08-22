@@ -160,6 +160,12 @@ class StateStore(_Base):
         ).fetchone()
         return json.loads(row[0]) if row is not None else None
 
+    def keys(self) -> tuple[str, ...]:
+        """Return the sorted store keys (deterministic)."""
+        conn = self._require()
+        rows = conn.execute("SELECT key FROM state").fetchall()
+        return tuple(sorted(r[0] for r in rows))
+
     def count(self) -> int:
         conn = self._require()
         (n,) = conn.execute("SELECT COUNT(*) FROM state").fetchone()
