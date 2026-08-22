@@ -39,14 +39,14 @@ agents).
 
 ## Current git state
 - **Branch:** `agent-centric-fbp`; **working tree clean**.
-- **HEAD:** `9a74acc` = `feat(fbp): registry maintenance - mark paid / mark status`.
+- **HEAD:** `6de8b99` = `feat(fbp): run_plan streams per-step progress (on_step)`.
 - **Pushed:** up through `7b1979f` (`feat(fbp): bills loop - first real
-  end-to-end FBP graph`). **Unpushed (30):** the older commits plus replay
+  end-to-end FBP graph`). **Unpushed (33):** the older commits plus replay
   state isolation, transport-resolve bills store endpoint, replay per-run
-  verifier resolution, durable directive ledger, auto re-seeding, run_plan,
-  operator summary, PDF / structured-intake / email capability ports,
-  BillsAgent intake tasks, and registry maintenance (see
-  `git log origin/agent-centric-fbp..HEAD`).
+  verifier resolution, durable directive ledger, auto re-seeding, run_plan
+  (+ on_step streaming), operator summary, PDF / structured-intake / email
+  capability ports, BillsAgent intake tasks, registry maintenance, and CLI
+  live-streaming output (see `git log origin/agent-centric-fbp..HEAD`).
 - Standing rule: **do not push unless the lead explicitly says push.**
 
 ## What's built (the full arc)
@@ -79,7 +79,8 @@ agents).
 - Example: `examples/fbp_durability_demo.py`.
 
 ## Validation
-- `uv run pytest` → **570 passed**; `uv run ruff check .` clean; `uv run mypy src` clean (72 source files).
+- `uv run pytest` → **572 passed**; `uv run ruff check .` clean; `uv run mypy src` clean (72 source files).
+- CLI output streams **line-buffered** so piped operator output is visible live.
 
 ## Key invariants to never break (FBP)
 - **No unverified success; fail-closed everywhere; deterministic control.
