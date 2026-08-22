@@ -762,7 +762,7 @@ def _cmd_fbp(transport: str, ledger: Path | None = None) -> int:
         driver.spawn("bills", kind="bills")
         driver.run(
             "bills_setup",
-            {"state": f"{_workdir}/bills.db", "store_keys": ["bill-d1"]},
+            {"state": f"{_workdir}/bills.db", "store_keys": ["bill-d1", "inbox/txt-bill.txt"]},
             child="bills",
         )
         draft = driver.run(
@@ -787,6 +787,19 @@ def _cmd_fbp(transport: str, ledger: Path | None = None) -> int:
             f"bills   : accepted={accepted.verified} "
             f"calendar_total_cents={agenda.value.get('total_cents') if agenda.verified else None}"
         )
+
+        # Agent-level intake from a structured source (unverified -> human accept).
+        f_draft = driver.run(
+            "bills_intake_file",
+            {
+                "source_path": "inbox/txt-bill.txt",
+                "content": "vendor: PostCo\namount_cents: 3000\ndue_date: 2026-09-15\n",
+            },
+            child="bills",
+        )
+        f_accepted = driver.run("bills_accept", {"draft": f_draft.value}, child="bills")
+        print(f"intake  : file draft verified={f_draft.verified} "
+              f"accepted={f_accepted.verified}")
 
         # Audit as proof + deterministic replay of a local run.
         chains = driver.reconstruct_audit()

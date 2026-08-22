@@ -185,9 +185,13 @@ mission-relevant workflow. Topology: `root -> bills -> store`.
 
 - **`BillsAgent`** (`bills_agent.py`) is a coordinating agent that drives the
   loop over a single-writer `StoreAgent` child (the durable registry). It
-  serves `bills_setup`, `bills_intake`, `bills_accept`, and `bills_calendar`.
+  serves `bills_setup`, `bills_intake`, `bills_accept`, `bills_calendar`.
 - **Pure domain functions** (`bills.py`) are registered capabilities:
   `bill_total`, `draft_from_intake`, `accept_draft`, `project_calendar`.
+- **Agent-level intake tasks** — `bills_intake_file` (json/csv/txt text),
+  `bills_intake_email` (a fetched message), and `bills_intake_pdf` (base64 PDF
+  bytes) produce **unverified** drafts over the protocol, all requiring the
+  human `bills_accept` gate.
 - **Human-gated accept**: a draft becomes a registry bill only via an explicit
   `bills_accept`; nothing auto-accepts. Amounts are integer cents; dates are
   ISO; malformed intake fails closed (no invented facts).
