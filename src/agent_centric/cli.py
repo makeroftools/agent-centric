@@ -852,6 +852,17 @@ def _cmd_fbp(transport: str, ledger: Path | None = None) -> int:
             f"traversal_denied={_denied}"
         )
 
+        # Model agent: an LLM as an ordinary first-class agent (deterministic
+        # stub by default, source references attached, parent re-verifies).
+        driver.spawn("model", kind="model")
+        model_resp = driver.run(
+            "model", {"prompt": "hello"}, child="model"
+        )
+        print(
+            f"model   : verified={model_resp.verified} "
+            f"source={model_resp.sources[0]['id'] if model_resp.sources else None}"
+        )
+
         # Audit as proof + deterministic replay of a local run.
         chains = driver.reconstruct_audit()
         relay_count = sum(

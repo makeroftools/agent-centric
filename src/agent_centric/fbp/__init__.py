@@ -72,6 +72,7 @@ from .message import (
     validate_directive,
     validate_response,
 )
+from .model_agent import TASK_MODEL, ModelAgent
 from .node import AgentNode, Node
 from .node import Response as NodeResponse
 from .pdf_intake import draft_from_pdf_text, extract_text
@@ -143,6 +144,9 @@ __all__ = [
     "CpmError",
     "analyse_cpm",
     "cpm_from_dict",
+    # Model agent (an LLM as an ordinary first-class agent)
+    "ModelAgent",
+    "TASK_MODEL",
     # Bills loop (real end-to-end FBP graph)
     "BillsAgent",
     "BillsError",

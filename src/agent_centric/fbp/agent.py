@@ -881,6 +881,10 @@ class Agent:
             from .bills_agent import BillsAgent
 
             return BillsAgent
+        if kind == "model":
+            from .model_agent import ModelAgent
+
+            return ModelAgent
         return Agent
 
     def configure_child(
