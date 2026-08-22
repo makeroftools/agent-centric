@@ -207,6 +207,30 @@ with FbpDriver() as d:
 This exercises the correctness spine where it matters most — **no unverified
 money/dates** — end to end, deterministically and auditably.
 
+### Intake capabilities (ported from the Manager line)
+
+Pure, deterministic, offline intake capabilities (registered callables) that
+feed **unverified** drafts into the human-gated accept — a malformed or
+incomplete source fails closed, so nothing is invented and no money/date ever
+auto-enters the registry:
+
+```python
+from agent_centric.fbp import draft_from_file, draft_from_email, draft_from_pdf_text
+
+# json / csv / txt / pdf -> an unverified draft
+file_draft = draft_from_file(content, source_path="inbox/gasco.pdf")
+
+# embedded PDF text -> an unverified draft (offline, deterministic)
+pdf_draft = draft_from_pdf_text(pdf_bytes, source_path="inbox/b.pdf")
+
+# a fetched email (subject + body) -> an unverified draft (read-only)
+email_draft = draft_from_email({"folder": "inbox", "id": "m1",
+    "subject": "Invoice", "body": "from GasCo amount 123.45 due 2026-10-01"})
+```
+
+All three preserve the mission invariant: the produced draft is **unverified**
+until a human calls `bills_accept`.
+
 ### Tree-audit reconstruction (audit as proof)
 
 `reconstruct_chains` (`audit.py`) is a read-only **capability** that turns the
