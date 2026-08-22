@@ -39,14 +39,15 @@ agents).
 
 ## Current git state
 - **Branch:** `agent-centric-fbp`; **working tree clean**.
-- **HEAD:** `e138f52` = `feat(fbp): port allowlisted workspace capability from main`.
+- **HEAD:** `2a1c8c2` = `feat(fbp): make registry reads grant-bound (mediated store ops)`.
 - **Pushed:** up through `7b1979f` (`feat(fbp): bills loop - first real
-  end-to-end FBP graph`). **Unpushed (35):** the older commits plus replay
+  end-to-end FBP graph`). **Unpushed (40):** the older commits plus replay
   state isolation, transport-resolve bills store endpoint, replay per-run
   verifier resolution, durable directive ledger, auto re-seeding, run_plan
   (+ on_step streaming), operator summary, PDF / structured-intake / email
   capability ports, BillsAgent intake tasks, registry maintenance, CLI
-  live-streaming output, and the allowlisted workspace capability (see
+  live-streaming output, allowlisted workspace capability, the redecorated
+  README + MPL-2.0 license fix, and grant-bound registry reads (see
   `git log origin/agent-centric-fbp..HEAD`).
 - Standing rule: **do not push unless the lead explicitly says push.**
 
@@ -81,7 +82,7 @@ agents).
 - Example: `examples/fbp_durability_demo.py`.
 
 ## Validation
-- `uv run pytest` → **579 passed**; `uv run ruff check .` clean; `uv run mypy src` clean (73 source files).
+- `uv run pytest` → **580 passed**; `uv run ruff check .` clean; `uv run mypy src` clean (73 source files).
 - CLI output streams **line-buffered** so piped operator output is visible live.
 
 ## Key invariants to never break (FBP)
