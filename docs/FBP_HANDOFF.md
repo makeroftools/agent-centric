@@ -39,16 +39,13 @@ agents).
 
 ## Current git state
 - **Branch:** `agent-centric-fbp`; **working tree clean**.
-- **HEAD:** `2a1c8c2` = `feat(fbp): make registry reads grant-bound (mediated store ops)`.
+- **HEAD:** `315df22` = `docs(fbp): document deterministic auto-accept via approved rules`.
 - **Pushed:** up through `7b1979f` (`feat(fbp): bills loop - first real
-  end-to-end FBP graph`). **Unpushed (40):** the older commits plus replay
-  state isolation, transport-resolve bills store endpoint, replay per-run
-  verifier resolution, durable directive ledger, auto re-seeding, run_plan
-  (+ on_step streaming), operator summary, PDF / structured-intake / email
-  capability ports, BillsAgent intake tasks, registry maintenance, CLI
-  live-streaming output, allowlisted workspace capability, the redecorated
-  README + MPL-2.0 license fix, and grant-bound registry reads (see
-  `git log origin/agent-centric-fbp..HEAD`).
+  end-to-end FBP graph`). **Unpushed (53):** the older commits plus grant-bound
+  registry reads, the softened correctness-spine docs, source references on
+  non-deterministic output, the **ModelAgent** (LLM as an ordinary agent),
+  determinism rating + approved-rule registry, and deterministic auto-accept
+  via approved rules (see `git log origin/agent-centric-fbp..HEAD`).
 - Standing rule: **do not push unless the lead explicitly says push.**
 
 ## What's built (the full arc)
@@ -66,6 +63,9 @@ agents).
 | **Intake capabilities (ported from main)** | `fbp/pdf_intake.py`, `fbp/intake.py`, `fbp/bills_agent.py` | Deterministic, offline, read-only intake into **unverified** drafts: `draft_from_pdf_text` (embedded PDF text), `draft_from_file` (json/csv/txt/pdf), `draft_from_email` (fetched email). **BillsAgent** also serves them as run-tasks (`bills_intake_file`/`_email`/`_pdf`), so intake -> human accept -> registry is reachable over the protocol and replayable. All require the human `bills_accept` gate; malformed/incomplete sources fail closed (no invented facts, no auto-enter). |
 | **Registry maintenance (ported from main)** | `fbp/bills.py` (`mark_bill_status`), `fbp/bills_agent.py` | `bills_mark_paid` / `bills_mark_status` are explicit, mediated status updates through the single-writer store (closed status set); `mark_bill_status` is a pure merge that never changes money/dates or re-accepts intake, and paid bills drop out of the open calendar. |
 | **Allowlisted workspace (ported from main)** | `fbp/workspace.py` | `WorkspaceFS` mediates file access strictly under an explicit allowlist (files/dirs/prefixes), fail-closed on any disallowed or traversal-escaping path, no deletion, no implicit dir creation. The trust/security boundary for a managed agent environment. |
+| **Source references on output** | `fbp/message.py`, `fbp/agent.py`, `fbp/store.py`, `fbp/audit.py` | `Response.sources` carries structured source references (model id, documents) on non-deterministic output; preserved through relays and the trajectory audit, surfaced in reconstructed chains. `FbpDriver.run(sources=...)`. |
+| **Model agent (LLM as an ordinary agent)** | `fbp/model_agent.py` | Spawn kind `model` serves a `model` run-task; other agents delegate to it over the protocol and its output is re-verified by the parent, audited, source-referenced. Deterministic stub by default; `ModelProvider` is an opt-in hook that never relaxes verification. |
+| **Determinism + auto-accept** | `fbp/determinism.py`, `fbp/bills_agent.py` | `score_determinism`/`Rule`/`RuleSet` rate and resolve ambiguity; `bills_accept_deterministic` auto-accepts a draft only when an approved rule matches (rule id as source), else routes to human review (no unverified write). |
 
 ## Easy-UX driver (`FbpDriver`) and CLI
 - `FbpDriver` (`fbp/driver.py`) is the synchronous, easy-UX layer: `register`,
@@ -82,7 +82,7 @@ agents).
 - Example: `examples/fbp_durability_demo.py`.
 
 ## Validation
-- `uv run pytest` → **580 passed**; `uv run ruff check .` clean; `uv run mypy src` clean (73 source files).
+- `uv run pytest` → **597 passed**; `uv run ruff check .` clean; `uv run mypy src` clean (75 source files).
 - CLI output streams **line-buffered** so piped operator output is visible live.
 
 ## Key invariants to never break (FBP)
