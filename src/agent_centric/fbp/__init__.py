@@ -66,6 +66,7 @@ from .message import (
 )
 from .node import AgentNode, Node
 from .node import Response as NodeResponse
+from .pdf_intake import draft_from_pdf_text, extract_text
 from .shell import Shell
 from .store import StateStore, StoreError, TrajectoryStore, open_state, open_trajectory
 from .store_agent import STORE_GET, STORE_SET, StoreAgent
@@ -142,4 +143,7 @@ __all__ = [
     "ledger_callables",
     "replay_ledger",
     "summarise_ledger",
+    # PDF intake (port of main's deterministic, offline capability)
+    "extract_text",
+    "draft_from_pdf_text",
 ]
