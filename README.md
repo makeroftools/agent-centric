@@ -146,31 +146,35 @@ Deep dive: [`README_FBP.md`](README_FBP.md) and [`docs/fbp.md`](docs/fbp.md).
 
 ---
 
-## 🧾 The bills loop — the mandate "accept"
+## 🧾 The bills loop — determinize, then decide
 
-Money and schedule. The human is **not** a permanent bottleneck. A human is only
-in the loop where a step is genuinely **non-deterministic** — where parsing
-free-form prose, email, or a PDF leaves real ambiguity. The human reviews that
-decision, and, where a **deterministic** rule would have handled it, authorizes a
-*rule* so the concern runs unattended thereafter:
+Money and schedule. The governing rule is: **we never rely on a non-deterministic
+output directly.** Anything that looks non-deterministic — parsing free-form
+prose, email, or a PDF — is treated as a *hint*, not an answer. We analyze it
+and **turn it into a deterministic method to every degree it physically can be**
+(a fixed parser, a stable rule, a recomputable transform). Only the small,
+genuinely irreducible residue — the judgment a deterministic procedure genuinely
+cannot reach — goes to the human to review:
 
 ```mermaid
 flowchart LR
-  A[file / email / PDF] --> B["UNVERIFIED draft (may be ambiguous)"]
-  B -->|"non-deterministic? only then review"| C[bills_accept]
-  C -->|"single-writer"| D[durable registry]
-  C -->|"authorize a rule"| R[automated rule going forward]
-  D --> E[verified calendar]
-  D --> F[bills_mark_paid]
+  A[file / email / PDF] --> B["hint (non-deterministic output)"]
+  B -->|analyze + derive a deterministic method| D["deterministic pipeline"]
+  D -->|"still irreducible"| H[human review]
+  D -->|"verified"| R[durable registry]
+  H -->|"decision"| R
+  R --> E[verified calendar]
+  R --> F[bills_mark_paid]
 ```
 
-Put simply: **``accept`` gates what is ambiguous — not everything.** The platform
-keeps moving deterministically; a human intervenes only to resolve genuine
-uncertainty and, in one step, authorizes the automation of that concern.
+The practical consequence for the human: they are **not** a checkpoint for every
+item. They review only the residue that resists determinization — and the system
+works to make that residue as small as it possibly can be.
 
-> *Status:* today the acceptance step is always explicit (a safe default); the
-> non-determinism-rating → authorize-a-rule flow is the design direction this
-> repository is moving toward and a good place to study together before launch.
+> *Status:* today the acceptance step is always explicit (a safe default). The
+> determinize-fully, then human-review-only-the-residue flow is where this
+> repository is heading, and isolating the true irreducible decisions for the
+> human to review is precisely the aim.
 
 ---
 

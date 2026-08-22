@@ -104,7 +104,7 @@ uv run agent-centric fbp --transport ipc # local inter-process
 | **Protocol + transport parity** | One versioned, enforced directive/response contract on `inproc://`, `tcp://`, `ipc://`. The transport is a property of the *channel*, never of the logic. |
 | **Correctness spine** | Parent re-verifies a child's value on the way up; a self-claimed `verified` is never trusted. |
 | **Durable single-writer state** | `StateStore` (keyed, fingerprint-idempotent) + `TrajectoryStore` (append-only audit). Persistence is always an explicit grant — never silent. |
-| **Bills loop** | intake → human review **only where there is genuine non-determinism** → grant-access register → verified calendar. The human authorizes a rule so the concern runs unattended thereafter. |
+| **Bills loop** | intake treats ambiguous output as a **hint**, derives a deterministic method wherever possible, and only the irreducible residue reaches the human → registry → verified calendar. |
 | **Intake (ported from main)** | `draft_from_file` (json/csv/txt/pdf), `draft_from_email`, `draft_from_pdf_text` — offline, deterministic, read-only → **unverified** drafts. |
 | **Registry maintenance** | `bills_mark_paid` / `bills_mark_status` — explicit status updates; paid bills drop out of the open calendar. |
 | **Allowlisted workspace** | `WorkspaceFS` mediates file access under an explicit allowlist — traversal and disallowed paths fail closed, no deletion, no implicit dir creation. |
@@ -116,28 +116,25 @@ uv run agent-centric fbp --transport ipc # local inter-process
 
 ---
 
-## The bills loop — the mission-critical arc, end to end
+## The bills loop — determinize, then decide
 
-FBP is proven on the workflow that matters most: **money and schedule.** A human
-is in the loop **only where a step is genuinely non-deterministic** (e.g.
-parsing free-form prose/email/PDF). Resolving that one judgment both accepts the
-item and, where a deterministic rule would do, authorizes a rule so the concern
-runs unattended from then on.
+FBP is proven on the workflow that matters most: **money and schedule.** The rule:
+we **never rely on a non-deterministic output directly.** An ambiguous parse is a
+*hint* — we analyze it and turn it into a **deterministic method** to every
+degree it can be. Only the true irreducible residue goes to the human:
 
 ```text
 inbox file · email · PDF
-   │  (offline, deterministic intake ⇒ UNVERIFIED draft)
+   │  (hint ⇒ derive a deterministic method)
    ▼
-bills_intake_file / _email / _pdf
+intake → analyze → determinize as far as possible
+   │
+   ├── verified ⇒ durable registry (no human needed)
+   └── irreducible residue ⇒ human review
    │
    ▼
-bills_accept   ←  only intervened on non-determinism; grants a rule
-   │
-   ▼
-single-writer registry (grant-bound keys)
-   │
-   ▼
-verified calendar   →   mark-paid / mark-status (maintenance)
+single-writer registry (grant-bound keys) → verified calendar
+   → mark-paid / mark-status (maintenance)
 ```
 
 ```python
@@ -182,8 +179,8 @@ piped.
 - **Deterministic by construction.**
 - **Persistence is an explicit grant; single-writer and fingerprint-idempotent;
   no auto-generated ids.**
-- **Human in the loop only for genuine non-determinism**; money/schedule writes
-  then run on the verified, granted path.
+- **We never rely on a non-deterministic output directly** — we derive a
+  deterministic method; only irreducible residue goes to the human.
 - **CPM, audit, and replay are read-only capabilities — not agents.**
 - **Public-surface additive only.**
 
