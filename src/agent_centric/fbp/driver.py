@@ -650,7 +650,9 @@ class FbpDriver:
             store_keys=store_keys,
         )
 
-    def configure_provider(self, child: str, provider: Any) -> Response:
+    def configure_provider(
+        self, child: str, provider: Any, *, model_id: str | None = None
+    ) -> Response:
         """Attach an opt-in model backend to a spawned ``model`` child.
 
         A convenience for wiring a real (or custom) provider to a ``ModelAgent``
@@ -660,6 +662,10 @@ class FbpDriver:
         ``.complete(prompt, **kwargs) -> str`` method. It never relaxes
         verification — the parent still re-verifies the model's output on the
         upward path.
+
+        ``model_id`` is optional and additive: when supplied it overrides the
+        source identity attributed to the model agent's responses (so an audited
+        result names the real model).
 
         This is an in-process composition-time hook (the provider is a local
         object, not serialisable across the wire), so it does not enter the
@@ -673,7 +679,7 @@ class FbpDriver:
             return self._provider_error(child, "no spawned child")
         if not isinstance(child_agent, ModelAgent):
             return self._provider_error(child, f"child {child!r} is not a model agent")
-        child_agent.set_provider(provider)
+        child_agent.set_provider(provider, model_id=model_id)
         return Response(
             correlation_id="configure-provider",
             kind=RESPONSE_OK,

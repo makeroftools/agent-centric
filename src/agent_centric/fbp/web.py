@@ -66,12 +66,12 @@ class FbpLandingServer:
         self._port = port
         # One driver, compositored and reused. We register and run a small
         # deterministic demo tree so the page has something real to show.
+        self._providers = _build_openrouter_providers()
         self._driver = self._build_driver()
 
     # -- driver setup (deterministic, offline) -----------------------------
 
-    @staticmethod
-    def _build_driver() -> FbpDriver:
+    def _build_driver(self) -> FbpDriver:
         driver = FbpDriver()
         driver.register("double", lambda value: value * 2, source_url="file:///tasks/double")
         driver.register("even", lambda value: isinstance(value, int) and value % 2 == 0)
@@ -87,12 +87,18 @@ class FbpLandingServer:
         # present it is wired to a real, fail-closed provider; otherwise it
         # serves the deterministic stub (offline, CI-safe).
         driver.spawn("model", kind="model")
-        provider = _build_openrouter_provider()
+        # Wire the first configured real provider, if any (an OpenRouter key is
+        # present); otherwise the deterministic stub serves (offline, CI-safe).
+        provider = next(iter(self._providers.values()), None)
         if provider is not None:
-            driver.configure_provider("model", provider)
+            driver.configure_provider("model", provider, model_id=next(iter(self._providers)))
         return driver
 
     # -- page state --------------------------------------------------------
+
+    def _model_choices(self) -> tuple[str, ...]:
+        """The configured model choices for the dropdown (may be empty)."""
+        return tuple(self._providers.keys())
 
     def _page_state(self) -> dict[str, Any]:
         """A deterministic JSON-ready snapshot for the landing page."""
@@ -157,19 +163,25 @@ class FbpLandingServer:
                 state: dict[str, Any]
                 if self.path in ("/", "", "/index.html"):
                     state = server._page_state()
-                    self._send_html(_render_landing(state))
+                    self._send_html(
+                        _render_landing(state, models=server._model_choices())
+                    )
                 elif self.path == "/action/run":
                     # Demonstrative deterministic action: run the demo task
                     # set through the (now-existing) driver.
                     run = server._run_demo()
                     state = server._page_state()
                     state["last_action"] = run
-                    self._send_html(_render_landing(state))
+                    self._send_html(
+                        _render_landing(state, models=server._model_choices())
+                    )
                 elif self.path == "/model":
                     # Run a prompt through the model agent (LLM as an ordinary
-                    # agent). Reads the prompt from the POST body.
-                    prompt = self._read_body()
-                    result = server._run_model(prompt)
+                    # agent). Body is either a plain prompt string or a JSON
+                    # ``{"prompt": str, "model": str}`` envelope.
+                    body = self._read_body()
+                    prompt, model = _parse_model_body(body)
+                    result = server._run_model(prompt, model)
                     self._send_json(result)
                 elif self.path == "/state.json":
                     # Machine-readable snapshot: tree + summary + last action.
@@ -229,34 +241,50 @@ class FbpLandingServer:
         except Exception as exc:  # noqa: BLE001 - surfaced to the page
             return {"action": "run double(21)", "error": str(exc)}
 
-    def _run_model(self, prompt: str) -> dict[str, Any]:
+    def _run_model(self, prompt: str, model: str = "") -> dict[str, Any]:
         """Run a prompt through the model agent (an LLM as an ordinary agent).
 
         The model is reached through the normal directive/response protocol and
         its output is re-verified by the parent. When no OpenRouter key is set
-        the model agent serves its deterministic stub (offline, CI-safe); when
-        a key is present it is routed to OpenRouter via the wiring in
-        ``_build_driver``.
+        the model agent serves its deterministic stub (offline, CI-safe); when a
+        key is present the selected model is routed to OpenRouter via the
+        providers built in ``__init__``.
+
+        ``model`` optionally names a configured provider to switch to for this
+        call (additive, in-process, never relaxes verification). Unknown or
+        empty selections are ignored and the current wiring is used.
         """
         try:
+            if model and model in self._providers:
+                self._driver.configure_provider("model", self._providers[model], model_id=model)
             resp = self._driver.run("model", {"prompt": prompt}, child="model")
             if resp.verified:
-                return {"ok": True, "text": resp.value, "verified": True}
-            return {"ok": False, "error": resp.error or "model run not verified"}
+                return {
+                    "ok": True,
+                    "text": resp.value,
+                    "verified": True,
+                    "model": (resp.sources[0]["id"] if resp.sources else None),
+                }
+            return {"ok": False, "error": resp.error or "model run not verified", "verified": False}
         except Exception as exc:  # noqa: BLE001 - surfaced to the page
-            return {"ok": False, "error": str(exc)}
+            return {"ok": False, "error": str(exc), "verified": False}
 
 
-def _openrouter_http_client() -> Any:
+def _openrouter_http_client(model: str) -> Any:
     """A stdlib ``urllib`` transport for OpenRouter's chat-completions API.
 
     It is used as the ``http_client`` for ``build_real_model_provider`` so the
     fail-closed, secret-redacting, timeout-bounded provider path is reused.
-    Returns the raw text block. Raises on HTTP/transport errors; the provider
-    maps those to ``ModelProviderError``.
+    The client builds the JSON request body and parses the ``choices``/``message``
+    shape, returning just the text block. Raises on HTTP/transport/parse errors;
+    the provider maps those to ``ModelProviderError``.
     """
 
-    def client(endpoint: str, headers: dict[str, str], payload: str) -> str:
+    def client(endpoint: str, headers: dict[str, str], prompt: str) -> str:
+        payload = json.dumps({
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+        })
         request = urllib.request.Request(
             endpoint, data=payload.encode("utf-8"), headers=headers, method="POST"
         )
@@ -265,50 +293,77 @@ def _openrouter_http_client() -> Any:
                 body = resp.read().decode("utf-8")
         except urllib.error.URLError as exc:
             raise RuntimeError(f"OpenRouter request failed: {exc}") from exc
-        data = json.loads(body)
-        # Chat-completions shape: choices[0].message.content
         try:
+            data = json.loads(body)
             content = data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
+        except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise RuntimeError(f"unexpected OpenRouter response: {body[:200]}") from exc
-        return str(content)
+        if not isinstance(content, str):
+            raise RuntimeError(f"unexpected OpenRouter response: {body[:200]}")
+        return content
 
     return client
 
 
-def _build_openrouter_provider() -> Any:
-    """Build an enabled OpenRouter provider, or None if no key is configured.
+def _parse_model_body(body: str) -> tuple[str, str]:
+    """Parse a ``/model`` POST body into ``(prompt, model)``.
+
+    Accepts either a plain prompt string or a JSON ``{"prompt": ..., "model":
+    ...}`` envelope. Always returns a ``(prompt, model)`` tuple; the model may
+    be empty to mean "use the current wiring" (fail closed — an unparseable
+    body yields an empty prompt, which the model agent rejects explicitly).
+    """
+    stripped = body.strip()
+    if not stripped.startswith("{"):
+        return stripped, ""
+    try:
+        data = json.loads(stripped)
+    except (ValueError, TypeError):
+        return "", ""
+    if not isinstance(data, dict):
+        return "", ""
+    prompt = data.get("prompt", "")
+    model = data.get("model", "")
+    return (prompt if isinstance(prompt, str) else "",
+            model if isinstance(model, str) else "")
+
+
+def _model_choices_from_env() -> tuple[str, ...]:
+    """Resolve the configured OpenRouter model choices.
+
+    Read from ``OPENROUTER_MODEL`` (a single id or comma-separated list),
+    defaulting to ``DEFAULT_OPENROUTER_MODEL``. Read at call time so env
+    changes (including tests) are honoured.
+    """
+    raw = os.environ.get(OPENROUTER_MODEL_ENV, "").strip()
+    if raw:
+        return tuple(m for m in (p.strip() for p in raw.split(",")) if m)
+    return (DEFAULT_OPENROUTER_MODEL,)
+
+
+def _build_openrouter_providers() -> dict[str, Any]:
+    """Build enabled OpenRouter providers per model, or {} if no key is set.
 
     Reads ``OPENROUTER_API_KEY`` from the environment (never hardcoded). When
-    the key is absent, returns None so the server fails closed to the
-    deterministic stub. The model is read from ``OPENROUTER_MODEL`` (default
-    ``DEFAULT_OPENROUTER_MODEL``).
+    the key is absent, returns {} so the server fails closed to the
+    deterministic stub. Model choices come from ``OPENROUTER_MODEL`` (a single
+    id or comma-separated list), defaulting to ``DEFAULT_OPENROUTER_MODEL``.
     """
     from ..providers import build_real_model_provider
 
     api_key = os.environ.get(OPENROUTER_API_KEY_ENV, "").strip()
     if not api_key:
-        return None
-    model = os.environ.get(OPENROUTER_MODEL_ENV, "").strip() or DEFAULT_OPENROUTER_MODEL
+        return {}
 
-    client = _openrouter_http_client()
-
-    def backend(prompt: str) -> str:
-        payload = json.dumps({
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-        })
-        return str(client(
-            OPENROUTER_ENDPOINT,
-            {"Authorization": "Bearer " + api_key, "Content-Type": "application/json"},
-            payload,
-        ))
-
-    return build_real_model_provider(
-        endpoint=OPENROUTER_ENDPOINT,
-        api_key=api_key,
-        http_client=client,
-    )
+    result: dict[str, Any] = {}
+    for model in _model_choices_from_env():
+        client = _openrouter_http_client(model)
+        result[model] = build_real_model_provider(
+            endpoint=OPENROUTER_ENDPOINT,
+            api_key=api_key,
+            http_client=client,
+        )
+    return result
 
 
 _PAGE_CSS = "\n".join([
@@ -331,12 +386,24 @@ _MODEL_JS = """\
   document.getElementById('model-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const prompt = document.getElementById('model-prompt').value;
+    const sel = document.getElementById('model-select');
+    const model = sel ? sel.value : '';
     const out = document.getElementById('model-result');
     out.textContent = '...';
     try {
-      const r = await fetch('/model', {method: 'POST', body: prompt});
+      const r = await fetch('/model', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({prompt: prompt, model: model})
+      });
       const data = await r.json();
-      out.textContent = data.ok ? data.text : ('error: ' + (data.error || 'unknown'));
+      if (data.ok) {
+        const badge = data.verified ? '[verified]' : '[unverified]';
+        const src = data.model ? ' source=' + data.model : '';
+        out.textContent = badge + src + '\n' + data.text;
+      } else {
+        out.textContent = 'error: ' + (data.error || 'unknown');
+      }
     } catch (err) {
       out.textContent = 'request failed: ' + err;
     }
@@ -345,7 +412,9 @@ _MODEL_JS = """\
 """
 
 
-def _render_landing(state: dict[str, Any], *, error: str | None = None) -> str:
+def _render_landing(
+    state: dict[str, Any], *, error: str | None = None, models: tuple[str, ...] = ()
+) -> str:
     """Render the actionable landing page HTML from a page-state snapshot."""
     tree = state.get("tree", [])
     summary = state.get("summary", {})
@@ -367,6 +436,20 @@ def _render_landing(state: dict[str, Any], *, error: str | None = None) -> str:
         if last else ""
     )
     err = f"<p class='error'>{error}</p>" if error else ""
+
+    # Model dropdown options (additive UX; a single entry when reading only
+    # ``OPENROUTER_MODEL``, or the deterministic stub choice).
+    choices = models or ()
+    opts = "".join(
+        f"<option value='{m}'{(' selected' if i == 0 else '')}>{m}</option>"
+        for i, m in enumerate(choices)
+    )
+    select = ""
+    if choices:
+        select = (
+            f"<label for='model-select'>Model</label>"
+            f"<select id='model-select' class='pill'>{opts}</select>"
+        )
 
     return f"""<!doctype html><html lang='en'><head><meta charset='utf-8'>
 <title>Agent-Centric FBP — Landing</title>
@@ -397,8 +480,10 @@ result or an explicit, audited failure</b> — never a silent third state.</p>
 
 <h2>Model (LLM as an ordinary agent)</h2>
 <p class='note'>Ask a model. When an <code>OPENROUTER_API_KEY</code> is set it is
-routed to OpenRouter; otherwise the deterministic stub answers (offline).</p>
+routed to OpenRouter; otherwise the deterministic stub answers (offline).
+The answer shows its <b>verified</b> status and model <b>source</b>.</p>
 <form id='model-form'>
+  {select}
   <textarea id='model-prompt' rows='3' cols='60' placeholder='Ask the model...'></textarea>
   <br/>
   <button type='submit'>Ask</button>

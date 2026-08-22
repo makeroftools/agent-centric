@@ -84,15 +84,24 @@ class ModelAgent(Agent):
                 return self._op_model(directive)
         return super()._handle(directive)
 
-    def set_provider(self, provider: ModelProvider) -> None:
+    def set_provider(
+        self, provider: ModelProvider, *, model_id: str | None = None
+    ) -> None:
         """Wire an opt-in model backend (never relaxes verification).
 
         Accepts either a callable ``__call__(prompt, **kwargs) -> str`` (e.g.
         the hardened ``OptionalRealModelProvider``) or an object with a
         ``.complete(prompt, **kwargs) -> str`` method. The correctness spine is
         untouched: the parent still re-verifies the output on the upward path.
+
+        ``model_id`` is optional and additive: when supplied it overrides the
+        source identity attributed to responses, so an audited result names the
+        real model rather than the default stub label. When omitted the current
+        id is kept.
         """
         self._provider = provider
+        if model_id:
+            self._model_id = model_id
 
     @staticmethod
     def _invoke_provider(provider: Any, prompt: str, kwargs: dict[str, Any]) -> str:

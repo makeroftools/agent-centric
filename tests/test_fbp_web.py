@@ -11,8 +11,9 @@ from __future__ import annotations
 
 from agent_centric.fbp.web import (
     FbpLandingServer,
-    _build_openrouter_provider,
+    _build_openrouter_providers,
     _grants,
+    _parse_model_body,
     _render_landing,
     _render_ledger,
 )
@@ -27,23 +28,69 @@ class TestModelRoute:
         result = server._run_model("hello")
         assert result["ok"] is True
         assert "stub response" in result["text"]
+        assert result.get("verified") is True
         server._driver.close()
 
-    def test_build_provider_returns_none_without_key(self, monkeypatch) -> None:
-        """No key in the environment => no real provider (fail-closed to stub)."""
+    def test_run_model_labels_source(self, monkeypatch) -> None:
+        """The answer surfaces the audited model source (the stub id when no
+        key is set), so the page shows *which* model produced it."""
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-        assert _build_openrouter_provider() is None
+        server = FbpLandingServer()
+        result = server._run_model("hello")
+        assert result.get("model") == "stub-model"
+        server._driver.close()
 
-    def test_build_provider_returns_provider_with_key(self, monkeypatch) -> None:
+    def test_build_providers_empty_without_key(self, monkeypatch) -> None:
+        """No key in the environment => no real providers (fail-closed to stub)."""
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        assert _build_openrouter_providers() == {}
+
+    def test_build_providers_returns_provider_with_key(self, monkeypatch) -> None:
         """With a key in the environment a real, enabled provider is built.
 
-        This only asserts the builder returns a provider (no network call); it
-        does not construct a server that would wire and invoke it."""
+        This only asserts the builder returns providers (no network call); it
+        does not construct a server that would wire and invoke them."""
         monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
-        provider = _build_openrouter_provider()
-        assert provider is not None
-        # The provider is enabled (opt-in satisfied by the key).
-        assert provider._enabled is True
+        providers = _build_openrouter_providers()
+        assert providers
+        for model, provider in providers.items():
+            assert model
+            # The provider is enabled (opt-in satisfied by the key).
+            assert provider._enabled is True
+
+    def test_build_providers_multiple_models_via_env(self, monkeypatch) -> None:
+        """A comma-separated OPENROUTER_MODEL yields one provider per model."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+        monkeypatch.setenv("OPENROUTER_MODEL", "m1,m2,m3")
+        providers = _build_openrouter_providers()
+        assert set(providers) == {"m1", "m2", "m3"}
+
+    def test_run_model_attributes_real_provider_id_when_keyed(
+        self, monkeypatch
+    ) -> None:
+        """With a key the audited source names the real selected model, not the
+        stub label. The provider is built with no http_client (fail-closed), so
+        no network call is made — we only assert the wiring and source id."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+        monkeypatch.setenv(
+            "OPENROUTER_MODEL",
+            "openai/gpt-5,anthropic/claude-opus",
+        )
+        server = FbpLandingServer()
+        # The model agent is wired to the first configured provider, so its
+        # audited source id should be that model (not "stub-model").
+        model_agent = server._driver._root.children["model"]
+        assert model_agent._model_id == "openai/gpt-5"
+        server._driver.close()
+
+    def test_parse_model_body_plain_prompt(self) -> None:
+        assert _parse_model_body("hello world") == ("hello world", "")
+
+    def test_parse_model_body_json_envelope(self) -> None:
+        assert _parse_model_body('{"prompt": "hi", "model": "m1"}') == ("hi", "m1")
+
+    def test_parse_model_body_rejects_garbage(self) -> None:
+        assert _parse_model_body("{not json") == ("", "")
 
 
 class TestGrantRender:
@@ -76,6 +123,17 @@ class TestLandingRender:
         assert "No unverified success" in html
         # Actionable links present.
         assert "/action/run" in html
+
+    def test_render_shows_model_dropdown_when_choices(self) -> None:
+        """When providers are configured the page renders a model dropdown."""
+        html = _render_landing({}, models=("gpt-x", "llama-y"))
+        assert "model-select" in html
+        assert "gpt-x" in html and "llama-y" in html
+
+    def test_render_omits_dropdown_without_choices(self) -> None:
+        """Without providers there is no empty dropdown (stub only)."""
+        html = _render_landing({})
+        assert "<select id='model-select'" not in html
 
     def test_page_state_reflects_live_tree(self) -> None:
         server = FbpLandingServer()
@@ -130,6 +188,7 @@ class TestLandingRender:
         """End-to-end: the landing /ledger /state.json /health /action/run and
         /model routes respond correctly over a bound stdlib HTTP server."""
         import asyncio
+        import json as _json
         import socket
         import threading
         import urllib.request
@@ -166,9 +225,11 @@ class TestLandingRender:
             ran = urllib.request.urlopen(base + "/action/run").read().decode()
             assert "Agent-Centric" in ran
             # The /model route answers (stub path when no key is set).
-            req = urllib.request.Request(base + "/model", data=b"hello", method="POST")
-            import json as _json
-
+            req = urllib.request.Request(
+                base + "/model",
+                data=_json.dumps({"prompt": "hello", "model": ""}).encode(),
+                method="POST",
+            )
             res = _json.loads(urllib.request.urlopen(req).read().decode())
             assert res.get("ok") is True
             assert "stub response" in res.get("text", "")
