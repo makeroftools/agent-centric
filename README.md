@@ -24,7 +24,7 @@ call is mediated.
 ![Tests](https://img.shields.io/badge/tests-579%20passed-brightgreen)
 ![Lint](https://img.shields.io/badge/ruff-passing-brightgreen)
 ![Types](https://img.shields.io/badge/mypy-clean-brightgreen)
-![License](https://img.shields.io/badge/license-MIT-blue)
+![License](https://img.shields.io/badge/license-MPL--2.0-blue)
 ![Status](https://img.shields.io/badge/status-active-important)
 
 ---
@@ -290,4 +290,4 @@ tests/                 Invariants across every volley
 
 ## 📄 License
 
-[MIT](LICENSE).
+[Mozilla Public License 2.0](LICENSE).
