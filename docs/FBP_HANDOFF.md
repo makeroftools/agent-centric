@@ -39,15 +39,16 @@ agents).
 
 ## Current git state
 - **Branch:** `agent-centric-fbp`; **working tree clean**.
-- **HEAD:** `454b873` = `fix(fbp): resolve per-run verifiers during replay`.
+- **HEAD:** `f1bde05` = `feat(fbp): durable, recoverable directive ledger`.
 - **Pushed:** up through `7b1979f` (`feat(fbp): bills loop - first real
-  end-to-end FBP graph`). **Unpushed (10):** `8ae8f6f` (tree-audit
+  end-to-end FBP graph`). **Unpushed (12):** `8ae8f6f` (tree-audit
   reconstruction), `33960e1` (deterministic replay), `72695d5` (session
   handoff), `022ad15` (replay_session — full-tree/delegated replay),
   `0f95db2` (spec & protocol contract sync), `95b3998` (handoff refresh),
   `e7790a7` (replay state isolation), `988b49a` (transport-resolve the bills
   store child endpoint), `7141640` (handoff refresh), `454b873` (replay
-  per-run-verifier resolution).
+  per-run-verifier resolution), `3e1c750` (handoff refresh), `f1bde05`
+  (durable directive ledger).
 - Standing rule: **do not push unless the lead explicitly says push.**
 
 ## What's built (the full arc)
@@ -67,14 +68,17 @@ agents).
 - `FbpDriver` (`fbp/driver.py`) is the synchronous, easy-UX layer: `register`,
   `resolve`, `configure`, `configure_child`, `run`, `spawn`, `ping`, `kill`,
   `state_set`/`state_get`, `audit`, `reconstruct_audit`, `ledger`, `replay`,
-  `replay_session`.
-- CLI: `agent-centric fbp [--transport inproc|tcp|ipc]` demonstrates the whole
-  stack (protocol, correctness spine, durable state + chain audit, store
-  agent, CPM, bills loop, audit reconstruction, deterministic replay).
+  `replay_session` (and `load_ledger`/`ledger_callables`/`replay_ledger` for the
+  durable ledger).
+- CLI: `agent-centric fbp [--transport inproc|tcp|ipc] [--ledger <path>]`
+  demonstrates the whole stack (protocol, correctness spine, durable state +
+  chain audit, store agent, CPM, bills loop, audit reconstruction, deterministic
+  replay); `agent-centric fbp-replay <path>` re-verifies a durable ledger in a
+  fresh process.
 - Example: `examples/fbp_durability_demo.py`.
 
 ## Validation
-- `uv run pytest` → **530 passed**; `uv run ruff check .` clean; `uv run mypy src` clean (69 source files).
+- `uv run pytest` → **536 passed**; `uv run ruff check .` clean; `uv run mypy src` clean (70 source files).
 
 ## Key invariants to never break (FBP)
 - **No unverified success; fail-closed everywhere; deterministic control.
