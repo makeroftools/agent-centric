@@ -78,6 +78,14 @@ from .pdf_intake import draft_from_pdf_text, extract_text
 from .shell import Shell
 from .store import StateStore, StoreError, TrajectoryStore, open_state, open_trajectory
 from .store_agent import STORE_GET, STORE_SET, StoreAgent
+from .workspace import (
+    DIRECTORY,
+    FILE,
+    WorkspaceEntry,
+    WorkspaceError,
+    WorkspaceFS,
+    WorkspaceLayout,
+)
 
 __all__ = [
     # Agent
@@ -158,4 +166,11 @@ __all__ = [
     # Structured intake (port of main's deterministic, offline heuristics)
     "draft_from_file",
     "draft_from_email",
+    # Allowlisted workspace capability (port of main's hardened workspace)
+    "WorkspaceFS",
+    "WorkspaceLayout",
+    "WorkspaceEntry",
+    "WorkspaceError",
+    "FILE",
+    "DIRECTORY",
 ]

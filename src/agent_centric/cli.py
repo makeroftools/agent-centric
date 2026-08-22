@@ -830,6 +830,28 @@ def _cmd_fbp(transport: str, ledger: Path | None = None) -> int:
         )
         print(f"maintain: open_after_paid={open_ids}")
 
+        # Allowlisted workspace capability: a fail-closed file-resource guard.
+        from agent_centric.fbp import WorkspaceError, WorkspaceFS, WorkspaceLayout
+
+        ws = WorkspaceFS(
+            f"{_workdir}/ws",
+            WorkspaceLayout(
+                files=("bills/registry.json",), directories=("bills",),
+                prefixes=(),
+            ),
+        )
+        ws.create_dir("bills")
+        ws.write_text("bills/registry.json", '{"bills": []}')
+        _denied = False
+        try:
+            ws.write_text("../secret.txt", "x")
+        except WorkspaceError:
+            _denied = True
+        print(
+            f"workspace: read={ws.read_text('bills/registry.json').content!r} "
+            f"traversal_denied={_denied}"
+        )
+
         # Audit as proof + deterministic replay of a local run.
         chains = driver.reconstruct_audit()
         relay_count = sum(
