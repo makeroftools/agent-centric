@@ -242,6 +242,29 @@ email_draft = draft_from_email({"folder": "inbox", "id": "m1",
 All three preserve the mission invariant: the produced draft is **unverified**
 until a human calls `bills_accept`.
 
+### Allowlisted workspace capability (ported from the Manager line)
+
+`WorkspaceFS` (`workspace.py`) mediates file access strictly under an **explicit
+allowlist** (exact files, directories, and prefix directories):
+
+```python
+from agent_centric.fbp import WorkspaceFS, WorkspaceLayout
+
+ws = WorkspaceFS("./data", WorkspaceLayout(
+    files=("bills/registry.json",), directories=("bills",), prefixes=("inbox/",),
+))
+ws.create_dir("bills")
+ws.write_text("bills/registry.json", '{"bills": []}')   # parent must exist
+content = ws.read_text("bills/registry.json").content     # -> the JSON
+listing = ws.list_prefix("inbox/")                        # files in inbox/
+```
+
+- **Fail-closed**: any path not on the allowlist — including any traversal that
+escapes the workspace root — is an explicit `WorkspaceError`. **No deletion**
+and **no implicit directory creation** (a write needs an already-existing,
+allowlisted parent). This is the trust/security boundary for a managed agent
+environment.
+
 ### Tree-audit reconstruction (audit as proof)
 
 `reconstruct_chains` (`audit.py`) is a read-only **capability** that turns the
