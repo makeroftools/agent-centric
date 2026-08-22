@@ -24,6 +24,16 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# Make CLI output stream live, even when piped (``agent-centric fbp | ...``),
+# so an operator sees progress as it happens rather than in bursts only when
+# the pipe buffer flushes. Line-buffered stdout is the safe minimum.
+try:
+    if sys.stdout is not None and hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(line_buffering=True)
+        sys.stderr.reconfigure(line_buffering=True)  # type: ignore[union-attr]
+except (ValueError, OSError):  # pragma: no cover - e.g. detached streams
+    pass
+
 from agent_centric import AgentManager
 from agent_centric.contracts.capability import Capability
 from agent_centric.contracts.manifest import AgentComponentManifest, AgentManifestVersion
