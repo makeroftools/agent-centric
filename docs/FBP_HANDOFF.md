@@ -39,17 +39,12 @@ agents).
 
 ## Current git state
 - **Branch:** `agent-centric-fbp`; **working tree clean**.
-- **HEAD:** `abba842` = `fix(fbp): resolve ledger-replay endpoint per transport`.
+- **HEAD:** `a93c8c3` = `docs(fbp): document auto re-seeding on durable-ledger replay`.
 - **Pushed:** up through `7b1979f` (`feat(fbp): bills loop - first real
-  end-to-end FBP graph`). **Unpushed (14):** `8ae8f6f` (tree-audit
-  reconstruction), `33960e1` (deterministic replay), `72695d5` (session
-  handoff), `022ad15` (replay_session — full-tree/delegated replay),
-  `0f95db2` (spec & protocol contract sync), `95b3998` (handoff refresh),
-  `e7790a7` (replay state isolation), `988b49a` (transport-resolve the bills
-  store child endpoint), `7141640` (handoff refresh), `454b873` (replay
-  per-run-verifier resolution), `3e1c750` (handoff refresh), `f1bde05`
-  (durable directive ledger), `322507f` (ledger docs), `abba842` (ledger
-  replay endpoint per transport).
+  end-to-end FBP graph`). **Unpushed (17):** the older commits plus replay
+  state isolation, transport-resolve bills store endpoint, replay per-run
+  verifier resolution, durable directive ledger, and auto re-seeding on
+  durable-ledger replay (see `git log origin/agent-centric-fbp..HEAD`).
 - Standing rule: **do not push unless the lead explicitly says push.**
 
 ## What's built (the full arc)
@@ -79,7 +74,7 @@ agents).
 - Example: `examples/fbp_durability_demo.py`.
 
 ## Validation
-- `uv run pytest` → **537 passed**; `uv run ruff check .` clean; `uv run mypy src` clean (70 source files).
+- `uv run pytest` → **538 passed**; `uv run ruff check .` clean; `uv run mypy src` clean (70 source files).
 
 ## Key invariants to never break (FBP)
 - **No unverified success; fail-closed everywhere; deterministic control.
