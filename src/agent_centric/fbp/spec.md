@@ -156,14 +156,39 @@ Implemented here (pure, offline-testable, deterministic):
   (not just a socket) via ``spawn``, and routes ``run`` directives down to a
   named child via ``delegate``, relaying the child's verified response up and
   failing closed on an unknown delegation target.
+- **Easy-UX driver** — `FbpDriver`, a synchronous driver over the
+  directive/response protocol that hides sockets/frames/event loop and runs
+  over `inproc`/`tcp`/`ipc` with transport-aware child addressing and bounded
+  retry for async link establishment.
+- **Durable, on-demand, deterministic state** — `StateStore` (a mutable,
+  single-writer, fingerprint-idempotent key/value store) and `TrajectoryStore`
+  (an append-only, write-once local audit). Separate SQLite files, opened only
+  as an explicit `configure` grant; read-only grants close the write path.
+- **Store/registry agent** — `StoreAgent`, the concrete realization of
+  "state controlled by a domain-specific agent": a single-writer durable
+  resource reached via delegation, bounded by a key-allowlist grant (requests
+  outside it fail closed).
+- **CPM capability** — Critical Path Method as a first-class, deterministic,
+  **read-only** tool (a registered callable, not an agent): forward/backward
+  pass, slack/float, critical path; fail-closed on cyclic or malformed input.
+- **Bills loop (a real end-to-end FBP graph)** — `BillsAgent` + pure domain
+  functions: intake -> human-gated accept -> durable registry -> verified
+  calendar projection. No unverified money/dates; no auto-accept; money in
+  integer cents and dates ISO.
+- **Tree-audit reconstruction** — `reconstruct_chains` rebuilds the full causal
+  chain per correlation id from the tree's trajectory stores (audit as
+  proof): verified only if every hop on the way up is verified.
+- **Deterministic replay** — `FbpDriver.replay` / `replay_session` re-run the
+  recorded directive ledger (including delegated runs, with the tree topology
+  rebuilt) and compare outcomes, so the system is re-verifiable after the fact.
 
-**Not yet implemented (next steps, optional adapters):**
+**Deferred (deliberate; optional adapters):**
 
 - Compile-on-demand from a resolved source URL (the execution clamp behind the catalog).
 - FastAPI UI/API layer (adds a dependency).
-- The concrete bills-loop nodes (intake → accept → registry → calendar →
-  maintain) as an FBP graph.
 - Real concurrency / multi-channel routing.
+- A durable git-backed directive ledger / cross-process directive queue.
+- Multi-language runtimes over the ZeroMQ protocol.
 
 These are deliberately deferred so the foundation can be proven correct,
 deterministic, and fully tested before layering on transport and UI.

@@ -80,6 +80,9 @@ outcome, regardless of arrival order.
 | `spawn` | Spawn a child agent, as prescribed by the directive. |
 | `register` | Registry write: record a capability's metadata (name, kind, source URL). |
 | `resolve` | Registry read: return a capability's location (never a callable, never executes). |
+| `state_get` | Read a value from the agent's durable state store (granted). |
+| `state_set` | Idempotently write a value to the durable state store (granted). |
+| `audit` | Return the agent's local audit record (the local start of chain audit). |
 | `ping` | Liveness / health check. |
 | `kill` | Teardown. |
 
@@ -200,3 +203,27 @@ CPM is especially valuable in the fractal, agent-centric model: at every level
 of the tree, CPM reveals which path dominates the duration and where slack
 allows flexibility. It is the tool that makes the system's timing transparent
 and auditable.
+
+Implemented as a **read-only capability** (a registered callable, not an agent
+— a pure observation, not a unit of work with responsibility).
+
+## 11. Durable state, chain audit, and replay
+
+**Durable state.** An agent may be granted a ``StateStore`` (a single-writer,
+fingerprint-idempotent key/value store) and a ``TrajectoryStore`` (an
+append-only, write-once audit) via ``configure`` ``state=``/``trajectory=``.
+Persistence is always an explicit grant — an agent never silently writes a
+file; a read-only grant closes the write path. State keys arrive in directives
+(never auto-generated), so replay rebuilds identical content.
+
+**Chain audit.** Chain audit begins locally: every agent records its own
+directive outcomes into its trajectory store, and each parent records a
+``relay`` hop when it accepts a child's verified response. The full chain is
+reconstructible per correlation id from the tree's stores; a chain is verified
+only if every hop on the way up verified.
+
+**Replay.** Every directive a driver issues is recorded in a ledger (kind +
+payload + terminal response). Deterministic replay re-runs the recorded
+sequence — including delegated runs, with the tree topology rebuilt — and
+compares outcomes, so the system is re-verifiable after the fact. Any
+divergence is an explicit, fail-closed report, never noise.
