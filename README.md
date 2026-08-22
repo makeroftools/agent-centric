@@ -94,8 +94,9 @@ claims `verified` but returns a value its parent can't confirm is **demoted to a
 explicit, audited failure** — never a silent win.
 
 This is what makes the system mission-appropriate: it can be trusted to carry
-**money and schedule** through a human-gated pipeline, because the correctness
-spine holds at every level of the tree.
+**money and schedule** through a pipeline where a human is in the loop **only
+where there is genuine non-determinism** — not as a permanent checkpoint —
+because the correctness spine holds at every level of the tree.
 
 ---
 
@@ -125,7 +126,7 @@ The **`agent-centric-fbp`** branch is a rooted, recursive **tree of agents** wit
 | **Protocol + transport parity** | One enforced wire contract on `inproc://` / `tcp://` / `ipc://`. |
 | **Correctness spine** | A parent re-verifies a child on the way up; self-claimed `verified` never trusted. |
 | **Durable single-writer state** | `StateStore` + `TrajectoryStore`; persistence is always an explicit grant. |
-| **Bills loop** | intake → human-gated accept → registry → verified calendar. |
+| **Bills loop** | intake → human review only where there's non-determinism → registry → verified calendar. |
 | **Intake** | `draft_from_file` / `_email` / `_pdf_text` → unverified drafts. |
 | **Registry maintenance** | `bills_mark_paid` / `bills_mark_status` → paid bills leave the calendar. |
 | **Allowlisted workspace** | Fail-closed file access under an explicit allowlist. |
@@ -145,18 +146,31 @@ Deep dive: [`README_FBP.md`](README_FBP.md) and [`docs/fbp.md`](docs/fbp.md).
 
 ---
 
-## 🧾 The bills loop — the mandatory arc
+## 🧾 The bills loop — the mandate "accept"
 
-Money and schedule, with a **human in the loop** — nothing auto-accepts:
+Money and schedule. The human is **not** a permanent bottleneck. A human is only
+in the loop where a step is genuinely **non-deterministic** — where parsing
+free-form prose, email, or a PDF leaves real ambiguity. The human reviews that
+decision, and, where a **deterministic** rule would have handled it, authorizes a
+*rule* so the concern runs unattended thereafter:
 
 ```mermaid
 flowchart LR
-    A[file / email / PDF] --> B[UNVERIFIED draft]
-    B -->|human gate| C[bills_accept]
-    C -->|single-writer| D[durable registry]
-    D --> E[verified calendar]
-    D --> F[bills_mark_paid]
+  A[file / email / PDF] --> B["UNVERIFIED draft (may be ambiguous)"]
+  B -->|"non-deterministic? only then review"| C[bills_accept]
+  C -->|"single-writer"| D[durable registry]
+  C -->|"authorize a rule"| R[automated rule going forward]
+  D --> E[verified calendar]
+  D --> F[bills_mark_paid]
 ```
+
+Put simply: **``accept`` gates what is ambiguous — not everything.** The platform
+keeps moving deterministically; a human intervenes only to resolve genuine
+uncertainty and, in one step, authorizes the automation of that concern.
+
+> *Status:* today the acceptance step is always explicit (a safe default); the
+> non-determinism-rating → authorize-a-rule flow is the design direction this
+> repository is moving toward and a good place to study together before launch.
 
 ---
 
