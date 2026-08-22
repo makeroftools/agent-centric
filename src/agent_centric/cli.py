@@ -863,6 +863,24 @@ def _cmd_fbp(transport: str, ledger: Path | None = None) -> int:
             f"source={model_resp.sources[0]['id'] if model_resp.sources else None}"
         )
 
+        # Determinism: an ambiguous draft scores low (human judgment); an
+        # approved rule makes a matching draft deterministic (auto-resolve).
+        from agent_centric.fbp import Rule, RuleSet, resolve_with_rules, score_determinism
+
+        ambiguous = {"vendor": "GasCo"}
+        score = score_determinism(ambiguous)
+        rules = RuleSet(
+            [Rule(id="r-gasco", domain="vendor", method="from_vendor",
+                  matcher={"vendor": "GasCo"})]
+        )
+        _resolved, rule = resolve_with_rules(
+            {"vendor": "GasCo", "amount_cents": 12345, "due_date": "2026-10-01"}, rules
+        )
+        print(
+            f"determinism: ambiguous_score={score.score:.2f} "
+            f"rule_matched={rule.id if rule else None}"
+        )
+
         # Audit as proof + deterministic replay of a local run.
         chains = driver.reconstruct_audit()
         relay_count = sum(

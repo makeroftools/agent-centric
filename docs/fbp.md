@@ -283,6 +283,30 @@ with FbpDriver() as d:
   provider (`ModelProvider`) is an opt-in hook (`set_provider`) that never
   relaxes verification.
 
+### Determinism rating + approved rules (determinize-then-decide)
+
+`determinism.py` is a pure capability that makes the "never rely on a
+non-deterministic output directly" rule operational:
+
+```python
+from agent_centric.fbp import Rule, RuleSet, resolve_with_rules, score_determinism
+
+ambiguous = {"vendor": "GasCo"}                    # few fields -> low score
+score = score_determinism(ambiguous)              # reserves human judgment
+
+rules = RuleSet([Rule(id="r1", domain="vendor", method="from_vendor",
+                      matcher={"vendor": "GasCo"})])
+resolved, rule = resolve_with_rules(
+    {"vendor": "GasCo", "amount_cents": 12345, "due_date": "2026-10-01"}, rules)
+# resolved is not None, rule.id == "r1"  -> auto-resolve deterministically
+```
+
+- `score_determinism` rates how reproducibly a draft's extraction could be
+  determined (0..1), purely as a function of the draft — never a live model.
+- A human (or analyser) authorizes a `Rule` once; `resolve_with_rules` then
+  auto-resolves matching intake deterministically (attributable to the rule),
+  and only non-matching (irreducible) residue reaches the human.
+
 ### Tree-audit reconstruction (audit as proof)
 
 `reconstruct_chains` (`audit.py`) is a read-only **capability** that turns the
