@@ -34,6 +34,7 @@ from .driver import (
     ledger_callables,
     load_ledger,
     replay_ledger,
+    summarise_ledger,
 )
 from .ledger import DirectiveLedger
 from .message import (
@@ -140,4 +141,5 @@ __all__ = [
     "load_ledger",
     "ledger_callables",
     "replay_ledger",
+    "summarise_ledger",
 ]

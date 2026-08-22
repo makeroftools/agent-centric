@@ -80,6 +80,7 @@ with FbpDriver() as driver:          # inproc, offline, deterministic
 | `state_get(key)` | `state_get` | read from the agent's durable state store |
 | `state_set(key, value)` | `state_set` | idempotently write to the durable state store |
 | `audit()` | `audit` | return the agent's local audit record |
+| `summary()` | — | deterministic, operator-facing summary of the session's ledger |
 | `ping()` | `ping` | liveness |
 | `kill()` | `kill` | teardown |
 
@@ -293,6 +294,15 @@ closure/lambda) is reported in `missing_callables` for the caller to seed manual
 `agent-centric fbp --ledger <path>` to record, then `agent-centric fbp-replay
 <path>` to re-verify in a fresh process.
 
+### Operator summary
+
+`FbpDriver.summary()` (and, for a durable ledger, `summarise_ledger(path)`)
+give a deterministic, operator-facing readout of a session: per-kind directive
+counts, per-run verified/error outcomes, and a per-run listing. The CLI exposes
+it as `agent-centric fbp-summary <path>`. `ok` is True only if every `run`
+outcome is verified; a summary with errors exits non-zero — honest, fail-closed
+ops.
+
 ### Transports
 
 `FbpDriver(transport=...)` runs the exact same protocol over:
@@ -309,6 +319,8 @@ directive returns the cached result rather than re-executing).
 
 `agent-centric fbp [--transport inproc|tcp|ipc]` drives a deterministic demo
 tree that exercises every property above and exits non-zero on any failure.
+`agent-centric fbp-replay <path>` re-verifies a durable ledger; `agent-centric
+fbp-summary <path>` gives an operator-facing summary.
 
 ## Guarantees
 

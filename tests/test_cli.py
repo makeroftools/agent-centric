@@ -115,3 +115,22 @@ class TestCliFbp:
             code, out = _run(tmp_path, "fbp-replay", str(ledger), "--transport", transport)
             assert code == 0, out
             assert "failed=0" in out
+
+    def test_fbp_summary_reports_ledger(self, tmp_path: Path) -> None:
+        """fbp-summary gives an operator-facing readout of a durable ledger. The
+        demo contains intentional fail-closed cases (demote / unknown target /
+        ungranted store key), so it reports errors and exits non-zero."""
+        ledger = tmp_path / "session.ledger.db"
+        code, _ = _run(tmp_path, "fbp", "--ledger", str(ledger))
+        assert code == 0
+
+        code, out = _run(tmp_path, "fbp-summary", str(ledger))
+        assert "run_count=14" in out
+        assert "errors=3" in out
+        assert "ok=False" in out
+        assert code == 1  # the demo has intentional failures
+
+    def test_fbp_summary_missing_fails_closed(self, tmp_path: Path) -> None:
+        code, out = _run(tmp_path, "fbp-summary", str(tmp_path / "nope.db"))
+        assert code == 1
+        assert "no ledger file" in out

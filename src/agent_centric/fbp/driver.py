@@ -308,6 +308,14 @@ class FbpDriver:
         """
         return dict(self._ledger)
 
+    def summary(self) -> dict[str, Any]:
+        """A deterministic, operator-facing summary of this session's lane.
+
+        Aggregates per-kind directive counts and run outcomes (verified/error).
+        Read-only and deterministic; same shape as ``summarise_ledger``.
+        """
+        return _summarise_entries(self._ledger)
+
     def reconstruct_audit_chains(self) -> tuple[AuditChain, ...]:
         """Return the reconstructed chains (dataclasses) for the current tree."""
         from .audit import reconstruct_chains
@@ -826,6 +834,59 @@ def _outcome_diff(a: dict[str, Any] | None, b: dict[str, Any] | None) -> dict[st
 def _noop(*_args: Any, **_kwargs: Any) -> Any:
     """A safe fallback callable (should never run in practice)."""
     return None
+
+
+def _summarise_entries(
+    entries: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """A deterministic, operator-facing summary of a directive ledger/entries.
+
+    Aggregates per-kind directive counts, run outcomes (verified/error), and a
+    list of run results. Deterministic: orders by correlation id. Read-only —
+    never mutates the entries.
+    """
+    kinds: dict[str, int] = {}
+    runs: list[dict[str, Any]] = []
+    for cid in sorted(entries):
+        d = entries[cid]
+        kind = d["kind"]
+        kinds[kind] = kinds.get(kind, 0) + 1
+        resp = d.get("response")
+        if kind == DIRECTIVE_RUN:
+            runs.append(
+                {
+                    "correlation_id": cid,
+                    "task": d["payload"].get("task"),
+                    "terminal": resp.get("terminal") if resp else None,
+                    "verified": bool(
+                        resp and resp.get("terminal") in ("result", "ok")
+                    ),
+                    "value": resp.get("terminal_value") if resp else None,
+                    "error": resp.get("terminal_error") if resp else None,
+                    "child": d["payload"].get("child"),
+                }
+            )
+    verified_runs = sum(1 for r in runs if r["verified"])
+    return {
+        "kinds": dict(sorted(kinds.items())),
+        "runs": runs,
+        "run_count": len(runs),
+        "verified_runs": verified_runs,
+        "error_runs": len(runs) - verified_runs,
+        "ok": verified_runs == len(runs),
+    }
+
+
+def summarise_ledger(
+    ledger_path: str | os.PathLike[str],
+) -> dict[str, Any]:
+    """Summarise a durable directive ledger (operator-facing, read-only).
+
+    Returns the same shape as ``FbpDriver.summary`` for a recorded session.
+    Fails closed (raises ``FileNotFoundError``) if the ledger does not exist.
+    """
+    entries = load_ledger(ledger_path)
+    return _summarise_entries(entries)
 
 
 def _seed_entry_from_source(name: str, info: dict[str, str]) -> bool:

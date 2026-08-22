@@ -564,6 +564,14 @@ def _build_parser() -> argparse.ArgumentParser:
         default="inproc",
         help="Transport to replay over (default: inproc).",
     )
+
+    p_fbp_summary = sub.add_parser(
+        "fbp-summary",
+        help="Summarise a durable directive ledger (operator-facing, read-only).",
+    )
+    p_fbp_summary.add_argument(
+        "ledger_path", type=Path, help="The durable ledger file."
+    )
     return parser
 
 
@@ -829,6 +837,24 @@ def _cmd_fbp_replay(ledger_path: Path, transport: str) -> int:
     return 0 if result["ok"] else 1
 
 
+def _cmd_fbp_summary(ledger_path: Path) -> int:
+    """Summarise a durable directive ledger (operator-facing, read-only)."""
+    import agent_centric.fbp as fbp
+
+    try:
+        s = fbp.summarise_ledger(str(ledger_path))
+    except FileNotFoundError:
+        print(f"ledger  : no ledger file at {ledger_path}")
+        return 1
+    kinds = " ".join(f"{k}={v}" for k, v in s["kinds"].items())
+    print(f"ledger  : run_count={s['run_count']} verified={s['verified_runs']} "
+          f"errors={s['error_runs']} ok={s['ok']} kinds=[{kinds}]")
+    for r in s["runs"]:
+        status = "ok" if r["verified"] else "ERR"
+        target = f"->{r['child']}" if r["child"] else ""
+        print(f"  {r['correlation_id']:<16} {status:<3} {r['task']}{target}")
+    return 0 if s["ok"] else 1
+
 
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point. Returns the process exit code."""
@@ -843,6 +869,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_fbp(args.transport, ledger=args.ledger)
     if args.command == "fbp-replay":
         return _cmd_fbp_replay(args.ledger_path, args.transport)
+    if args.command == "fbp-summary":
+        return _cmd_fbp_summary(args.ledger_path)
     raise AssertionError(f"unhandled command: {args.command}")
 
 

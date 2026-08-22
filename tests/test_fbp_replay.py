@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from agent_centric.fbp import (
     DirectiveLedger,
     FbpDriver,
@@ -391,6 +393,57 @@ class TestReplaySessionStateIsolation:
             after = store.open_trajectory(audit_path)
             assert after.count() == before_count
             after.close()
+
+
+class TestSummary:
+    """summary() / summarise_ledger give a deterministic, operator-facing view."""
+
+    def test_summary_reports_verified_and_error_runs(self) -> None:
+        register_callable("double", _double)
+        register_callable("even", _even)
+        with FbpDriver() as driver:
+            driver.register("double", _double)
+            driver.register("even", _even)
+            driver.configure(tasks=("double",), verifiers=("even",), verifier="even")
+            ok = driver.run("double", {"value": 21})  # result
+            assert ok.verified is True
+            # A second run under the even-verifier on an odd output fails.
+            driver.register("odd", _odd)
+            driver.configure(verifiers=("even", "odd"), verifier="odd")
+            bad = driver.run("double", {"value": 21})  # 42 even -> odd fails
+            assert bad.verified is False
+
+            s = driver.summary()
+            assert s["run_count"] == 2
+            assert s["verified_runs"] == 1
+            assert s["error_runs"] == 1
+            assert s["ok"] is False
+            assert s["kinds"].get("run") == 2
+
+    def test_summarise_ledger_matches_driver_summary(
+        self, tmp_path: Path
+    ) -> None:
+        register_callable("double", _double)
+        ledger_path = tmp_path / "session.ledger.db"
+        with FbpDriver(ledger_path=str(ledger_path)) as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            driver.run("double", {"value": 21})
+            driver.run("double", {"value": 5})
+
+            live = driver.summary()
+        from agent_centric.fbp import summarise_ledger
+
+        persisted = summarise_ledger(str(ledger_path))
+        assert persisted["run_count"] == live["run_count"] == 2
+        assert persisted["verified_runs"] == live["verified_runs"] == 2
+        assert persisted["ok"] is True
+
+    def test_summarise_ledger_missing_fails_closed(self, tmp_path: Path) -> None:
+        from agent_centric.fbp import summarise_ledger
+
+        with pytest.raises(FileNotFoundError):
+            summarise_ledger(str(tmp_path / "nope.db"))
 
 
 class TestDurableLedger:

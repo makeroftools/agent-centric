@@ -191,6 +191,10 @@ Implemented here (pure, offline-testable, deterministic):
   importable ``module.qualname``) is persisted, so a fresh process can
   `replay_ledger`/`load_ledger` the session (crash-safe re-verification after
   the fact). `replay_ledger` auto-imports the manifest to restore callables.
+- **Deterministic plan execution + operator summary** — `run_plan` runs a
+  deterministic sequence of `run` steps, failing closed on the first unverified
+  one; `summary`/`summarise_ledger` give an operator-facing per-kind/per-run
+  readout, `ok` only if every run verified.
 
 **Deferred (deliberate; optional adapters):**
 
