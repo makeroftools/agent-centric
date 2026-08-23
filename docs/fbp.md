@@ -427,8 +427,16 @@ result = run_network(driver, net)  # double(21) -> even(42); both verified
   never silently succeeds.
 - The landing page has a **Component Network** visual editor: a dependency-free
   drag-and-drop node-and-wire canvas (palette buttons, draggable nodes,
-  click-to-connect ports, SVG edges, double-click to remove, live JSON). No
-  third-party/CDN library — it stays stdlib-only and fail-closed.
+  click-to-connect **and drag-and-drop** ports with a live preview wire, SVG
+  edges, double-click to remove, live JSON). No third-party/CDN library — it
+  stays stdlib-only and fail-closed.
+- **Agent composition**: the palette exposes the real **demo agents** (`child`,
+  `store`, `model`) as draggable nodes that delegate via the network's `child`
+  field — so a network can compose actual spawned agents (e.g. `child` double →
+  `store` write, `model` → `store` write) through the verified spine. The
+  arithmetic primitives remain as a secondary **Primitives** group for building
+  simple test networks that feed the agents. A **Load agent demo** button builds
+  a canonical agent chain in one click.
 - **Durable save/load**: with `fbp-web --networks <path>`, named networks can be
   saved and reloaded across restarts (`/network/save|/list|/load`); a network is
   validated before it is persisted (fail-closed).

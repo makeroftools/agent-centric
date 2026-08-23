@@ -1017,3 +1017,76 @@ class TestDesignerSurface:
             assert all(s["verified"] for s in result["results"])
         finally:
             server._driver.close()
+
+
+class TestAgentDesigner:
+    """The Designer now composes the real demo agents (child/store/model) via
+    the network's ``child`` delegation, alongside the arithmetic primitives."""
+
+    def test_palette_has_agents_group(self) -> None:
+        html = _render_landing({})
+        # The Agents group is present and lists the demo agents.
+        assert "Agents" in html
+        for task in ("store_set", "store_get", "model"):
+            assert task in html
+        # The primitives are kept as a secondary group.
+        assert "Primitives" in html
+
+    def test_agent_demo_runs_through_spine(self, monkeypatch) -> None:
+        """The agent demo (child double -> store_set, model -> store_set) runs
+        through the verified spine, delegating to the real spawned agents."""
+        # Force the deterministic stub so the test is offline and CI-safe.
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        server = FbpLandingServer()
+        try:
+            payload = (
+                '{"components": ['
+                '{"id": "c1", "task": "double", "args": {"value": 21}, "child": "child"},'
+                '{"id": "c2", "task": "store_set", "args": {"key": "demo", "value": 0},'
+                ' "child": "store"},'
+                '{"id": "c3", "task": "model", "args": {"prompt": "hello"}, "child": "model"},'
+                '{"id": "c4", "task": "store_set", "args": {"key": "answer", "value": 0},'
+                ' "child": "store"}'
+                "], "
+                '"edges": ['
+                '{"source": "c1", "source_field": "value", "target": "c2", "target_arg": "value"},'
+                '{"source": "c3", "source_field": "value", "target": "c4", "target_arg": "value"}]}'
+            )
+            result = server._run_network(payload)
+            assert result["ok"] is True
+            assert result["completed"] == 4
+            # The child agent doubled 21 -> 42 (verified even).
+            c1 = next(s for s in result["results"] if s["id"] == "c1")
+            assert c1["value"] == 42
+            assert c1["verified"] is True
+            # The store writes verified (the store agent served them).
+            c2 = next(s for s in result["results"] if s["id"] == "c2")
+            assert c2["verified"] is True
+            c4 = next(s for s in result["results"] if s["id"] == "c4")
+            assert c4["verified"] is True
+            # The model agent answered (verified, a non-empty string).
+            c3 = next(s for s in result["results"] if s["id"] == "c3")
+            assert isinstance(c3["value"], str) and c3["value"]
+            assert c3["verified"] is True
+        finally:
+            server._driver.close()
+
+    def test_agent_demo_store_writes_are_granted(self) -> None:
+        """The store agent is granted a ``demo-*`` prefix so the agent demo's
+        writes (demo/answer) are served; a key outside the grant fails closed."""
+        server = FbpLandingServer()
+        try:
+            # A store_set under the granted demo-* prefix verifies.
+            ok = server._run_network(
+                '{"components": [{"id": "a", "task": "store_set", '
+                '"args": {"key": "demo-x", "value": 1}, "child": "store"}], "edges": []}'
+            )
+            assert ok["ok"] is True
+            # A store_set outside the grant fails closed (not verified).
+            denied = server._run_network(
+                '{"components": [{"id": "a", "task": "store_set", '
+                '"args": {"key": "nope", "value": 1}, "child": "store"}], "edges": []}'
+            )
+            assert denied["ok"] is False
+        finally:
+            server._driver.close()

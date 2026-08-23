@@ -290,7 +290,15 @@ class FbpLandingServer:
         driver.spawn("child")
         driver.configure_child("child", tasks=("double",))
         driver.spawn("store", kind="store")
-        driver.configure_child("store", store_keys=("bill-b1",))
+        # Grant the store a durable state path (temp by default) so it can
+        # actually serve store_set/store_get for the Designer agent demo.
+        import tempfile as _tf
+        self._store_tmp = _tf.TemporaryDirectory(prefix="agent-centric-fbp-store-")
+        driver.configure_child(
+            "store",
+            state=os.path.join(self._store_tmp.name, "store.db"),
+            store_keys=("bill-b1", "demo*", "answer*"),
+        )
         # A model agent: an LLM as an ordinary agent. If an OpenRouter key is
         # present it is wired to a real, fail-closed provider; otherwise it
         # serves the deterministic stub (offline, CI-safe).
@@ -2242,18 +2250,26 @@ _NETWORK_JS = r"""\
   // A full-featured, dependency-free component-network editor. Nodes are
   // absolutely-positioned divs; edges are SVG paths. The editor serializes to
   // the ComponentNetwork JSON the verified spine runs. No libs, no CDN.
+  // The palette: real demo agents (delegating via ``child``) plus the
+  // arithmetic primitives (pure functions) used to feed them.
   const netPalette = [
-    {group: 'Arithmetic', items: [
+    {group: 'Agents', items: [
+      {task: 'double', child: 'child', desc: 'child agent: value * 2',
+        args: {value: 1}},
+      {task: 'store_set', child: 'store', desc: 'store agent: write key=value',
+        args: {key: 'k', value: 1}},
+      {task: 'store_get', child: 'store', desc: 'store agent: read key',
+        args: {key: 'k'}},
+      {task: 'model', child: 'model', desc: 'model agent: answer a prompt',
+        args: {prompt: 'hello'}},
+    ]},
+    {group: 'Primitives', items: [
       {task: 'double', desc: 'value * 2', args: {value: 1}},
       {task: 'square', desc: 'value * value', args: {value: 3}},
       {task: 'negate', desc: 'value * -1', args: {value: 5}},
-    ]},
-    {group: 'Derived', items: [
       {task: 'sum', desc: 'a + b', args: {a: 1, b: 1}},
       {task: 'product', desc: 'a * b', args: {a: 2, b: 3}},
       {task: 'concat', desc: 'a + b (str)', args: {a: 'x', b: 'y'}},
-    ]},
-    {group: 'Checks', items: [
       {task: 'even', desc: 'is value even?', args: {value: 0}},
       {task: 'odd', desc: 'is value odd?', args: {value: 1}},
       {task: 'positive', desc: 'is value > 0?', args: {value: 1}},
@@ -2291,7 +2307,7 @@ _NETWORK_JS = r"""\
         b.type = 'button'; b.className = 'pal-item';
         b.innerHTML = '<span class="ptask">' + it.task + '</span>' +
           '<span class="pdesc">' + it.desc + '</span>';
-        b.addEventListener('click', () => netAddComponent(it.task, it.args));
+        b.addEventListener('click', () => netAddComponent(it.task, it.args, it.child));
         wrap.appendChild(b);
       });
       box.appendChild(wrap);
@@ -2303,9 +2319,11 @@ _NETWORK_JS = r"""\
     return {x: 40 + (n % 3) * 220, y: 40 + Math.floor(n / 3) * 130};
   }
 
-  function netAddComponent(task, args) {
+  function netAddComponent(task, args, child) {
     const id = 'c' + netSeq++;
-    netState.components.push({id: id, task: task, args: Object.assign({}, args || {})});
+    const comp = {id: id, task: task, args: Object.assign({}, args || {})};
+    if (child) comp.child = child;
+    netState.components.push(comp);
     netLayout[id] = netPlaceId();
     netRender();
   }
@@ -2421,6 +2439,10 @@ _NETWORK_JS = r"""\
         '>' + (v || '- none -') + '</option>').join('') + '</select></div>';
     h += '<div class="insp-sec"><label>child (delegate)</label><input value="' + (c.child || '') +
       '" onchange="netSetChild(this)"/></div>';
+    if (c.child) {
+      h += '<p class="note">Delegates to the real <b>' + esc(c.child) +
+        '</b> agent in the tree.</p>';
+    }
     h += '<div class="insp-sec"><button type="button" onclick="netRemoveComponent(\'' + c.id +
       '\')">Delete node</button></div>';
     box.innerHTML = h;
@@ -2553,6 +2575,21 @@ _NETWORK_JS = r"""\
     netRender();
   }, {passive: false});
 
+  // Load a canonical agent demo: child(double) -> store_set, then a model
+  // node. This shows the Designer composing real agents through the spine.
+  function netLoadAgentDemo() {
+    netClear();
+    netAddComponent('double', {value: 21}, 'child');
+    netAddComponent('store_set', {key: 'demo', value: 0}, 'store');
+    netAddComponent('model', {prompt: 'hello'}, 'model');
+    netAddComponent('store_set', {key: 'answer', value: 0}, 'store');
+    // Wire child.double -> store_set.value, and model -> store_set.value.
+    netState.edges.push({source: 'c1', source_field: 'value', target: 'c2', target_arg: 'value'});
+    netState.edges.push({source: 'c3', source_field: 'value', target: 'c4', target_arg: 'value'});
+    netRender();
+    netSetStatus('Agent demo loaded: child(double) -> store, model -> store. Click Run.');
+  }
+
   async function netRun() {
     const spin = $netSpin();
     netResult = {};
@@ -2652,6 +2689,7 @@ _NETWORK_JS = r"""\
     netSetStatus('Auto-layout applied.');
   }
 
+  document.getElementById('net-demo').addEventListener('click', netLoadAgentDemo);
   document.getElementById('net-run').addEventListener('click', netRun);
   document.getElementById('net-clear').addEventListener('click', netClear);
   document.getElementById('net-layout').addEventListener('click', netAutoLayout);
@@ -3004,6 +3042,7 @@ and unknown references fail closed.</p>
     <div class='net-toolbar'>
       <button id='net-layout' type='button'>⇲ Auto-layout</button>
       <button id='net-clear' type='button'>Clear</button>
+      <button id='net-demo' type='button'>Load agent demo</button>
       <button id='net-run' class='primary' type='button'>▶ Run network</button>
       <span id='net-spinner' class='spinner' style='display:none'></span>
       <span class='net-hint'>drag bg to pan·wheel to zoom·dbl-click a node to delete</span>
