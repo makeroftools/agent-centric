@@ -525,15 +525,19 @@ class TestLandingRender:
         # Actionable links present.
         assert "/action/run" in html
 
-    def test_render_has_chat_designer_mode_switch(self) -> None:
-        """The page exposes a Chat/Designer mode switch with two panes; the
-        designer pane is hidden by default (a clear functional division)."""
+    def test_render_has_sidebar_nav_with_sections(self) -> None:
+        """The page exposes a sidebar nav with sectioned panes; one pane is
+        active at a time (a clear, navigable dashboard), defaulting to the
+        overview/dashboard pane."""
         html = _render_landing({})
-        assert "mode-chat" in html and "mode-designer" in html
-        assert "pane-chat" in html and "pane-designer" in html
-        # Designer starts hidden; chat visible.
-        assert "pane-designer' class='mode-pane' style='display:none'" in html
-        assert "mode-btn active" in html
+        # Sidebar navigation is present with all the main sections.
+        assert "class='sidebar'" in html
+        for page in ("dashboard", "chat", "provision", "bills", "registry", "designer", "docs"):
+            assert f"data-page='{page}'" in html
+            assert f"id='pane-{page}'" in html
+        # Dashboard pane is the default (active by default in navShow).
+        assert "id='pane-dashboard'" in html
+        assert "dashboard" in html
 
     def test_render_uses_cards(self) -> None:
         """Functional areas are wrapped in cards for a clean, friendly layout."""

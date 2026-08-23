@@ -1482,15 +1482,63 @@ def _build_openrouter_providers() -> dict[str, Any]:
 
 
 _PAGE_CSS = "\n".join([
-    "body { font-family: system-ui, sans-serif;",
-    "  max-width: 900px; margin: 2rem auto; padding: 0 1rem; color:#1a1a1a; }",
+    # ---- base / layout ----
+    "* { box-sizing: border-box; }",
+    "body { margin:0; font-family: system-ui, -apple-system, Segoe UI, sans-serif;",
+    "  background:#f5f6fa; color:#1a1a2e; }",
+    ".app { display:flex; min-height:100vh; }",
+    # ---- sidebar ----
+    ".sidebar { width:240px; flex-shrink:0; background:#111827; color:#e5e7eb;",
+    "  display:flex; flex-direction:column; position:sticky; top:0; height:100vh; }",
+    ".sidebar .brand { padding:1.2rem 1.2rem .6rem; font-weight:700; font-size:1.02rem;",
+    "  color:#fff; letter-spacing:.2px; }",
+    ".sidebar .brand small { display:block; font-weight:400; color:#9ca3af;",
+    "  font-size:.72rem; margin-top:.15rem; }",
+    ".sidebar nav { flex:1; overflow-y:auto; padding:.5rem .6rem; }",
+    ".side-section { font-size:.68rem; text-transform:uppercase; letter-spacing:.06em;",
+    "  color:#6b7280; padding:.7rem .8rem .3rem; }",
+    ".side-link { display:flex; align-items:center; gap:.55rem; width:100%;",
+    "  padding:.55rem .8rem; margin:.05rem 0; border:0; background:transparent;",
+    "  color:#d1d5db; border-radius:8px; cursor:pointer; font-size:.88rem; text-align:left; }",
+    ".side-link:hover { background:#1f2937; color:#fff; }",
+    ".side-link.active { background:#374151; color:#fff; font-weight:600; }",
+    ".side-link .ico { width:1.1rem; text-align:center; }",
+    ".sidebar .foot { padding:.8rem 1rem; font-size:.72rem; color:#6b7280;",
+    "  border-top:1px solid #1f2937; }",
+    # ---- main ----
+    ".main { flex:1; min-width:0; padding:1.6rem 2rem 3rem; }",
+    ".main header { margin-bottom:1.4rem; }",
+    ".main header h1 { margin:0 0 .25rem; font-size:1.5rem; font-weight:700; }",
+    ".main header p { margin:0; color:#6b7280; font-size:.92rem; }",
+    # ---- stat cards (overview) ----
+    ".stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));",
+    "  gap:1rem; margin-bottom:1.4rem; }",
+    ".stat { background:#fff; border:1px solid #e5e7eb; border-radius:12px;",
+    "  padding:1rem 1.1rem; box-shadow:0 1px 3px rgba(0,0,0,.04); }",
+    ".stat .k { font-size:.75rem; text-transform:uppercase; letter-spacing:.04em;",
+    "  color:#6b7280; }",
+    ".stat .v { font-size:1.5rem; font-weight:700; margin-top:.2rem; }",
+    ".stat .v.green { color:#16a34a; } .stat .v.blue { color:#2563eb; }",
+    # ---- dashboard pane visibility (sidebar-driven) ----
+    "#pane-dashboard, #pane-chat, #pane-provision, #pane-bills, #pane-registry,",
+    "#pane-designer, #pane-docs { display:none; }",
+    "#pane-dashboard.active, #pane-chat.active, #pane-provision.active,",
+    "#pane-bills.active, #pane-registry.active, #pane-designer.active, #pane-docs.active",
+    "{ display:block; }",
+    ".docs { line-height:1.65; }",
+    ".docs h2 { margin-top:1.4rem; }",
+    ".docs code { background:#f3f4f6; padding:.15rem .35rem; border-radius:4px;",
+    "  font-size:.88em; }",
+    ".docs ul { padding-left:1.2rem; }",
+    "# ---- shared existing styles (kept) ----",
     "h1 { font-size: 1.6rem; } h2 { font-size: 1.15rem; margin-top: 1.5rem; }",
     "table { border-collapse: collapse; width: 100%; }",
     "th,td { text-align:left; padding:.4rem .6rem; border-bottom:1px solid #ddd; }",
     ".pill { display:inline-block; background:#eee; border-radius:999px;",
     "  font-size:.8rem; padding:.15rem .6rem; }",
     ".actions a { display:inline-block; margin-right:.6rem;",
-    "  padding:.5rem .9rem; background:#0057ff; color:#fff; text-decoration:none; }",
+    "  padding:.5rem .9rem; background:#0057ff; color:#fff; text-decoration:none;",
+    "  border-radius:6px; }",
     ".invariants li { margin:.25rem 0; } .error { color:#b00020; } .note { color:#555; }",
     ".spinner { display:inline-block; width:1rem; height:1rem; border:2px solid #ccc;",
     "  border-top-color:#0057ff; border-radius:50%; animation:spin .6s linear infinite;",
@@ -1498,7 +1546,7 @@ _PAGE_CSS = "\n".join([
     "@keyframes spin { to { transform: rotate(360deg); } }",
     "#model-result { white-space:pre-wrap; }",
     ".chat-history { border:1px solid #ddd; border-radius:6px; padding:.5rem .8rem;",
-    "  margin:.5rem 0 1rem; max-height:18rem; overflow:auto; }",
+    "  margin:.5rem 0 1rem; max-height:18rem; overflow:auto; background:#fff; }",
     ".chat-turn { padding:.35rem 0; border-bottom:1px solid #f0f0f0; }",
     ".chat-turn:last-child { border-bottom:none; }",
     ".net-node { display:inline-block; background:#e8f0fe; border:1px solid #b6cdf5;",
@@ -1506,7 +1554,7 @@ _PAGE_CSS = "\n".join([
     ".net-edge { color:#555; font-family:monospace; font-size:.85rem;",
     "  margin:.15rem 0 .15rem 1rem; }",
     ".net-panel { border:1px solid #ddd; border-radius:6px; padding:.6rem;",
-    "  margin:.5rem 0; }",
+    "  margin:.5rem 0; background:#fff; }",
     ".net-canvas { position:relative; border:1px dashed #bbb; border-radius:6px;",
     "  background:#fafbfc; margin:.4rem 0; overflow:hidden; }",
     ".net-node-el { position:absolute; background:#e8f0fe; border:1px solid #5b8def;",
@@ -1517,15 +1565,14 @@ _PAGE_CSS = "\n".join([
     "  vertical-align:middle; }",
     ".net-node-el .net-port.in { background:#22a06b; }",
     ".net-svg { display:block; }",
-    ".mode-switch { display:flex; gap:.5rem; margin:1.2rem 0 .8rem; }",
-    ".mode-btn { flex:1; padding:.6rem; border:1px solid #ccc; border-radius:8px;",
-    "  background:#f5f6f8; cursor:pointer; font-size:1rem; }",
-    ".mode-btn.active { background:#0057ff; color:#fff; border-color:#0057ff; }",
-    ".card { background:#fff; border:1px solid #e2e4e8; border-radius:12px;",
-    "  box-shadow:0 1px 3px rgba(0,0,0,.06); padding:1rem 1.2rem; margin:1rem 0; }",
+    ".mode-switch { display:none; }",  # replaced by sidebar nav
+    ".card { background:#fff; border:1px solid #e5e7eb; border-radius:12px;",
+    "  box-shadow:0 1px 3px rgba(0,0,0,.04); padding:1rem 1.2rem; margin:1rem 0; }",
     ".card h2 { margin-top:0; }",
     ".card-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }",
-    "@media (max-width:760px){ .card-grid { grid-template-columns:1fr; } }",
+    "@media (max-width:900px){ .card-grid { grid-template-columns:1fr; }",
+    "  .app { flex-direction:column; } .sidebar { width:100%; height:auto;",
+    "    position:static; } }",
     ".card .note { margin-top:.2rem; }",
     ".schema-field { margin:.4rem 0; }",
     ".schema-field label { display:block; font-size:.85rem; color:#333; margin-bottom:.15rem; }",
@@ -1535,6 +1582,11 @@ _PAGE_CSS = "\n".join([
     "  margin:.4rem .4rem .2rem 0; }",
     ".bills-form input { padding:.35rem .5rem; border:1px solid #ccc;",
     "  border-radius:6px; font-family:monospace; margin-right:.6rem; }",
+    # ---- docs panel ----",".docs { line-height:1.6; }",
+    ".docs h2 { margin-top:1.4rem; }",
+    ".docs code { background:#f3f4f6; padding:.15rem .35rem; border-radius:4px;",
+    "  font-size:.88em; }",
+    ".docs ul { padding-left:1.2rem; }",
 ])
 
 # The model text-box client script (kept out of the f-string so its JS object
@@ -2387,6 +2439,30 @@ _MODE_JS = r"""\
 </script>
 """
 
+# The sidebar navigation script: one page = one visible pane.
+_NAV_JS = r"""\
+<script>
+  const PANES = ['dashboard', 'chat', 'provision', 'bills', 'registry', 'designer', 'docs'];
+  function navShow(page) {
+    for (const p of PANES) {
+      const pane = document.getElementById('pane-' + p);
+      if (pane) pane.classList.toggle('active', p === page);
+    }
+    document.querySelectorAll('.side-link').forEach(l =>
+      l.classList.toggle('active', l.dataset.page === page));
+  }
+  document.querySelectorAll('.side-link').forEach(l => {
+    l.addEventListener('click', () => {
+      const page = l.dataset.page;
+      if (page === 'refresh') { window.location.reload(); return; }
+      if (page) navShow(page);
+    });
+  });
+  // Default pane is the dashboard (overview).
+  navShow('dashboard');
+</script>
+"""
+
 
 def _render_landing(
     state: dict[str, Any], *, error: str | None = None, models: tuple[str, ...] = ()
@@ -2428,38 +2504,80 @@ def _render_landing(
         )
 
     return f"""<!doctype html><html lang='en'><head><meta charset='utf-8'>
-<title>Agent-Centric FBP — Landing</title>
-<style>{_PAGE_CSS}</style></head><body>
-<h1>Agent-Centric · FBP Subsystem</h1>
-<p>A deterministic, agent-centric, flow-based subsystem. A rooted tree of agents;
-work flows <b>down</b> as directives, responsibility bubbles <b>up</b> — each parent
-re-verifies a child's value before accepting it. A task ends in a <b>verified
-result or an explicit, audited failure</b> — never a silent third state.</p>
+<title>Agent-Centric FBP — Dashboard</title>
+<style>{_PAGE_CSS}</style></head>
+<body>
+<div class='app'>
 
-<h2>Live agent tree</h2>
-<table><thead><tr><th>Identity</th><th>Kind</th><th>Capabilities</th><th>Grants</th></tr></thead>
-<tbody>{rows}</tbody></table>
+<aside class='sidebar'>
+  <div class='brand'>Agent-Centric<small>FBP subsystem · deterministic</small></div>
+  <nav>
+    <div class='side-section'>Workspace</div>
+    <button class='side-link active' data-page='dashboard' type='button'>
+      <span class='ico'>⊙</span>Dashboard</button>
+    <button class='side-link' data-page='chat' type='button'>
+      <span class='ico'>💬</span>Chat</button>
+    <button class='side-link' data-page='provision' type='button'>
+      <span class='ico'>⚙️</span>Provision</button>
+    <button class='side-link' data-page='bills' type='button'>
+      <span class='ico'>📄</span>Bills</button>
+    <button class='side-link' data-page='registry' type='button'>
+      <span class='ico'>🗂️</span>Registry</button>
+    <div class='side-section'>Design</div>
+    <button class='side-link' data-page='designer' type='button'>
+      <span class='ico'>🕸️</span>Designer</button>
+    <div class='side-section'>Learn</div>
+    <button class='side-link' data-page='docs' type='button'>
+      <span class='ico'>📚</span>Docs</button>
+  </nav>
+  <div class='foot'>Local-first · verified spine · fail-closed</div>
+</aside>
 
-<h2>Session summary</h2>
-<p class='pill'>{caps}</p>
-<p>Identities: {len(identities)} · {' · '.join(identities) if identities else '—'}</p>
+<main class='main'>
 
-<h2>Actions</h2>
-<div class='actions'>
-  <a href='/'>Refresh</a>
-  <a href='/action/run'>Run a deterministic demo action</a>
-  <a href='/ledger'>View ledger</a>
-  <a href='/state.json'>state.json</a>
-</div>
-{action_note}
-{err}
+<header>
+  <h1>Agent-Centric · FBP</h1>
+  <p>A deterministic, agent-centric, flow-based subsystem. A rooted tree of agents;
+  work flows <b>down</b> as directives, responsibility bubbles <b>up</b> — each parent
+  re-verifies a child's value before accepting it.</p>
+  {err}
+</header>
 
-<div class='mode-switch'>
-  <button id='mode-chat' class='mode-btn active' type='button'>Chat</button>
-  <button id='mode-designer' class='mode-btn' type='button'>Designer</button>
-</div>
+<section id='pane-dashboard'>
+  <div class='stats'>
+    <div class='stat'><div class='k'>Runs</div>
+      <div class='v blue'>{summary.get('run_count', 0)}</div></div>
+    <div class='stat'><div class='k'>Verified</div>
+      <div class='v green'>{summary.get('verified_runs', 0)}</div></div>
+    <div class='stat'><div class='k'>Identities</div>
+      <div class='v'>{len(identities)}</div></div>
+    <div class='stat'><div class='k'>Mode</div><div class='v'>FBP</div></div>
+  </div>
+  {action_note}
+  {err}
+  <div class='card'>
+    <h2>Live agent tree</h2>
+    <table><thead><tr><th>Identity</th><th>Kind</th><th>Capabilities</th><th>Grants</th></tr></thead>
+    <tbody>{rows}</tbody></table>
+  </div>
+  <div class='card'>
+    <h2>Session summary</h2>
+    <p class='pill'>{caps}</p>
+    <p>Identities: {len(identities)} · {' · '.join(identities) if identities else '—'}</p>
+  </div>
+  <div class='card'>
+    <h2>Actions</h2>
+    <div class='actions'>
+      <a href='/'>Refresh</a>
+      <a href='/action/run'>Run a deterministic demo action</a>
+      <a href='/ledger'>View ledger</a>
+      <a href='/state.json'>state.json</a>
+    </div>
+    {action_note}
+  </div>
+</section>
 
-<div id='pane-chat' class='mode-pane'>
+<section id='pane-chat'>
 
 <div class='card'>
 <h2>Model (LLM as an ordinary agent)</h2>
@@ -2511,6 +2629,9 @@ free-form JSON.</p>
 <pre id='schema-result' class='note'></pre>
 {_SCHEMA_JS}
 </div>
+</section>
+
+<section id='pane-bills'>
 
 <div class='card'>
 <h2>Bills workflow</h2>
@@ -2539,6 +2660,9 @@ verified spine; money stays integer cents and dates ISO; nothing auto-accepts.</
 <div id='bill-calendar' class='chat-history'></div>
 {_BILLS_JS}
 </div>
+</section>
+
+<section id='pane-registry'>
 
 <div class='card'>
 <h2>Network of Experts</h2>
@@ -2579,7 +2703,11 @@ produced — each run's verified output, source refs, residue, and cost. Keyed b
 <div id='artifacts-list' class='chat-history'></div>
 <p class='note'>Total cost: <span id='artifacts-total'>—</span></p>
 {_ARTIFACTS_JS}
+
 </div>
+</section>
+
+<section id='pane-provision'>
 
 <div class='card'>
 <h2>Provision a domain expert</h2>
@@ -2602,9 +2730,9 @@ over-budget plans, and missing grants fail closed.</p>
 <pre id='prov-result' class='note'></pre>
 {_PROVISION_JS}
 </div>
-</div>
+</section>
 
-<div id='pane-designer' class='mode-pane' style='display:none'>
+<section id='pane-designer'>
 
 <div class='card'>
 <h2>Component Network (visual programming)</h2>
@@ -2635,18 +2763,54 @@ and unknown references fail closed.</p>
 {_NETWORK_JS}
 </div>
 </div>
+</section>
 
-<h2>Standing invariants</h2>
-<ul class='invariants'>
-  <li>No unverified success — a child's self-claimed <code>verified</code>
-      is not conclusive on its own.</li>
-  <li>Fail-closed everywhere; deterministic by construction.</li>
-  <li>Persistence is an explicit grant; single-writer; no auto-generated ids.</li>
-  <li>We use — but never fully trust — non-deterministic tools; only
-      irreducible residue reaches a human.</li>
-  <li>CPM, audit, and replay are read-only capabilities, not agents.</li>
-</ul>
-{_MODE_JS}
+<section id='pane-docs'>
+<div class='card docs'>
+  <h2>Standing invariants</h2>
+  <ul class='invariants'>
+    <li>No unverified success — a child's self-claimed <code>verified</code>
+        is not conclusive on its own.</li>
+    <li>Fail-closed everywhere; deterministic by construction.</li>
+    <li>Persistence is an explicit grant; single-writer; no auto-generated ids.</li>
+    <li>We use — but never fully trust — non-deterministic tools; only
+        irreducible residue reaches a human.</li>
+    <li>CPM, audit, and replay are read-only capabilities, not agents.</li>
+  </ul>
+
+  <h2>Network of Experts AI</h2>
+  <p><i>The model is not the expert; the network is.</i> An AI is a network of
+  narrow domain experts, each verified by a deterministic verifier. Every
+  component of a component network is a <b>domain</b> served by the best
+  expert kind: <b>deterministic</b> method, <b>learned</b> (a per-domain SLM), or
+  <b>human</b> — chosen by <code>select_expert</code>, accounted by
+  <code>CostLedger</code>, evidenced in the Artifact Vault.</p>
+
+  <h2>The three tiers</h2>
+  <ul>
+    <li><b>Deterministic</b> — a hand-tuned method; cheapest and fully auditable.</li>
+    <li><b>Learned</b> — a per-domain SLM (opt-in external provider), planned by
+        the training tier and built from a recommended base-model catalog.</li>
+    <li><b>Paid</b> — micro-payment settlement under an explicit operator grant;
+        the natural home for a future pay-for-service.</li>
+  </ul>
+
+  <h2>Domain Registry + Artifact Vault</h2>
+  <p>The registry is a <b>passive catalog</b>, never an authority — authority
+  stays in the tree topology. The vault is <b>write-once evidence</b>:
+  append-only, keyed by (tenant, domain, run), never mutable.</p>
+
+  <h2>Provisioning</h2>
+  <p>Provisioning is an explicit <b>grant</b>, never a reflex. The flow is
+  <code>select → plan → train → account → settle</code>; every stage is
+  deterministic and fail-closed. The plan picks the hardware tier from corpus
+  size, method, <b>and the base model's size-class floor</b>.</p>
+</div>
+</section>
+
+</main>
+</div>
+{_NAV_JS}
 </body></html>
 """
 
