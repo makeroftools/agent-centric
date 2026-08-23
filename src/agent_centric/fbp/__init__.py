@@ -130,6 +130,14 @@ from .orchestrate import (
 )
 from .pdf_intake import draft_from_pdf_text, extract_text
 from .shell import Shell
+from .slm import (
+    SlmError,
+    SlmExpert,
+    SlmProvider,
+    SlmSpec,
+    StubSlmProvider,
+    build_domain_expert,
+)
 from .store import StateStore, StoreError, TrajectoryStore, open_state, open_trajectory
 from .store_agent import STORE_GET, STORE_KEYS, STORE_SET, StoreAgent
 from .web import DEFAULT_HOST, DEFAULT_PORT, FbpLandingServer
@@ -249,6 +257,13 @@ __all__ = [
     "ArtifactVault",
     "Artifact",
     "RegistryError",
+    # Domain-expert SLM provider contract (the learned tier)
+    "SlmProvider",
+    "SlmSpec",
+    "SlmExpert",
+    "SlmError",
+    "StubSlmProvider",
+    "build_domain_expert",
     # Model agent (an LLM as an ordinary first-class agent)
     "ModelAgent",
     "TASK_MODEL",

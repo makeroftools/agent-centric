@@ -386,6 +386,29 @@ class FbpLandingServer:
             "durable": self._registry_path is not None,
         }
 
+    def _slm_readout(self) -> dict[str, Any]:
+        """A read-only view of which domains warrant a learned (SLM) expert.
+
+        For each observed domain it reports whether ``select_expert`` warrants a
+        per-domain SLM (the ``learned`` tier). Read-only — it never trains; it
+        only shows the deterministic recommendation.
+        """
+        if self._domain_registry is None:
+            return {"ok": False, "warranted": []}
+        from .experts import select_expert
+
+        warranted: list[dict[str, Any]] = []
+        for rec in self._domain_registry.all():
+            sel = select_expert(rec.domain)
+            warranted.append({
+                "id": rec.domain.id,
+                "name": rec.domain.name,
+                "kind": sel.kind,
+                "warranted": sel.warranted,
+                "reason": sel.reason,
+            })
+        return {"ok": True, "warranted": warranted}
+
     # -- persistence of the write-once artifact evidence (explicit grant) ----
 
     def _load_artifacts(self) -> None:
@@ -589,6 +612,10 @@ class FbpLandingServer:
                 elif self.path == "/artifacts":
                     # Read-only artifact vault (write-once evidence).
                     self._send_json(server._artifact_readout())
+                elif self.path == "/slm":
+                    # Read-only view of which domains warrant a learned (SLM)
+                    # expert (the deterministic select_expert recommendation).
+                    self._send_json(server._slm_readout())
                 elif self.path == "/model":
                     # Run a prompt through the model agent (LLM as an ordinary
                     # agent). Body is either a plain prompt string or a JSON
@@ -1770,6 +1797,31 @@ _DOMAINS_JS = r"""\
 </script>
 """
 
+# The Domain SLM (learned-expert recommendation) readout script.
+_SLM_JS = r"""\
+<script>
+  async function slmLoad() {
+    const box = document.getElementById('slm-list');
+    if (!box) return;
+    try {
+      const r = await fetch('/slm');
+      const data = await r.json();
+      box.innerHTML = '';
+      if (!data.ok || !data.warranted) { box.textContent = 'no domains observed.'; return; }
+      for (const d of data.warranted) {
+        const div = document.createElement('div');
+        div.className = 'chat-turn';
+        const badge = d.warranted ? ' <span class=\'error\'>[warrants SLM]</span>' : '';
+        div.innerHTML = '<b>' + esc(d.id) + '</b> → <span class=\'pill\'>' +
+          esc(d.kind) + '</span> ' + badge;
+        box.appendChild(div);
+      }
+    } catch (e) { box.textContent = 'recommendation unavailable.'; }
+  }
+  slmLoad();
+</script>
+"""
+
 # The artifact vault readout script (append-only, write-once evidence).
 _ARTIFACTS_JS = r"""\
 <script>
@@ -2187,6 +2239,17 @@ the expert; the network is.</p>
 <div id='experts-list' class='chat-history'></div>
 <p class='note'>Total cost: <span id='experts-total'>—</span></p>
 {_EXPERTS_JS}
+</div>
+
+<div class='card'>
+<h2>Domain SLM (learned experts)</h2>
+<p class='note'>Which domains <b>warrant</b> a per-domain expert SLM? This is the
+deterministic <code>select_expert</code> recommendation — the <b>learned</b> tier,
+chosen only when a deterministic method can't cover the residue. Building the
+actual is an opt-in provider (<code>fbp/slm.py</code>); this only shows the
+recommendation.</p>
+<div id='slm-list' class='chat-history'></div>
+{_SLM_JS}
 </div>
 
 <div class='card'>

@@ -808,3 +808,21 @@ class TestArtifactRecording:
             assert server._artifact_readout()["count"] >= 2
         finally:
             server._driver.close()
+
+
+class TestSlmReadout:
+    """The /slm readout shows which domains warrant a learned (SLM) expert."""
+
+    def test_slm_readout_is_deterministic(self) -> None:
+        server = FbpLandingServer()
+        try:
+            a = server._slm_readout()
+            b = server._slm_readout()
+            assert a == b
+            assert a["ok"] is True
+            assert len(a["warranted"]) >= 1
+            for d in a["warranted"]:
+                assert d["kind"] in ("human", "deterministic", "learned")
+                assert "warranted" in d
+        finally:
+            server._driver.close()
