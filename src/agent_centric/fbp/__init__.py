@@ -46,6 +46,7 @@ from .driver import (
     replay_ledger,
     summarise_ledger,
 )
+from .envelopes import EnvelopeGuard, ResourceEnvelope
 from .intake import draft_from_email, draft_from_file
 from .ledger import DirectiveLedger
 from .message import (
@@ -155,6 +156,9 @@ __all__ = [
     "RuleSet",
     "score_determinism",
     "resolve_with_rules",
+    # Resource envelopes (hard, enforced bounds in the FBP tree)
+    "ResourceEnvelope",
+    "EnvelopeGuard",
     # Model agent (an LLM as an ordinary first-class agent)
     "ModelAgent",
     "TASK_MODEL",

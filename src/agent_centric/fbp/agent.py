@@ -26,6 +26,7 @@ import zmq.asyncio
 
 from . import store as _store
 from .config import AgentConfig
+from .envelopes import EnvelopeGuard, ResourceEnvelope
 from .message import (
     DIRECTIVE_AUDIT,
     DIRECTIVE_CONFIGURE,
@@ -57,6 +58,19 @@ from .registry import Registry, RegistryEntry
 Task = Callable[..., Any]
 # A verifier is a pure callable: given a value, return True if verified.
 Verifier = Callable[[Any], bool]
+
+
+def _as_envelope(value: Any) -> ResourceEnvelope | None:
+    """Normalize an envelope-accepting argument to a ResourceEnvelope or None."""
+    if value is None:
+        return None
+    if isinstance(value, ResourceEnvelope):
+        return value
+    if isinstance(value, EnvelopeGuard):
+        return value.envelope
+    if isinstance(value, dict):
+        return ResourceEnvelope.from_payload(value)
+    raise TypeError(f"invalid resource envelope: {type(value).__name__}")
 
 
 # The registry of callables known to the system. In the foundation this is a
@@ -124,6 +138,9 @@ class Agent:
         self._registry = Registry()
         self._rules: tuple[str, ...] = ()
         self._verifier: str | None = None
+        # A hard, enforced resource envelope (see ``envelopes.py``). ``None``
+        # means unbounded (the pre-envelope behaviour). Granted at configure.
+        self._envelope_guard: EnvelopeGuard | None = None
         self._alive = False
         # Idempotency cache: full directive fingerprint -> response. A replayed
         # directive (same correlation_id + kind + canonic payload) returns the
@@ -531,6 +548,13 @@ class Agent:
         """
         payload = directive.payload
         self._rules = tuple(payload.get("rules", ()))
+        # A parent may (re)grant a hard resource envelope. Re-applying it
+        # replaces the current guard (a fresh accounting); an absent envelope
+        # key leaves the current one unchanged (additive, non-breaking).
+        envelope_data = payload.get("_envelope")
+        if isinstance(envelope_data, dict):
+            env = ResourceEnvelope.from_payload(envelope_data)
+            self._envelope_guard = EnvelopeGuard(env)
         # ``verifier`` may be absent (keep current), a name (set it), or an
         # explicit None (clear it). A ``_clear_verifier`` flag distinguishes an
         # explicit clear from an absent key.
@@ -650,9 +674,22 @@ class Agent:
         if not isinstance(task_name, str):
             return self._error(directive, "run directive requires a 'task' name")
 
+        # Hard resource-envelope enforcement (fail-closed): a run that would
+        # violate the granted bounds is rejected before any work begins.
+        guard = self._envelope_guard
+        if guard is not None:
+            violation = guard.check_directive(kind="run", payload=directive.payload)
+            if violation is not None:
+                return self._error(directive, violation)
+
         task = self._registry.resolve(task_name)
         if task is None:
             return self._error(directive, f"unknown task {task_name!r}")
+
+        if guard is not None:
+            guard.record_step()
+
+        source = self._registry.source(task_name) or ""
 
         source = self._registry.source(task_name) or ""
         # A producer (e.g. an LLM agent) may declare source references for its
@@ -829,6 +866,14 @@ class Agent:
         if not child_identity or not child_endpoint:
             return self._error(directive, "spawn requires 'identity' and 'endpoint'")
 
+        # Hard resource-envelope enforcement (fail-closed): a spawn that would
+        # exceed the child limit is refused before a socket is bound.
+        guard = self._envelope_guard
+        if guard is not None:
+            violation = guard.check_directive(kind="spawn", payload=payload)
+            if violation is not None:
+                return self._error(directive, violation)
+
         if self._context is None:
             return self._error(directive, "agent not initialised")
 
@@ -842,6 +887,9 @@ class Agent:
                 verified=True,
                 node=self.identity,
             )
+
+        if guard is not None:
+            guard.record_step(is_spawn=True)
 
         child_socket = self._context.socket(zmq.ROUTER)
         child_socket.bind(self._endpoint(child_endpoint))
@@ -899,6 +947,7 @@ class Agent:
         state_read_only: bool = False,
         trajectory: str | None = None,
         store_keys: tuple[str, ...] = (),
+        envelope: EnvelopeGuard | ResourceEnvelope | None = None,
     ) -> Response:
         """Configure a spawned child (the parent provides the child's context).
 
@@ -907,8 +956,8 @@ class Agent:
         it. It fails closed if ``identity`` is not a spawned child.
 
         Beyond the task/verifier/rule grant, the parent may grant durable
-        stores (``state``/``trajectory``) and, for a ``StoreAgent`` child, a
-        key allowlist (``store_keys``) bounding which keys it may serve.
+        stores (``state``/``trajectory``), a key allowlist (``store_keys``),
+        and an optional hard resource ``envelope``.
         """
         child = self._child_agents.get(identity)
         if child is None:
@@ -919,11 +968,14 @@ class Agent:
                 node=self.identity,
                 error=f"no spawned child {identity!r}",
             )
+        env = _as_envelope(envelope)
         payload: dict[str, Any] = {
             "tasks": list(tasks),
             "verifiers": list(verifiers),
             "rules": list(rules),
         }
+        if env is not None:
+            payload["_envelope"] = env.to_payload()
         if verifier is not None:
             payload["verifier"] = verifier
         if state is not None:

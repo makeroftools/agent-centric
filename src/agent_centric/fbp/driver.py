@@ -40,6 +40,7 @@ from . import ledger as _ledger
 from .agent import Agent, _resolve_entry, register_callable
 from .audit import AuditChain
 from .config import AgentConfig
+from .envelopes import ResourceEnvelope
 from .message import (
     DIRECTIVE_AUDIT,
     DIRECTIVE_CONFIGURE,
@@ -562,6 +563,7 @@ class FbpDriver:
         state: str | None = None,
         state_read_only: bool = False,
         trajectory: str | None = None,
+        envelope: ResourceEnvelope | None = None,
     ) -> Response:
         """Configure the root agent's rules, task allowlist, verifier, and
         optional durable stores.
@@ -578,12 +580,17 @@ class FbpDriver:
                 grant; writes fail closed).
             trajectory: Optional durable trajectory file path grant (an
                 append-only local audit — the start of chain audit).
+            envelope: An optional hard resource envelope (bounds on steps,
+                payload size, latency, and children). Default None = unbounded.
         """
         payload: dict[str, Any] = {
             "tasks": list(tasks),
             "verifiers": list(verifiers),
             "rules": list(rules),
         }
+        if envelope is not None:
+            envelope.validate()
+            payload["_envelope"] = envelope.to_payload()
         if verifier is not None:
             payload["verifier"] = verifier
         if clear_verifier:
@@ -607,12 +614,15 @@ class FbpDriver:
         state_read_only: bool = False,
         trajectory: str | None = None,
         store_keys: tuple[str, ...] = (),
+        envelope: ResourceEnvelope | None = None,
     ) -> Response:
         """Configure a spawned child (the parent provides the child's context).
 
         Records a synthetic configure directive in the ledger (keyed under a
         child-specific correlation id) so ``replay_session`` can rebuild child
         configuration for delegated runs.
+
+        ``envelope`` optionally grants a hard resource envelope to the child.
         """
         # Record the child-configure so replay_session can reconstitute the child.
         self._seq += 1
@@ -623,6 +633,9 @@ class FbpDriver:
             "rules": list(rules),
             "store_keys": list(store_keys),
         }}
+        if envelope is not None:
+            envelope.validate()
+            payload["extra"]["_envelope"] = envelope.to_payload()
         if state is not None:
             payload["extra"]["state"] = self._isolate_state_path(state)
             payload["extra"]["state_read_only"] = state_read_only
@@ -648,6 +661,7 @@ class FbpDriver:
             if trajectory is not None
             else None,
             store_keys=store_keys,
+            envelope=envelope,
         )
 
     def configure_provider(
