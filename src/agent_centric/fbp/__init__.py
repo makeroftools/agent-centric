@@ -60,6 +60,19 @@ from .driver import (
     summarise_ledger,
 )
 from .envelopes import EnvelopeGuard, ResourceEnvelope
+from .experts import (
+    EXPERT_DETERMINISTIC,
+    EXPERT_HUMAN,
+    EXPERT_KINDS,
+    EXPERT_LEARNED,
+    CostAccount,
+    CostLedger,
+    Domain,
+    ExpertSelection,
+    ExpertsError,
+    domain_from_dict,
+    select_expert,
+)
 from .intake import draft_from_email, draft_from_file
 from .ledger import DirectiveLedger
 from .message import (
@@ -211,6 +224,18 @@ __all__ = [
     # Resource envelopes (hard, enforced bounds in the FBP tree)
     "ResourceEnvelope",
     "EnvelopeGuard",
+    # Expert selection + cost/residue ledger (Network of Experts AI)
+    "Domain",
+    "ExpertSelection",
+    "select_expert",
+    "CostAccount",
+    "CostLedger",
+    "EXPERT_KINDS",
+    "EXPERT_DETERMINISTIC",
+    "EXPERT_LEARNED",
+    "EXPERT_HUMAN",
+    "ExpertsError",
+    "domain_from_dict",
     # Model agent (an LLM as an ordinary first-class agent)
     "ModelAgent",
     "TASK_MODEL",

@@ -124,6 +124,11 @@ class FbpDriver:
         self._seq = 0
         self._child_base = 0
         self._ledger: dict[str, dict[str, Any]] = {}
+        # The configured verifier *names* (the set of pure predicates the tree
+        # uses to verify outputs). Read-only, additive — keeps an operator (and
+        # the expert-selection readout) able to see which domains are verifiable
+        # without reaching into registry internals.
+        self._verifier_names: set[str] = set()
         # Over ``tcp``/``ipc`` the DEALER link connects asynchronously; retry a
         # bounded number of times with a short settle before giving up.
         self._settle_attempts = 5
@@ -600,6 +605,11 @@ class FbpDriver:
             payload["state_read_only"] = state_read_only
         if trajectory is not None:
             payload["trajectory"] = self._isolate_state_path(trajectory)
+        # Record the configured verifier names (read-only, additive) so the
+        # expert-selection readout can see which domains are verifiable.
+        self._verifier_names.update(v for v in verifiers if isinstance(v, str))
+        if isinstance(verifier, str) and verifier:
+            self._verifier_names.add(verifier)
         return self._roundtrip(DIRECTIVE_CONFIGURE, payload, prefix="configure")
 
     def configure_child(
@@ -929,6 +939,10 @@ class FbpDriver:
             rules = getattr(agent, "_rules", None)
             if rules:
                 info["rules"] = sorted(rules)
+            # The tree-wide configured verifier names (a read-only, additive
+            # signal of which domains are verifiable).
+            if self._verifier_names:
+                info["verifiers"] = sorted(self._verifier_names)
             snapshot.append(info)
         return snapshot
 

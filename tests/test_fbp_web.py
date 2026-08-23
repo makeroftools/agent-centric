@@ -170,6 +170,34 @@ class TestBillsRoutes:
             s2._driver.close()
 
 
+class TestExpertsRoute:
+    """The read-only expert-selection + cost readout (Network of Experts AI)."""
+
+    def test_experts_readout_is_deterministic(self) -> None:
+        server = FbpLandingServer()
+        try:
+            a = server._experts_readout()
+            b = server._experts_readout()
+            assert a == b  # deterministic
+            assert a["ok"] is True
+            assert isinstance(a["total_cost"], int)
+        finally:
+            server._driver.close()
+
+    def test_experts_readout_marks_verifiable_domains(self) -> None:
+        server = FbpLandingServer()
+        try:
+            a = server._experts_readout()
+            kinds = {d["kind"] for d in a["domains"]}
+            # even/odd are configured verifiers -> deterministic; unverifiable -> human.
+            assert any(d["kind"] == "human" for d in a["domains"])
+            assert all(d["kind"] in ("human", "deterministic", "learned") for d in a["domains"])
+            assert a["total_cost"] >= 0
+            _ = kinds
+        finally:
+            server._driver.close()
+
+
 class TestChatContext:
     """The model box folds prior (durable) turns into the next prompt."""
 

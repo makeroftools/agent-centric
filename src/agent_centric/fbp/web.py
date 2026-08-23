@@ -405,6 +405,27 @@ class FbpLandingServer:
                     # Deterministic calendar projection from the registry.
                     body = self._read_body()
                     self._send_json(server._bills_calendar(body))
+                elif self.path == "/experts":
+                    # Read-only expert-selection + cost readout for the domains
+                    # in the live tree (Network of Experts AI). Deterministic.
+                    self._send_json(server._experts_readout())
+                elif self.path == "/model":
+                    # Run a prompt through the model agent (LLM as an ordinary
+                    # agent). Body is either a plain prompt string or a JSON
+                    # ``{"prompt": str, "model": str}`` envelope. This is the
+                    # audited path (goes through the driver's correctness spine).
+                    body = self._read_body()
+                    prompt, model = _parse_model_body(body)
+                    result = server._run_model(prompt, model)
+                    self._send_json(result)
+                elif self.path == "/model/stream":
+                    # Streaming preview: SSE over POST so the model's tokens
+                    # appear as they arrive (real-time UX). This bypasses the
+                    # driver round-trip and reports the result honestly as an
+                    # unverified preview; the verified path remains /model.
+                    body = self._read_body()
+                    prompt, model = _parse_model_body(body)
+                    self._serve_sse_stream(server, prompt, model)
                 elif self.path == "/network":
                     # Component Networks: a visual-programming graph payload
                     # (components + edges) compiles to an ordered FBP plan and
@@ -663,6 +684,64 @@ class FbpLandingServer:
         value = resp.value if isinstance(resp.value, dict) else {}
         return {"ok": True, "entries": value.get("entries", []),
                 "total_cents": value.get("total_cents", 0)}
+
+    def _experts_readout(self) -> dict[str, Any]:
+        """A read-only expert-selection + cost readout for the live tree.
+
+        For each domain (a registered capability on a node) it deterministically
+        picks the expert kind (deterministic / learned / human) using the tree's
+        configured verifiers to know which domains are verifiable, and records a
+        nominal per-run cost so the readout shows an honest total. This is the
+        "Network of Experts AI" observer: it shows how each part of the network
+        would be served — read-only, never mutating state.
+        """
+        from .experts import CostAccount, CostLedger, Domain, select_expert
+
+        tree = self._driver.tree()
+        # The tree-wide configured verifier names mark verifiable domains.
+        verifiers: set[str] = set()
+        for node in tree:
+            verifiers.update(node.get("verifiers") or [])
+        entries: list[dict[str, Any]] = []
+        cost_ledger = CostLedger()
+        for node in tree:
+            identity = node.get("identity", "")
+            caps = node.get("capabilities") or []
+            if not caps:
+                continue
+            for cap in sorted(caps):
+                verifiable = cap in verifiers
+                domain = Domain(
+                    id=f"{identity}::{cap}",
+                    name=f"{identity} domain ({cap})",
+                    output_fields=("value",) if verifiable else (),
+                    determinism=0.8 if verifiable else 0.2,
+                    residue=0.1 if verifiable else 0.9,
+                )
+                sel = select_expert(domain)
+                cost = 10 if verifiable else 100
+                cost_ledger.record(
+                    CostAccount(
+                        domain=domain.id, kind=sel.kind, cost=cost,
+                        residue=domain.residue or 0.0,
+                    )
+                )
+                entries.append(
+                    {
+                        "id": domain.id,
+                        "name": domain.name,
+                        "kind": sel.kind,
+                        "reason": sel.reason,
+                        "warranted": sel.warranted,
+                        "verifiable": verifiable,
+                        "cost": cost,
+                    }
+                )
+        return {
+            "ok": True,
+            "domains": entries,
+            "total_cost": cost_ledger.total_cost(),
+        }
 
     def _run_demo(self) -> dict[str, Any]:
         """A deterministic demo action: run the double task through the driver.
@@ -1446,6 +1525,36 @@ _BILLS_JS = r"""\
 </script>
 """
 
+# The Network-of-Experts readout client script: shows which kind of expert would
+# serve each domain (deterministic / learned / human) and the running cost.
+_EXPERTS_JS = r"""\
+<script>
+  async function expertsLoad() {
+    const box = document.getElementById('experts-list');
+    const total = document.getElementById('experts-total');
+    if (!box) return;
+    try {
+      const r = await fetch('/experts');
+      const data = await r.json();
+      box.innerHTML = '';
+      if (!data.ok || !data.domains) { box.textContent = 'unavailable.'; return; }
+      const kinds = {deterministic: 'deterministic', learned: 'learned (SLM)', human: 'human'};
+      for (const d of data.domains) {
+        const div = document.createElement('div');
+        div.className = 'chat-turn';
+        const warrant = d.warranted ? ' <span class=\'error\'>[warrants SLM]</span>' : '';
+        div.innerHTML = '<b>' + esc(d.name) + '</b> → ' +
+          '<span class=\'pill\'>' + esc(kinds[d.kind] || d.kind) + '</span>' +
+          ' · ' + esc(d.cost) + ' cost' + warrant;
+        box.appendChild(div);
+      }
+      if (total) total.textContent = data.total_cost;
+    } catch (e) { box.textContent = 'readout unavailable.'; }
+  }
+  expertsLoad();
+</script>
+"""
+
 # The Component Network editor client script (kept out of the f-string so its
 # JS object braces are not mistaken for f-string interpolations).
 _NETWORK_JS = r"""\
@@ -1825,6 +1934,17 @@ verified spine; money stays integer cents and dates ISO; nothing auto-accepts.</
 <h3>Calendar</h3>
 <div id='bill-calendar' class='chat-history'></div>
 {_BILLS_JS}
+</div>
+
+<div class='card'>
+<h2>Network of Experts</h2>
+<p class='note'>Each component is a <b>domain</b>; this read-only view picks which
+kind of expert serves it — <b>deterministic</b> method, <b>learned</b> (a
+per-domain SLM), or <b>human</b> — and shows the running cost. The model is not
+the expert; the network is.</p>
+<div id='experts-list' class='chat-history'></div>
+<p class='note'>Total cost: <span id='experts-total'>—</span></p>
+{_EXPERTS_JS}
 </div>
 </div>
 

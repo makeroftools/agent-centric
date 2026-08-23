@@ -39,7 +39,7 @@ we are.
   relaxed, but confirm each time for a given commit.)
 
 ### Validation (run this session, all live)
-- `uv run pytest` → **771 passed** (was 765; added bills-web + prefix-grant tests)
+- `uv run pytest` → **789 passed** (was 771; added expert-selection + web experts-route tests)
 - `uv run ruff check .` → clean
 - `uv run mypy src` → clean (**81 source files**)
 - FBP coverage (`uv run pytest --cov=agent_centric.fbp --cov-report=term`) →
@@ -84,6 +84,7 @@ that page:
 | **Chat-context** | `fbp/web.py` (`_build_chat_context`) | prior (durable) transcript turns fold into the next model prompt (oldest-first, bounded), so the model answers with continuity — wired into both the audited `/model` and the streaming preview path |
 | **Schema-driven orchestration** | `fbp/orchestrate.py`, `fbp/web.py` | **Typed, schema-constrained intents** (`SCHEMAS`: `run`/`double`/`sum`): `plan_from_schema` validates + coerces a typed artifact fail-closed before planning; the landing page gains a **schema-driven form** (`/orchestrate/schema` serves the schemas) — same verified spine, typed form instead of free-form JSON. Additive (`plan_from_artifact` unchanged) |
 | **Bills workflow on the landing page** | `fbp/web.py`, `fbp/bills_agent.py`, `fbp/store_agent.py` | The mission-relevant loop is now a **live, runnable card** on the landing page: `/bills/intake` → `/bills/accept` (human-gated, the only registry write) → `/bills/registry` (read-only snapshot) → `/bills/calendar` (verified projection). **Prefix grants** (`bill-*`) let the UI accept arbitrary bill ids under a granted namespace while still failing closed outside it. Durable via `fbp-web --bills <path>`. Store teardown made **thread-safe** (cross-thread close no longer crashes) |
+| **Expert selection + cost ledger** | `fbp/experts.py`, `fbp/web.py`, `fbp/driver.py` | The deterministic core of **"Network of Experts AI"** (the coinded axiom): `select_expert(domain)` picks deterministic / learned (per-domain SLM) / human for each component (domain), and `CostLedger` accounts cost + irreducible residue per run. Read-only **Network of Experts** card on the landing page (`/experts`). Driver surfaces configured verifier names (read-only). Additive |
 | **Component Networks** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. **True dataflow** (a downstream component consumes the *computed* verified output of its upstreams, not their args). Cycles / unknown refs / unverified steps fail closed. Landing page has a **dependency-free drag-and-drop node-and-wire canvas** editor (palette, draggable nodes, click-to-connect ports, SVG edges, run) + **durable save/load** (`fbp-web --networks <path>`, `/network/save|/list|/load`) |
 | **Card-based UI + mode switch** | `fbp/web.py` | Card-based landing page with a **Chat / Designer** mode switch: Chat = model box + chat history + run-an-artifact (general-purpose); Designer = Component Network editor. Clear functional division |
 
@@ -245,6 +246,14 @@ of decisions and working style that a fresh session must inherit.
    under a granted namespace. Durable via `fbp-web --bills <path>`. Store
    teardown made **thread-safe** (cross-thread close no longer crashes). 771
    tests.
+20. **Expert selection + cost ledger** (current) — the deterministic core of the
+   **"Network of Experts AI"** axiom, made concrete. `experts.py` (`Domain`,
+   `select_expert`, `CostLedger`/`CostAccount`): each component is a domain;
+   the engine picks deterministic / learned (per-domain SLM) / human strictly
+   from contract + residue + cost, fail-closed (unverifiable → human). The
+   landing page gains a read-only **Network of Experts** card (`/experts`).
+   `FbpDriver` surfaces its configured verifier names (read-only). Additive;
+   789 tests.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -362,9 +371,18 @@ These are listed in `STATUS.md`'s "out of scope / future volleys".
   on the landing page (`/bills/*` routes, durable via `--bills <path>`). The
   natural next step is richer typed intents mapped onto the bills loop (intake
   → accept → calendar) and other domain agent operations, so the chat window
+  → accept → calendar) and other domain agent operations, so the chat window
   can drive them through the schema form.**Chat-context** (feed prior turns
   into the next prompt) is now built (`c4afa94`); **persisted** (durable) chat
   history and streaming were already in.
+- **Expert selection (Network of Experts AI) — foundation now built**
+  (`experts.py` + `/experts` readout). What remains is the **opt-in external
+  adapters** the core deliberately does *not* build: (a) a **per-domain SLM
+  provider** (training/adaptation as an external, fail-closed provider — corpus
+  in, expert out, selected only when `select_expert` warrants it); and (b) a
+  **micro-payment / X402-style settlement adapter** for per-run cost (external,
+  opt-in, never auto-charge without an explicit grant). Both slot into the
+  contracts `experts.py` already defines.
 
 ---
 

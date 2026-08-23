@@ -350,6 +350,31 @@ deterministic chat-context (oldest-first, bounded, auditable): the model answers
 with continuity, and the same context prefix feeds both the audited `/model`
 path and the streaming preview.
 
+### Expert selection + cost ledger (Network of Experts AI)
+
+`experts.py` is the deterministic core of the **"Network of Experts AI"** axiom:
+*the model is not the expert; the network is.* For each component (a **domain**)
+it decides *which kind of expert* should serve it, and it accounts the **cost**
+and **irreducible residue** per run:
+
+- `Domain` — a component's contract (input schema, output fields, measured
+  determinism/residue). A domain is *achievable* (deterministically serviceable)
+  iff it has a verifiable output; an unverifiable domain fails closed to human.
+- `select_expert(domain, ...)` — a pure, deterministic decision: **deterministic**
+  method when the residue is low; **learned** (a per-domain SLM) only when a
+  real residue remains and the operator asks for it, or the domain is below a
+  determinism ceiling (never bypassing any verifier); **human** for the
+  irreducible residue no method or SLM can cover safely.
+- `CostLedger` / `CostAccount` — an append-only accounting record of each run's
+  cost + residue, filterable per domain (the deterministic foundation for
+  showing "what does this network cost" — and, later, opt-in micro-payment
+  settlement via an external adapter).
+
+The landing page exposes a read-only **Network of Experts** card (`/experts`):
+for each domain in the live tree it shows the chosen expert kind and running
+cost. `FbpDriver` now also surfaces its configured **verifier names** (read-only)
+so the readout knows which domains are verifiable.
+
 ### Component Networks (visual programming)
 
 A component network is a directed graph of components wired by data-flow edges
