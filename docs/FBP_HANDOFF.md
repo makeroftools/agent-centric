@@ -25,11 +25,13 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `8f6daa2` (durable chat history). **Pushed to origin:** up through
-  `df0fb16`. **Unpushed (3 commits):** `09d1c7a` (Enter/Shift-Enter submit),
-  `5b53945` (this handoff), `8f6daa2` (durable chat history — committed this
-  session, not pushed). Run `git log origin/agent-centric-fbp..HEAD` to see the
-  unpushed set.
+- **HEAD:** `dc0b81c` (fbp-web --kill flag). **Pushed to origin:** up through
+  `87e7bbe` (the user pushed). **Unpushed (11 commits):** `c4afa94`
+  (chat-context), `46b3948` (handoff), `69df3d8` (Component Networks),
+  `9b8f7e5` (handoff), `4a94c16` (canvas editor), `241d9a3` (handoff),
+  `fac7a16` (dataflow + save/load), `10f343b` (handoff), `d44a582` (card UI +
+  mode switch), `6f2f2a6` (handoff), `dc0b81c` (--kill flag). Run
+  `git log origin/agent-centric-fbp..HEAD` to see the unpushed set.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule in effect for a long time: **do not push unless the lead
   explicitly says push.** (The lead has since been pushing directly themselves;
@@ -37,7 +39,7 @@ we are.
   relaxed, but confirm each time for a given commit.)
 
 ### Validation (run this session, all live)
-- `uv run pytest` → **749 passed** (was 743; added true dataflow + network save/load)
+- `uv run pytest` → **751 passed** (was 749; added card/mode-switch render tests)
 - `uv run ruff check .` → clean
 - `uv run mypy src` → clean (**81 source files**)
 - FBP coverage (`uv run pytest --cov=agent_centric.fbp --cov-report=term`) →
@@ -81,6 +83,7 @@ that page:
 | **Chat → FBP orchestration** | `fbp/orchestrate.py`, `fbp/web.py` `/orchestrate` | A canonical JSON artifact (single `task` or `steps`) maps to an ordered FBP `run` plan executed through the driver's verified spine (parent re-verified, ledgered, replayable). Fail-closed on invalid/unorchestrable artifacts |
 | **Chat-context** | `fbp/web.py` (`_build_chat_context`) | prior (durable) transcript turns fold into the next model prompt (oldest-first, bounded), so the model answers with continuity — wired into both the audited `/model` and the streaming preview path |
 | **Component Networks** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. **True dataflow** (a downstream component consumes the *computed* verified output of its upstreams, not their args). Cycles / unknown refs / unverified steps fail closed. Landing page has a **dependency-free drag-and-drop node-and-wire canvas** editor (palette, draggable nodes, click-to-connect ports, SVG edges, run) + **durable save/load** (`fbp-web --networks <path>`, `/network/save|/list|/load`) |
+| **Card-based UI + mode switch** | `fbp/web.py` | Card-based landing page with a **Chat / Designer** mode switch: Chat = model box + chat history + run-an-artifact (general-purpose); Designer = Component Network editor. Clear functional division |
 
 ### Easy-UX driver & CLI
 - `FbpDriver` API: `register`, `resolve`, `configure`, `configure_child`,
@@ -90,7 +93,9 @@ that page:
   `tree()`, `store_keys(child)`.
 - CLI: `agent-centric fbp [--transport inproc|tcp|ipc] [--ledger <path>]`,
   `fbp-summary <path>`, `fbp-replay <path>`, `fbp-web [--host --port --open]`,
-  `fbp-web --reload` (auto-restart on source change), `fbp-web-kill [--port]`.
+  `fbp-web --reload` (auto-restart on source change), `fbp-web --kill [--port]`
+  (stop the server on the port; the `fbp-web-kill` subcommand is kept for
+  backward compatibility).
 - Examples: `examples/fbp_arc_demo.py`, `fbp_demo.py`, `fbp_durability_demo.py`.
 
 ### Tooling / commands
@@ -219,6 +224,11 @@ of decisions and working style that a fresh session must inherit.
    switch: Chat = the model box + chat history + run-an-artifact; Designer =
    the Component Network editor. A clear functional division — the chat box is
    general-purpose, not only for design.
+17. **`fbp-web --kill` flag** (`dc0b81c`) — per the user's request, `kill` is
+   now a flag on `fbp-web` (`uv run agent-centric fbp-web --kill [--port]`)
+   rather than a separate `fbp-web-kill` subcommand. It routes to
+   `_cmd_fbp_web_kill(port=port)`. The `fbp-web-kill` subcommand is kept for
+   backward compatibility.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -242,6 +252,20 @@ of decisions and working style that a fresh session must inherit.
   during the long autonomous stretch. They also value **honest status** — they
   pushed back when the state was misrepresented. So: be direct about what is/is
   not done, pushed/unpushed, tested/uncovered.
+- **Visual-programming direction (this session):** the user asked for a visual
+  programming interface like FBP ("Component Networks") and shared a curated
+  list of open-source libraries (Blockly, Rete.js, LiteGraph, Drawflow,
+  React Flow, Node-RED, etc.). The lead's call was to **not** pull in a
+  third-party/CDN library — it would violate the stdlib-only, fail-closed,
+  deterministic posture. Instead we built our own dependency-free drag-and-drop
+  canvas on the deterministic `fbp/network.py` core. The user agreed with the
+  reasoning ("full-featured ≠ right for us").
+- **Card-based UI + Chat/Designer mode switch (this session):** the user asked
+  for a clear functional division — the chat box should not be used only for
+  design. Delivered as a card-based layout with a Chat/Designer mode switch
+  (`d44a582`).
+- **`--kill` as a flag (this session):** the user asked that `kill` be a flag
+  on `fbp-web` rather than a separate subcommand (`dc0b81c`).
 
 ### How to talk to the user / working style
 - Be the **senior, decisive engineer**: propose a course, proceed on the
@@ -255,6 +279,13 @@ of decisions and working style that a fresh session must inherit.
   when relevant (the platform's "verified vs unverified", "deterministic",
   "no auto-gener ids"). They walked through a beginner's tour and engaged with
   it.
+- **Agent failure mode to avoid (this session):** the agent's local terminal
+  was wedged, so it routed terminal work through a sub-agent. When asked for a
+  handoff, the agent tried to do too much in one turn (validate + commit + write
+  handoff + commit) and its responses truncated to nothing — it "died"
+  repeatedly. **Lesson: execute in small concrete steps (one tool call at a
+  time), don't narrate a plan without running it, and commit/validate each piece
+  before moving on.** The user explicitly called this out.
 
 ---
 
@@ -262,7 +293,7 @@ of decisions and working style that a fresh session must inherit.
 
 ### Production/deploy gaps the user should resolve (explicit, not built)
 These are the honest reasons the project is **not yet "1.0 / production-ready"**
-despite 674 passing tests:
+despite 751 passing tests:
 - **Transport security (documented, not built):** over `tcp`/`ipc` the
 directive/response protocol is **unauthenticated** — no TLS, no authn/z. The
 trust boundary is now documented in `docs/transport_trust_boundary.md`
@@ -279,10 +310,11 @@ real trust boundary.
 These are listed in `STATUS.md`'s "out of scope / future volleys".
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (8):** `c4afa94` (chat-context), `46b3948` (handoff),
+- **Unpushed commits (11):** `c4afa94` (chat-context), `46b3948` (handoff),
   `69df3d8` (Component Networks), `9b8f7e5` (handoff), `4a94c16` (canvas
-  editor), `241d9a3` (handoff), `fac7a16` (dataflow + save/load), `d44a582`
-  (card UI + mode switch) are local but not yet on GitHub; plus this handoff
+  editor), `241d9a3` (handoff), `fac7a16` (dataflow + save/load), `10f343b`
+  (handoff), `d44a582` (card UI + mode switch), `6f2f2a6` (handoff),
+  `dc0b81c` (--kill flag) are local but not yet on GitHub; plus this handoff
   update. The remote was at `87e7bbe`. The user pushes directly; confirm before
   pushing anything yourself.
 - **Terminal glitch (this session):** the session's local terminal began
@@ -319,7 +351,9 @@ uv run agent-centric fbp --transport tcp | ipc
 uv run agent-centric fbp-web            # landing page + model box
 uv run agent-centric fbp-web --reload   # auto-restart on source edits
 uv run agent-centric fbp-web --history chat.db   # durable transcript across restarts
-uv run agent-centric fbp-web-kill       # stop the server on the port
+uv run agent-centric fbp-web --networks networks.json  # durable saved networks
+uv run agent-centric fbp-web --kill     # stop the server on the port (flag)
+uv run agent-centric fbp-web-kill       # stop the server on the port (legacy subcommand)
 uv run agent-centric fbp-replay sess.db
 uv run agent-centric fbp-summary sess.db
 uv run python examples/fbp_arc_demo.py
