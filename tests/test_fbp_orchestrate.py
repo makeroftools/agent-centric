@@ -211,3 +211,70 @@ class TestBillsIntents:
     def test_bills_intents_in_schemas(self) -> None:
         assert "bills_intake" in SCHEMAS
         assert SCHEMAS["bills_accept"]["child"] == "bills"
+
+
+class TestBillsIntentsExtended:
+    """The full bills typed-intent surface: read-only registry, maintenance,
+    deterministic accept, and rule persistence all route to the ``bills`` child."""
+
+    def test_bills_registry_plans_to_child(self) -> None:
+        steps = plan_from_schema({"intent": "bills_registry"})
+        assert steps == [
+            {"task": "bills_registry", "args": {}, "child": "bills"}
+        ]
+
+    def test_bills_mark_paid_plans_to_child(self) -> None:
+        steps = plan_from_schema(
+            {"intent": "bills_mark_paid", "id": "b1", "note": "paid by wire"}
+        )
+        assert steps == [
+            {"task": "bills_mark_paid",
+             "args": {"id": "b1", "note": "paid by wire"}, "child": "bills"}
+        ]
+
+    def test_bills_mark_status_plans_to_child(self) -> None:
+        steps = plan_from_schema(
+            {"intent": "bills_mark_status", "id": "b1", "status": "void"}
+        )
+        assert steps == [
+            {"task": "bills_mark_status",
+             "args": {"id": "b1", "status": "void"}, "child": "bills"}
+        ]
+
+    def test_bills_accept_deterministic_plans_to_child(self) -> None:
+        steps = plan_from_schema(
+            {"intent": "bills_accept_deterministic", "draft": {"id": "b1"}}
+        )
+        assert steps == [
+            {"task": "bills_accept_deterministic",
+             "args": {"draft": {"id": "b1"}}, "child": "bills"}
+        ]
+
+    def test_bills_rule_add_plans_to_child(self) -> None:
+        rule = {"id": "r-gasco", "domain": "vendor", "method": "eq",
+                "matcher": {"vendor": "GasCo"}}
+        steps = plan_from_schema({"intent": "bills_rule_add", "rule": rule})
+        assert steps == [
+            {"task": "bills_rule_add", "args": {"rule": rule}, "child": "bills"}
+        ]
+
+    def test_bills_mark_status_missing_status_fails_closed(self) -> None:
+        with pytest.raises(ValueError):
+            plan_from_schema({"intent": "bills_mark_status", "id": "b1"})
+
+    def test_bills_mark_paid_missing_id_fails_closed(self) -> None:
+        with pytest.raises(ValueError):
+            plan_from_schema({"intent": "bills_mark_paid"})
+
+    def test_bills_rule_add_missing_rule_fails_closed(self) -> None:
+        with pytest.raises(ValueError):
+            plan_from_schema({"intent": "bills_rule_add"})
+
+    def test_all_bills_intents_in_schemas(self) -> None:
+        for intent in (
+            "bills_registry", "bills_mark_paid", "bills_mark_status",
+            "bills_accept_deterministic", "bills_rule_add",
+        ):
+            assert intent in SCHEMAS
+            assert SCHEMAS[intent]["child"] == "bills"
+            assert SCHEMAS[intent]["task"] == intent

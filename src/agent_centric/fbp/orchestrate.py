@@ -29,6 +29,8 @@ from typing import Any
 SUPPORTED_INTENTS = (
     "run", "inspect", "status", "double", "sum",
     "bills_intake", "bills_accept", "bills_calendar",
+    "bills_registry", "bills_mark_paid", "bills_mark_status",
+    "bills_accept_deterministic", "bills_rule_add",
 )
 
 # Typed intent schemas for schema-driven orchestration. Each schema declares the
@@ -83,6 +85,53 @@ SCHEMAS: dict[str, dict[str, Any]] = {
             "intent": {"type": "str", "default": "bills_calendar"},
             "from_date": {"type": "str", "required": True},
             "to_date": {"type": "str", "required": True},
+        },
+    },
+    # Read-only registry snapshot (no fields beyond the intent).
+    "bills_registry": {
+        "task": "bills_registry",
+        "child": "bills",
+        "fields": {
+            "intent": {"type": "str", "default": "bills_registry"},
+        },
+    },
+    # Registry maintenance: mark a bill paid (explicit, mediated write).
+    "bills_mark_paid": {
+        "task": "bills_mark_paid",
+        "child": "bills",
+        "fields": {
+            "intent": {"type": "str", "default": "bills_mark_paid"},
+            "id": {"type": "str", "required": True},
+            "note": {"type": "str"},
+        },
+    },
+    # Registry maintenance: set an arbitrary status (explicit, mediated write).
+    "bills_mark_status": {
+        "task": "bills_mark_status",
+        "child": "bills",
+        "fields": {
+            "intent": {"type": "str", "default": "bills_mark_status"},
+            "id": {"type": "str", "required": True},
+            "status": {"type": "str", "required": True},
+            "note": {"type": "str"},
+        },
+    },
+    # Deterministic auto-accept: only when an approved rule matches.
+    "bills_accept_deterministic": {
+        "task": "bills_accept_deterministic",
+        "child": "bills",
+        "fields": {
+            "intent": {"type": "str", "default": "bills_accept_deterministic"},
+            "draft": {"type": "object", "required": True},
+        },
+    },
+    # Persist an approved deterministic rule (authorize once, run after restart).
+    "bills_rule_add": {
+        "task": "bills_rule_add",
+        "child": "bills",
+        "fields": {
+            "intent": {"type": "str", "default": "bills_rule_add"},
+            "rule": {"type": "object", "required": True},
         },
     },
 }
