@@ -25,20 +25,20 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `f6a4770` (docs: SLM provider). Commits in this session (all
-  local, none pushed to origin by me): `a9e4647` (expert selection + cost
-  ledger), `7528ee5` (Domain Registry + Artifact Vault rename), `93c673c`
-  (Law 11 admonition), `c01ea2c` (tools: safe-edit/safe-replace), `ed5e27a`
-  (bills intents), `7c61773` (Artifact Vault records real runs), `9956eb8`
-  (fbp-domains CLI), `f980e3d` (SLM provider contract), `f6a4770` (SLM docs).
-  **Pushed to origin:** up through `87e7bbe` (the user pushed). **Unpushed
-  (29 commits):** the full `agent-centric-fbp` sequence from `c4afa94` onward.
-  Run `git log origin/agent-centric-fbp..HEAD` to see the exact unpushed set.
+- **HEAD:** `de853a5` (full three-pane Designer). This session added several
+commits on top of the earlier sequence (all local, none pushed by me):
+`a7e72b2` (provisioning card on the landing page), `1266eb4` (transport
+hardening §5.2/§5.4/§5.5 + real credential wiring), `683e9c2` (roadmap-only
+paid-service entry), `9e6c3e2` (base-model catalog + size-class gating),
+`4cfee32` (catalog wired into website), `6c460cb` (landing page + dashboard
+sidebar), `de853a5` (full three-pane Designer).
+- **Pushed to origin:** the user pushes directly. **Unpushed (45 commits):** the
+full `agent-centric-fbp` sequence from `c4afa94` onward. Run
+`git log origin/agent-centric-fbp..HEAD` to see the exact unpushed set. No
+push is made by the agent; the lead pushes when they choose.
 - `main` stays the GitHub default and is **fully contained** in this branch.
-- Standing rule in effect for a long time: **do not push unless the lead
-  explicitly says push.** (The lead has since been pushing directly themselves;
-  see the push decision note below — the "no push" rule has effectively been
-  relaxed, but confirm each time for a given commit.)
+- Standing rule: **do not push unless the lead explicitly says push.** The lead
+has been pushing directly; confirm per commit.
 
 ### Validation (run this session, all live)
 - `uv run pytest` → **959 passed** (was 908; added transport security + real credential-wiring + base-model catalog + web catalog wiring + Designer-surface tests)
@@ -304,6 +304,62 @@ of decisions and working style that a fresh session must inherit.
    and a read-only **Domain SLM** card (`/slm`). Docs updated (`f6a4770`). 824
    tests.
 
+#### Current session (this thread, from the provisioning baseline)
+27. **Provisioning card on the landing page** (`a7e72b2`) — the previously
+   code-only provisioning path (`select → plan → train → account → settle`) is
+   now a runnable card (`/provision`, `/provision/domains`) that picks the domain
+   from the live tree, runs through the offline stub, records the expert artifact
+   into the Artifact Vault, and fails closed on unknown domains / over-budget /
+   missing grants.
+28. **Real training-provider credential wiring** (`1266eb4`) — env-driven
+   (`TRAIN_ENDPOINT`/`TRAIN_TOKEN`/`TRAIN_AUTH_SCHEME`), a dependency-free
+   `stdlib_http_client` with **secret redaction**, and `build_modal_from_env` /
+   `build_credential_client` that make the Modal adapter genuinely workable
+   against a real endpoint while failing closed with no credentials. Verified
+   live over a bound HTTP server; secrets never leak.
+29. **Transport hardening §5.2/§5.4/§5.5** (`1266eb4`) — new `fbp/security.py`:
+   **per-peer authorization** (`PeerAuthz`/`PeerPolicy`, `FbpDriver(peer_autz=...)`),
+   **traffic integrity** (`sign_payload`/`verify_payload`/`integrity_headers`,
+   HMAC-SHA256 over a canonical message), and **mutual-TLS credential config**
+   (`TlsCreds`/`configure_tls`, fail-closed for a `security=="tls"` bind without
+   ready material). All opt-in, default-off, offline-tested.
+30. **Standalone multi-tenant paid web service → roadmap only** (`683e9c2`) —
+   the user asked this be captured **for the roadmap only**, NOT built. It
+   records that a future paid "Network of Experts" registry/artifact service
+   would be a shared observability + provenance layer (never the governance
+   layer; each customer's tree stays the authority), additive on the tenant-aware
+   core, home for the settlement adapter, gated on real mTLS + per-tenant
+   isolation + billing (needs sign-off before code).
+31. **Recommended base-model catalog** (`9e6c3e2`) — `fbp/model_catalog.py`, the
+   deterministic 2026 reference of 17 open-weight bases for domain adaptation,
+   categorical by size class (`edge`/`small`/`mid`/`large`) with `min_tier`,
+   licensing, and instruction availability. `resolve_base`/`min_tier_for`/`catalog`
+   are pure + fail-closed. `plan_training` now gates the hardware tier by the
+   base's **size-class floor** (a 14B base can't be planned onto CPU). The catalog
+   is wired into the website (`4cfee32`): a **base-model picker** in the Provision
+   card drives the tier with a live expected-tier hint; unknown base fails closed.
+   `docs/domain_slm.md` enshrines the full 2026 base + domain-hub lists.
+32. **Landing page + dashboard** (`6c460cb`) — the landing page is now a sidebar-
+   navigated dashboard: dark sidebar (groups, brand, nav), **stat cards** on an
+   Overview pane, sectioned panes (Chat / Provision / Bills / Registry / Designer /
+   Docs), responsive (sidebar collapses on narrow screens), and a new **Docs**
+   pane enshrining the standing invariants + Network-of-Experts three tiers.
+   stdlib-only, no new deps; every card and element id preserved.
+33. **Full three-pane Designer** (`de853a5`) — the Component Network editor is now
+   a complete visual-programming surface: **categorized palette** (Arithmetic /
+   Derived / Checks; richer deterministic tasks `double`/`square`/`negate`/`sum`/
+   `product`/`concat`/`even`/`odd`/`positive`), **canvas** (drag nodes, click-to-
+   wire ports, double-click-to-delete, wheel zoom, drag-pan, grid), **per-node
+   results painted on the canvas**, **inspector** (edit a node's args/verifier/
+   child), and **auto-layout** (topological) + run/save/load. Verified true
+   dataflow (sum→double→even) end-to-end.
+34. **Bills loop → demo framing (this session)** — the user decided the bills loop
+   is a **demonstration** of the platform's deterministic human-gated verified-loop
+   pattern; it belongs in **testing** and **docs/examples**, and is **not** the
+   production accounting package. The eventual **accounting package** + its
+   sub-components will live in the **domain platform** (roadmap). Documented in
+   the handoff; code stays (its tests depend on it) as the reference pattern.
+
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
   Platform work was **spun out** into separate repo scaffolds under
@@ -406,6 +462,24 @@ of decisions and working style that a fresh session must inherit.
   and `tools/safe-replace.sh`. The user also asked for a generalized directive
   (no project-specific terms) for other agents, and a copy-paste directive for
   the agent that currently needs it.
+- **Bills loop is a demonstration, not the platform (this session):** the user
+  clarified the bills loop belongs to **testing** and the **docs/examples**
+  folder as a demonstration of the verified-loop pattern, and that the eventual
+  **accounting package** and all its sub-components will live in the **domain
+  platform**. So: treat the bills loop as demo/test material — do not grow it as
+  if it were the production accounting system.
+- **Base-model catalog built from the user's 2026 list (this session):** the
+  user shared a categorical list of recommended base models + domain hubs; the
+  lead turned it into a deterministic `fbp/model_catalog.py` (size-classed, with
+  hardware-tier floors) and enshrined the full lists in `docs/domain_slm.md`,
+  wiring the catalog into the web provision picker. It is a **passive registry**
+  (records what bases exist; never decides).
+- **Standalone paid web service → roadmap only (this session):** the user asked
+  this be captured **for the roadmap only**, not built. See the roadmap entry.
+- **Designer direction (this session):** iterative build of the visual
+  programmer — first the provisioning pathway + dashboard, then the full
+  three-pane Designer. The lead kept it dependency-free/stdlib-only (no
+  Blockly/Rete/React Flow), consistent with the fail-closed posture.
 
 ### How to talk to the user / working style
 - Be the **senior, decisive engineer**: propose a course, proceed on the
@@ -478,13 +552,11 @@ service; the existing loopback (`fbp-web --registry`) surface remains the only
 hosted layer.
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (11):** `c4afa94` (chat-context), `46b3948` (handoff),
-  `69df3d8` (Component Networks), `9b8f7e5` (handoff), `4a94c16` (canvas
-  editor), `241d9a3` (handoff), `fac7a16` (dataflow + save/load), `10f343b`
-  (handoff), `d44a582` (card UI + mode switch), `6f2f2a6` (handoff),
-  `dc0b81c` (--kill flag) are local but not yet on GitHub; plus this handoff
-  update. The remote was at `87e7bbe`. The user pushes directly; confirm before
-  pushing anything yourself.
+- **Unpushed commits (45):** the whole `agent-centric-fbp` sequence from
+  `c4afa94` onward is local — including this session's `a7e72b2`, `1266eb4`,
+  `683e9c2`, `9e6c3e2`, `4cfee32`, `6c460cb`, `de853a5` — none on GitHub. The
+  lead pushes directly; confirm before pushing anything yourself. Run
+  `git log origin/agent-centric-fbp..HEAD` for the exact set.
 - **Terminal glitch (this session):** the session's local terminal began
   rejecting ``cd`` into the project with "not in any of the project's
   worktrees"; the same command had worked minutes earlier. The sub-agent (which
@@ -591,6 +663,24 @@ uv run python examples/fbp_arc_demo.py
   expert with full provenance. Training stays external; the core selects
   (`select_expert`) and verifies, never bypassing a verifier. `docs/domain_slm.md`
   is the 2026 engineering reference.
+- **The bills loop is a demonstration, not the platform.** It lives in testing +
+  docs/examples to show the deterministic human-gated verified-loop *pattern*;
+  the eventual **accounting package** + sub-components will live in the **domain
+  platform** (roadmap). Do not grow the bills demo as if it were the production
+  accounting system.
+- **Recommended base-model catalog** (`fbp/model_catalog.py`) is the deterministic
+  2026 reference (size-classed, with hardware-tier floors); `plan_training` gates
+  the hardware tier by the base's size-class floor. It is a **passive registry**
+  — records what bases exist, never decides. Full 2026 lists in
+  `docs/domain_slm.md`.
+- **Standalone multi-tenant paid web service is roadmap-only** (not built). It
+  would be a shared observability + provenance layer (never the governance
+  layer); gated on real mTLS + per-tenant isolation + billing, which need
+  sign-off.
+- **Transport hardening exists opt-in** (`fbp/security.py`): per-peer
+  authorization, traffic integrity (HMAC), and mutual-TLS credential config — all
+  default-off. A real cross-host deployment still supplies live certs + a TLS
+  transport.
 - The AC Router is spun out, gitignored, and **not** our work here.
 - Trust only what the tests prove and what is committed; say clearly when
   something is unverifiable or unpushed.
