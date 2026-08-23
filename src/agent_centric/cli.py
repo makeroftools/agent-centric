@@ -1025,10 +1025,11 @@ def _fbp_web_reload(
     # If an fbp-web server (that we can positively identify) already owns the
     # port, take it over so `--reload` is idempotent and convenient. We only
     # kill when we can confirm it is one of ours; an unrelated process on the
-    # port is left untouched (fail-closed).
+    # port is left untouched (fail-closed). This also means a second `--reload`
+    # (or a plain already-running `fbp-web`) never leaves two instances alive.
     _fbp_kill_stale_web(port)
 
-    def _spawn() -> subprocess.Popen[Any]:
+    def _spawn(*, open_browser: bool) -> subprocess.Popen[Any]:
         cmd = [
             sys.executable,
             "-m",
@@ -1060,7 +1061,10 @@ def _fbp_web_reload(
             child.wait()
 
     try:
-        child = _spawn()
+        # Open the browser tab only on the initial launch; the restarting child
+        # re-uses the same port, so later reloads re-fresh the already-open tab
+        # rather than spawning a second one.
+        child = _spawn(open_browser=open_browser)
         print(f"fbp-web: watching {_FBP_DIR} for changes (Ctrl-C to stop)")
         while True:
             time.sleep(1.0)
@@ -1074,7 +1078,7 @@ def _fbp_web_reload(
             if _fbp_tree_changed(_FBP_DIR):
                 print("fbp-web: change detected; restarting...")
                 _stop(child)
-                child = _spawn()
+                child = _spawn(open_browser=False)
     except KeyboardInterrupt:
         print("\nfbp-web: stopping.")
         _stop(child)
