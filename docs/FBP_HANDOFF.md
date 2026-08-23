@@ -80,7 +80,7 @@ that page:
 | **Post-return determinism** | `fbp/chat_pipeline.py` | The "model proposes, code accepts" seam: deterministic repair → schema-parse → canonicalize → request-key → pin. `PinCache` serves the first accepted artifact for identical inputs (lexical determinism by caching). Pure/offline |
 | **Chat → FBP orchestration** | `fbp/orchestrate.py`, `fbp/web.py` `/orchestrate` | A canonical JSON artifact (single `task` or `steps`) maps to an ordered FBP `run` plan executed through the driver's verified spine (parent re-verified, ledgered, replayable). Fail-closed on invalid/unorchestrable artifacts |
 | **Chat-context** | `fbp/web.py` (`_build_chat_context`) | prior (durable) transcript turns fold into the next model prompt (oldest-first, bounded), so the model answers with continuity — wired into both the audited `/model` and the streaming preview path |
-| **Component Networks** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. Cycles / unknown refs fail closed. Landing page has a visual editor (add component/edge, run) |
+| **Component Networks** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. Cycles / unknown refs fail closed. Landing page has a **dependency-free drag-and-drop node-and-wire canvas** editor (palette, draggable nodes, click-to-connect ports, SVG edges, run) |
 
 ### Easy-UX driver & CLI
 - `FbpDriver` API: `register`, `resolve`, `configure`, `configure_child`,
@@ -204,6 +204,10 @@ of decisions and working style that a fresh session must inherit.
    FBP `run` plan run through the verified spine. Cycles / unknown refs fail
    closed. The landing page gains a **Component Network** visual editor
    (`/network` route: add components/edges, run).
+14. **Canvas editor** (`4a94c16`) — the Component Network editor is now a
+   dependency-free drag-and-drop node-and-wire canvas (SVG): palette buttons,
+   draggable nodes, click-to-connect ports, double-click to remove, live JSON.
+   No third-party/CDN library — keeps the stdlib-only, fail-closed posture.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -264,10 +268,11 @@ real trust boundary.
 These are listed in `STATUS.md`'s "out of scope / future volleys".
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (3):** `c4afa94` (chat-context), `46b3948` (handoff), and
-  `69df3d8` (Component Networks) are local but not yet on GitHub; plus this
-  handoff update. The remote was at `87e7bbe`. The user pushes directly;
-  confirm before pushing anything yourself.
+- **Unpushed commits (5):** `c4afa94` (chat-context), `46b3948` (handoff),
+  `69df3d8` (Component Networks), `9b8f7e5` (handoff), `4a94c16` (canvas
+  editor) are local but not yet on GitHub; plus this handoff update. The remote
+  was at `87e7bbe`. The user pushes directly; confirm before pushing anything
+  yourself.
 - **Terminal glitch (this session):** the session's local terminal began
   rejecting ``cd`` into the project with "not in any of the project's
   worktrees"; the same command had worked minutes earlier. The sub-agent (which

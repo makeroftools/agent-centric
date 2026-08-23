@@ -344,8 +344,10 @@ result = run_network(driver, net)  # double(21) -> even(42); both verified
   (ties by id), so the same graph always yields the same ordered plan.
 - **Fail-closed**: cycles, self-loops, and edges to unknown components/output
   fields are rejected — a half-wired network never silently runs.
-- The landing page has a **Component Network** visual editor (add
-  components/edges, view the graph, run).
+- The landing page has a **Component Network** visual editor: a dependency-free
+  drag-and-drop node-and-wire canvas (palette buttons, draggable nodes,
+  click-to-connect ports, SVG edges, double-click to remove, live JSON). No
+  third-party/CDN library — it stays stdlib-only and fail-closed.
 
 ### Determinism rating + approved rules (determinize-then-decide)
 
