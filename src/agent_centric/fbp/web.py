@@ -272,6 +272,13 @@ class FbpLandingServer:
                     body = self._read_body()
                     result = server._run_artifact(body)
                     self._send_json(result)
+                elif self.path == "/network":
+                    # Component Networks: a visual-programming graph payload
+                    # (components + edges) compiles to an ordered FBP plan and
+                    # runs through the verified spine.
+                    body = self._read_body()
+                    result = server._run_network(body)
+                    self._send_json(result)
                 elif self.path == "/history":
                     # In-page chat history (per-session, bounded).
                     self._send_json(server._history_state())
@@ -396,6 +403,29 @@ class FbpLandingServer:
                 "error": f"artifact rejected: {exc}",
             }
         return run_artifact_plan(self._driver, artifact)
+
+    def _run_network(self, body: str) -> dict[str, Any]:
+        """Run a component network (visual-programming payload) as an FBP plan.
+
+        Body is a JSON ``to_dict()``-shaped network (``components`` + ``edges``).
+        It is reconstructed, validated (DAG, known refs), compiled to an ordered
+        FBP ``run`` plan, and executed through the driver's verified spine.
+        Fail-closed: a malformed or cyclic network returns ``ok=False``.
+        """
+        from .network import network_from_dict, run_network
+
+        try:
+            import json as _json
+
+            data = _json.loads(body)
+            if not isinstance(data, dict):
+                return {"ok": False, "results": [], "completed": 0,
+                        "error": "network payload must be a JSON object"}
+            network = network_from_dict(data)
+        except (ValueError, TypeError) as exc:
+            return {"ok": False, "results": [], "completed": 0,
+                    "error": f"network rejected: {exc}"}
+        return run_network(self._driver, network)
 
     def _run_demo(self) -> dict[str, Any]:
         """A deterministic demo action: run the double task through the driver.
@@ -772,6 +802,12 @@ _PAGE_CSS = "\n".join([
     "  margin:.5rem 0 1rem; max-height:18rem; overflow:auto; }",
     ".chat-turn { padding:.35rem 0; border-bottom:1px solid #f0f0f0; }",
     ".chat-turn:last-child { border-bottom:none; }",
+    ".net-node { display:inline-block; background:#e8f0fe; border:1px solid #b6cdf5;",
+    "  border-radius:6px; padding:.3rem .7rem; margin:.25rem; font-family:monospace; }",
+    ".net-edge { color:#555; font-family:monospace; font-size:.85rem;",
+    "  margin:.15rem 0 .15rem 1rem; }",
+    ".net-panel { border:1px solid #ddd; border-radius:6px; padding:.6rem;",
+    "  margin:.5rem 0; }",
 ])
 
 # The model text-box client script (kept out of the f-string so its JS object
@@ -937,6 +973,100 @@ _ORCHESTRATE_JS = r"""\
 </script>
 """
 
+# The Component Network editor client script (kept out of the f-string so its
+# JS object braces are not mistaken for f-string interpolations).
+_NETWORK_JS = r"""\
+<script>
+  const netState = {components: [], edges: []};
+  const $netOut = () => document.getElementById('net-result');
+  const $netSpin = () => document.getElementById('net-spinner');
+  const $netBtn = () => document.getElementById('net-run');
+
+  function netRender() {
+    const box = document.getElementById('net-graph');
+    if (!box) return;
+    box.innerHTML = '';
+    for (const c of netState.components) {
+      const div = document.createElement('div');
+      div.className = 'net-node';
+      div.textContent = c.id + ' : ' + c.task;
+      box.appendChild(div);
+    }
+    for (const e of netState.edges) {
+      const div = document.createElement('div');
+      div.className = 'net-edge';
+      div.textContent = e.source + '.' + e.source_field + ' -> ' + e.target + '.' + e.target_arg;
+      box.appendChild(div);
+    }
+    document.getElementById('net-json').value = JSON.stringify(netState, null, 2);
+  }
+
+  function netAddComponent() {
+    const id = document.getElementById('net-cid').value.trim();
+    const task = document.getElementById('net-task').value.trim();
+    if (!id || !task) { alert('component needs an id and a task'); return; }
+    netState.components.push({id: id, task: task, args: {}});
+    netRender();
+  }
+
+  function netAddEdge() {
+    const src = document.getElementById('net-src').value.trim();
+    const sf = document.getElementById('net-sf').value.trim();
+    const tgt = document.getElementById('net-tgt').value.trim();
+    const ta = document.getElementById('net-ta').value.trim();
+    if (!src || !tgt) { alert('edge needs source and target'); return; }
+    netState.edges.push({source: src, source_field: sf || 'value',
+      target: tgt, target_arg: ta || 'value'});
+    netRender();
+  }
+
+  function netClear() {
+    netState.components = []; netState.edges = [];
+    netRender();
+  }
+
+  async function netRun() {
+    const out = $netOut(); const spin = $netSpin(); const btn = $netBtn();
+    out.textContent = ''; out.className = 'note';
+    if (spin) spin.style.display = 'inline-block';
+    if (btn) btn.disabled = true;
+    try {
+      const r = await fetch('/network', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(netState)
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        out.textContent = 'HTTP ' + r.status + ': ' + JSON.stringify(data);
+        out.className='error'; return;
+      }
+      if (data.ok) {
+        let lines = data.results.map((s) =>
+          (s.verified ? '✔' : '✘') + ' step ' + s.step + ' ' + s.task +
+          (s.value !== undefined ? ' = ' + JSON.stringify(s.value) : '') +
+          (s.error ? ' error=' + s.error : '')
+        ).join('\n');
+        out.textContent = 'Network ok (' + data.completed + ' step(s)):\n' + lines;
+      } else {
+        out.textContent = 'Network FAILED: ' + (data.error || 'unverified step');
+        out.className = 'error';
+      }
+    } catch (err) {
+      out.textContent = 'request failed: ' + err; out.className='error';
+    } finally {
+      if (spin) spin.style.display = 'none';
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  document.getElementById('net-add-c').addEventListener('click', netAddComponent);
+  document.getElementById('net-add-e').addEventListener('click', netAddEdge);
+  document.getElementById('net-clear').addEventListener('click', netClear);
+  document.getElementById('net-run').addEventListener('click', netRun);
+  netRender();
+</script>
+"""
+
 
 def _render_landing(
     state: dict[str, Any], *, error: str | None = None, models: tuple[str, ...] = ()
@@ -1034,6 +1164,27 @@ replayable. Invalid artifacts fail closed.</p>
 <span id='orch-spinner' class='spinner' style='display:none'></span>
 <pre id='orch-result' class='note'></pre>
 {_ORCHESTRATE_JS}
+
+<h2>Component Network (visual programming)</h2>
+<p class='note'>Wire components into a directed data-flow graph. Each component is an FBP
+<code>task</code>; each edge feeds a target's input from a source's output. The
+network compiles to an ordered plan and runs through the verified spine — cycles
+and unknown references fail closed.</p>
+<div class='net-panel'>
+  <b>Components</b><br/>
+  <input id='net-cid' placeholder='id'/><input id='net-task' placeholder='task'/>
+  <button id='net-add-c' type='button'>Add component</button><br/>
+  <b>Edges</b><br/>
+  <input id='net-src' placeholder='src'/><input id='net-sf' placeholder='outField'/>
+  <input id='net-tgt' placeholder='tgt'/><input id='net-ta' placeholder='inArg'/>
+  <button id='net-add-e' type='button'>Add edge</button><br/>
+  <button id='net-clear' type='button'>Clear</button>
+  <button id='net-run' type='button'>Run network</button>
+  <span id='net-spinner' class='spinner' style='display:none'></span>
+<div id='net-graph' class='net-panel'></div>
+<textarea id='net-json' rows='6' cols='72' class='note'></textarea>
+<pre id='net-result' class='note'></pre>
+{_NETWORK_JS}
 
 <h2>Standing invariants</h2>
 <ul class='invariants'>

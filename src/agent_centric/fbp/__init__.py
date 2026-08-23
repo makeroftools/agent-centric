@@ -85,6 +85,14 @@ from .message import (
     validate_response,
 )
 from .model_agent import TASK_MODEL, ModelAgent
+from .network import (
+    Component,
+    ComponentNetwork,
+    Edge,
+    NetworkError,
+    network_from_dict,
+    run_network,
+)
 from .node import AgentNode, Node
 from .node import Response as NodeResponse
 from .orchestrate import (
@@ -168,6 +176,13 @@ __all__ = [
     "extract_intent",
     "plan_from_artifact",
     "run_artifact_plan",
+    # Component Networks (visual programming core)
+    "Component",
+    "ComponentNetwork",
+    "Edge",
+    "NetworkError",
+    "network_from_dict",
+    "run_network",
     "StoreAgent",
     "STORE_GET",
     "STORE_SET",

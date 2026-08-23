@@ -97,6 +97,50 @@ class TestChatContext:
             server._driver.close()
 
 
+class TestComponentNetworkRoute:
+    """The visual-programming seam: a component network runs as a verified
+    FBP plan (DAG, data-flow wiring, fail-closed)."""
+
+    def test_run_network_single_component(self) -> None:
+        server = FbpLandingServer()
+        try:
+            payload = (
+                '{"components": [{"id": "a", "task": "double", '
+                '"args": {"value": 21}}], "edges": []}'
+            )
+            result = server._run_network(payload)
+            assert result["ok"] is True
+            assert result["results"][0]["verified"] is True
+            assert result["results"][0]["value"] == 42
+        finally:
+            server._driver.close()
+
+    def test_run_network_rejects_invalid_payload(self) -> None:
+        server = FbpLandingServer()
+        try:
+            result = server._run_network("{not json")
+            assert result["ok"] is False
+            assert "network rejected" in result["error"]
+        finally:
+            server._driver.close()
+
+    def test_run_network_rejects_cycle(self) -> None:
+        server = FbpLandingServer()
+        try:
+            payload = (
+                '{"components": [{"id": "a", "task": "double", "args": {"value": 1}}, '
+                '{"id": "b", "task": "double", "args": {"value": 1}}], '
+                '"edges": [{"source": "a", "source_field": "value", "target": "b", '
+                '"target_arg": "value"}, {"source": "b", "source_field": "value", '
+                '"target": "a", "target_arg": "value"}]}'
+            )
+            result = server._run_network(payload)
+            assert result["ok"] is False
+            assert "cycle" in result["error"]
+        finally:
+            server._driver.close()
+
+
 class TestModelRoute:
     def test_run_model_uses_stub_without_key(self, monkeypatch) -> None:
         """Without an OpenRouter key the model agent serves the deterministic
