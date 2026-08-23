@@ -25,12 +25,15 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `583972f` (handoff). Commits in this session: `a9e4647` (expert
-  selection + cost ledger), this handoff, and — awaiting commit from this turn —
-  the **Domain Registry + artifact vault**. **Pushed to origin:**
-  up through `87e7bbe` (the user pushed). **Unpushed (~18-19 commits):** the
-  full `agent-centric-fbp` sequence from `c4afa94` onward. Run
-  `git log origin/agent-centric-fbp..HEAD` to see the exact unpushed set.
+- **HEAD:** `f6a4770` (docs: SLM provider). Commits in this session (all
+  local, none pushed to origin by me): `a9e4647` (expert selection + cost
+  ledger), `7528ee5` (Domain Registry + Artifact Vault rename), `93c673c`
+  (Law 11 admonition), `c01ea2c` (tools: safe-edit/safe-replace), `ed5e27a`
+  (bills intents), `7c61773` (Artifact Vault records real runs), `9956eb8`
+  (fbp-domains CLI), `f980e3d` (SLM provider contract), `f6a4770` (SLM docs).
+  **Pushed to origin:** up through `87e7bbe` (the user pushed). **Unpushed
+  (29 commits):** the full `agent-centric-fbp` sequence from `c4afa94` onward.
+  Run `git log origin/agent-centric-fbp..HEAD` to see the exact unpushed set.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule in effect for a long time: **do not push unless the lead
   explicitly says push.** (The lead has since been pushing directly themselves;
@@ -40,7 +43,7 @@ we are.
 ### Validation (run this session, all live)
 - `uv run pytest` → **824 passed** (was 804; added SLM provider + web slm-route tests)
 - `uv run ruff check .` → clean
-- `uv run mypy src` → clean (**83 source files**)
+- `uv run mypy src` → clean (**84 source files**)
 - FBP coverage: `experts.py` 94%, `domainrepo.py` **100%**, driver 91%.
 - Cross-transport durable replay: 19/19 on inproc/ipc/tcp. Full production-arc
   demo: crash-safe replay 6/6.
@@ -261,6 +264,28 @@ of decisions and working style that a fresh session must inherit.
    evidence durable via `fbp-web --registry <path>` (explicit grant). Tenant-
    awareness makes a future paid multi-tenant web service additive, not a
    rewrite. 804 tests.
+22. **Domain Registry + Artifact Vault rename** (`7528ee5`) — the user approved
+   the vocabulary: "Domain of Experts" was retired (parses backward, muddies the
+   Network-of-Experts vocabulary, crowded trademark space). `ArtifactRepository`
+   → `ArtifactVault`; "artifact repository" → "artifact vault"; `DomainRegistry`
+   class stays; user-facing term is "Domain Registry". Swept code, tests, docs.
+23. **Law 11 enshrined** (`93c673c`) — the no-inline-editing law made emphatic:
+   files are NEVER edited in place; only copy-to-temp → `cp` → `rm`. The user
+   mandated this because in-place editing in this Zed environment is unreliable,
+   forces repeated authorization, and has corrupted files.
+24. **Law-11 tooling** (`c01ea2c`) — `tools/safe-edit.sh` + `tools/safe-replace.sh`
+   + `tools/README.md`: the provided solution so the law is enforceable in
+   practice (temp + `cp`, never in-place).
+25. **Schema-driven bills intents** (`ed5e27a`) — `bills_intake`/`bills_accept`/
+   `bills_calendar` typed intents route to the `bills` child through the verified
+   spine. **Artifact Vault records real runs** (`7c61773`) — verified run outputs
+   become write-once evidence. **`fbp-domains` CLI** (`9956eb8`) — operator
+   readout of a saved registry + vault.
+26. **Domain-expert SLM provider contract** (`f980e3d`) — the **learned** tier:
+   `fbp/slm.py` (`SlmProvider`/`SlmSpec`/`SlmExpert`/`StubSlmProvider`/
+   `build_domain_expert`), `docs/domain_slm.md` (the 2026 engineering reference),
+   and a read-only **Domain SLM** card (`/slm`). Docs updated (`f6a4770`). 824
+   tests.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -347,6 +372,23 @@ of decisions and working style that a fresh session must inherit.
   (`docs/transport_trust_boundary.md`) and needs TLS + authn/z + tenant
   isolation + billing before it is real, so it was **not** stood up
   unilaterally. The user confirmed this shape implicitly by saying proceed.
+
+- **Domain-expert SLM writeup adopted (this session):** the user shared a
+  detailed, technically accurate writeup on building domain-expert SLMs in 2026
+  (QLoRA on a 3B-7B base, DAPT + SFT + DPO, corpus curation, open-source domain
+  models). The lead's take: it is the empirical confirmation of the "learned"
+  tier and was adopted as the reference for `fbp/slm.py` and `docs/domain_slm.md`.
+  The SLM is an *expert kind*, not a new authority — selected by `select_expert`,
+  verified by the domain verifier, its artifacts in the Artifact Vault. Training
+  stays an opt-in external provider, never built into the deterministic core.
+- **No-inline-editing mandate (this session, MISSION CRITICAL):** the user
+  explicitly required that files be **never edited in place** — the Zed in-place
+  editing is broken, forces repeated authorization, and risks corruption. This
+  became **Law 11** in `PRINCIPLES.md` (emphatic admonition) and is now a
+  standing truth in this handoff. The provided tools are `tools/safe-edit.sh`
+  and `tools/safe-replace.sh`. The user also asked for a generalized directive
+  (no project-specific terms) for other agents, and a copy-paste directive for
+  the agent that currently needs it.
 
 ### How to talk to the user / working style
 - Be the **senior, decisive engineer**: propose a course, proceed on the
@@ -477,16 +519,33 @@ uv run python examples/fbp_arc_demo.py
 - No GitHub CI.
 - Deterministic-first north star; LLM as ordinary agent; grants; fail-closed;
   no auto-pres ids.
+- **THE NO-INLINE-EDITING LAW (Law 11) — MISSION CRITICAL, ABSOLUTE.** Files are
+  **NEVER edited in place. EVER. Zero exceptions.** Do not use in-place edit
+  tools; do not patch/rewrite a single line inside an existing file; do not
+  change one character/comment/label in place — not even a trivial edit. In-place
+  editing corrupts files and forces repeated authorization prompts; it has been
+  observed to corrupt content in this project. The ONLY permitted way to change
+  a file: (1) copy the target's contents to a temp file, (2) make ALL changes in
+  the temp, (3) `cp tempfile targetfile` (atomic, byte-complete whole-file
+  replace), (4) `rm tempfile`. Prefer the provided tools `tools/safe-edit.sh`
+  and `tools/safe-replace.sh`. Brand-new files (that don't exist yet) may be
+  created directly. This law is enshrined in `PRINCIPLES.md` §11 and applies to
+  source, tests, docs, and config alike, with no exceptions.
 - **The coined axiom (user): "Network of Experts AI"** — *the model is not the
   expert, the network is.* An AI is a network of narrow domain experts, each
   verified by a deterministic verifier; a general model is one (fallible) kind
   of expert. Enshrined at the top of `README_FBP.md` and `spec.md` §0. Treat it
   as the conceptual north star for any future expert-selection / per-domain-SLM
-  work. Two hard rules for the agreed **Domain Registry + artifact
-  repository** increment: the registry is a **passive catalog, never an
-  authority** (authority stays in the tree topology); the artifact vault
-  is **write-once evidence, never mutable** (append-only, keyed by (domain,
-  run), carrying source refs + residue + cost).
+  work. Two hard rules for the **Domain Registry + Artifact Vault**: the
+  registry is a **passive catalog, never an authority** (authority stays in the
+  tree topology); the artifact vault is **write-once evidence, never mutable**
+  (append-only, keyed by (tenant, domain, run), carrying source refs + residue +
+  cost).
+- **The SLM provider contract** (`fbp/slm.py`) is the **learned** tier: an
+  opt-in external provider turns a domain corpus into a trained per-domain
+  expert with full provenance. Training stays external; the core selects
+  (`select_expert`) and verifies, never bypassing a verifier. `docs/domain_slm.md`
+  is the 2026 engineering reference.
 - The AC Router is spun out, gitignored, and **not** our work here.
 - Trust only what the tests prove and what is committed; say clearly when
   something is unverifiable or unpushed.
