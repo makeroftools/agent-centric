@@ -273,22 +273,60 @@ def network_from_dict(data: dict[str, Any]) -> ComponentNetwork:
 
 
 def run_network(driver: Any, network: ComponentNetwork) -> dict[str, Any]:
-    """Compile and run a component network through ``driver.run_plan``.
+    """Execute a component network as true dataflow through the verified spine.
 
-    The compiled plan runs through the verified spine: every step is a normal
-    directive (parent re-verified, ledgered, replayable). Fail-closed: an
-    invalid network or a failed step returns ``ok=False``.
+    Components run in deterministic topological order. Each component's args are
+    built from its template plus any incoming edges, which feed the **computed
+    output** of the source component (its verified result) into the target's
+    input args. Each step is a normal ``driver.run`` directive — parent
+    re-verified, ledgered, replayable. Fail-closed: an invalid network, an
+    unknown output field, or an unverified step returns ``ok=False``.
+
+    Returns ``{"ok", "results", "completed", "error"?}`` where each result is
+    ``{"step", "task", "verified", "value", "error", "id"}`` (``id`` is the
+    component id, so the editor can map results back to nodes).
     """
     try:
-        steps = network.compile()
+        network.validate()
+        order = network._topological_order()
     except NetworkError as exc:
         return {"ok": False, "results": [], "completed": 0, "error": str(exc)}
-    try:
-        return dict(driver.run_plan(steps))
-    except Exception as exc:  # noqa: BLE001 - surfaced to the operator
-        return {
-            "ok": False,
-            "results": [],
-            "completed": 0,
-            "error": f"network execution failed: {exc}",
+
+    outputs: dict[str, Any] = {}
+    results: list[dict[str, Any]] = []
+    for idx, cid in enumerate(order):
+        comp = network._components[cid]
+        args = dict(comp.args)
+        for edge in network._edges:
+            if edge.target != cid:
+                continue
+            if edge.source not in outputs:
+                # The source ran earlier (topological order) so its output is
+                # known; if not, the edge is malformed -> fail closed.
+                return {
+                    "ok": False, "results": results, "completed": idx,
+                    "error": f"edge {edge.source}.{edge.source_field} -> {cid}: "
+                    f"source has no computed output",
+                }
+            args[edge.target_arg] = outputs[edge.source]
+        try:
+            resp = driver.run(
+                comp.task, args, verifier=comp.verifier, child=comp.child
+            )
+        except Exception as exc:  # noqa: BLE001 - surfaced to the operator
+            return {
+                "ok": False, "results": results, "completed": idx,
+                "error": f"component {cid} ({comp.task}) raised: {exc}",
+            }
+        result = {
+            "step": idx, "id": cid, "task": comp.task,
+            "verified": resp.verified, "value": resp.value, "error": resp.error,
         }
+        results.append(result)
+        if not resp.verified:
+            return {
+                "ok": False, "results": results, "completed": idx,
+                "failed": result,
+            }
+        outputs[cid] = resp.value
+    return {"ok": True, "results": results, "completed": len(results), "failed": None}

@@ -141,3 +141,47 @@ class TestRunNetwork:
             assert "error" in result
         finally:
             driver.close()
+
+    def test_true_dataflow_sum_of_two_doubles(self) -> None:
+        """A downstream component consumes the *computed output* of its
+        upstreams (not their args): double(21)=42 and double(10)=20 feed
+        sum(a,b)=62. This is real dataflow, not constant propagation."""
+        from agent_centric.fbp.driver import FbpDriver
+
+        driver = FbpDriver()
+        driver.register("double", lambda value: value * 2, source_url="file:///tasks/double")
+        driver.register("sum", lambda a, b: a + b, source_url="file:///tasks/sum")
+        driver.configure(tasks=("double", "sum"))
+        net = ComponentNetwork()
+        net.add_component(Component(id="d1", task="double", args={"value": 21}))
+        net.add_component(Component(id="d2", task="double", args={"value": 10}))
+        net.add_component(Component(id="s", task="sum", args={}))
+        net.add_edge(Edge(source="d1", source_field="value", target="s", target_arg="a"))
+        net.add_edge(Edge(source="d2", source_field="value", target="s", target_arg="b"))
+        try:
+            result = run_network(driver, net)
+            assert result["ok"] is True
+            by_id = {r["id"]: r for r in result["results"]}
+            assert by_id["d1"]["value"] == 42
+            assert by_id["d2"]["value"] == 20
+            assert by_id["s"]["value"] == 62
+        finally:
+            driver.close()
+
+    def test_unverified_step_fails_closed(self) -> None:
+        """A component that fails verification stops the network."""
+        from agent_centric.fbp.driver import FbpDriver
+
+        driver = FbpDriver()
+        driver.register("double", lambda value: value * 2, source_url="file:///tasks/double")
+        driver.register("odd", lambda value: isinstance(value, int) and value % 2 == 1)
+        driver.configure(tasks=("double",))
+        net = ComponentNetwork()
+        # double(21)=42 is even; the odd verifier on the component demotes it.
+        net.add_component(Component(id="a", task="double", args={"value": 21}, verifier="odd"))
+        try:
+            result = run_network(driver, net)
+            assert result["ok"] is False
+            assert result["completed"] == 0
+        finally:
+            driver.close()

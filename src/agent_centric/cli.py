@@ -595,6 +595,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional durable chat-history store path. The model box's transcript "
         "persists across restarts (explicit grant; with default: in-memory only).",
     )
+    p_fbp_web.add_argument(
+        "--networks",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Optional durable store for saved component networks. Networks persist "
+        "across restarts (explicit grant; with default: in-memory only).",
+    )
 
     p_fbp_web_kill = sub.add_parser(
         "fbp-web-kill",
@@ -975,6 +983,7 @@ def _cmd_fbp_web(
     open_browser: bool = False,
     reload: bool = False,
     history: Path | None = None,
+    networks: Path | None = None,
 ) -> int:
     """Serve a local, actionable landing page for the FBP subsystem.
 
@@ -986,17 +995,20 @@ def _cmd_fbp_web(
     With ``reload=True`` the server runs as a child process that is restarted
     whenever the FBP source tree changes (a dev convenience so edits are picked
     up without a manual restart). ``history`` optionally grants a durable,
-    cross-restart chat-history store for the model box.
+    cross-restart chat-history store; ``networks`` optionally grants durable
+    storage for saved component networks.
     """
     if reload:
         return _fbp_web_reload(
-            host=host, port=port, open_browser=open_browser, history=history
+            host=host, port=port, open_browser=open_browser, history=history,
+            networks=networks,
         )
 
     from agent_centric.fbp.web import serve
 
     try:
-        serve(host=host, port=port, open_browser=open_browser, history_path=history)
+        serve(host=host, port=port, open_browser=open_browser, history_path=history,
+              networks_path=networks)
     except OSError as exc:
         print(f"fbp-web: could not bind {host}:{port}: {exc}", file=sys.stderr)
         return 1
@@ -1004,7 +1016,8 @@ def _cmd_fbp_web(
 
 
 def _fbp_web_reload(
-    *, host: str, port: int, open_browser: bool, history: Path | None = None
+    *, host: str, port: int, open_browser: bool, history: Path | None = None,
+    networks: Path | None = None,
 ) -> int:
     """Run ``fbp-web`` as a child process, restarting it on source changes.
 
@@ -1044,6 +1057,8 @@ def _fbp_web_reload(
             cmd.append("--open")
         if history:
             cmd.extend(["--history", str(history)])
+        if networks:
+            cmd.extend(["--networks", str(networks)])
         return subprocess.Popen(
             cmd,
             cwd=os.getcwd(),
@@ -1280,7 +1295,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "fbp-web":
         return _cmd_fbp_web(
             host=args.host, port=args.port, open_browser=args.open, reload=args.reload,
-            history=args.history,
+            history=args.history, networks=args.networks,
         )
     if args.command == "fbp-web-kill":
         return _cmd_fbp_web_kill(port=args.port)

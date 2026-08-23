@@ -140,6 +140,68 @@ class TestComponentNetworkRoute:
         finally:
             server._driver.close()
 
+    def test_save_and_load_network(self) -> None:
+        """A validated network can be saved by name and loaded back (explicit
+        grant; in-memory by default)."""
+        server = FbpLandingServer()
+        try:
+            net = (
+                '{"components": [{"id": "a", "task": "double", '
+                '"args": {"value": 21}}], "edges": []}'
+            )
+            saved = server._network_save('{"name": "demo", "network": ' + net + '}')
+            assert saved["ok"] is True
+            assert saved["saved"] == "demo"
+            assert server._network_list()["names"] == ["demo"]
+            loaded = server._network_load("demo")
+            assert loaded["ok"] is True
+            assert loaded["network"]["components"][0]["id"] == "a"
+        finally:
+            server._driver.close()
+
+    def test_save_rejects_invalid_network(self) -> None:
+        """A cyclic/malformed network is never persisted (fail-closed)."""
+        server = FbpLandingServer()
+        try:
+            bad = ('{"components": [{"id": "a", "task": "double", "args": {"value": 1}}, '
+                   '{"id": "b", "task": "double", "args": {"value": 1}}], '
+                   '"edges": [{"source": "a", "source_field": "value", "target": "b", '
+                   '"target_arg": "value"}, {"source": "b", "source_field": "value", '
+                   '"target": "a", "target_arg": "value"}]}')
+            result = server._network_save('{"name": "bad", "network": ' + bad + '}')
+            assert result["ok"] is False
+            assert "invalid" in result["error"]
+            assert server._network_list()["names"] == []
+        finally:
+            server._driver.close()
+
+    def test_load_unknown_network_fails_closed(self) -> None:
+        server = FbpLandingServer()
+        try:
+            result = server._network_load("missing")
+            assert result["ok"] is False
+        finally:
+            server._driver.close()
+
+    def test_networks_persist_across_restart(self, tmp_path) -> None:
+        """With a granted networks path, saved networks survive a restart."""
+        path = str(tmp_path / "networks.json")
+        s1 = FbpLandingServer(networks_path=path)
+        try:
+            net = (
+                '{"components": [{"id": "a", "task": "double", '
+                '"args": {"value": 21}}], "edges": []}'
+            )
+            s1._network_save('{"name": "demo", "network": ' + net + '}')
+        finally:
+            s1._driver.close()
+        s2 = FbpLandingServer(networks_path=path)
+        try:
+            assert s2._network_list()["names"] == ["demo"]
+            assert s2._network_load("demo")["ok"] is True
+        finally:
+            s2._driver.close()
+
 
 class TestModelRoute:
     def test_run_model_uses_stub_without_key(self, monkeypatch) -> None:

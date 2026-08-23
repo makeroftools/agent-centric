@@ -73,6 +73,7 @@ class FbpLandingServer:
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_PORT,
         history_path: str | os.PathLike[str] | None = None,
+        networks_path: str | os.PathLike[str] | None = None,
     ) -> None:
         self._host = host
         self._port = port
@@ -80,6 +81,12 @@ class FbpLandingServer:
         # deterministic demo tree so the page has something real to show.
         self._providers = _build_openrouter_providers()
         self._driver = self._build_driver()
+        # Saved component networks (name -> to_dict payload). In-memory by
+        # default; persisted to ``networks_path`` when granted (explicit grant).
+        self._networks: dict[str, Any] = {}
+        self._networks_path = str(networks_path) if networks_path is not None else None
+        if self._networks_path:
+            self._load_networks()
         # In-page chat history (bounded, per-session in-memory). When a durable
         # path is granted it is ALSO persisted (explicit grant: nothing is
         # written unless a caller opts in via ``history_path``).
@@ -141,6 +148,85 @@ class FbpLandingServer:
         with self._history_lock:
             return {"history": [dict(h) for h in self._history],
                     "durable": self._history_store is not None}
+
+    # -- saved component networks (explicit-grant persistence) --------------
+
+    def _load_networks(self) -> None:
+        """Load saved networks from the granted path (fail-closed)."""
+        if not self._networks_path:
+            return
+        import os
+
+        if not os.path.exists(self._networks_path):
+            return
+        try:
+            with open(self._networks_path, encoding="utf-8") as fh:
+                data = json.load(fh)
+            if isinstance(data, dict):
+                self._networks = dict(data)
+        except (OSError, ValueError) as exc:
+            print(f"fbp-web: could not load saved networks: {exc}")
+
+    def _save_networks(self) -> None:
+        """Persist saved networks to the granted path (atomic write)."""
+        if not self._networks_path:
+            return
+        import os
+        import tempfile
+
+        directory = os.path.dirname(os.path.abspath(self._networks_path)) or "."
+        os.makedirs(directory, exist_ok=True)
+        (fd, tmp_path) = tempfile.mkstemp(dir=directory, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(self._networks, fh, sort_keys=True)
+            os.replace(tmp_path, self._networks_path)
+        except BaseException:
+            from contextlib import suppress
+
+            with suppress(OSError):
+                os.unlink(tmp_path)
+            raise
+
+    def _network_save(self, body: str) -> dict[str, Any]:
+        """Save a named component network (explicit grant; fail-closed).
+
+        Body is ``{"name": str, "network": {...to_dict payload...}}``. The
+        network is validated before it is stored (a malformed network is never
+        persisted).
+        """
+        from .network import network_from_dict
+
+        try:
+            data = json.loads(body)
+        except (ValueError, TypeError) as exc:
+            return {"ok": False, "error": f"invalid payload: {exc}"}
+        if not isinstance(data, dict):
+            return {"ok": False, "error": "payload must be a JSON object"}
+        name = data.get("name")
+        network = data.get("network")
+        if not isinstance(name, str) or not name.strip():
+            return {"ok": False, "error": "save requires a 'name' string"}
+        if not isinstance(network, dict):
+            return {"ok": False, "error": "save requires a 'network' object"}
+        try:
+            network_from_dict(network).validate()
+        except Exception as exc:  # noqa: BLE001 - fail closed
+            return {"ok": False, "error": f"network invalid: {exc}"}
+        self._networks[name.strip()] = network
+        self._save_networks()
+        return {"ok": True, "saved": name.strip()}
+
+    def _network_list(self) -> dict[str, Any]:
+        """List saved network names (read-only)."""
+        return {"names": sorted(self._networks.keys())}
+
+    def _network_load(self, name: str) -> dict[str, Any]:
+        """Load a saved network by name (read-only; fail-closed if unknown)."""
+        net = self._networks.get(name)
+        if net is None:
+            return {"ok": False, "error": f"no saved network named {name!r}"}
+        return {"ok": True, "network": net}
 
     # -- driver setup (deterministic, offline) -----------------------------
 
@@ -281,6 +367,14 @@ class FbpLandingServer:
                     body = self._read_body()
                     result = server._run_network(body)
                     self._send_json(result)
+                elif self.path == "/network/save":
+                    body = self._read_body()
+                    self._send_json(server._network_save(body))
+                elif self.path == "/network/list":
+                    self._send_json(server._network_list())
+                elif self.path.startswith("/network/load/"):
+                    name = self.path[len("/network/load/"):]
+                    self._send_json(server._network_load(name))
                 elif self.path == "/history":
                     # In-page chat history (per-session, bounded).
                     self._send_json(server._history_state())
@@ -1141,6 +1235,44 @@ _NETWORK_JS = r"""\
     }
   }
 
+  async function netSave() {
+    const name = document.getElementById('net-name').value.trim();
+    if (!name) { alert('enter a network name to save'); return; }
+    const r = await fetch('/network/save', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name: name, network: netState})
+    });
+    const data = await r.json();
+    if (data.ok) { netRefreshList(); alert('saved ' + name); }
+    else { alert('save failed: ' + (data.error || 'unknown')); }
+  }
+
+  async function netRefreshList() {
+    try {
+      const r = await fetch('/network/list');
+      const data = await r.json();
+      const sel = document.getElementById('net-load-sel');
+      sel.innerHTML = '';
+      (data.names || []).forEach((n) => {
+        const o = document.createElement('option'); o.value = n; o.textContent = n;
+        sel.appendChild(o);
+      });
+    } catch (e) { /* best-effort */ }
+  }
+
+  async function netLoad() {
+    const sel = document.getElementById('net-load-sel');
+    const name = sel.value;
+    if (!name) { alert('select a saved network to load'); return; }
+    const r = await fetch('/network/load/' + encodeURIComponent(name));
+    const data = await r.json();
+    if (data.ok) {
+      netState.components = (data.network.components || []).map(c => ({...c}));
+      netState.edges = (data.network.edges || []).map(e => ({...e}));
+      netRender();
+    } else { alert('load failed: ' + (data.error || 'unknown')); }
+  }
+
   document.getElementById('net-add-c').addEventListener('click', () => netAddComponent('double'));
   document.getElementById('net-add-e').addEventListener('click', () => netAddComponent('even'));
   document.getElementById('net-add-s').addEventListener('click', () => netAddComponent('sum'));
@@ -1149,6 +1281,9 @@ _NETWORK_JS = r"""\
     netRender();
   });
   document.getElementById('net-run').addEventListener('click', netRun);
+  document.getElementById('net-save').addEventListener('click', netSave);
+  document.getElementById('net-load').addEventListener('click', netLoad);
+  netRefreshList();
   netRender();
 </script>
 """
@@ -1264,6 +1399,11 @@ and unknown references fail closed.</p>
   <button id='net-clear' type='button'>Clear</button>
   <button id='net-run' type='button'>Run network</button>
   <span id='net-spinner' class='spinner' style='display:none'></span>
+  <br/>
+  <input id='net-name' placeholder='network name'/>
+  <button id='net-save' type='button'>Save</button>
+  <button id='net-load' type='button'>Load</button>
+  <select id='net-load-sel'></select>
   <p class='note'>Drag nodes on the canvas. Click a node's <b>out</b> port, then a
   target's <b>in</b> port, to wire an edge. Double-click a node to remove it.</p>
   <div id='net-canvas' class='net-canvas'>
@@ -1334,13 +1474,19 @@ def serve(
     port: int = DEFAULT_PORT,
     open_browser: bool = False,
     history_path: str | os.PathLike[str] | None = None,
+    networks_path: str | os.PathLike[str] | None = None,
 ) -> None:
     """Serve the FBP landing page (blocking). Pass --open to open a browser.
 
     ``history_path`` optionally grants a durable, cross-restart chat-history
     store (an explicit opt-in; without it the transcript is in-memory only).
+    ``networks_path`` optionally grants durable, cross-restart storage for
+    saved component networks (an explicit opt-in; without it they are
+    in-memory only).
     """
-    server = FbpLandingServer(host=host, port=port, history_path=history_path)
+    server = FbpLandingServer(
+        host=host, port=port, history_path=history_path, networks_path=networks_path
+    )
     if open_browser:
         url = f"http://{host}:{port}"
         threading.Thread(target=webbrowser.open, args=(url,), daemon=True).start()
