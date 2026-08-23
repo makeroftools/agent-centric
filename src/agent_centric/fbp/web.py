@@ -34,6 +34,7 @@ from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import TYPE_CHECKING, Any
 
+from .activity import ActivityFeed
 from .chatstore import ChatHistoryStore
 from .driver import FbpDriver
 
@@ -79,6 +80,7 @@ class FbpLandingServer:
         networks_path: str | os.PathLike[str] | None = None,
         bills_path: str | os.PathLike[str] | None = None,
         registry_path: str | os.PathLike[str] | None = None,
+        activity_path: str | os.PathLike[str] | None = None,
     ) -> None:
         self._host = host
         self._port = port
@@ -131,6 +133,12 @@ class FbpLandingServer:
                 # degrade to the in-memory transcript and say so on the page.
                 self._history_store = None
                 print(f"fbp-web: durable chat history unavailable: {exc}")
+        # Operator activity feed (bounded, append-only, optionally-durable
+        # audit of operator actions). In-memory by default; durable via
+        # ``activity_path`` (explicit grant).
+        self._activity = ActivityFeed(
+            path=str(activity_path) if activity_path is not None else None
+        )
 
     # -- chat history (in-page, bounded, per-session) -----------------------
 
@@ -549,6 +557,10 @@ class FbpLandingServer:
         except Exception as exc:  # noqa: BLE001 - surfaced to the operator
             return {"ok": False, "error": f"provision failed: {exc}"}
         self._record_provision_artifact(result)
+        self._record_activity(
+            "provision", "Provision domain expert",
+            detail=result.to_dict(), verified=True,
+        )
         return {"ok": True, "result": result.to_dict()}
 
     def _record_provision_artifact(self, result: Any) -> None:
@@ -648,6 +660,32 @@ class FbpLandingServer:
     def _model_choices(self) -> tuple[str, ...]:
         """The configured model choices for the dropdown (may be empty)."""
         return tuple(self._providers.keys())
+
+    def _activity_readout(self) -> dict[str, Any]:
+        """A deterministic, read-only view of the operator activity feed.
+
+        Bounded, append-only, and (when a path is granted) durable. Each
+        entry records an action an operator took and whether its outcome
+        passed the correctness spine. Read-only — nothing is mutated.
+        """
+        return self._activity.to_dict()
+
+    def _record_activity(
+        self, kind: str, action: str, *, detail: object = None,
+        verified: bool = False, model: str | None = None,
+    ) -> None:
+        """Best-effort recording of an operator action into the feed.
+
+        Never raises: the feed is an audit convenience, not the correctness
+        spine, so a failed record must not break the action that triggered it.
+        """
+        try:
+            self._activity.record(
+                kind=kind, action=action, detail=detail,
+                verified=verified, model=model,
+            )
+        except Exception:  # noqa: BLE001 - audit must never break an action
+            return
 
     def _page_state(self) -> dict[str, Any]:
         """A deterministic JSON-ready snapshot for the landing page."""
@@ -840,6 +878,9 @@ class FbpLandingServer:
                 elif self.path == "/ledger":
                     # Operator-facing durable-ledger readout (read-only).
                     self._send_html(_render_ledger(server._ledger_state()))
+                elif self.path == "/activity":
+                    # Read-only operator activity feed (bounded audit).
+                    self._send_json(server._activity_readout())
                 elif self.path == "/health":
                     self._send_json({"ok": True, "server": f"{host}:{port}"})
                 else:
@@ -952,6 +993,12 @@ class FbpLandingServer:
                 "error": f"artifact rejected: {exc}",
             }
         plan_result = run_artifact_plan(self._driver, artifact)
+        self._record_activity(
+            "orchestrate", "run artifact",
+            detail={"ok": plan_result.get("ok"),
+                    "completed": plan_result.get("completed", 0)},
+            verified=bool(plan_result.get("ok")),
+        )
         for step in plan_result.get("results", []):
             if step.get("verified"):
                 self._record_run_artifact(step.get("task", "task"), step)
@@ -979,6 +1026,12 @@ class FbpLandingServer:
             return {"ok": False, "results": [], "completed": 0,
                     "error": f"network rejected: {exc}"}
         net_result = run_network(self._driver, network)
+        self._record_activity(
+            "network", "Component network",
+            detail={"ok": net_result.get("ok"),
+                    "completed": net_result.get("completed", 0)},
+            verified=bool(net_result.get("ok")),
+        )
         for step in net_result.get("results", []):
             if step.get("verified"):
                 self._record_run_artifact(step.get("task", "task"), step)
@@ -1022,6 +1075,10 @@ class FbpLandingServer:
         resp = self._driver.run("bills_intake", {"draft": draft}, child="bills")
         if not resp.verified:
             return {"ok": False, "error": resp.error or "bills_intake not verified"}
+        self._record_activity(
+            "bills", "Intake bill draft", detail=draft,
+            verified=bool(resp.verified),
+        )
         return {"ok": True, "draft": resp.value}
 
     def _bills_accept(self, body: str) -> dict[str, Any]:
@@ -1053,6 +1110,9 @@ class FbpLandingServer:
         resp = self._driver.run("bills_accept", {"draft": draft}, child="bills")
         if not resp.verified:
             return {"ok": False, "error": resp.error or "bills_accept not verified"}
+        self._record_activity(
+            "bills", "Accept bill", detail=draft, verified=bool(resp.verified),
+        )
         return {"ok": True, "id": resp.value}
 
     def _bills_calendar(self, body: str) -> dict[str, Any]:
@@ -1149,6 +1209,7 @@ class FbpLandingServer:
         try:
             resp = self._driver.run("double", {"value": 21}, verifier="even")
             if resp.verified:
+                self._record_activity("action", "run demo double(21)", verified=True)
                 return {"action": "run double(21)", "value": resp.value}
             return {"action": "run double(21)", "error": resp.error}
         except Exception as exc:  # noqa: BLE001 - surfaced to the page
@@ -2672,6 +2733,32 @@ _MODE_JS = r"""\
 </script>
 """
 
+# The operator activity-feed script (kept out of the f-string so its JS
+# object braces are not mistaken for f-string interpolations).
+_ACTIVITY_JS = r"""\
+<script>
+  (async () => {
+    const box = document.getElementById('activity-list');
+    if (!box) return;
+    try {
+      const r = await fetch('/activity');
+      const data = await r.json();
+      box.innerHTML = '';
+      const entries = data.entries || [];
+      if (!entries.length) { box.textContent = 'no activity recorded yet.'; return; }
+      for (const e of entries) {
+        const div = document.createElement('div');
+        div.className = 'chat-turn';
+        const badge = e.verified ? '\u2713' : '\u2717';
+        div.innerHTML = '<b>' + esc(e.kind) + '</b> ' + esc(e.action) +
+          ' <span class=\'pill\'>' + badge + '</span>';
+        box.appendChild(div);
+      }
+    } catch (err) { box.textContent = 'activity unavailable.'; }
+  })();
+</script>
+"""
+
 # The sidebar navigation script: one page = one visible pane.
 _NAV_JS = r"""\
 <script>
@@ -2797,6 +2884,14 @@ def _render_landing(
     <h2>Session summary</h2>
     <p class='pill'>{caps}</p>
     <p>Identities: {len(identities)} · {' · '.join(identities) if identities else '—'}</p>
+  </div>
+  <div class='card'>
+    <h2>Activity feed</h2>
+    <p class='note'>A bounded, append-only audit of operator actions — each
+    recorded through the verified spine. Read-only; see
+    <a href='/activity'>/activity</a> for the JSON.</p>
+    <div id='activity-list' class='chat-history'></div>
+    {_ACTIVITY_JS}
   </div>
   <div class='card'>
     <h2>Actions</h2>
@@ -3113,6 +3208,7 @@ def serve(
     networks_path: str | os.PathLike[str] | None = None,
     bills_path: str | os.PathLike[str] | None = None,
     registry_path: str | os.PathLike[str] | None = None,
+    activity_path: str | os.PathLike[str] | None = None,
 ) -> None:
     """Serve the FBP landing page (blocking). Pass --open to open a browser.
 
@@ -3124,10 +3220,13 @@ def serve(
     bills registry (an explicit opt-in; without it the registry is in-memory
     only). ``registry_path`` optionally grants durable, cross-restart storage
     for the Domain Registry + artifact vault.
+    ``activity_path`` optionally grants a durable, cross-restart operator
+    activity feed (an explicit opt-in; without it the feed is in-memory only).
     """
     server = FbpLandingServer(
         host=host, port=port, history_path=history_path, networks_path=networks_path,
         bills_path=bills_path, registry_path=registry_path,
+        activity_path=activity_path,
     )
     if open_browser:
         url = f"http://{host}:{port}"

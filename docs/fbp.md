@@ -468,6 +468,44 @@ resolved, rule = resolve_with_rules(
   single-writer store) — so an authorized rule keeps auto-accepting matching
   intake across restarts without re-granting.
 
+### Operator activity feed (audit of what an operator did)
+
+`activity.py` is the observability layer for *what an operator did* through the
+easy-UX surface. It is the audit counterpart to the chat history (the transcript
+of model turns) and the artifact vault (the write-once evidence of domain runs):
+a bounded, append-only, optionally-durable log of operator actions, each
+carrying its verification status.
+
+```python
+from agent_centric.fbp import ActivityFeed
+
+feed = ActivityFeed()
+feed.record(kind="model", action="model run", verified=True, model="stub-model")
+feed.record(kind="bills", action="bills_accept", detail={"id": "bill-b1"}, verified=True)
+feed.to_dict()   # {"entries": [...], "count": 2, "verified": 2, "durable": False}
+
+# Durable by explicit grant: persists atomically and reloads on open.
+durable = ActivityFeed(path="activity.json")
+feed.record(kind="provision", action="provision bill-extract", verified=True)
+```
+
+- **Append-only & immutable**: entries are never mutated once recorded; each
+  carries a monotonic `seq` (insertion order, oldest first). `clear()` is the
+  only destructive operation (an explicit operator action).
+- **Bounded**: capped at `MAX_ACTIVITY_ENTRIES` (500); the oldest entries drop
+  first, so the feed never grows without bound.
+- **Deterministic**: ordering is by sequence number, never a wall-clock
+  timestamp, so identical action sequences yield identical readouts.
+- **Fail-closed**: an unknown `kind` or an empty `action` is rejected; a corrupt
+  durable file degrades to an empty feed rather than crashing the caller.
+- **Durable by explicit grant**: passing a `path` persists the feed (temp file +
+  atomic `os.replace`) and reloads it on open. Without a path it stays
+  in-memory only — persistence is always an explicit grant.
+
+The kinds form a closed set (`model` / `orchestrate` / `network` / `bills` /
+`provision` / `action`), so the feed is self-describing and auditable. A runnable
+demo lives at `examples/fbp_activity_demo.py`.
+
 ### Tree-audit reconstruction (audit as proof)
 
 `reconstruct_chains` (`audit.py`) is a read-only **capability** that turns the
@@ -591,7 +629,9 @@ in-page chat), `/orchestrate` + `/orchestrate/schema` (run-an-artifact and the
 schema-driven typed form), `/network` (+ `/network/save|/list|/load`), the
 **bills workflow** (`/bills/intake`, `/bills/accept`, `/bills/registry`,
 `/bills/calendar` — intake → human-gated accept → durable registry → verified
-calendar, all through the verified spine), `/ledger`, `/state.json`, and
+calendar, all through the verified spine), `/activity` (the read-only
+operator activity feed — a bounded audit of operator actions, each with its
+verification status), `/ledger`, `/state.json`, and
 `/health`. `fbp-web --reload` auto-restarts on source edits; `fbp-web-kill`
 stops the server on the port.
 
@@ -604,6 +644,11 @@ explicit grant).
 
 Pass `--bills <path>` to give the bills workflow a **durable** registry: accepted
 bills persist across server restarts (explicit grant; in-memory by default).
+
+Pass `--activity <path>` to give the operator **activity feed** a durable home:
+every action you take through the page (model prompts, orchestrated/network
+runs, bills intake/accept, provisioning, the demo action) is recorded with its
+verification status and survives server restarts (explicit grant; in-memory by default).
 
 ## Full arc demo
 

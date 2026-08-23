@@ -105,6 +105,7 @@ that page:
 | **Domain Registry + artifact vault** | `fbp/domainrepo.py`, `fbp/web.py` | The **observability + provenance** layer (catalog → decision → accounting → evidence): `DomainRegistry` (read-only, **tenant-aware** catalog — passive, never an authority) + `ArtifactVault` (append-only, write-once evidence keyed by (tenant, domain, run), never mutable). Read-only **registry** + **artifact** cards (`/domains`, `/artifacts`); durable via `fbp-web --registry <path>` (explicit grant). Tenant-awareness makes a future paid multi-tenant web service additive, not a rewrite; the service would be a shared observability/provenance layer, never the governance layer. Additive |
 | **Component Networks** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. **True dataflow** (a downstream component consumes the *computed* verified output of its upstreams, not their args). Cycles / unknown refs / unverified steps fail closed. The **Designer** is now a full **three-pane editor**: categorized palette → canvas (pan/zoom, grid) → inspector (per-node args/verifier/child). Drag-and-drop nodes, click-to-wire ports, edge delete on double-click, **per-node results painted on the canvas**, **auto-layout** (topological), run/save/load (`fbp-web --networks <path>`, `/network/save|/list|/load`). Richer deterministic palette (Arithmetic/Derived/Checks). Verified true dataflow end-to-end |
 | **Card-based UI + mode switch** | `fbp/web.py` | Card-based landing page with a **Chat / Designer** mode switch: Chat = model box + chat history + run-an-artifact (general-purpose); Designer = Component Network editor. Clear functional division |
+| **Operator activity feed** | `fbp/activity.py`, `fbp/web.py` | The **audit of what an operator did**: a bounded, append-only, optionally-durable feed of operator actions, each with a kind (`model`/`orchestrate`/`network`/`bills`/`provision`/`action`) and its **verification status**. Deterministic ordering by sequence number; fail-closed on malformed/corrupt input; durable via `fbp-web --activity <path>` (explicit grant). The landing page gains a **dashboard Activity card** + a read-only `/activity` route; real actions (demo, bills intake/accept, network runs, orchestration, provisioning) record automatically through the verified spine. Additive |
 
 ### Easy-UX driver & CLI
 - `FbpDriver` API: `register`, `resolve`, `configure`, `configure_child`,
@@ -621,12 +622,14 @@ uv run agent-centric fbp-web --history chat.db   # durable transcript across res
 uv run agent-centric fbp-web --networks networks.json  # durable saved networks
 uv run agent-centric fbp-web --bills registry.db  # durable bills registry across restarts
 uv run agent-centric fbp-web --registry repo.json # durable domain registry + artifacts across restarts
+uv run agent-centric fbp-web --activity activity.json # durable operator activity feed across restarts
 uv run agent-centric fbp-web --kill     # stop the server on the port (flag)
 uv run agent-centric fbp-web-kill       # stop the server on the port (legacy subcommand)
 uv run agent-centric fbp-replay sess.db
 uv run agent-centric fbp-summary sess.db
 uv run agent-centric fbp-domains repo.json  # operator readout of a saved Domain Registry + Artifact Vault
 uv run python examples/fbp_arc_demo.py
+uv run python examples/fbp_activity_demo.py
 ```
 
 ---
