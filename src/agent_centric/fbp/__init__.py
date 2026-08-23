@@ -129,6 +129,14 @@ from .orchestrate import (
     run_artifact_plan,
 )
 from .pdf_intake import draft_from_pdf_text, extract_text
+from .providers import (
+    ModalSlmProvider,
+    ProviderRegistry,
+    ReplicateSlmProvider,
+    RunpodSlmProvider,
+    get_provider,
+    provider_names,
+)
 from .settlement import (
     Settlement,
     SettlementError,
@@ -148,6 +156,17 @@ from .slm import (
 )
 from .store import StateStore, StoreError, TrajectoryStore, open_state, open_trajectory
 from .store_agent import STORE_GET, STORE_KEYS, STORE_SET, StoreAgent
+from .training_plan import (
+    TIER_CPU,
+    TIER_KINDS,
+    TIER_MULTI_GPU,
+    TIER_SINGLE_GPU,
+    TIERS,
+    TrainingError,
+    TrainingPlan,
+    TrainingTier,
+    plan_training,
+)
 from .transport import (
     IPC_SOCKET_MODE,
     SECURITY_DEFAULT,
@@ -300,6 +319,23 @@ __all__ = [
     "SettlementError",
     "StubSettlementProvider",
     "settle_run",
+    # External training-provider adapters (the learned tier; opt-in, operator-selected)
+    "ProviderRegistry",
+    "provider_names",
+    "get_provider",
+    "ModalSlmProvider",
+    "RunpodSlmProvider",
+    "ReplicateSlmProvider",
+    # Deterministic training-plan tier (strategic hardware provisioning)
+    "TrainingPlan",
+    "TrainingTier",
+    "TrainingError",
+    "plan_training",
+    "TIERS",
+    "TIER_KINDS",
+    "TIER_CPU",
+    "TIER_SINGLE_GPU",
+    "TIER_MULTI_GPU",
     # Model agent (an LLM as an ordinary first-class agent)
     "ModelAgent",
     "TASK_MODEL",
