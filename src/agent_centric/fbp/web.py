@@ -1705,6 +1705,8 @@ _PAGE_CSS = "\n".join([
     ".net-svg { position:absolute; top:0; left:0; overflow:visible; pointer-events:none; }",
     ".net-edge-path { pointer-events:stroke; stroke:#94a3b8; stroke-width:2; fill:none;",
     "  cursor:pointer; }",
+    ".net-wire-preview { stroke:#5b8def; stroke-width:2.5; stroke-dasharray:6 4;",
+    "  pointer-events:none; }",
     ".net-edge-path.sel { stroke:#111827; stroke-width:3; }",
     ".net-inspector { background:#f8fafc; border:1px solid #e5e7eb; border-radius:12px;",
     "  padding:.9rem; }",
@@ -2263,6 +2265,7 @@ _NETWORK_JS = r"""\
   const netLayout = {};
   let netSeq = 1;
   let netPending = null;
+  let netWire = null;   // in-progress drag-and-drop connector
   let netSel = null;
   let netDrag = null;
   let netPan = null;
@@ -2313,6 +2316,7 @@ _NETWORK_JS = r"""\
     delete netLayout[id];
     delete netResult[id];
     if (netPending && netPending.sourceNode === id) netPending = null;
+    if (netWire && netWire.sourceNode === id) netWire = null;
     if (netSel === id) { netSel = null; netRenderInspector(); }
     netRender();
   }
@@ -2321,7 +2325,7 @@ _NETWORK_JS = r"""\
     netState.components = [];
     netState.edges = [];
     Object.keys(netLayout).forEach(k => delete netLayout[k]);
-    netPending = null; netSel = null; netResult = {};
+    netPending = null; netWire = null; netSel = null; netResult = {};
     netRender(); netRenderInspector();
     netSetStatus('Empty network - add components from the palette.');
   }
@@ -2342,6 +2346,51 @@ _NETWORK_JS = r"""\
     const x = (r.left - cr.left) + (which === 'in' ? 0 : r.width);
     const y = (r.top - cr.top) + r.height / 2;
     return {x: x / netZoom, y: y / netZoom};
+  }
+
+  // Convert a client-space point to canvas (unzoomed) coordinates.
+  function netClientToCanvas(clientX, clientY) {
+    const cr = $netCanvas().getBoundingClientRect();
+    return {x: (clientX - cr.left) / netZoom, y: (clientY - cr.top) / netZoom};
+  }
+
+  // Start a drag-and-drop connector from an output port.
+  function netWireStart(id, ev) {
+    ev.stopPropagation();
+    ev.preventDefault();
+    const s = netPortPos(id, 'out');
+    netWire = {sourceNode: id, x: s.x, y: s.y};
+    netSelect(id);
+    netSetStatus('Drag to an input port to connect.');
+    netRenderEdges();
+  }
+
+  // Update the live preview line while dragging.
+  function netWireMove(ev) {
+    if (!netWire) return;
+    const p = netClientToCanvas(ev.clientX, ev.clientY);
+    netWire.x = p.x; netWire.y = p.y;
+    netRenderEdges();
+  }
+
+  // Complete the edge if released over an input port, else cancel.
+  function netWireEnd(ev) {
+    if (!netWire) return;
+    const target = document.elementFromPoint(ev.clientX, ev.clientY);
+    const inPort = target && target.classList && target.classList.contains('net-port')
+      && target.classList.contains('in');
+    if (inPort) {
+      const el = target.closest('.net-node-el');
+      const tid = el ? el.id.replace('net-n-', '') : null;
+      if (tid && tid !== netWire.sourceNode) {
+        netState.edges.push({source: netWire.sourceNode, source_field: 'value',
+          target: tid, target_arg: 'value'});
+        netResult = {};
+        netSetStatus('Connected ' + netWire.sourceNode + ' -> ' + tid + '.');
+      }
+    }
+    netWire = null;
+    netRender();
   }
 
   function netSelect(id, ev) {
@@ -2429,6 +2478,9 @@ _NETWORK_JS = r"""\
       });
       el.addEventListener('click', (ev) => { ev.stopPropagation(); netSelect(c.id); });
       el.addEventListener('dblclick', (ev) => { ev.stopPropagation(); netRemoveComponent(c.id); });
+      el.querySelector('.net-port.out').addEventListener('mousedown', (ev) => {
+        netWireStart(c.id, ev);
+      });
       el.querySelector('.net-port.out').addEventListener('click', (ev) => {
         ev.stopPropagation();
         netPending = {sourceNode: c.id};
@@ -2459,6 +2511,13 @@ _NETWORK_JS = r"""\
       paths += '<path class="net-edge-path" d="M' + s.x + ',' + s.y + ' C' + mx + ',' + s.y +
         ' ' + mx + ',' + t.y + ' ' + t.x + ',' + t.y + '" data-ed="' + netEdgeKey(e) + '"/>';
     });
+    if (netWire) {
+      const s = netWire;
+      const t = {x: netWire.x, y: netWire.y};
+      const mx = (s.x + t.x) / 2;
+      paths += '<path class="net-edge-path net-wire-preview" d="M' + s.x + ',' + s.y +
+        ' C' + mx + ',' + s.y + ' ' + mx + ',' + t.y + ' ' + t.x + ',' + t.y + '"/>';
+    }
     svg.innerHTML = paths;
     svg.setAttribute('width', $netCanvas().clientWidth || 600);
     svg.setAttribute('height', $netCanvas().clientHeight || 460);
@@ -2474,10 +2533,12 @@ _NETWORK_JS = r"""\
       $netCanvas().classList.add('panning');
     }
   });
-  document.addEventListener('mouseup', () => {
+  document.addEventListener('mouseup', (ev) => {
+    if (netWire) { netWireEnd(ev); return; }
     netPan = null; netDrag = null; $netCanvas().classList.remove('panning');
   });
   document.addEventListener('mousemove', (ev) => {
+    if (netWire) { netWireMove(ev); return; }
     if (netDrag) {
       const el = netNodeEl(netDrag.id); if (!el) return;
       const p = {x: (ev.clientX - netDrag.dx) / netZoom, y: (ev.clientY - netDrag.dy) / netZoom};
