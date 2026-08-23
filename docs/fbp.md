@@ -306,6 +306,13 @@ The attaching seam between the LLM chat window and the FBP network, per the
   `run_artifact_plan(driver, artifact)` executes it through `driver.run_plan`,
   so every step is a normal directive (parent re-verified, ledgered,
   replayable). Unsupported intents / unorchestrable artifacts fail closed.
+- **Schema-driven orchestration** — `plan_from_schema(artifact)` validates a
+  typed artifact against its intent's schema (`SCHEMAS`: `run`/`double`/`sum`)
+  and coerces fields fail-closed before planning. This is the seam that lets a
+  chat window (or a scripted client) emit a *typed, schema-constrained*
+  artifact — `{"intent": "sum", "a": 2, "b": 3}` — instead of free-form JSON,
+  and still run through the exact same verified spine. Unknown intents, missing
+  required fields, and uncoercible types fail closed.
 
 ```python
 from agent_centric.fbp import plan_from_artifact, run_artifact_plan
@@ -316,7 +323,10 @@ result = run_artifact_plan(driver, {"task": "double", "args": {"value": 21}})
 ```
 
 The landing page exposes this as an **Orchestrate → FBP** box (`/orchestrate`
-route): paste a JSON artifact and it runs as a verified FBP plan.
+route): paste a JSON artifact and it runs as a verified FBP plan. A
+**schema-driven** form (`/orchestrate/schema` serves the intent schemas) lets you
+pick a typed intent and fill its fields — same verified spine, typed form
+instead of free-form JSON.
 
 The model box also folds **prior transcript turns** into the next prompt as
 deterministic chat-context (oldest-first, bounded, auditable): the model answers

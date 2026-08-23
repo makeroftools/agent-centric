@@ -50,6 +50,39 @@ class TestOrchestrateRoute:
         finally:
             server._driver.close()
 
+    def test_run_artifact_typed_intent(self) -> None:
+        server = FbpLandingServer()
+        try:
+            result = server._run_artifact('{"intent": "sum", "a": 2, "b": 3}')
+            assert result["ok"] is True
+            assert result["results"][0]["value"] == 5
+        finally:
+            server._driver.close()
+
+    def test_run_artifact_typed_intent_coerces(self) -> None:
+        server = FbpLandingServer()
+        try:
+            result = server._run_artifact('{"intent": "double", "value": "21"}')
+            assert result["ok"] is True
+            assert result["results"][0]["value"] == 42
+        finally:
+            server._driver.close()
+
+    def test_run_artifact_typed_intent_fails_closed(self) -> None:
+        server = FbpLandingServer()
+        try:
+            result = server._run_artifact('{"intent": "sum", "a": 2}')
+            assert result["ok"] is False
+            assert "required" in result["error"]
+        finally:
+            server._driver.close()
+
+    def test_schema_route_exposes_schemas(self) -> None:
+        from agent_centric.fbp.orchestrate import SCHEMAS
+
+        assert set(SCHEMAS) >= {"run", "double", "sum"}
+        assert SCHEMAS["sum"]["fields"]["a"]["required"] is True
+
 
 class TestChatContext:
     """The model box folds prior (durable) turns into the next prompt."""

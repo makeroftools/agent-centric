@@ -96,9 +96,11 @@ from .network import (
 from .node import AgentNode, Node
 from .node import Response as NodeResponse
 from .orchestrate import (
+    SCHEMAS,
     SUPPORTED_INTENTS,
     extract_intent,
     plan_from_artifact,
+    plan_from_schema,
     run_artifact_plan,
 )
 from .pdf_intake import draft_from_pdf_text, extract_text
@@ -175,7 +177,9 @@ __all__ = [
     "SUPPORTED_INTENTS",
     "extract_intent",
     "plan_from_artifact",
+    "plan_from_schema",
     "run_artifact_plan",
+    "SCHEMAS",
     # Component Networks (visual programming core)
     "Component",
     "ComponentNetwork",

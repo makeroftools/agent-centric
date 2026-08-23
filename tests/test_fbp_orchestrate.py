@@ -10,10 +10,75 @@ from __future__ import annotations
 import pytest
 
 from agent_centric.fbp.orchestrate import (
+    SCHEMAS,
     extract_intent,
     plan_from_artifact,
+    plan_from_schema,
     run_artifact_plan,
 )
+
+
+class TestSchemaDriven:
+    """Schema-driven orchestration: a typed artifact is validated/coerced
+    against its intent's schema (fail-closed) before it maps to a plan."""
+
+    def test_typed_double_plans(self) -> None:
+        steps = plan_from_schema({"intent": "double", "value": 21})
+        assert steps == [{"task": "double", "args": {"value": 21}}]
+
+    def test_typed_sum_plans(self) -> None:
+        steps = plan_from_schema({"intent": "sum", "a": 2, "b": 3})
+        assert steps == [{"task": "sum", "args": {"a": 2, "b": 3}}]
+
+    def test_intent_defaults_to_run(self) -> None:
+        steps = plan_from_schema({"task": "double", "args": {"value": 21}})
+        assert steps == [{"task": "double", "args": {"value": 21}}]
+
+    def test_coerces_numeric_strings(self) -> None:
+        steps = plan_from_schema({"intent": "sum", "a": "2", "b": "3"})
+        assert steps == [{"task": "sum", "args": {"a": 2, "b": 3}}]
+
+    def test_missing_required_field_fails_closed(self) -> None:
+        with pytest.raises(ValueError):
+            plan_from_schema({"intent": "sum", "a": 2})
+
+    def test_bad_type_fails_closed(self) -> None:
+        with pytest.raises(ValueError):
+            plan_from_schema({"intent": "double", "value": "not-a-number"})
+
+    def test_unknown_intent_fails_closed(self) -> None:
+        with pytest.raises(ValueError):
+            plan_from_schema({"intent": "delete_everything", "value": 1})
+
+    def test_schemas_expose_declared_fields(self) -> None:
+        assert set(SCHEMAS) >= {"run", "double", "sum"}
+        assert SCHEMAS["sum"]["fields"]["a"]["required"] is True
+
+    def test_run_artifact_plan_runs_typed_intent(self) -> None:
+        from agent_centric.fbp.driver import FbpDriver
+
+        driver = FbpDriver()
+        driver.register(
+            "sum", lambda a, b: a + b, source_url="file:///tasks/sum"
+        )
+        driver.configure(tasks=("sum",))
+        try:
+            result = run_artifact_plan(driver, {"intent": "sum", "a": 2, "b": 3})
+            assert result["ok"] is True
+            assert result["results"][0]["value"] == 5
+        finally:
+            driver.close()
+
+    def test_run_artifact_plan_typed_fail_closed(self) -> None:
+        from agent_centric.fbp.driver import FbpDriver
+
+        driver = FbpDriver()
+        try:
+            result = run_artifact_plan(driver, {"intent": "sum", "a": 2})
+            assert result["ok"] is False
+            assert "required" in result["error"]
+        finally:
+            driver.close()
 
 
 class TestExtractIntent:

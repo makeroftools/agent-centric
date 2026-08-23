@@ -82,6 +82,7 @@ that page:
 | **Post-return determinism** | `fbp/chat_pipeline.py` | The "model proposes, code accepts" seam: deterministic repair → schema-parse → canonicalize → request-key → pin. `PinCache` serves the first accepted artifact for identical inputs (lexical determinism by caching). Pure/offline |
 | **Chat → FBP orchestration** | `fbp/orchestrate.py`, `fbp/web.py` `/orchestrate` | A canonical JSON artifact (single `task` or `steps`) maps to an ordered FBP `run` plan executed through the driver's verified spine (parent re-verified, ledgered, replayable). Fail-closed on invalid/unorchestrable artifacts |
 | **Chat-context** | `fbp/web.py` (`_build_chat_context`) | prior (durable) transcript turns fold into the next model prompt (oldest-first, bounded), so the model answers with continuity — wired into both the audited `/model` and the streaming preview path |
+| **Schema-driven orchestration** | `fbp/orchestrate.py`, `fbp/web.py` | **Typed, schema-constrained intents** (`SCHEMAS`: `run`/`double`/`sum`): `plan_from_schema` validates + coerces a typed artifact fail-closed before planning; the landing page gains a **schema-driven form** (`/orchestrate/schema` serves the schemas) — same verified spine, typed form instead of free-form JSON. Additive (`plan_from_artifact` unchanged) |
 | **Component Networks** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. **True dataflow** (a downstream component consumes the *computed* verified output of its upstreams, not their args). Cycles / unknown refs / unverified steps fail closed. Landing page has a **dependency-free drag-and-drop node-and-wire canvas** editor (palette, draggable nodes, click-to-connect ports, SVG edges, run) + **durable save/load** (`fbp-web --networks <path>`, `/network/save|/list|/load`) |
 | **Card-based UI + mode switch** | `fbp/web.py` | Card-based landing page with a **Chat / Designer** mode switch: Chat = model box + chat history + run-an-artifact (general-purpose); Designer = Component Network editor. Clear functional division |
 
@@ -229,6 +230,13 @@ of decisions and working style that a fresh session must inherit.
    rather than a separate `fbp-web-kill` subcommand. It routes to
    `_cmd_fbp_web_kill(port=port)`. The `fbp-web-kill` subcommand is kept for
    backward compatibility.
+18. **Schema-driven orchestration** (current) — the handoff's "future UX idea"
+   realized: `orchestrate.py` gains typed intent `SCHEMAS` (`run`/`double`/
+   `sum`) and `plan_from_schema`, so a typed, schema-constrained artifact
+   (e.g. `{"intent": "sum", "a": 2, "b": 3}`) is validated + coerced
+   fail-closed and runs through the same verified spine. The landing page gains
+   a **schema-driven form** card in Chat mode (`/orchestrate/schema` serves the
+   schemas). Additive — `plan_from_artifact` etc. unchanged. 765 tests.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -334,11 +342,14 @@ These are listed in `STATUS.md`'s "out of scope / future volleys".
   `OPENROUTER_API_KEY` for a real model; it fails closed to the stub otherwise):
   `uv run agent-centric fbp-web --reload`. Add `--history <path>` to keep the
   model-box transcript across restarts.
-- Future UX idea for the model box: schema-driven orchestration (let the chat
-  window emit a *typed*, schema-constrained artifact that maps to richer FBP
-  intents, e.g. bills intake → accept). **Chat-context** (feed prior turns into
-  the next prompt) is now built (`c4afa94`); **persisted** (durable) chat
-  history and streaming were already in.
+- Future UX idea for the model box: **schema-driven orchestration — now built**
+  (typed intents via `SCHEMAS`/`plan_from_schema`; the landing page has a
+  schema-driven form). The typed-intent surface is currently the demo tasks
+  (`run`/`double`/`sum`); the natural next step is richer intents mapped onto
+  the real bills loop (intake → accept → calendar) and other domain agent
+  operations.**Chat-context** (feed prior turns into the next prompt) is now
+  built (`c4afa94`); **persisted** (durable) chat history and streaming were
+  already in.
 
 ---
 

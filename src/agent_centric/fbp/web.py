@@ -355,11 +355,17 @@ class FbpLandingServer:
                     self._serve_sse_stream(server, prompt, model)
                 elif self.path == "/orchestrate":
                     # The chat-window → FBP seam: a JSON artifact (task or
-                    # steps) is validated/canonicalized, then run as an FBP plan
-                    # through the driver's verified spine.
+                    # steps, or a typed intent) is validated/canonicalized, then
+                    # run as an FBP plan through the driver's verified spine.
                     body = self._read_body()
                     result = server._run_artifact(body)
                     self._send_json(result)
+                elif self.path == "/orchestrate/schema":
+                    # The typed-intent schema registry (schema-driven
+                    # orchestration): the UI renders a typed form from it.
+                    from .orchestrate import SCHEMAS
+
+                    self._send_json({"schemas": SCHEMAS})
                 elif self.path == "/network":
                     # Component Networks: a visual-programming graph payload
                     # (components + edges) compiles to an ordered FBP plan and
@@ -924,6 +930,10 @@ _PAGE_CSS = "\n".join([
     ".card-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }",
     "@media (max-width:760px){ .card-grid { grid-template-columns:1fr; } }",
     ".card .note { margin-top:.2rem; }",
+    ".schema-field { margin:.4rem 0; }",
+    ".schema-field label { display:block; font-size:.85rem; color:#333; margin-bottom:.15rem; }",
+    ".schema-field input { width:60%; padding:.35rem .5rem; border:1px solid #ccc;",
+    "  border-radius:6px; font-family:monospace; }",
 ])
 
 # The model text-box client script (kept out of the f-string so its JS object
@@ -1086,6 +1096,105 @@ _ORCHESTRATE_JS = r"""\
       if (btn) btn.disabled = false;
     }
   });
+</script>
+"""
+
+# The schema-driven orchestration client script: a typed form rendered from the
+# intent schema registry (`/orchestrate/schema`), submitting a typed artifact.
+_SCHEMA_JS = r"""\
+<script>
+  let schemaData = {};
+
+  async function schemaLoad() {
+    try {
+      const r = await fetch('/orchestrate/schema');
+      const data = await r.json();
+      schemaData = (data && data.schemas) || {};
+    } catch (e) { schemaData = {}; }
+    schemaRenderIntents();
+  }
+
+  function schemaRenderIntents() {
+    const sel = document.getElementById('schema-intent');
+    if (!sel) return;
+    sel.innerHTML = '';
+    for (const name of Object.keys(schemaData)) {
+      const o = document.createElement('option'); o.value = name; o.textContent = name;
+      sel.appendChild(o);
+    }
+    if (sel.options.length) schemaRenderFields();
+  }
+
+  function schemaTypeLabel(type) {
+    return type === 'int' ? 'integer' : (type === 'float' ? 'decimal' : type);
+  }
+
+  function schemaRenderFields() {
+    const sel = document.getElementById('schema-intent');
+    const box = document.getElementById('schema-fields');
+    if (!sel || !box) return;
+    const schema = schemaData[sel.value] || {};
+    const fields = schema.fields || {};
+    box.innerHTML = '';
+    for (const [name, spec] of Object.entries(fields)) {
+      if (name === 'intent') continue;
+      const req = spec.required ? ' (required)' : '';
+      const wrap = document.createElement('div');
+      wrap.className = 'schema-field';
+      wrap.innerHTML = '<label>' + esc(name + ' (' +
+        schemaTypeLabel(spec.type || 'str') + ')' + req + ')</label>';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.id = 'schema-f-' + name;
+      if (spec.default !== undefined) input.value = spec.default;
+      input.placeholder = spec.type || 'str';
+      wrap.appendChild(input);
+      box.appendChild(wrap);
+    }
+  }
+
+  async function schemaRun() {
+    const sel = document.getElementById('schema-intent');
+    const out = document.getElementById('schema-result');
+    const spin = document.getElementById('schema-spinner');
+    const btn = document.getElementById('schema-run');
+    out.textContent = ''; out.className = 'note';
+    if (spin) spin.style.display = 'inline-block';
+    if (btn) btn.disabled = true;
+    const schema = (schemaData[sel.value] || {}).fields || {};
+    const artifact = {intent: sel.value};
+    for (const name of Object.keys(schema)) {
+      if (name === 'intent') continue;
+      artifact[name] = document.getElementById('schema-f-' + name).value;
+    }
+    try {
+      const r = await fetch('/orchestrate', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(artifact)
+      });
+      const data = await r.json();
+      if (data.ok) {
+        let lines = data.results.map((s) =>
+          (s.verified ? '✔' : '✘') + ' step ' + s.step + ' ' + s.task +
+          (s.value !== undefined ? ' = ' + JSON.stringify(s.value) : '') +
+          (s.error ? ' error=' + s.error : '')
+        ).join('\n');
+        out.textContent = 'FBP plan ok (' + data.completed + ' step(s)):\n' + lines;
+      } else {
+        out.textContent = 'FBP plan FAILED: ' + (data.error || 'unverified step');
+        out.className = 'error';
+      }
+    } catch (err) {
+      out.textContent = 'request failed: ' + err; out.className='error';
+    } finally {
+      if (spin) spin.style.display = 'none';
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  document.getElementById('schema-intent').addEventListener('change', schemaRenderFields);
+  document.getElementById('schema-run').addEventListener('click', schemaRun);
+  schemaLoad();
 </script>
 """
 
@@ -1413,8 +1522,8 @@ Answers stream in as they arrive; the transcript shows each turn's status.</p>
 <div class='card'>
 <h2>Orchestrate → FBP</h2>
 <p class='note'>Take a validated, canonical JSON artifact and run it as an
-FBP plan through the verified spine. A single task (<code>{{"task": ...}}</code>)
-or an ordered <code>{{"steps": [...]}}</code> list; each step is a normal
+FBP plan through the verified spine. A single task (<code>{{ "task": ... }}</code>)
+or an ordered <code>{{ "steps": [...] }}</code> list; each step is a normal
 <code>run</code> directive that is parent re-verified, ledgered, and
 replayable. Invalid artifacts fail closed.</p>
 <textarea id='orch-prompt' rows='5' cols='72'
@@ -1424,6 +1533,22 @@ replayable. Invalid artifacts fail closed.</p>
 <span id='orch-spinner' class='spinner' style='display:none'></span>
 <pre id='orch-result' class='note'></pre>
 {_ORCHESTRATE_JS}
+</div>
+
+<div class='card'>
+<h2>Schema-driven orchestration</h2>
+<p class='note'>Pick a typed intent and fill its fields. The artifact is validated
+against the intent's schema (fail-closed), then run as a verified FBP plan —
+the same verified spine, but with a typed, schema-constrained form instead of
+free-form JSON.</p>
+<label for='schema-intent'>Intent</label>
+<select id='schema-intent' class='pill'></select>
+<div id='schema-fields'></div>
+<br/>
+<button id='schema-run' type='button'>Run typed intent</button>
+<span id='schema-spinner' class='spinner' style='display:none'></span>
+<pre id='schema-result' class='note'></pre>
+{_SCHEMA_JS}
 </div>
 </div>
 

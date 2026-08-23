@@ -5,7 +5,10 @@ This is the attaching seam between the LLM chat window and the FBP network:
 1. The model's free-text output is validated → canonicalized → pinned (see
    ``chat_pipeline``). The pinned artifact is a **typed, canonical JSON object**.
 2. Here, ordinary deterministic code maps that artifact onto an FBP **plan** — an
-   ordered list of ``run`` steps consumed by ``FbpDriver.run_plan``.
+   ordered list of ``run`` steps consumed by ``FbpDriver.run_plan``. A typed
+   artifact may declare an ``intent`` (``run``/``double``/``sum``/...); its
+   fields are validated against a **schema** (``SCHEMAS``) and coerced
+   fail-closed before planning (schema-driven orchestration).
 3. The plan runs through the driver's correctness spine: every step is a normal
    directive, the parent re-verifies each child's value, and the run is recorded
    in the ledger (auditable + replayable). Orchestration never bypasses
@@ -23,7 +26,36 @@ from typing import Any
 
 # Operations this orchestrator knows how to emit (as FBP ``run`` steps).
 # Chat artifacts request one of these intents; anything else is rejected.
-SUPPORTED_INTENTS = ("run", "inspect", "status")
+SUPPORTED_INTENTS = ("run", "inspect", "status", "double", "sum")
+
+# Typed intent schemas for schema-driven orchestration. Each schema declares the
+# fields an artifact may carry for that intent (``type`` in
+# ``int|float|bool|str|object``, ``required``, ``default``). A raw artifact is
+# validated/coerced against its intent's schema (fail-closed) before it is
+# mapped to a concrete FBP plan. This is the seam that lets the chat window emit
+# a *typed, schema-constrained* artifact rather than free-form JSON.
+SCHEMAS: dict[str, dict[str, Any]] = {
+    "run": {
+        "fields": {
+            "intent": {"type": "str", "default": "run"},
+            "task": {"type": "str", "required": True},
+            "args": {"type": "object"},
+        }
+    },
+    "double": {
+        "fields": {
+            "intent": {"type": "str", "default": "double"},
+            "value": {"type": "int", "required": True},
+        }
+    },
+    "sum": {
+        "fields": {
+            "intent": {"type": "str", "default": "sum"},
+            "a": {"type": "int", "required": True},
+            "b": {"type": "int", "required": True},
+        }
+    },
+}
 
 # Reserved step-keys an artifact may carry; unknown keys are rejected fail-closed.
 _ALLOWED_STEP_KEYS = ("task", "args", "verifier", "child")
@@ -99,6 +131,95 @@ def _steps_from_list(
     return out
 
 
+def _coerce_field(value: Any, type_: str, name: str) -> Any:
+    """Coerce ``value`` to a declared schema field type (fail-closed).
+
+    Supports the scalar types ``int``/``float``/``bool``/``str`` (numeric strings
+    are parsed) and ``object`` (a dict, passed through). An uncoercible value
+    raises ``ValueError`` so a malformed artifact never silently runs.
+    """
+    if type_ == "object":
+        if not isinstance(value, dict):
+            raise ValueError(f"field {name!r} must be an object")
+        return value
+    if type_ == "bool":
+        if isinstance(value, bool):
+            return value
+        s = str(value).strip().lower()
+        if s in ("true", "yes", "y", "1", "ok"):
+            return True
+        if s in ("false", "no", "n", "0", ""):
+            return False
+        raise ValueError(f"field {name!r} cannot be coerced to bool")
+    if type_ == "int":
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if isinstance(value, str):
+            try:
+                return int(value.strip())
+            except ValueError as exc:
+                raise ValueError(f"field {name!r} cannot be coerced to int") from exc
+        raise ValueError(f"field {name!r} cannot be coerced to int")
+    if type_ == "float":
+        if isinstance(value, bool):
+            return float(value)
+        try:
+            return float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"field {name!r} cannot be coerced to float") from exc
+    # str
+    return str(value)
+
+
+def plan_from_schema(
+    artifact: dict[str, Any],
+    *,
+    verifier: str | None = None,
+) -> list[dict[str, Any]]:
+    """Validate a typed artifact against its intent's schema, then map to a plan.
+
+    The artifact declares an ``intent`` (default ``run``). For ``run`` this
+    delegates to ``plan_from_artifact`` (a task or an ordered ``steps`` list).
+    For a typed intent (e.g. ``double``/``sum``) the artifact's fields are
+    coerced against the intent's ``SCHEMAS`` entry (fail-closed), then mapped to
+    a single concrete ``run`` step. An unknown intent or a schema violation
+    raises ``ValueError``.
+    """
+    if not isinstance(artifact, dict):
+        raise ValueError("artifact must be a JSON object")
+    intent = extract_intent(artifact)
+    if intent == "run":
+        return plan_from_artifact(artifact, verifier=verifier)
+    schema = SCHEMAS.get(intent)
+    if schema is None:
+        raise ValueError(f"no schema for intent {intent!r}")
+    fields = schema.get("fields")
+    if not isinstance(fields, dict):
+        raise ValueError(f"schema for intent {intent!r} has no 'fields'")
+    args: dict[str, Any] = {}
+    for name, spec in fields.items():
+        spec = spec if isinstance(spec, dict) else {}
+        type_ = spec.get("type", "str")
+        required = bool(spec.get("required", False))
+        default = spec.get("default")
+        if name == "intent":
+            continue
+        if name in artifact and artifact[name] is not None:
+            args[name] = _coerce_field(artifact[name], type_, name)
+        elif required:
+            raise ValueError(f"missing required field: {name}")
+        elif default is not None:
+            args[name] = default
+    step: dict[str, Any] = {"task": intent, "args": args}
+    if verifier:
+        step["verifier"] = verifier
+    return [step]
+
+
 def run_artifact_plan(
     driver: Any,
     artifact: dict[str, Any],
@@ -115,7 +236,7 @@ def run_artifact_plan(
     ``ok=False`` — never a silent partial success.
     """
     try:
-        steps = plan_from_artifact(artifact, verifier=verifier)
+        steps = plan_from_schema(artifact, verifier=verifier)
     except ValueError as exc:
         return {"ok": False, "results": [], "completed": 0, "error": str(exc)}
     try:
