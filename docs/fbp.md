@@ -324,7 +324,7 @@ The attaching seam between the LLM chat window and the FBP network, per the
   so every step is a normal directive (parent re-verified, ledgered,
   replayable). Unsupported intents / unorchestrable artifacts fail closed.
 - **Schema-driven orchestration** — `plan_from_schema(artifact)` validates a
-  typed artifact against its intent's schema (`SCHEMAS`: `run`/`double`/`sum`)
+  typed artifact against its intent's schema (`SCHEMAS`: `run`/`double`/`sum`/`bills_intake`/`bills_accept`/`bills_calendar`)
   and coerces fields fail-closed before planning. This is the seam that lets a
   chat window (or a scripted client) emit a *typed, schema-constrained*
   artifact — `{"intent": "sum", "a": 2, "b": 3}` — instead of free-form JSON,

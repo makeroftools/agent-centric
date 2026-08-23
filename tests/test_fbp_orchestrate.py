@@ -170,3 +170,44 @@ class TestRunArtifactPlan:
             assert "error" in result
         finally:
             driver.close()
+
+class TestBillsIntents:
+    """Schema-driven bills intents route to the ``bills`` child (the mission loop)."""
+
+    def test_bills_intake_plans_to_child(self) -> None:
+        steps = plan_from_schema(
+            {"intent": "bills_intake", "draft": {"id": "b1", "vendor": "GasCo"}}
+        )
+        assert steps == [
+            {"task": "bills_intake", "args": {"draft": {"id": "b1", "vendor": "GasCo"}},
+             "child": "bills"}
+        ]
+
+    def test_bills_accept_plans_to_child(self) -> None:
+        steps = plan_from_schema(
+            {"intent": "bills_accept", "draft": {"id": "b1"}}
+        )
+        assert steps[0]["task"] == "bills_accept"
+        assert steps[0]["child"] == "bills"
+
+    def test_bills_calendar_plans_to_child(self) -> None:
+        steps = plan_from_schema(
+            {"intent": "bills_calendar", "from_date": "2026-01-01", "to_date": "2026-12-31"}
+        )
+        assert steps == [
+            {"task": "bills_calendar",
+             "args": {"from_date": "2026-01-01", "to_date": "2026-12-31"},
+             "child": "bills"}
+        ]
+
+    def test_bills_intake_missing_draft_fails_closed(self) -> None:
+        with pytest.raises(ValueError):
+            plan_from_schema({"intent": "bills_intake"})
+
+    def test_bills_calendar_missing_dates_fails_closed(self) -> None:
+        with pytest.raises(ValueError):
+            plan_from_schema({"intent": "bills_calendar", "from_date": "2026-01-01"})
+
+    def test_bills_intents_in_schemas(self) -> None:
+        assert "bills_intake" in SCHEMAS
+        assert SCHEMAS["bills_accept"]["child"] == "bills"

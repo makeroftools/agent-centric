@@ -6,8 +6,8 @@ This is the attaching seam between the LLM chat window and the FBP network:
    ``chat_pipeline``). The pinned artifact is a **typed, canonical JSON object**.
 2. Here, ordinary deterministic code maps that artifact onto an FBP **plan** — an
    ordered list of ``run`` steps consumed by ``FbpDriver.run_plan``. A typed
-   artifact may declare an ``intent`` (``run``/``double``/``sum``/...); its
-   fields are validated against a **schema** (``SCHEMAS``) and coerced
+   artifact may declare an ``intent`` (``run``/``double``/``sum``/``bills_*``/...);
+   its fields are validated against a **schema** (``SCHEMAS``) and coerced
    fail-closed before planning (schema-driven orchestration).
 3. The plan runs through the driver's correctness spine: every step is a normal
    directive, the parent re-verifies each child's value, and the run is recorded
@@ -26,14 +26,18 @@ from typing import Any
 
 # Operations this orchestrator knows how to emit (as FBP ``run`` steps).
 # Chat artifacts request one of these intents; anything else is rejected.
-SUPPORTED_INTENTS = ("run", "inspect", "status", "double", "sum")
+SUPPORTED_INTENTS = (
+    "run", "inspect", "status", "double", "sum",
+    "bills_intake", "bills_accept", "bills_calendar",
+)
 
 # Typed intent schemas for schema-driven orchestration. Each schema declares the
 # fields an artifact may carry for that intent (``type`` in
-# ``int|float|bool|str|object``, ``required``, ``default``). A raw artifact is
-# validated/coerced against its intent's schema (fail-closed) before it is
-# mapped to a concrete FBP plan. This is the seam that lets the chat window emit
-# a *typed, schema-constrained* artifact rather than free-form JSON.
+# ``int|float|bool|str|object``, ``required``, ``default``), plus an optional
+# ``task`` (the FBP task to run) and ``child`` (the child agent to delegate to).
+# A raw artifact is validated/coerced against its intent's schema (fail-closed)
+# before it is mapped to a concrete FBP plan. This is the seam that lets the chat
+# window emit a *typed, schema-constrained* artifact rather than free-form JSON.
 SCHEMAS: dict[str, dict[str, Any]] = {
     "run": {
         "fields": {
@@ -54,6 +58,32 @@ SCHEMAS: dict[str, dict[str, Any]] = {
             "a": {"type": "int", "required": True},
             "b": {"type": "int", "required": True},
         }
+    },
+    # Bills loop intents: route to the ``bills`` child (the mission loop).
+    "bills_intake": {
+        "task": "bills_intake",
+        "child": "bills",
+        "fields": {
+            "intent": {"type": "str", "default": "bills_intake"},
+            "draft": {"type": "object", "required": True},
+        },
+    },
+    "bills_accept": {
+        "task": "bills_accept",
+        "child": "bills",
+        "fields": {
+            "intent": {"type": "str", "default": "bills_accept"},
+            "draft": {"type": "object", "required": True},
+        },
+    },
+    "bills_calendar": {
+        "task": "bills_calendar",
+        "child": "bills",
+        "fields": {
+            "intent": {"type": "str", "default": "bills_calendar"},
+            "from_date": {"type": "str", "required": True},
+            "to_date": {"type": "str", "required": True},
+        },
     },
 }
 
@@ -184,10 +214,11 @@ def plan_from_schema(
 
     The artifact declares an ``intent`` (default ``run``). For ``run`` this
     delegates to ``plan_from_artifact`` (a task or an ordered ``steps`` list).
-    For a typed intent (e.g. ``double``/``sum``) the artifact's fields are
-    coerced against the intent's ``SCHEMAS`` entry (fail-closed), then mapped to
-    a single concrete ``run`` step. An unknown intent or a schema violation
-    raises ``ValueError``.
+    For a typed intent (e.g. ``double``/``sum``/``bills_*``) the artifact's
+    fields are coerced against the intent's ``SCHEMAS`` entry (fail-closed), then
+    mapped to a single concrete ``run`` step — using the schema's ``task`` and
+    ``child`` when present (so a bills intent routes to the ``bills`` child). An
+    unknown intent or a schema violation raises ``ValueError``.
     """
     if not isinstance(artifact, dict):
         raise ValueError("artifact must be a JSON object")
@@ -214,7 +245,9 @@ def plan_from_schema(
             raise ValueError(f"missing required field: {name}")
         elif default is not None:
             args[name] = default
-    step: dict[str, Any] = {"task": intent, "args": args}
+    step: dict[str, Any] = {"task": schema.get("task", intent), "args": args}
+    if schema.get("child"):
+        step["child"] = schema["child"]
     if verifier:
         step["verifier"] = verifier
     return [step]
