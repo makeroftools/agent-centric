@@ -25,10 +25,9 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `c9d5bcd` (commit below) on top of `db30e8a`. Both are local, **not
-  pushed** as of this handoff. The user said they will push this batch.
-- **Pushed to origin:** up through `0c78394`. Run
-  `git log origin/agent-centric-fbp..HEAD` to see the unpushed set.
+- **HEAD:** `09d1c7a` (Enter/Shift-Enter submit). **Pushed to origin:** up through
+  `df0fb16`. **Unpushed (1 commit):** `09d1c7a` (the Enter/Shift-Enter submit).
+  Run `git log origin/agent-centric-fbp..HEAD` to see the unpushed set.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule in effect for a long time: **do not push unless the lead
   explicitly says push.** (The lead has since been pushing directly themselves;
@@ -49,7 +48,8 @@ we are.
 Everything in the capability table below is real code, committed, and exercised
 by tests — the deterministic platform first, LLMs as ordinary agents, the bills
 loop, durable single-writer state, replay/audit, a landing-page server, and now
-an OpenRouter-backed model text box on that page:
+an OpenRouter-backed model box (dropdown, spinner, streaming, chat history) on
+that page:
 
 | Area | Where | Guarantee |
 |------|-------|-----------|
@@ -71,7 +71,9 @@ an OpenRouter-backed model text box on that page:
 | Determinism + auto-accept | `fbp/determinism.py`, `fbp/bills_agent.py` | `score_determinism`, `Rule`/`RuleSet`, `bills_accept_deterministic` only on an approved rule |
 | Durable approved rules | `fbp/bills_agent.py` (`bills_rule_add`) | rules persist; auto-accept across restarts — **"authorize once, run after restart"** |
 | **Landing-page server** | `fbp/web.py` | `agent-centric fbp-web`; stdlib `http.server`, loopback-only, read/verify-only; live tree, summary, invariants, actions |
-| **Model box (dropdown + spinner)** | `fbp/web.py` | `/model` POST runs a prompt through the `model` agent → OpenRouter when `OPENROUTER_API_KEY` set, else stub; model dropdown (`OPENROUTER_MODEL`), spinner, verified/source status |
+| **Model box (dropdown + spinner)** | `fbp/web.py` | `/model` POST runs a prompt through the `model` agent → OpenRouter when `OPENROUTER_API_KEY` set, else stub; model dropdown (`OPENROUTER_MODEL`), spinner, verified/source status; **Enter submits, Shift+Enter = newline** |
+| **Streaming answers + chat history** | `fbp/web.py` | `/model/stream` (SSE-over-POST) streams OpenRouter tokens live; `/history` + `/history/clear` give a bounded in-page transcript (100 turns). Streaming reports honestly as verified=False (the audited path stays `/model`) |
+| **Resource envelopes** | `fbp/envelopes.py` | `ResourceEnvelope` (step/size/latency/child bounds) granted at configure time, enforced fail-closed at run/spawn; unbounded by default |
 
 ### Easy-UX driver & CLI
 - `FbpDriver` API: `register`, `resolve`, `configure`, `configure_child`,
@@ -166,6 +168,8 @@ of decisions and working style that a fresh session must inherit.
 7. **Transport trust-boundary doc** (`docs/transport_trust_boundary.md`) — the
    honest statement of the FBP transport's authn/z + TLS gaps and the exact
    hardening needed before cross-host use.
+8. **Enter/Shift-Enter submit** (`09d1c7a`) — Enter submits the model prompt
+   (no more clicking Ask); Shift+Enter inserts a newline for multi-line prompts.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -226,15 +230,16 @@ real trust boundary.
 These are listed in `STATUS.md`'s "out of scope / future volleys".
 
 ### Loose ends / immediate next actions
-- **Unpushed commits:** `db30e8a` (real-model payload fix + dropdown) and
-  `c9d5bcd` (model box end-to-end + reload/kill) are local but not on GitHub
-  (remote is at `0c78394`). The user said "I'll push" for the current batch.
+- **Unpushed commit:** `09d1c7a` (Enter/Shift-Enter submit) is local but not on
+  GitHub (remote is at `df0fb16`). The user pushes directly; confirm before
+  pushing anything yourself.
 - **`OPENROUTER_MODEL` lives in the user's `~/.bashrc`** (out of the repo):
   `deepseek/deepseek-v4-flash-0731,openai/gpt-4o-mini,anthropic/claude-3.5-son
   net,meta-llama/llama-3.3-70b-instruct`. The `anthropic/claude-3.5-sonnet` id
   404s on OpenRouter for this key (invalid slug); remove or correct it.
 - **docs/fbp.md / FBP_HANDOFF.md / README_FBP.md** are living docs — keep them
-  current (they now mention the model box, reload, kill).
+  current (they now mention the model box, reload, kill, streaming, history,
+  envelopes).
 - **The `fbp-web` landing page** is live and runnable for a demo (set
   `OPENROUTER_API_KEY` for a real model; it fails closed to the stub otherwise):
   `uv run agent-centric fbp-web --reload`.
