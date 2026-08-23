@@ -627,9 +627,10 @@ is set, deterministic stub otherwise, showing `[verified]`/source),
 `/model/stream` (SSE token streaming), `/history` + `/history/clear` (bounded
 in-page chat), `/orchestrate` + `/orchestrate/schema` (run-an-artifact and the
 schema-driven typed form), `/network` (+ `/network/save|/list|/load`), the
-**bills workflow** (`/bills/intake`, `/bills/accept`, `/bills/registry`,
-`/bills/calendar` — intake → human-gated accept → durable registry → verified
-calendar, all through the verified spine), `/activity` (the read-only
+**bills loop** (**demonstration only** — `/bills/intake`, `/bills/accept`,
+`/bills/registry`, `/bills/calendar` — intake → human-gated accept → durable
+registry → verified calendar, all through the verified spine; no dashboard
+tab), `/activity` (the read-only
 operator activity feed — a bounded audit of operator actions, each with its
 verification status), `/ledger`, `/state.json`, and
 `/health`. `fbp-web --reload` auto-restarts on source edits; `fbp-web-kill`

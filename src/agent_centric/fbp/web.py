@@ -1593,10 +1593,10 @@ _PAGE_CSS = "\n".join([
     ".stat .v { font-size:1.5rem; font-weight:700; margin-top:.2rem; }",
     ".stat .v.green { color:#16a34a; } .stat .v.blue { color:#2563eb; }",
     # ---- dashboard pane visibility (sidebar-driven) ----
-    "#pane-dashboard, #pane-chat, #pane-provision, #pane-bills, #pane-registry,",
+    "#pane-dashboard, #pane-chat, #pane-provision, #pane-registry,",
     "#pane-designer, #pane-docs { display:none; }",
     "#pane-dashboard.active, #pane-chat.active, #pane-provision.active,",
-    "#pane-bills.active, #pane-registry.active, #pane-designer.active, #pane-docs.active",
+    "#pane-registry.active, #pane-designer.active, #pane-docs.active",
     "{ display:block; }",
     ".docs { line-height:1.65; }",
     ".docs h2 { margin-top:1.4rem; }",
@@ -1651,10 +1651,6 @@ _PAGE_CSS = "\n".join([
     ".schema-field label { display:block; font-size:.85rem; color:#333; margin-bottom:.15rem; }",
     ".schema-field input { width:60%; padding:.35rem .5rem; border:1px solid #ccc;",
     "  border-radius:6px; font-family:monospace; }",
-    ".bills-form label { display:inline-block; font-size:.85rem; color:#333;",
-    "  margin:.4rem .4rem .2rem 0; }",
-    ".bills-form input { padding:.35rem .5rem; border:1px solid #ccc;",
-    "  border-radius:6px; font-family:monospace; margin-right:.6rem; }",
     # ---- docs panel ----
     ".docs { line-height:1.6; }",
     ".docs h2 { margin-top:1.4rem; }",
@@ -1985,114 +1981,6 @@ _SCHEMA_JS = r"""\
 </script>
 """
 
-# The bills-workflow client script: intake -> accept -> registry + calendar.
-_BILLS_JS = r"""\
-<script>
-  const $billOut = () => document.getElementById('bill-result');
-  const $billSpin = () => document.getElementById('bill-spinner');
-  const $billReg = () => document.getElementById('bill-registry');
-  const $billCal = () => document.getElementById('bill-calendar');
-
-  function billDraft() {
-    return {
-      id: document.getElementById('bill-id').value.trim(),
-      vendor: document.getElementById('bill-vendor').value.trim(),
-      amount_cents: document.getElementById('bill-amount').value.trim(),
-      due_date: document.getElementById('bill-due').value.trim()
-    };
-  }
-
-  function billRenderRegistry(registry) {
-    const box = $billReg(); if (!box) return;
-    box.innerHTML = '';
-    const ids = Object.keys(registry || {}).sort();
-    if (!ids.length) { box.textContent = 'no bills in the registry yet.'; return; }
-    for (const id of ids) {
-      const b = registry[id];
-      const div = document.createElement('div');
-      div.className = 'chat-turn';
-      div.innerHTML = '<b>' + esc(id) + '</b> ' + esc(b.vendor) +
-        ' · ' + esc(b.amount_cents) + '¢ · due ' + esc(b.due_date) +
-        ' · <span class=\'pill\'>' + esc(b.status || 'open') + '</span>';
-      box.appendChild(div);
-    }
-  }
-
-  function billRenderCalendar(entries) {
-    const box = $billCal(); if (!box) return;
-    box.innerHTML = '';
-    if (!entries || !entries.length) { box.textContent = 'no open bills in range.'; return; }
-    for (const e of entries) {
-      const div = document.createElement('div');
-      div.className = 'chat-turn';
-      div.innerHTML = '<b>' + esc(e.due_date) + '</b> ' + esc(e.vendor) +
-        ' · ' + esc(e.amount_cents) + '¢';
-      box.appendChild(div);
-    }
-  }
-
-  async function billRefresh() {
-    try {
-      const r = await fetch('/bills/registry');
-      const data = await r.json();
-      if (data.ok) billRenderRegistry(data.registry);
-    } catch (e) { /* best-effort */ }
-    try {
-      const r = await fetch('/bills/calendar', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({from_date: '1900-01-01', to_date: '2999-12-31'})
-      });
-      const data = await r.json();
-      if (data.ok) billRenderCalendar(data.entries);
-    } catch (e) { /* best-effort */ }
-  }
-
-  async function billIntake() {
-    const out = $billOut(); const spin = $billSpin();
-    out.textContent = ''; out.className = 'note';
-    if (spin) spin.style.display = 'inline-block';
-    try {
-      const r = await fetch('/bills/intake', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({draft: billDraft()})
-      });
-      const data = await r.json();
-      if (data.ok) {
-        out.textContent = 'Draft ready (unverified): ' + JSON.stringify(data.draft);
-      } else {
-        out.textContent = 'Intake failed: ' + (data.error || 'unknown'); out.className='error';
-      }
-    } catch (err) {
-      out.textContent = 'request failed: ' + err; out.className='error';
-    } finally { if (spin) spin.style.display = 'none'; }
-  }
-
-  async function billAccept() {
-    const out = $billOut(); const spin = $billSpin();
-    out.textContent = ''; out.className = 'note';
-    if (spin) spin.style.display = 'inline-block';
-    try {
-      const r = await fetch('/bills/accept', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({draft: billDraft()})
-      });
-      const data = await r.json();
-      if (data.ok) {
-        out.textContent = 'Accepted ' + data.id + ' into the registry (verified).';
-        billRefresh();
-      } else {
-        out.textContent = 'Accept failed: ' + (data.error || 'unknown'); out.className='error';
-      }
-    } catch (err) {
-      out.textContent = 'request failed: ' + err; out.className='error';
-    } finally { if (spin) spin.style.display = 'none'; }
-  }
-
-  document.getElementById('bill-intake').addEventListener('click', billIntake);
-  document.getElementById('bill-accept').addEventListener('click', billAccept);
-  billRefresh();
-</script>
-"""
 
 # The Network-of-Experts readout client script: shows which kind of expert would
 # serve each domain (deterministic / learned / human) and the running cost.
@@ -2762,7 +2650,7 @@ _ACTIVITY_JS = r"""\
 # The sidebar navigation script: one page = one visible pane.
 _NAV_JS = r"""\
 <script>
-  const PANES = ['dashboard', 'chat', 'provision', 'bills', 'registry', 'designer', 'docs'];
+  const PANES = ['dashboard', 'chat', 'provision', 'registry', 'designer', 'docs'];
   function navShow(page) {
     for (const p of PANES) {
       const pane = document.getElementById('pane-' + p);
@@ -2839,8 +2727,6 @@ def _render_landing(
       <span class='ico'>💬</span>Chat</button>
     <button class='side-link' data-page='provision' type='button'>
       <span class='ico'>⚙️</span>Provision</button>
-    <button class='side-link' data-page='bills' type='button'>
-      <span class='ico'>📄</span>Bills</button>
     <button class='side-link' data-page='registry' type='button'>
       <span class='ico'>🗂️</span>Registry</button>
     <div class='side-section'>Design</div>
@@ -2956,37 +2842,6 @@ free-form JSON.</p>
 <span id='schema-spinner' class='spinner' style='display:none'></span>
 <pre id='schema-result' class='note'></pre>
 {_SCHEMA_JS}
-</div>
-</section>
-
-<section id='pane-bills'>
-
-<div class='card'>
-<h2>Bills workflow</h2>
-<p class='note'>The mission-relevant loop: <b>intake</b> an unverified draft,
-<b>accept</b> it (human-gated — the only path that writes the durable
-registry), and <b>project</b> a verified calendar. Every step runs through the
-verified spine; money stays integer cents and dates ISO; nothing auto-accepts.</p>
-<div class='bills-form'>
-  <label for='bill-id'>Bill id</label>
-  <input id='bill-id' placeholder='bill-b1'/>
-  <label for='bill-vendor'>Vendor</label>
-  <input id='bill-vendor' placeholder='GasCo'/>
-  <label for='bill-amount'>Amount (cents)</label>
-  <input id='bill-amount' type='number' placeholder='12345'/>
-  <label for='bill-due'>Due date (YYYY-MM-DD)</label>
-  <input id='bill-due' placeholder='2026-10-01'/>
-  <br/>
-  <button id='bill-intake' type='button'>Intake draft</button>
-  <button id='bill-accept' type='button'>Accept → registry</button>
-  <span id='bill-spinner' class='spinner' style='display:none'></span>
-</div>
-<pre id='bill-result' class='note'></pre>
-<h3>Registry</h3>
-<div id='bill-registry' class='chat-history'></div>
-<h3>Calendar</h3>
-<div id='bill-calendar' class='chat-history'></div>
-{_BILLS_JS}
 </div>
 </section>
 

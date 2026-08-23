@@ -532,9 +532,12 @@ class TestLandingRender:
         html = _render_landing({})
         # Sidebar navigation is present with all the main sections.
         assert "class='sidebar'" in html
-        for page in ("dashboard", "chat", "provision", "bills", "registry", "designer", "docs"):
+        # The bills loop is a demonstration only, so it has no dashboard tab.
+        for page in ("dashboard", "chat", "provision", "registry", "designer", "docs"):
             assert f"data-page='{page}'" in html
             assert f"id='pane-{page}'" in html
+        # The Bills demo tab is intentionally absent from the dashboard.
+        assert "data-page='bills'" not in html
         # Dashboard pane is the default (active by default in navShow).
         assert "id='pane-dashboard'" in html
         assert "dashboard" in html

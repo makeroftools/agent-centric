@@ -191,7 +191,7 @@ uv run agent-centric fbp --transport ipc # local inter-process
 | **Expert selection + cost ledger** | The deterministic core of "Network of Experts AI": for each component (a domain) `select_expert` picks the kind — deterministic method / learned (per-domain SLM) / human — and `CostLedger` accounts cost + irreducible residue per run. The landing page has a read-only **Network of Experts** card (`/experts`). |
 | **Domain-expert SLM provider contract** | The **learned** tier: an opt-in external provider (`fbp/slm.py`) turns a domain corpus into a trained per-domain expert with full provenance. Training stays external; the core selects (`select_expert`) and verifies. Read-only **Domain SLM** card (`/slm`) shows which domains warrant a learned expert. |
 | **Domain Registry + artifact vault** | The observability + provenance layer: `DomainRegistry` (a read-only, **tenant-aware** catalog — passive, never an authority) + `ArtifactVault` (append-only, write-once run evidence keyed by (tenant, domain, run)). Read-only **registry** and **artifact** cards on the landing page; durable via `--registry <path>`. |
-| **Bills workflow on the page** | The mission loop — intake → human-gated accept → durable registry → verified calendar — is a live card (`/bills/*` routes), durable via `--bills <path>`. Prefix grants (`bill-*`) allow ids under a namespace while failing closed outside it. |
+| **Bills loop — demonstration** | The mission loop — intake → human-gated accept → durable registry → verified calendar — is a **demonstration** (no dashboard tab), exercised via the live `/bills/*` routes and the demo arcs; durable via `--bills <path>`. Prefix grants (`bill-*`) allow ids under a namespace while failing closed outside it. |
 
 ---
 

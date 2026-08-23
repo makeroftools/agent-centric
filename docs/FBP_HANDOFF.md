@@ -86,7 +86,7 @@ that page:
 | **Chat → FBP orchestration** | `fbp/orchestrate.py`, `fbp/web.py` `/orchestrate` | A canonical JSON artifact (single `task` or `steps`) maps to an ordered FBP `run` plan executed through the driver's verified spine (parent re-verified, ledgered, replayable). Fail-closed on invalid/unorchestrable artifacts |
 | **Chat-context** | `fbp/web.py` (`_build_chat_context`) | prior (durable) transcript turns fold into the next model prompt (oldest-first, bounded), so the model answers with continuity — wired into both the audited `/model` and the streaming preview path |
 | **Schema-driven orchestration** | `fbp/orchestrate.py`, `fbp/web.py` | **Typed, schema-constrained intents** (`SCHEMAS`: `run`/`double`/`sum` + the full bills surface `bills_intake`/`bills_accept`/`bills_calendar`/`bills_registry`/`bills_mark_paid`/`bills_mark_status`/`bills_accept_deterministic`/`bills_rule_add`): `plan_from_schema` validates + coerces a typed artifact fail-closed before planning; the landing page gains a **schema-driven form** (`/orchestrate/schema` serves the schemas) — same verified spine, typed form instead of free-form JSON. Additive (`plan_from_artifact` unchanged) |
-| **Bills workflow on the landing page** | `fbp/web.py`, `fbp/bills_agent.py`, `fbp/store_agent.py` | The mission-relevant loop is now a **live, runnable card** on the landing page: `/bills/intake` → `/bills/accept` (human-gated, the only registry write) → `/bills/registry` (read-only snapshot) → `/bills/calendar` (verified projection). **Prefix grants** (`bill-*`) let the UI accept arbitrary bill ids under a granted namespace while still failing closed outside it. Durable via `fbp-web --bills <path>`. Store teardown made **thread-safe** (cross-thread close no longer crashes) |
+| **Bills loop — demonstration backend** | `fbp/web.py`, `fbp/bills_agent.py`, `fbp/store_agent.py` | **Demonstration-only** (no dashboard tab): the mission loop (intake → human-gated accept → durable registry → verified calendar) is exercised through the live `/bills/*` routes and `_bills_*` methods, and the demo arcs/examples. **Prefix grants** (`bill-*`) allow ids under a granted namespace while failing closed outside it. Durable via `fbp-web --bills <path>`. Store teardown made **thread-safe** (cross-thread close no longer crashes). The **Bills tab has been removed from the dashboard** — it is a demonstration, not a product surface |
 
 > **Demo framing (lead direction):** the bills loop is a **demonstration** of the
 > platform's deterministic, human-gated, verified-loop pattern — it lives in
@@ -583,8 +583,8 @@ hosted layer.
 - Future UX idea for the model box: **schema-driven orchestration — now built**
   (typed intents via `SCHEMAS`/`plan_from_schema`; the landing page has a
   schema-driven form). The typed-intent surface is currently the demo tasks
-  (`run`/`double`/`sum`); the **bills workflow is now also a first-class card**
-  on the landing page (`/bills/*` routes, durable via `--bills <path>`). The
+  (`run`/`double`/`sum`); the **bills loop remains a demonstration** (`/bills/*`
+  routes, durable via `--bills <path>`, no dashboard tab). The
   natural next step is richer typed intents mapped onto the bills loop (intake
   → accept → calendar) and other domain agent operations, so the chat window
   can drive them through the schema form.**Chat-context** (feed prior turns
