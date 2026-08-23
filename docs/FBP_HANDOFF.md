@@ -25,13 +25,19 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `dc0b81c` (fbp-web --kill flag). **Pushed to origin:** up through
-  `87e7bbe` (the user pushed). **Unpushed (11 commits):** `c4afa94`
+- **HEAD:** `a9e4647` (expert selection + cost ledger). **Pushed to origin:** up
+  through `87e7bbe` (the user pushed). **Unpushed (17 commits):** `c4afa94`
   (chat-context), `46b3948` (handoff), `69df3d8` (Component Networks),
   `9b8f7e5` (handoff), `4a94c16` (canvas editor), `241d9a3` (handoff),
   `fac7a16` (dataflow + save/load), `10f343b` (handoff), `d44a582` (card UI +
-  mode switch), `6f2f2a6` (handoff), `dc0b81c` (--kill flag). Run
-  `git log origin/agent-centric-fbp..HEAD` to see the unpushed set.
+  mode switch), `6f2f2a6` (handoff), `dc0b81c` (--kill flag), `f2ee043`
+  (schema-driven orchestration), `d05cb31` (bills workflow on the page),
+  `3b30ab1` (Network of Experts AI axiom), `fef58ba` (appreciating the
+  architecture + README refresh), `a9e4647` (expert selection + cost ledger),
+  plus this handoff update. Run `git log origin/agent-centric-fbp..HEAD` to see
+  the unpushed set.
+  plus this handoff update. Run `git log origin/agent-centric-fbp..HEAD` to see
+  the unpushed set.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule in effect for a long time: **do not push unless the lead
   explicitly says push.** (The lead has since been pushing directly themselves;
@@ -41,10 +47,10 @@ we are.
 ### Validation (run this session, all live)
 - `uv run pytest` → **789 passed** (was 771; added expert-selection + web experts-route tests)
 - `uv run ruff check .` → clean
-- `uv run mypy src` → clean (**81 source files**)
+- `uv run mypy src` → clean (**82 source files**)
 - FBP coverage (`uv run pytest --cov=agent_centric.fbp --cov-report=term`) →
-  **~88% total**; key files: registry 97%, bills 94%, store 93%, store_agent
-  89%, web 83%.
+  **~84% total**; key files: registry 97%, bills 94%, store 93%, store_agent
+  90%, web 69%, experts 94%, driver 91%.
 - Cross-transport durable replay: 19/19 on inproc/ipc/tcp. Full production-arc
   demo: crash-safe replay 6/6.
 
@@ -291,6 +297,42 @@ of decisions and working style that a fresh session must inherit.
   (`d44a582`).
 - **`--kill` as a flag (this session):** the user asked that `kill` be a flag
   on `fbp-web` rather than a separate subcommand (`dc0b81c`).
+- **Coined axiom: "Network of Experts AI" (this session):** the user coined the
+  phrase and asked it be enshrined at the top of conceptual understanding. The
+  lead wrote it as: *the model is not the expert, the network is.* An AI is a
+  network of narrow domain experts, each verified by a deterministic verifier; a
+  general model is one (fallible) kind of expert. Enshrined at the top of
+  `README_FBP.md`, `spec.md` §0, and `docs/fbp.md`; recorded as a standing truth
+  (`3b30ab1`). The user also stated plainly: **"I don't believe in LLMs. I
+  believe in component networks of domain (component) experts."** The lead
+  reframed it (not "LLMs are worthless" but "an untrusted model's word is never
+  the answer — it's a hint that must be verified deterministically"), which is
+  exactly the existing north star.
+- **Per-domain SLM + micro-payment idea (this session):** the user proposed
+  building an engine that trains a **Small Language Model expert per domain**
+  (only when warranted) and using **X402-style micro-payment infrastructure** to
+  show cost and provide the SLM-building infrastructure for component networks.
+  The lead's call: (a) **training is not an in-architecture operation** — it is
+  an **opt-in external provider** (corpus in, expert out) behind a strict
+  contract, never baked into the deterministic spine; (b) **"expert" doesn't
+  have to mean a trained model** — deterministic method first, SLM only for the
+  residue; (c) **cost accounting is a perfect in-architecture fit**, but the
+  payment infrastructure itself (X402 or any provider) is an **opt-in external
+  adapter**, never auto-charge without an explicit grant. This led directly to
+  the built `experts.py` foundation.
+- **Domain-of-Experts registry + artifact repository idea (this session, not
+  yet built):** the user proposed a **Domain of Experts registry and artifact
+  repository.** The lead's take: it is the **observability + provenance layer**
+  that completes the network-of-experts model (catalog → decision → accounting
+  → evidence). Strong because it makes the system self-describing and is the
+  natural home for learned-expert artifacts (weights + provenance). Two hard
+  rules the lead held: (1) the **registry stays a passive catalog, never an
+  authority** (authority stays in the tree topology — no central boss); (2) the
+  **artifact repository is write-once evidence** — append-only, keyed by
+  (domain, run), carrying source refs + residue + cost, never mutable. The lead
+  proposed building `DomainRegistry` (read-only catalog) + `ArtifactRepository`
+  (append-only provenance store) + read-only UI cards. The user has not yet
+  said "build it" — this is the agreed next increment.
 
 ### How to talk to the user / working style
 - Be the **senior, decisive engineer**: propose a course, proceed on the
@@ -357,9 +399,9 @@ These are listed in `STATUS.md`'s "out of scope / future volleys".
   envelopes, the durable `--history` transcript, the **"Network of Experts AI"**
   axiom enshrined at the top of `README_FBP.md` and `spec.md` §0, and an
   **"Appreciating the architecture"** section for new readers at the top of
-  `README_FBP.md`). `README_FBP.md` was also brought current (771 tests, missing
+  `README_FBP.md`). `README_FBP.md` was also brought current (789 tests, missing
   capability rows added: Component Networks, schema-driven orchestration, bills
-  workflow).
+  workflow, expert selection).
 - **The `fbp-web` landing page** is live and runnable for a demo (set
   `OPENROUTER_API_KEY` for a real model; it fails closed to the stub otherwise):
   `uv run agent-centric fbp-web --reload`. Add `--history <path>` to keep the
@@ -370,7 +412,6 @@ These are listed in `STATUS.md`'s "out of scope / future volleys".
   (`run`/`double`/`sum`); the **bills workflow is now also a first-class card**
   on the landing page (`/bills/*` routes, durable via `--bills <path>`). The
   natural next step is richer typed intents mapped onto the bills loop (intake
-  → accept → calendar) and other domain agent operations, so the chat window
   → accept → calendar) and other domain agent operations, so the chat window
   can drive them through the schema form.**Chat-context** (feed prior turns
   into the next prompt) is now built (`c4afa94`); **persisted** (durable) chat
@@ -383,6 +424,18 @@ These are listed in `STATUS.md`'s "out of scope / future volleys".
   **micro-payment / X402-style settlement adapter** for per-run cost (external,
   opt-in, never auto-charge without an explicit grant). Both slot into the
   contracts `experts.py` already defines.
+- **Domain-of-Experts registry + artifact repository — the agreed next
+  increment (user's idea, not yet built).** The lead proposed: `DomainRegistry`
+  (a read-only, deterministic catalog of domains: id, name, contract, measured
+  determinism/residue, selected expert kind, provenance) + `ArtifactRepository`
+  (an append-only, provenance-carrying store of domain run artifacts: verified
+  output keyed by (domain, run), with source refs + residue + cost) + read-only
+  UI cards (Domains / Artifacts). Two hard rules agreed: the registry is a
+  **passive catalog, never an authority** (authority stays in the tree
+  topology); the artifact repository is **write-once evidence, never mutable**.
+  This is the observability + provenance layer that completes catalog →
+  decision → accounting → evidence. The user has not yet said "build it" —
+  confirm before starting.
 
 ---
 
@@ -416,7 +469,11 @@ uv run python examples/fbp_arc_demo.py
   verified by a deterministic verifier; a general model is one (fallible) kind
   of expert. Enshrined at the top of `README_FBP.md` and `spec.md` §0. Treat it
   as the conceptual north star for any future expert-selection / per-domain-SLM
-  work.
+  work. Two hard rules for the agreed **Domain-of-Experts registry + artifact
+  repository** increment: the registry is a **passive catalog, never an
+  authority** (authority stays in the tree topology); the artifact repository
+  is **write-once evidence, never mutable** (append-only, keyed by (domain,
+  run), carrying source refs + residue + cost).
 - The AC Router is spun out, gitignored, and **not** our work here.
 - Trust only what the tests prove and what is committed; say clearly when
   something is unverifiable or unpushed.
