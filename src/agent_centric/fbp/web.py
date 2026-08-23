@@ -409,6 +409,150 @@ class FbpLandingServer:
             })
         return {"ok": True, "warranted": warranted}
 
+    def _provision_domains(self) -> list[dict[str, Any]]:
+        """The live domains a user may provision (read-only).
+
+        Mirrors the tree-observed domains used by the expert/deterministic
+        readouts, so the provisioning card lists the same verifiable domains the
+        rest of the page serves.
+        """
+        from .experts import Domain, select_expert
+
+        tree = self._driver.tree()
+        verifiers: set[str] = set()
+        for node in tree:
+            verifiers.update(node.get("verifiers") or [])
+        domains: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for node in tree:
+            identity = node.get("identity", "")
+            for cap in sorted(node.get("capabilities") or []):
+                did = f"{identity}::{cap}"
+                if did in seen:
+                    continue
+                seen.add(did)
+                verifiable = cap in verifiers
+                domain = Domain(
+                    id=did,
+                    name=f"{identity} domain ({cap})",
+                    output_fields=("value",) if verifiable else (),
+                    determinism=0.8 if verifiable else 0.2,
+                    residue=0.1 if verifiable else 0.9,
+                )
+                sel = select_expert(domain)
+                domains.append({
+                    "id": did,
+                    "name": domain.name,
+                    "kind": sel.kind,
+                    "warranted": sel.warranted,
+                    "verifiable": verifiable,
+                })
+        default = "bill-extract::extract"
+        alias = "bill-extract::extract.v1"
+        if default not in seen and alias not in seen:
+            domain = Domain(
+                id="bill-extract",
+                name="bill extraction",
+                output_fields=("vendor", "amount_cents", "due_date"),
+                determinism=0.5,
+                residue=0.8,
+            )
+            sel = select_expert(domain)
+            domains.append({
+                "id": "bill-extract",
+                "name": domain.name,
+                "kind": sel.kind,
+                "warranted": sel.warranted,
+                "verifiable": True,
+            })
+        return domains
+
+    def _run_provision(self, body: str) -> dict[str, Any]:
+        """Run one deterministic provisioning pass (offline, fail-closed).
+
+        Parses a ``{domain, provider, budget}`` envelope and calls
+        ``provision_expert`` through the default (stub) provider — the real
+        Modal adapter is opt-in and never reached here. The produced expert's
+        artifact is recorded into the Artifact Vault as write-once evidence.
+        Recording is best-effort and can never break the run.
+        """
+        from .experts import Domain
+        from .provision import ProvisionError, provision_expert
+        from .settlement import SettlementGrant
+
+        try:
+            data = json.loads(body or "{}") if body else {}
+        except ValueError:
+            return {"ok": False, "error": "invalid JSON body"}
+        if not isinstance(data, dict):
+            return {"ok": False, "error": "body must be a JSON object"}
+        did = str(data.get("domain") or "bill-extract")
+        provider = str(data.get("provider") or "stub")
+        budget = data.get("budget")
+
+        known = {d["id"] for d in self._provision_domains()}
+        if did not in known:
+            known_sorted = ", ".join(sorted(known)) or "(none observed)"
+            return {
+                "ok": False,
+                "error": f"domain {did!r} is not a known domain; expected one of {known_sorted}",
+            }
+        domain_map = {
+            "bill-extract": Domain(
+                id="bill-extract",
+                name="bill extraction",
+                output_fields=("vendor", "amount_cents", "due_date"),
+                determinism=0.5,
+                residue=0.8,
+            )
+        }
+        domain = domain_map.get(did)
+        if domain is None:
+            return {"ok": False, "error": f"no contract mapped for domain {did!r}"}
+
+        grant = SettlementGrant(domain=did, max_amount=max(budget or 0, 1))
+        try:
+            result = provision_expert(
+                domain,
+                [f"vendor GasCo amount {i}" for i in range(50)],
+                provider=provider,
+                grant=grant,
+                budget=budget,
+            )
+        except ProvisionError as exc:
+            return {"ok": False, "error": str(exc)}
+        except Exception as exc:  # noqa: BLE001 - surfaced to the operator
+            return {"ok": False, "error": f"provision failed: {exc}"}
+        self._record_provision_artifact(result)
+        return {"ok": True, "result": result.to_dict()}
+
+    def _record_provision_artifact(self, result: Any) -> None:
+        """Record a trained expert's artifact into the Artifact Vault.
+
+        Best-effort and write-once: a missing vault, an unverifiable domain, or
+        a vault failure is a no-op (evidence is only ever written for a produced
+        learned expert). Never breaks the provisioning run.
+        """
+        if self._artifact_vault is None or result is None:
+            return
+        expert = getattr(result, "expert", None)
+        if expert is None:
+            return
+        from .domainrepo import Artifact
+
+        try:
+            self._artifact_vault.record(Artifact(
+                tenant="local",
+                domain=result.domain,
+                run=f"run-{self._artifact_vault.count()}",
+                value={"artifact": expert.artifact, "method": expert.method},
+                kind=result.selection,
+                residue=result.account.residue,
+                cost=result.account.cost,
+            ))
+        except Exception:  # noqa: BLE001 - evidence recording must never break a run
+            return
+
     # -- persistence of the write-once artifact evidence (explicit grant) ----
 
     def _load_artifacts(self) -> None:
@@ -616,6 +760,14 @@ class FbpLandingServer:
                     # Read-only view of which domains warrant a learned (SLM)
                     # expert (the deterministic select_expert recommendation).
                     self._send_json(server._slm_readout())
+                elif self.path == "/provision":
+                    # Run one deterministic expert-provisioning pass
+                    # (plan -> train -> account -> settle), offline via the stub.
+                    body = self._read_body()
+                    self._send_json(server._run_provision(body))
+                elif self.path == "/provision/domains":
+                    # The live domains a user may provision (read-only).
+                    self._send_json({"ok": True, "domains": server._provision_domains()})
                 elif self.path == "/model":
                     # Run a prompt through the model agent (LLM as an ordinary
                     # agent). Body is either a plain prompt string or a JSON
@@ -1849,6 +2001,97 @@ _ARTIFACTS_JS = r"""\
 </script>
 """
 
+# The expert-provisioning client script: select the domain, pick the (stub)
+# provider and a cost budget, then run one deterministic provisioning pass
+# (plan -> train -> account -> settle), offline and fail-closed.
+_PROVISION_JS = r"""\
+<script>
+  const $provOut = () => document.getElementById('prov-result');
+  const $provSpin = () => document.getElementById('prov-spinner');
+  const $provBtn = () => document.getElementById('prov-run');
+
+  const provKinds = {
+    'deterministic': 'deterministic',
+    'learned': 'learned (SLM)',
+    'human': 'human'
+  };
+
+  async function provLoadDomains() {
+    const sel = document.getElementById('prov-domain');
+    if (!sel) return;
+    try {
+      const r = await fetch('/provision/domains');
+      const data = await r.json();
+      sel.innerHTML = '';
+      const domains = (data && data.domains) || [];
+      if (!domains.length) {
+        const o = document.createElement('option'); o.value = 'bill-extract';
+        o.textContent = 'bill-extract (bill extraction)'; sel.appendChild(o);
+        return;
+      }
+      for (const d of domains) {
+        const o = document.createElement('option');
+        o.value = d.id;
+        o.textContent = d.id + ' (' + (provKinds[d.kind] || d.kind) + ') ' +
+          (d.warranted ? '[SLM]' : '');
+        sel.appendChild(o);
+      }
+    } catch (e) { /* best-effort; the default option remains */ }
+  }
+
+  async function provRun() {
+    const out = $provOut(); const spin = $provSpin(); const btn = $provBtn();
+    out.textContent = ''; out.className = 'note';
+    if (spin) spin.style.display = 'inline-block';
+    if (btn) btn.disabled = true;
+    const sel = document.getElementById('prov-domain');
+    const budgetEl = document.getElementById('prov-budget');
+    const payload = {
+      domain: (sel && sel.value) || 'bill-extract',
+      provider: 'stub',
+      budget: budgetEl && budgetEl.value !== '' ? Number(budgetEl.value) : null
+    };
+    try {
+      const r = await fetch('/provision', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const data = await r.json();
+      if (data.ok) {
+        const res = data.result;
+        let lines = 'selection: ' + res.selection +
+          '\nplan tier: ' + (res.plan || '—');
+        if (res.expert) {
+          lines += '\nexpert artifact: ' + res.expert.artifact +
+            ' (' + res.expert.method + ' base ' + res.expert.base_model + ')' +
+            ' dataset ' + res.expert.dataset_size;
+        }
+        lines += '\naccount cost: ' + res.account.cost;
+        if (res.settlement) {
+          lines += '\nsettlement: ' + res.settlement.status + ' ' +
+            res.settlement.amount + ' (' + res.settlement.settlement_id + ')';
+        } else {
+          lines += '\nsettlement: — (no grant / no charge)';
+        }
+        out.textContent = 'Provisioning ok:\n' + lines;
+      } else {
+        out.textContent = 'Provisioning failed (fail-closed): ' +
+          (data.error || 'unknown');
+        out.className = 'error';
+      }
+    } catch (err) {
+      out.textContent = 'request failed: ' + err; out.className = 'error';
+    } finally {
+      if (spin) spin.style.display = 'none';
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  document.getElementById('prov-run').addEventListener('click', provRun);
+  provLoadDomains();
+</script>
+"""
+
 # The Component Network editor client script (kept out of the f-string so its
 # JS object braces are not mistaken for f-string interpolations).
 _NETWORK_JS = r"""\
@@ -2269,6 +2512,24 @@ produced — each run's verified output, source refs, residue, and cost. Keyed b
 <div id='artifacts-list' class='chat-history'></div>
 <p class='note'>Total cost: <span id='artifacts-total'>—</span></p>
 {_ARTIFACTS_JS}
+</div>
+
+<div class='card'>
+<h2>Provision a domain expert</h2>
+<p class='note'>Run one deterministic provisioning pass from the live tree:
+<b>select</b> the expert kind → <b>plan</b> the hardware tier → <b>train</b>
+(opt-in provider; offline stub by default) → <b>account</b> cost → <b>settle</b>
+under an explicit grant. Real providers never run here; unverifiable domains,
+over-budget plans, and missing grants fail closed.</p>
+<label for='prov-domain'>Domain</label>
+<select id='prov-domain' class='pill'></select>
+<label for='prov-budget'>Budget</label>
+<input id='prov-budget' type='number' placeholder='100 (optional cost cap)'/>
+<br/>
+<button id='prov-run' type='button'>Provision (stub, offline)</button>
+<span id='prov-spinner' class='spinner' style='display:none'></span>
+<pre id='prov-result' class='note'></pre>
+{_PROVISION_JS}
 </div>
 </div>
 

@@ -126,7 +126,7 @@ this if convenient; it is optional and low-risk.
 
 ## 5. Validation baseline (all verified live) — do not regress
 
-- 804 passing tests · ruff clean · mypy clean (83 source files) · domainrepo 100%.
+- 908 passing tests · ruff clean · mypy clean (89 source files) · domainrepo 100%.
 - Everything was committed on `agent-centric-fbp`; see `git log`. Working tree
   was clean at last check. There are ~20 unpushed commits (the user pushes).
 

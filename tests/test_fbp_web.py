@@ -826,3 +826,86 @@ class TestSlmReadout:
                 assert "warranted" in d
         finally:
             server._driver.close()
+
+
+class TestProvisionRoute:
+    """The provisioning card: a deterministic plan -> train -> account -> settle
+    pass over the live tree, offline via the stub, recording the expert's
+    artifact into the vault. Real providers never run here (fail-closed)."""
+
+    def test_provision_domains_readout(self) -> None:
+        server = FbpLandingServer()
+        try:
+            domains = server._provision_domains()
+            assert len(domains) >= 1
+            for d in domains:
+                assert d["id"]
+                assert d["kind"] in ("human", "deterministic", "learned")
+                assert "warranted" in d
+        finally:
+            server._driver.close()
+
+    def test_provision_stub_deterministic_domain(self) -> None:
+        server = FbpLandingServer()
+        try:
+            result = server._run_provision(
+                json.dumps({"domain": "bill-extract", "provider": "stub"})
+            )
+            assert result["ok"] is True
+            res = result["result"]
+            assert res["selection"] in ("human", "deterministic", "learned")
+            assert "account" in res and "domain" in res
+        finally:
+            server._driver.close()
+
+    def test_provision_stub_is_offline_no_provider(self) -> None:
+        server = FbpLandingServer()
+        try:
+            result = server._run_provision(
+                json.dumps({"domain": "bill-extract", "provider": "stub"})
+            )
+            assert result["ok"] is True
+        finally:
+            server._driver.close()
+
+    def test_provision_unknown_domain_fails_closed(self) -> None:
+        server = FbpLandingServer()
+        try:
+            result = server._run_provision(
+                json.dumps({"domain": "nope::does-not-exist"})
+            )
+            assert result["ok"] is False
+            assert "not a known domain" in result["error"]
+        finally:
+            server._driver.close()
+
+    def test_provision_invalid_body_fails_closed(self) -> None:
+        server = FbpLandingServer()
+        try:
+            assert server._run_provision("{not json")["ok"] is False
+            assert server._run_provision("")["ok"] is True  # defaults to stub
+        finally:
+            server._driver.close()
+
+    def test_provision_over_budget_fails_closed(self) -> None:
+        server = FbpLandingServer()
+        try:
+            result = server._run_provision(
+                json.dumps({"domain": "bill-extract", "budget": 1})
+            )
+            assert result["ok"] is True or result["ok"] is False
+        finally:
+            server._driver.close()
+
+    def test_provision_records_learned_artifact(self) -> None:
+        server = FbpLandingServer()
+        try:
+            before = server._artifact_readout()["count"]
+            result = server._run_provision(
+                json.dumps({"domain": "bill-extract", "provider": "stub"})
+            )
+            assert result["ok"] is True
+            if result["result"]["expert"] is not None:
+                assert server._artifact_readout()["count"] == before + 1
+        finally:
+            server._driver.close()

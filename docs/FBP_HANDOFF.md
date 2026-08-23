@@ -41,7 +41,7 @@ we are.
   relaxed, but confirm each time for a given commit.)
 
 ### Validation (run this session, all live)
-- `uv run pytest` → **824 passed** (was 804; added SLM provider + web slm-route tests)
+- `uv run pytest` → **908 passed** (was 901; added the landing-page provisioning card + route tests)
 - `uv run ruff check .` → clean
 - `uv run mypy src` → clean (**84 source files**)
 - FBP coverage: `experts.py` 94%, `domainrepo.py` **100%**, driver 91%.
@@ -91,6 +91,7 @@ that page:
 | **Deterministic training-plan tier** | `fbp/training_plan.py` | The **strategic hardware-provisioning decision**: `plan_training(domain, corpus_size, method, budget)` picks a hardware tier (`cpu`/`single-gpu`/`multi-gpu`) deterministically from corpus size + method, caps `SlmSpec.max_examples` at the tier's one-pass capacity, and fails closed if the estimated cost exceeds an explicit budget (the natural source is a `SettlementGrant`). Pure/offline; the provider executes, the core decides |
 | **External training-provider adapters** | `fbp/providers.py` | The **execution** side of the learned tier: an operator-selectable registry (`ProviderRegistry`/`provider_names`/`get_provider`) of `SlmProvider` adapters — **Modal** (GPU-on-demand, the easiest fit; implemented) plus **Runpod** and **Replicate** (documented, opt-in stubs to wire later). Default is the offline stub; a real provider is opt-in and never runs in the offline suite. The core plans and verifies; the provider trains |
 | **End-to-end expert provisioning** | `fbp/provision.py` | Ties select → plan → train → account → settle into one deterministic, workable path: `provision_expert(domain, corpus, provider, grant, ledger)` selects the expert kind, plans the hardware tier, trains via an opt-in provider (default stub, offline/CI-safe), records the `CostAccount` in a `CostLedger`, and settles under an explicit `SettlementGrant`. Fail-closed: unverifiable domain / over-budget plan / provider failure / missing grant all abort. The Modal adapter is **workable** with an injected HTTP client (real transport seam, fail-closed without one) |
+| **Provisioning card on the landing page** | `fbp/web.py` | **Easy-UX surface for the provisioning path**: a runnable **Provision a domain expert** card (`/provision`, `/provision/domains`) that selects the domain from the live tree, plans the tier, trains via the offline stub, accounts cost, and settles under a grant — recording the expert's artifact into the Artifact Vault as write-once evidence. Real providers never run here; unknown domains, over-budget plans, and invalid bodies fail closed. Additive |
 | **Domain Registry + artifact vault** | `fbp/domainrepo.py`, `fbp/web.py` | The **observability + provenance** layer (catalog → decision → accounting → evidence): `DomainRegistry` (read-only, **tenant-aware** catalog — passive, never an authority) + `ArtifactVault` (append-only, write-once evidence keyed by (tenant, domain, run), never mutable). Read-only **registry** + **artifact** cards (`/domains`, `/artifacts`); durable via `fbp-web --registry <path>` (explicit grant). Tenant-awareness makes a future paid multi-tenant web service additive, not a rewrite; the service would be a shared observability/provenance layer, never the governance layer. Additive |
 | **Component Networks** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. **True dataflow** (a downstream component consumes the *computed* verified output of its upstreams, not their args). Cycles / unknown refs / unverified steps fail closed. Landing page has a **dependency-free drag-and-drop node-and-wire canvas** editor (palette, draggable nodes, click-to-connect ports, SVG edges, run) + **durable save/load** (`fbp-web --networks <path>`, `/network/save|/list|/load`) |
 | **Card-based UI + mode switch** | `fbp/web.py` | Card-based landing page with a **Chat / Designer** mode switch: Chat = model box + chat history + run-an-artifact (general-purpose); Designer = Component Network editor. Clear functional division |
@@ -111,9 +112,9 @@ that page:
 ### Tooling / commands
 ```sh
 uv sync --extra dev
-uv run pytest                  # 674 passed (as of this handoff)
+uv run pytest                  # 908 passed (as of this handoff)
 uv run ruff check .            # clean
-uv run mypy src                # clean, 77 source files
+uv run mypy src                # clean, 89 source files
 uv run pytest --cov=agent_centric.fbp --cov-report=term   # ~88%
 uv run agent-centric fbp --transport inproc|tcp|ipc
 uv run agent-centric fbp-replay <ledger>   # re-verify a durable session
