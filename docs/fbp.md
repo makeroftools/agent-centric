@@ -318,6 +318,11 @@ result = run_artifact_plan(driver, {"task": "double", "args": {"value": 21}})
 The landing page exposes this as an **Orchestrate → FBP** box (`/orchestrate`
 route): paste a JSON artifact and it runs as a verified FBP plan.
 
+The model box also folds **prior transcript turns** into the next prompt as
+deterministic chat-context (oldest-first, bounded, auditable): the model answers
+with continuity, and the same context prefix feeds both the audited `/model`
+path and the streaming preview.
+
 ### Determinism rating + approved rules (determinize-then-decide)
 
 `determinism.py` is a pure capability that makes the "never rely on a
