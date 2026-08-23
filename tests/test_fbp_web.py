@@ -260,3 +260,75 @@ class TestLandingRender:
             httpd.shutdown()
             httpd.server_close()
         server._driver.close()
+
+
+class TestStreamingAndHistory:
+    def test_stream_model_stub_emits_meta_chunks_done(self, monkeypatch) -> None:
+        """Without a key, the streaming route fails closed to the stub and emits
+        a meta, chunk(s), and a done event (offline, deterministic)."""
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        server = FbpLandingServer()
+        events = list(server._stream_model("hello", ""))
+        types = [e["type"] for e in events]
+        assert types[0] == "meta"
+        assert "chunk" in types
+        assert types[-1] == "done"
+        done = events[-1]
+        assert done["verified"] is False
+        assert "stub response" in done["text"]
+        assert done["model"] == "stub-model"
+        server._driver.close()
+
+    def test_history_append_and_get(self, monkeypatch) -> None:
+        """A completed /model run records a user+assistant turn; /history reads it."""
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        server = FbpLandingServer()
+        server._run_model("hi there", "")
+        state = server._history_state()
+        entries = state["history"]
+        assert len(entries) == 2
+        assert entries[0]["role"] == "user"
+        assert entries[0]["content"] == "hi there"
+        assert entries[1]["role"] == "assistant"
+        server._driver.close()
+
+    def test_history_clear(self, monkeypatch) -> None:
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        server = FbpLandingServer()
+        server._run_model("hi", "")
+        server._clear_history()
+        assert server._history_state()["history"] == []
+        server._driver.close()
+
+    def test_stream_client_parses_sse_lines(self, monkeypatch) -> None:
+        """The streaming transport parses OpenRouter SSE lines into chunks and
+        handles the [DONE] terminator — offline via a stubbed urlopen."""
+        import urllib.request as _ur
+
+        from agent_centric.fbp.web import _openrouter_http_client_stream
+
+        lines = [
+            b'data: {"choices":[{"delta":{"content":"Hel"}}]}\n',
+            b'data: {"choices":[{"delta":{"content":"lo"}}]}\n',
+            b"data: [DONE]\n",
+        ]
+        collected: list[str] = []
+
+        class _FakeResp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a: object) -> None:
+                return None
+
+            def __iter__(self):
+                return iter(lines)
+
+        def _fake_urlopen(_req: object, timeout: float = 30) -> _FakeResp:
+            return _FakeResp()
+
+        monkeypatch.setattr(_ur, "urlopen", _fake_urlopen)
+        client = _openrouter_http_client_stream("m", collected.append)
+        full = client("https://example.test", {}, "hi")
+        assert collected == ["Hel", "lo"]
+        assert full == "Hello"

@@ -26,9 +26,11 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import threading
 import urllib.request
 import webbrowser
+from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
@@ -37,6 +39,9 @@ from .driver import FbpDriver
 # The default loopback bind host and port for the landing-server.
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8790
+
+# Upper bound on in-page chat history turns (a small, bounded transcript).
+MAX_HISTORY_TURNS = 100
 
 # OpenRouter chat-completions endpoint (the ``/api/v1/chat/completions`` form).
 OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
@@ -68,6 +73,31 @@ class FbpLandingServer:
         # deterministic demo tree so the page has something real to show.
         self._providers = _build_openrouter_providers()
         self._driver = self._build_driver()
+        # In-page chat history (per session, bounded, not durable).
+        self._history: list[dict[str, Any]] = []
+        self._history_lock = threading.Lock()
+
+    # -- chat history (in-page, bounded, per-session) -----------------------
+
+    def _append_history(self, entry: dict[str, Any]) -> None:
+        """Append a turn to the in-page chat history, bound to MAX_HISTORY_TURNS.
+
+        Entries are ``{"role": "user"|"assistant", "content", "model"?,
+        "verified"?, "error"?}``. The transcript is in-memory only (per server
+        session); it is not durable and never leaves the local page.
+        """
+        with self._history_lock:
+            self._history.append(entry)
+            if len(self._history) > MAX_HISTORY_TURNS:
+                del self._history[: len(self._history) - MAX_HISTORY_TURNS]
+
+    def _clear_history(self) -> None:
+        with self._history_lock:
+            self._history.clear()
+
+    def _history_state(self) -> dict[str, Any]:
+        with self._history_lock:
+            return {"history": [dict(h) for h in self._history]}
 
     # -- driver setup (deterministic, offline) -----------------------------
 
@@ -178,11 +208,26 @@ class FbpLandingServer:
                 elif self.path == "/model":
                     # Run a prompt through the model agent (LLM as an ordinary
                     # agent). Body is either a plain prompt string or a JSON
-                    # ``{"prompt": str, "model": str}`` envelope.
+                    # ``{"prompt": str, "model": str}`` envelope. This is the
+                    # audited path (goes through the driver's correctness spine).
                     body = self._read_body()
                     prompt, model = _parse_model_body(body)
                     result = server._run_model(prompt, model)
                     self._send_json(result)
+                elif self.path == "/model/stream":
+                    # Streaming preview: SSE over POST so the model's tokens
+                    # appear as they arrive (real-time UX). This bypasses the
+                    # driver round-trip and reports the result honestly as an
+                    # unverified preview; the verified path remains /model.
+                    body = self._read_body()
+                    prompt, model = _parse_model_body(body)
+                    self._serve_sse_stream(server, prompt, model)
+                elif self.path == "/history":
+                    # In-page chat history (per-session, bounded).
+                    self._send_json(server._history_state())
+                elif self.path == "/history/clear":
+                    server._clear_history()
+                    self._send_json({"ok": True})
                 elif self.path == "/state.json":
                     # Machine-readable snapshot: tree + summary + last action.
                     self._send_json(server._page_state())
@@ -223,6 +268,58 @@ class FbpLandingServer:
                 self.end_headers()
                 self.wfile.write(data)
 
+            def _serve_sse_stream(
+                self,
+                srver: FbpLandingServer,
+                prompt: str,
+                model: str,
+            ) -> None:
+                """Stream a model response to the browser as Server-Sent Events.
+
+                Writes ``data: <json>\n\n`` events: a ``meta`` event, live
+                ``chunk`` events, and a final ``done`` (or ``error``). The whole
+                stream is written on the handler thread; the model runs in a
+                background thread, so tokens can be emitted as they arrive.
+                """
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.end_headers()
+                full_text = ""
+                result_model = model
+                errored = False
+                try:
+                    for event in srver._stream_model(prompt, model):
+                        if event.get("type") == "done":
+                            full_text = event.get("text", "")
+                            result_model = event.get("model", result_model)
+                        elif event.get("type") == "error":
+                            errored = True
+                        self.wfile.write(
+                            ("data: " + json.dumps(event) + "\n\n").encode("utf-8")
+                        )
+                        self.wfile.flush()
+                except (BrokenPipeError, ConnectionAbortedError):
+                    # Client disconnected mid-stream; stop without crashing the
+                    # poll loop. The streaming result (if any) is not recorded.
+                    return
+                if not errored:
+                    srver._record_model_turn(
+                        prompt,
+                        {
+                            "ok": True,
+                            "text": full_text,
+                            "verified": False,
+                            "model": result_model,
+                        },
+                    )
+                else:
+                    srver._record_model_turn(
+                        prompt,
+                        {"ok": False, "error": "stream failed", "verified": False},
+                    )
+
         return _Handler
 
     def _run_demo(self) -> dict[str, Any]:
@@ -259,15 +356,141 @@ class FbpLandingServer:
                 self._driver.configure_provider("model", self._providers[model], model_id=model)
             resp = self._driver.run("model", {"prompt": prompt}, child="model")
             if resp.verified:
-                return {
+                result = {
                     "ok": True,
                     "text": resp.value,
                     "verified": True,
                     "model": (resp.sources[0]["id"] if resp.sources else None),
                 }
-            return {"ok": False, "error": resp.error or "model run not verified", "verified": False}
+            else:
+                result = {
+                    "ok": False,
+                    "error": resp.error or "model run not verified",
+                    "verified": False,
+                }
+            self._record_model_turn(prompt, result)
+            return result
         except Exception as exc:  # noqa: BLE001 - surfaced to the page
-            return {"ok": False, "error": str(exc), "verified": False}
+            result = {"ok": False, "error": str(exc), "verified": False}
+            self._record_model_turn(prompt, result)
+            return result
+
+    def _record_model_turn(self, prompt: str, result: dict[str, Any]) -> None:
+        """Record a completed model turn into the in-page chat history.
+
+        Always records the user turn; records the assistant answer (or the
+        error) so the user sees the outcome in the transcript.
+        """
+        self._append_history({"role": "user", "content": prompt, "model": result.get("model")})
+        if result.get("ok"):
+            self._append_history({
+                "role": "assistant",
+                "content": result.get("text", ""),
+                "model": result.get("model"),
+                "verified": result.get("verified"),
+            })
+        else:
+            self._append_history({
+                "role": "assistant",
+                "content": "",
+                "model": result.get("model"),
+                "verified": False,
+                "error": result.get("error") or "unknown error",
+            })
+
+    def _stream_model(self, prompt: str, model: str) -> Iterator[dict[str, Any]]:
+        """Run a model request with progressive token delivery.
+
+        This is a *streaming preview* surface for the landing page: it runs the
+        model directly (in a background thread) and emits real token chunks to
+        the SSE handler via a queue as they arrive. It does **not** go through
+        the driver's directive/response round-trip, so its output is reported
+        honestly as an unverified preview (the audited, verified path remains
+        the synchronous ``/model`` route). When no ``OPENROUTER_API_KEY`` is set
+        it fails closed to the deterministic stub.
+
+        A generator of stream events: ``{type: meta, model}``, then
+        ``{type: chunk, text}`` events, then ``{type: done, text, model,
+        verified: False}`` (or ``{type: error, error}`` on failure). The caller
+        (SSE handler) serialises them for the browser and, on completion,
+        records the turn in chat history.
+        """
+        resolved_model = model or (next(iter(self._providers), None) or "stub-model")
+
+        api_key = os.environ.get(OPENROUTER_API_KEY_ENV, "").strip()
+        if not api_key or resolved_model == "stub-model":
+            # Deterministic stub (offline, CI-safe) — emit progressively.
+            text = _stub_model_text(prompt)
+            yield {"type": "meta", "model": "stub-model"}
+            for chunk in _stream_chunks(text):
+                yield {"type": "chunk", "text": chunk}
+            yield {"type": "done", "text": text, "model": "stub-model", "verified": False}
+            return
+
+        out: queue.Queue[tuple[str, str]] = queue.Queue(maxsize=1)
+        chunks: list[str] = []
+
+        def _worker() -> None:
+            try:
+                client = _openrouter_http_client_stream(
+                    resolved_model,
+                    on_chunk=lambda c: out.put(("chunk", c)),
+                )
+                full = client(
+                    OPENROUTER_ENDPOINT,
+                    {"Authorization": "Bearer " + api_key, "Content-Type": "application/json"},
+                    prompt,
+                )
+                chunks.append(full)
+                out.put(("done", full))
+            except Exception as exc:  # noqa: BLE001 - surfaced as an SSE error
+                out.put(("error", f"{exc}"))
+
+        threading.Thread(target=_worker, daemon=True).start()
+        yield {"type": "meta", "model": resolved_model}
+        while True:
+            tag, value = out.get()
+            if tag == "error":
+                yield {"type": "error", "error": value}
+                return
+            if tag == "done":
+                full = value
+                if not chunks:  # no live chunks (e.g. empty reply); fall back to full
+                    yield {"type": "chunk", "text": full}
+                yield {"type": "done", "text": full, "model": resolved_model, "verified": False}
+                return
+            # tag == "chunk": a real token chunk
+            yield {"type": "chunk", "text": value}
+            chunks.append(value)
+
+
+def _stub_model_text(prompt: str) -> str:
+    """The deterministic offline stub response (mirrors the model agent stub)."""
+    return f"stub response to: {prompt[:80]}"
+
+
+def _stream_chunks(text: str, size: int = 32) -> list[str]:
+    """Split ``text`` into progressive word/prefix-sized chunks for the SSE UI.
+
+    A simple, deterministic progressive renderer: emits the text in words so
+    the browser shows the answer appearing incrementally, until the final
+    ``done`` carries the full text.
+    """
+    if not text:
+        return []
+    words = text.split(" ")
+    out: list[str] = []
+    buffer = ""
+    for w in words:
+        cand = f"{buffer} {w}" if buffer else w
+        if len(cand) >= size or w == words[-1]:
+            out.append(cand)
+            buffer = ""
+        else:
+            buffer = cand
+    if buffer:
+        out.append(buffer)
+    return out
 
 
 def _openrouter_http_client(model: str) -> Any:
@@ -301,6 +524,61 @@ def _openrouter_http_client(model: str) -> Any:
         if not isinstance(content, str):
             raise RuntimeError(f"unexpected OpenRouter response: {body[:200]}")
         return content
+
+    return client
+
+
+def _openrouter_http_client_stream(model: str, on_chunk: Any) -> Any:
+    """A stdlib ``urllib`` transport that streams OpenRouter tokens incrementally.
+
+    It posts a chat-completions request with ``"stream": True``, reads the
+    response line-by-line (OpenRouter sends Server-Sent Events: ``data: {...}``
+    with ``choices[0].delta.content``), and calls ``on_chunk(text)`` for each
+    content delta. Returns the concatenated full text.
+
+    ``on_chunk`` receives ``str`` chunks as they arrive. The final ``data:
+    [DONE]`` line ends the loop. An OpenRouter error line (``data:
+    {"error": ...}``) raises ``RuntimeError``. Raises on HTTP/transport/parse
+    errors; the caller surfaces them (a streaming failure is an explicit,
+    visible error, never a silent gap).
+    """
+
+    def client(endpoint: str, headers: dict[str, str], prompt: str) -> str:
+        payload = json.dumps({
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": True,
+        })
+        request = urllib.request.Request(
+            endpoint, data=payload.encode("utf-8"), headers=headers, method="POST"
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as resp:
+                full: list[str] = []
+                for raw in resp:
+                    line = raw.decode("utf-8", errors="replace").strip()
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        obj = json.loads(data)
+                    except ValueError as exc:
+                        raise RuntimeError(f"unexpected SSE line: {line[:200]}") from exc
+                    if isinstance(obj, dict) and obj.get("error"):
+                        err = obj["error"]
+                        raise RuntimeError(f"OpenRouter error: {err}")
+                    try:
+                        delta = obj["choices"][0]["delta"].get("content")
+                    except (KeyError, IndexError, TypeError):
+                        continue
+                    if delta:
+                        on_chunk(str(delta))
+                        full.append(str(delta))
+                return "".join(full)
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"OpenRouter stream request failed: {exc}") from exc
 
     return client
 
@@ -382,44 +660,120 @@ _PAGE_CSS = "\n".join([
     "  vertical-align:middle; margin-left:.5rem; }",
     "@keyframes spin { to { transform: rotate(360deg); } }",
     "#model-result { white-space:pre-wrap; }",
+    ".chat-history { border:1px solid #ddd; border-radius:6px; padding:.5rem .8rem;",
+    "  margin:.5rem 0 1rem; max-height:18rem; overflow:auto; }",
+    ".chat-turn { padding:.35rem 0; border-bottom:1px solid #f0f0f0; }",
+    ".chat-turn:last-child { border-bottom:none; }",
 ])
 
 # The model text-box client script (kept out of the f-string so its JS object
 # braces are not mistaken for f-string interpolations).
 _MODEL_JS = r"""\
 <script>
+  const $modelOut = () => document.getElementById('model-result');
+  const $modelSpin = () => document.getElementById('model-spinner');
+  const $modelBtn = () => document.getElementById('model-ask');
+
+  async function loadHistory() {
+    try {
+      const r = await fetch('/history');
+      const data = await r.json();
+      renderHistory(data.history || []);
+    } catch (e) { /* history is best-effort */ }
+  }
+
+  function renderHistory(history) {
+    const box = document.getElementById('chat-history');
+    if (!box) return;
+    box.innerHTML = '';
+    for (const turn of history) {
+      const div = document.createElement('div');
+      div.className = 'chat-turn';
+      if (turn.role === 'user') {
+        div.innerHTML = '<b>You:</b> ' + esc(turn.content);
+      } else if (turn.error) {
+        div.innerHTML = '<b>Model:</b> <span class=\'error\'>' + esc(turn.error) + '</span>';
+      } else {
+        const badge = turn.verified ? '[verified]' : '[unverified]';
+        const src = turn.model ? ' source=' + turn.model : '';
+        div.innerHTML = '<b>Model (' + esc(badge + src) + '):</b> ' + esc(turn.content);
+      }
+      box.appendChild(div);
+    }
+  }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML;
+  }
+
   document.getElementById('model-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const prompt = document.getElementById('model-prompt').value;
     const sel = document.getElementById('model-select');
     const model = sel ? sel.value : '';
-    const out = document.getElementById('model-result');
-    const spin = document.getElementById('model-spinner');
-    out.textContent = "";
-    out.className = 'note';
+    const out = $modelOut();
+    const spin = $modelSpin();
+    const btn = $modelBtn();
+    out.textContent = ''; out.className = 'note';
     if (spin) spin.style.display = 'inline-block';
+    if (btn) btn.disabled = true;
+    let full = ''; let resultModel = model; let failed = '';
     try {
-      const r = await fetch('/model', {
+      const r = await fetch('/model/stream', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({prompt: prompt, model: model})
       });
-      const data = await r.json();
-      if (data.ok) {
-        const badge = data.verified ? '[verified]' : '[unverified]';
-        const src = data.model ? ' source=' + data.model : '';
-        out.textContent = badge + src + '\n' + data.text;
-      } else {
-        out.textContent = 'error: ' + (data.error || 'unknown');
-        out.className = 'error';
+      if (!r.ok) {
+        out.textContent = 'request failed: HTTP ' + r.status;
+        out.className='error'; failed='HTTP '+r.status;
+      }
+      const reader = r.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, {stream: true});
+        let idx;
+        while ((idx = buf.indexOf('\n\n')) !== -1) {
+          const block = buf.slice(0, idx); buf = buf.slice(idx + 2);
+          for (const line of block.split('\n')) {
+            if (!line.startsWith('data: ')) continue;
+            const evt = JSON.parse(line.slice(6));
+            if (evt.type === 'chunk') {
+              full += evt.text; out.textContent = full;
+            }
+            else if (evt.type === 'meta') { resultModel = evt.model || model; }
+            else if (evt.type === 'done') {
+              resultModel = evt.model || resultModel;
+              out.textContent = full || evt.text;
+            }
+            else if (evt.type === 'error') {
+              failed = evt.error || 'stream error';
+              out.textContent = 'error: ' + failed; out.className='error';
+            }
+          }
+        }
       }
     } catch (err) {
-      out.textContent = 'request failed: ' + err;
-      out.className = 'error';
+      failed = String(err); out.textContent = 'request failed: ' + err; out.className='error';
     } finally {
       if (spin) spin.style.display = 'none';
+      if (btn) btn.disabled = false;
+      loadHistory();
     }
   });
+
+  document.getElementById('history-clear').addEventListener('click', async () => {
+    await fetch('/history/clear', {method: 'POST'});
+    loadHistory();
+    const out = $modelOut(); out.textContent=''; out.className='note';
+  });
+
+  loadHistory();
 </script>
 """
 
@@ -493,15 +847,18 @@ result or an explicit, audited failure</b> — never a silent third state.</p>
 <h2>Model (LLM as an ordinary agent)</h2>
 <p class='note'>Ask a model. When an <code>OPENROUTER_API_KEY</code> is set it is
 routed to OpenRouter; otherwise the deterministic stub answers (offline).
-The answer shows its <b>verified</b> status and model <b>source</b>.</p>
+Answers stream in as they arrive; the transcript shows each turn's status.</p>
 <form id='model-form'>
   {select}
   <textarea id='model-prompt' rows='3' cols='60' placeholder='Ask the model...'></textarea>
   <br/>
-  <button type='submit'>Ask</button>
+  <button id='model-ask' type='submit'>Ask</button>
   <span id='model-spinner' class='spinner' style='display:none'></span>
 </form>
 <pre id='model-result' class='note'></pre>
+<h3>Chat history</h3>
+<div id='chat-history' class='chat-history'></div>
+<button id='history-clear' type='button'>Clear history</button>
 {_MODEL_JS}
 
 <h2>Standing invariants</h2>
