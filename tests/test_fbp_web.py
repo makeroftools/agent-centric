@@ -331,6 +331,22 @@ class TestLandingRender:
         # Actionable links present.
         assert "/action/run" in html
 
+    def test_render_has_chat_designer_mode_switch(self) -> None:
+        """The page exposes a Chat/Designer mode switch with two panes; the
+        designer pane is hidden by default (a clear functional division)."""
+        html = _render_landing({})
+        assert "mode-chat" in html and "mode-designer" in html
+        assert "pane-chat" in html and "pane-designer" in html
+        # Designer starts hidden; chat visible.
+        assert "pane-designer' class='mode-pane' style='display:none'" in html
+        assert "mode-btn active" in html
+
+    def test_render_uses_cards(self) -> None:
+        """Functional areas are wrapped in cards for a clean, friendly layout."""
+        html = _render_landing({})
+        assert "class='card'" in html
+        assert "card" in html
+
     def test_render_shows_model_dropdown_when_choices(self) -> None:
         """When providers are configured the page renders a model dropdown."""
         html = _render_landing({}, models=("gpt-x", "llama-y"))

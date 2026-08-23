@@ -914,6 +914,16 @@ _PAGE_CSS = "\n".join([
     "  vertical-align:middle; }",
     ".net-node-el .net-port.in { background:#22a06b; }",
     ".net-svg { display:block; }",
+    ".mode-switch { display:flex; gap:.5rem; margin:1.2rem 0 .8rem; }",
+    ".mode-btn { flex:1; padding:.6rem; border:1px solid #ccc; border-radius:8px;",
+    "  background:#f5f6f8; cursor:pointer; font-size:1rem; }",
+    ".mode-btn.active { background:#0057ff; color:#fff; border-color:#0057ff; }",
+    ".card { background:#fff; border:1px solid #e2e4e8; border-radius:12px;",
+    "  box-shadow:0 1px 3px rgba(0,0,0,.06); padding:1rem 1.2rem; margin:1rem 0; }",
+    ".card h2 { margin-top:0; }",
+    ".card-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }",
+    "@media (max-width:760px){ .card-grid { grid-template-columns:1fr; } }",
+    ".card .note { margin-top:.2rem; }",
 ])
 
 # The model text-box client script (kept out of the f-string so its JS object
@@ -1288,6 +1298,25 @@ _NETWORK_JS = r"""\
 </script>
 """
 
+# The Chat/Designer mode-switch script.
+_MODE_JS = r"""\
+<script>
+  function modeShow(which) {
+    const chat = document.getElementById('pane-chat');
+    const des = document.getElementById('pane-designer');
+    const bc = document.getElementById('mode-chat');
+    const bd = document.getElementById('mode-designer');
+    if (!chat || !des) return;
+    chat.style.display = (which === 'chat') ? 'block' : 'none';
+    des.style.display = (which === 'designer') ? 'block' : 'none';
+    bc.classList.toggle('active', which === 'chat');
+    bd.classList.toggle('active', which === 'designer');
+  }
+  document.getElementById('mode-chat').addEventListener('click', () => modeShow('chat'));
+  document.getElementById('mode-designer').addEventListener('click', () => modeShow('designer'));
+</script>
+"""
+
 
 def _render_landing(
     state: dict[str, Any], *, error: str | None = None, models: tuple[str, ...] = ()
@@ -1355,6 +1384,14 @@ result or an explicit, audited failure</b> — never a silent third state.</p>
 {action_note}
 {err}
 
+<div class='mode-switch'>
+  <button id='mode-chat' class='mode-btn active' type='button'>Chat</button>
+  <button id='mode-designer' class='mode-btn' type='button'>Designer</button>
+</div>
+
+<div id='pane-chat' class='mode-pane'>
+
+<div class='card'>
 <h2>Model (LLM as an ordinary agent)</h2>
 <p class='note'>Ask a model. When an <code>OPENROUTER_API_KEY</code> is set it is
 routed to OpenRouter; otherwise the deterministic stub answers (offline).
@@ -1371,7 +1408,9 @@ Answers stream in as they arrive; the transcript shows each turn's status.</p>
 <div id='chat-history' class='chat-history'></div>
 <button id='history-clear' type='button'>Clear history</button>
 {_MODEL_JS}
+</div>
 
+<div class='card'>
 <h2>Orchestrate → FBP</h2>
 <p class='note'>Take a validated, canonical JSON artifact and run it as an
 FBP plan through the verified spine. A single task (<code>{{"task": ...}}</code>)
@@ -1385,7 +1424,12 @@ replayable. Invalid artifacts fail closed.</p>
 <span id='orch-spinner' class='spinner' style='display:none'></span>
 <pre id='orch-result' class='note'></pre>
 {_ORCHESTRATE_JS}
+</div>
+</div>
 
+<div id='pane-designer' class='mode-pane' style='display:none'>
+
+<div class='card'>
 <h2>Component Network (visual programming)</h2>
 <p class='note'>Wire components into a directed data-flow graph. Each component is an FBP
 <code>task</code>; each edge feeds a target's input from a source's output. The
@@ -1412,6 +1456,8 @@ and unknown references fail closed.</p>
   <textarea id='net-json' rows='5' cols='72' class='note'></textarea>
   <pre id='net-result' class='note'></pre>
 {_NETWORK_JS}
+</div>
+</div>
 
 <h2>Standing invariants</h2>
 <ul class='invariants'>
@@ -1423,6 +1469,7 @@ and unknown references fail closed.</p>
       irreducible residue reaches a human.</li>
   <li>CPM, audit, and replay are read-only capabilities, not agents.</li>
 </ul>
+{_MODE_JS}
 </body></html>
 """
 
