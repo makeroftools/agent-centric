@@ -25,9 +25,11 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `09d1c7a` (Enter/Shift-Enter submit). **Pushed to origin:** up through
-  `df0fb16`. **Unpushed (1 commit):** `09d1c7a` (the Enter/Shift-Enter submit).
-  Run `git log origin/agent-centric-fbp..HEAD` to see the unpushed set.
+- **HEAD:** `8f6daa2` (durable chat history). **Pushed to origin:** up through
+  `df0fb16`. **Unpushed (3 commits):** `09d1c7a` (Enter/Shift-Enter submit),
+  `5b53945` (this handoff), `8f6daa2` (durable chat history — committed this
+  session, not pushed). Run `git log origin/agent-centric-fbp..HEAD` to see the
+  unpushed set.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule in effect for a long time: **do not push unless the lead
   explicitly says push.** (The lead has since been pushing directly themselves;
@@ -35,11 +37,12 @@ we are.
   relaxed, but confirm each time for a given commit.)
 
 ### Validation (run this session, all live)
-- `uv run pytest` → **674 passed** (was 649; added envelopes + streaming/history)
+- `uv run pytest` → **686 passed** (was 674; added `chatstore` + durable-history
+  web/CLI wiring)
 - `uv run ruff check .` → clean
-- `uv run mypy src` → clean (**77 source files**)
+- `uv run mypy src` → clean (**78 source files**)
 - FBP coverage (`uv run pytest --cov=agent_centric.fbp --cov-report=term`) →
-  **88% total**; key files: registry 97%, bills 94%, store 93%, store_agent
+  **~88% total**; key files: registry 97%, bills 94%, store 93%, store_agent
   89%, web 83%.
 - Cross-transport durable replay: 19/19 on inproc/ipc/tcp. Full production-arc
   demo: crash-safe replay 6/6.
@@ -74,6 +77,7 @@ that page:
 | **Model box (dropdown + spinner)** | `fbp/web.py` | `/model` POST runs a prompt through the `model` agent → OpenRouter when `OPENROUTER_API_KEY` set, else stub; model dropdown (`OPENROUTER_MODEL`), spinner, verified/source status; **Enter submits, Shift+Enter = newline** |
 | **Streaming answers + chat history** | `fbp/web.py` | `/model/stream` (SSE-over-POST) streams OpenRouter tokens live; `/history` + `/history/clear` give a bounded in-page transcript (100 turns). Streaming reports honestly as verified=False (the audited path stays `/model`) |
 | **Resource envelopes** | `fbp/envelopes.py` | `ResourceEnvelope` (step/size/latency/child bounds) granted at configure time, enforced fail-closed at run/spawn; unbounded by default |
+| **Durable chat history** | `fbp/chatstore.py`, `fbp/web.py`, CLI | OPT-IN model-box transcript (`fbp-web --history <path>`): single-writer, append-only, WAL, bounded like the in-memory log; survives restarts, replays identically. In-memory by default (no write without an explicit grant)
 
 ### Easy-UX driver & CLI
 - `FbpDriver` API: `register`, `resolve`, `configure`, `configure_child`,
@@ -170,6 +174,11 @@ of decisions and working style that a fresh session must inherit.
    hardening needed before cross-host use.
 8. **Enter/Shift-Enter submit** (`09d1c7a`) — Enter submits the model prompt
    (no more clicking Ask); Shift+Enter inserts a newline for multi-line prompts.
+9. **Durable chat history** (`8f6daa2`) — OPT-IN `--history <path>` persists the
+   model box transcript to a single-writer, append-only, WAL store
+   (`fbp/chatstore.py`); the transcript survives restarts and replays
+   identically, matching the durability spine (`TrajectoryStore` philosophy).
+   In-memory by default (no write without an explicit grant).
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -230,22 +239,30 @@ real trust boundary.
 These are listed in `STATUS.md`'s "out of scope / future volleys".
 
 ### Loose ends / immediate next actions
-- **Unpushed commit:** `09d1c7a` (Enter/Shift-Enter submit) is local but not on
+- **Unpushed commits (3):** `09d1c7a` (Enter/Shift-Enter), `5b53945` (handoff),
+  and `8f6daa2` (durable chat history, added this session) are local but not on
   GitHub (remote is at `df0fb16`). The user pushes directly; confirm before
   pushing anything yourself.
+- **Terminal glitch (this session):** the session's local terminal began
+  rejecting ``cd`` into the project with "not in any of the project's
+  worktrees"; the same command had worked minutes earlier. The sub-agent (which
+  runs from `agent-centric/` — note the nested project root) had no such issue.
+  If a fresh session hits the same wall, use the sub-agent/spawn path or the
+  nested `agent-centric/` root.
 - **`OPENROUTER_MODEL` lives in the user's `~/.bashrc`** (out of the repo):
   `deepseek/deepseek-v4-flash-0731,openai/gpt-4o-mini,anthropic/claude-3.5-son
   net,meta-llama/llama-3.3-70b-instruct`. The `anthropic/claude-3.5-sonnet` id
   404s on OpenRouter for this key (invalid slug); remove or correct it.
 - **docs/fbp.md / FBP_HANDOFF.md / README_FBP.md** are living docs — keep them
   current (they now mention the model box, reload, kill, streaming, history,
-  envelopes).
+  envelopes, and the durable `--history` transcript).
 - **The `fbp-web` landing page** is live and runnable for a demo (set
   `OPENROUTER_API_KEY` for a real model; it fails closed to the stub otherwise):
-  `uv run agent-centric fbp-web --reload`.
-- Future UX ideas for the model box: **persisted** (durable, cross-restart)
-  chat history, and a model **chat-context** option. Streaming + in-page
-  history are already built (see the session arc).
+  `uv run agent-centric fbp-web --reload`. Add `--history <path>` to keep the
+  model-box transcript across restarts.
+- Future UX idea for the model box: a model **chat-context** option (feed prior
+  turns into the next prompt). **Persisted** (durable, cross-restart) chat
+  history is now built (`8f6daa2`); streaming + in-page history were already in.
 
 ---
 
@@ -257,6 +274,7 @@ uv run agent-centric fbp                # drive FBP demo (inproc)
 uv run agent-centric fbp --transport tcp | ipc
 uv run agent-centric fbp-web            # landing page + model box
 uv run agent-centric fbp-web --reload   # auto-restart on source edits
+uv run agent-centric fbp-web --history chat.db   # durable transcript across restarts
 uv run agent-centric fbp-web-kill       # stop the server on the port
 uv run agent-centric fbp-replay sess.db
 uv run agent-centric fbp-summary sess.db
@@ -271,7 +289,7 @@ uv run python examples/fbp_arc_demo.py
 - Deterministic-first north star; LLM as ordinary agent; grants; fail-closed;
   no auto-pres ids.
 - The AC Router is spun out, gitignored, and **not** our work here.
-- Trust only what 674 tests prove and what is committed; say clearly when
+- Trust only what 686 tests prove and what is committed; say clearly when
   something is unverifiable or unpushed.
 
 ---
