@@ -409,6 +409,17 @@ class FbpLandingServer:
             })
         return {"ok": True, "warranted": warranted}
 
+    def _catalog_readout(self) -> dict[str, Any]:
+        """Read-only view of the recommended base-model catalog.
+
+        Serves the 2026 reference catalog (categorical by deployment class) so
+        the provisioning card can offer a model picker and show each base's
+        recommended hardware tier. Deterministic and read-only.
+        """
+        from .model_catalog import catalog
+
+        return {"ok": True, **catalog()}
+
     def _provision_domains(self) -> list[dict[str, Any]]:
         """The live domains a user may provision (read-only).
 
@@ -489,6 +500,7 @@ class FbpLandingServer:
         did = str(data.get("domain") or "bill-extract")
         provider = str(data.get("provider") or "stub")
         budget = data.get("budget")
+        base_model = str(data.get("base_model") or "llama-3.2-3b")
 
         known = {d["id"] for d in self._provision_domains()}
         if did not in known:
@@ -518,6 +530,7 @@ class FbpLandingServer:
                 provider=provider,
                 grant=grant,
                 budget=budget,
+                base_model=base_model,
             )
         except ProvisionError as exc:
             return {"ok": False, "error": str(exc)}
@@ -768,6 +781,9 @@ class FbpLandingServer:
                 elif self.path == "/provision/domains":
                     # The live domains a user may provision (read-only).
                     self._send_json({"ok": True, "domains": server._provision_domains()})
+                elif self.path == "/catalog":
+                    # Read-only recommended base-model catalog (model picker).
+                    self._send_json(server._catalog_readout())
                 elif self.path == "/model":
                     # Run a prompt through the model agent (LLM as an ordinary
                     # agent). Body is either a plain prompt string or a JSON
@@ -2001,9 +2017,9 @@ _ARTIFACTS_JS = r"""\
 </script>
 """
 
-# The expert-provisioning client script: select the domain, pick the (stub)
-# provider and a cost budget, then run one deterministic provisioning pass
-# (plan -> train -> account -> settle), offline and fail-closed.
+# The expert-provisioning client script: select the domain, pick a base model,
+# a (stub) provider and a cost budget, then run one deterministic provisioning
+# pass (plan -> train -> account -> settle), offline and fail-closed.
 _PROVISION_JS = r"""\
 <script>
   const $provOut = () => document.getElementById('prov-result');
@@ -2014,6 +2030,11 @@ _PROVISION_JS = r"""\
     'deterministic': 'deterministic',
     'learned': 'learned (SLM)',
     'human': 'human'
+  };
+  const provTierLabels = {
+    'cpu': 'CPU / tiny',
+    'single-gpu': 'Single GPU',
+    'multi-gpu': 'Multi-GPU'
   };
 
   async function provLoadDomains() {
@@ -2039,16 +2060,59 @@ _PROVISION_JS = r"""\
     } catch (e) { /* best-effort; the default option remains */ }
   }
 
+  let provCatalog = [];
+
+  async function provLoadCatalog() {
+    const sel = document.getElementById('prov-model');
+    if (!sel) return;
+    try {
+      const r = await fetch('/catalog');
+      const data = await r.json();
+      provCatalog = (data && data.bases) || [];
+      // Arc the bases by size class (smallest to largest).
+      const order = ['edge', 'small', 'mid', 'large'];
+      provCatalog.sort((a, b) =>
+        order.indexOf(a.size_class) - order.indexOf(b.size_class) || a.params - b.params);
+      sel.innerHTML = '';
+      let selectedDefault = false;
+      for (const b of provCatalog) {
+        const o = document.createElement('option');
+        o.value = b.id;
+        const cls = b.size_class || 'mid';
+        const label = b.id + ' (' + cls + ', ' + b.params + 'B)';
+        o.textContent = label;
+        o.title = (b.note || '') + ' min tier: ' + (b.min_tier || '');
+        if (!selectedDefault && b.id === 'llama-3.2-3b') {
+          o.selected = true; selectedDefault = true;
+        }
+        sel.appendChild(o);
+      }
+      provShowTier();
+    } catch (e) { /* best-effort */ }
+  }
+
+  function provShowTier() {
+    const sel = document.getElementById('prov-model');
+    const el = document.getElementById('prov-tier');
+    if (!sel || !el) return;
+    const id = sel.value;
+    const b = provCatalog.find(x => x.id === id);
+    const tier = b ? (b.min_tier || '') : '';
+    el.textContent = provTierLabels[tier] ? ('Expected tier: ' + provTierLabels[tier]) : '';
+  }
+
   async function provRun() {
     const out = $provOut(); const spin = $provSpin(); const btn = $provBtn();
     out.textContent = ''; out.className = 'note';
     if (spin) spin.style.display = 'inline-block';
     if (btn) btn.disabled = true;
     const sel = document.getElementById('prov-domain');
+    const model = document.getElementById('prov-model');
     const budgetEl = document.getElementById('prov-budget');
     const payload = {
       domain: (sel && sel.value) || 'bill-extract',
       provider: 'stub',
+      base_model: (model && model.value) || 'llama-3.2-3b',
       budget: budgetEl && budgetEl.value !== '' ? Number(budgetEl.value) : null
     };
     try {
@@ -2088,7 +2152,10 @@ _PROVISION_JS = r"""\
   }
 
   document.getElementById('prov-run').addEventListener('click', provRun);
+  const modelSel = document.getElementById('prov-model');
+  if (modelSel) modelSel.addEventListener('change', provShowTier);
   provLoadDomains();
+  provLoadCatalog();
 </script>
 """
 
@@ -2523,6 +2590,10 @@ under an explicit grant. Real providers never run here; unverifiable domains,
 over-budget plans, and missing grants fail closed.</p>
 <label for='prov-domain'>Domain</label>
 <select id='prov-domain' class='pill'></select>
+<label for='prov-model'>Base model</label>
+<select id='prov-model' class='pill'></select>
+<span id='prov-tier' class='note' style='margin-left:.6rem'></span>
+<br/>
 <label for='prov-budget'>Budget</label>
 <input id='prov-budget' type='number' placeholder='100 (optional cost cap)'/>
 <br/>

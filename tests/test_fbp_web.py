@@ -909,3 +909,57 @@ class TestProvisionRoute:
                 assert server._artifact_readout()["count"] == before + 1
         finally:
             server._driver.close()
+
+
+class TestCatalogWiring:
+    """The recommended base-model catalog is wired into the web tier."""
+
+    def test_catalog_readout_serves_bases(self) -> None:
+        server = FbpLandingServer()
+        try:
+            cat = server._catalog_readout()
+            assert cat["ok"] is True
+            assert len(cat["bases"]) >= 10
+            assert cat["size_classes"] == ["edge", "small", "mid", "large"]
+            for b in cat["bases"]:
+                assert "min_tier" in b
+                assert "size_class" in b
+        finally:
+            server._driver.close()
+
+    def test_provision_accepts_base_model(self) -> None:
+        server = FbpLandingServer()
+        try:
+            result = server._run_provision(
+                json.dumps({
+                    "domain": "bill-extract",
+                    "provider": "stub",
+                    "base_model": "qwen3-14b",
+                    "budget": 100,
+                })
+            )
+            assert result["ok"] is True
+            assert result["result"]["plan"] == "multi-gpu"
+            assert result["result"]["expert"]["base_model"] == "qwen3-14b"
+        finally:
+            server._driver.close()
+
+    def test_provision_unknown_base_fails_closed(self) -> None:
+        server = FbpLandingServer()
+        try:
+            result = server._run_provision(
+                json.dumps({
+                    "domain": "bill-extract",
+                    "provider": "stub",
+                    "base_model": "no-such-model",
+                })
+            )
+            assert result["ok"] is False
+            assert "unknown base model" in result["error"]
+        finally:
+            server._driver.close()
+
+    def test_landing_includes_model_picker(self) -> None:
+        html = _render_landing({})
+        assert "prov-model" in html
+        assert "prov-tier" in html
