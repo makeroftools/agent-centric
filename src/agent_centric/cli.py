@@ -603,6 +603,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional durable store for saved component networks. Networks persist "
         "across restarts (explicit grant; with default: in-memory only).",
     )
+    p_fbp_web.add_argument(
+        "--kill",
+        action="store_true",
+        help="Stop a running fbp-web server on the port (instead of serving).",
+    )
 
     p_fbp_web_kill = sub.add_parser(
         "fbp-web-kill",
@@ -984,6 +989,7 @@ def _cmd_fbp_web(
     reload: bool = False,
     history: Path | None = None,
     networks: Path | None = None,
+    kill: bool = False,
 ) -> int:
     """Serve a local, actionable landing page for the FBP subsystem.
 
@@ -996,8 +1002,12 @@ def _cmd_fbp_web(
     whenever the FBP source tree changes (a dev convenience so edits are picked
     up without a manual restart). ``history`` optionally grants a durable,
     cross-restart chat-history store; ``networks`` optionally grants durable
-    storage for saved component networks.
+    storage for saved component networks. ``kill=True`` stops a running server
+    on the port instead of serving.
     """
+    if kill:
+        return _cmd_fbp_web_kill(port=port)
+
     if reload:
         return _fbp_web_reload(
             host=host, port=port, open_browser=open_browser, history=history,
@@ -1295,7 +1305,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "fbp-web":
         return _cmd_fbp_web(
             host=args.host, port=args.port, open_browser=args.open, reload=args.reload,
-            history=args.history, networks=args.networks,
+            history=args.history, networks=args.networks, kill=args.kill,
         )
     if args.command == "fbp-web-kill":
         return _cmd_fbp_web_kill(port=args.port)
