@@ -24,6 +24,13 @@ adapters (see ``spec.md`` and ``protocol.md``).
 
 from __future__ import annotations
 
+from .activity import (
+    ACTIVITY_KINDS,
+    MAX_ACTIVITY_ENTRIES,
+    ActivityEntry,
+    ActivityError,
+    ActivityFeed,
+)
 from .agent import Agent, register_callable
 from .audit import AuditChain, ChainEvent, reconstruct_chains
 from .bills import (
@@ -280,6 +287,12 @@ __all__ = [
     "ChatHistoryStore",
     "ChatHistoryError",
     "open_chat_history",
+    # Operator activity feed (bounded, append-only, optionally-durable audit)
+    "ActivityFeed",
+    "ActivityEntry",
+    "ActivityError",
+    "ACTIVITY_KINDS",
+    "MAX_ACTIVITY_ENTRIES",
     # Post-return determinism + orchestration (chat → FBP seam)
     "PinCache",
     "canonical_json",
@@ -460,4 +473,3 @@ __all__ = [
 from pathlib import Path  # noqa: E402  (kept at the end, after __all__)
 
 _FBP_DIR = Path(__file__).resolve().parent
-
