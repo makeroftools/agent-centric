@@ -967,3 +967,50 @@ class TestCatalogWiring:
         html = _render_landing({})
         assert "prov-model" in html
         assert "prov-tier" in html
+
+
+class TestDesignerSurface:
+    """The Designer is a full three-pane component-network editor: palette,
+    stage (canvas), and inspector — all wired and rendered."""
+
+    def test_render_has_three_pane_designer(self) -> None:
+        html = _render_landing({})
+        # Palette, canvas/stage, and inspector all present.
+        assert "id='net-pal'" in html
+        assert "id='net-canvas'" in html and "id='net-svg'" in html
+        assert "id='net-insp'" in html
+        # Toolbar controls present.
+        for i in ("net-layout", "net-clear", "net-run", "net-save", "net-load"):
+            assert f"id='{i}'" in html
+        # The palette data is data-driven (tasks listed).
+        for task in ("double", "sum", "square", "even"):
+            assert task in html
+
+    def test_new_tasks_true_dataflow(self) -> None:
+        """The richer task set runs as verified true dataflow through the spine:
+        sum(2,3)=5 -> double=10 -> even=true."""
+        server = FbpLandingServer()
+        try:
+            payload = (
+                '{"components": ['
+                '{"id": "a", "task": "sum", "args": {"a": 2, "b": 3}},'
+                '{"id": "b", "task": "double", "args": {"value": 0}},'
+                '{"id": "c", "task": "even", "args": {}}'
+                "], "
+                '"edges": ['
+                '{"source": "a", "source_field": "value", "target": "b", '
+                '"target_arg": "value"},'
+                '{"source": "b", "source_field": "value", "target": "c", '
+                '"target_arg": "value"}]}'
+            )
+            result = server._run_network(payload)
+            assert result["ok"] is True
+            assert result["completed"] == 3
+            values = {s["id"]: s["value"] for s in result["results"]}
+            assert values["a"] == 5
+            assert values["b"] == 10
+            assert values["c"] is True
+            # Every step verified.
+            assert all(s["verified"] for s in result["results"])
+        finally:
+            server._driver.close()

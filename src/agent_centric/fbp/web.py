@@ -260,12 +260,24 @@ class FbpLandingServer:
     def _build_driver(self) -> FbpDriver:
         driver = FbpDriver()
         driver.register("double", lambda value: value * 2, source_url="file:///tasks/double")
+        driver.register("triple", lambda value: value * 3, source_url="file:///tasks/triple")
+        driver.register("square", lambda value: value * value, source_url="file:///tasks/square")
+        driver.register("negate", lambda value: -value, source_url="file:///tasks/negate")
         driver.register("even", lambda value: isinstance(value, int) and value % 2 == 0)
         driver.register("odd", lambda value: isinstance(value, int) and value % 2 == 1)
+        driver.register("positive", lambda value: value > 0)
         driver.register("sum", lambda a, b: a + b, source_url="file:///tasks/sum")
+        driver.register("product", lambda a, b: a * b, source_url="file:///tasks/product")
+        driver.register("concat", lambda a, b: f"{a}{b}", source_url="file:///tasks/concat")
         # No global verifier: the ``double`` demo passes ``even`` per-run, and
         # the model agent (string output) is not gated by a numeric verifier.
-        driver.configure(tasks=("double", "even", "odd", "sum"), verifiers=("even", "odd"))
+        driver.configure(
+            tasks=(
+                "double", "triple", "square", "negate",
+                "even", "odd", "positive", "sum", "product", "concat",
+            ),
+            verifiers=("even", "odd", "positive"),
+        )
         # Provision a couple of real children so the tree shows substance.
         driver.spawn("child")
         driver.configure_child("child", tasks=("double",))
@@ -1582,11 +1594,72 @@ _PAGE_CSS = "\n".join([
     "  margin:.4rem .4rem .2rem 0; }",
     ".bills-form input { padding:.35rem .5rem; border:1px solid #ccc;",
     "  border-radius:6px; font-family:monospace; margin-right:.6rem; }",
-    # ---- docs panel ----",".docs { line-height:1.6; }",
+    # ---- docs panel ----
+    ".docs { line-height:1.6; }",
     ".docs h2 { margin-top:1.4rem; }",
     ".docs code { background:#f3f4f6; padding:.15rem .35rem; border-radius:4px;",
     "  font-size:.88em; }",
     ".docs ul { padding-left:1.2rem; }",
+    # ---- designer / component network editor ----
+    ".net-grid { display:grid; grid-template-columns:220px 1fr 240px; gap:1rem;",
+    "  align-items:start; }",
+    "@media (max-width:1000px){ .net-grid { grid-template-columns:1fr; } }",
+    ".net-palette { background:#f8fafc; border:1px solid #e5e7eb; border-radius:12px;",
+    "  padding:.8rem; }",
+    ".net-palette h4 { margin:.3rem 0 .6rem; font-size:.8rem; text-transform:uppercase;",
+    "  letter-spacing:.04em; color:#6b7280; }",
+    ".net-pal-group { margin-bottom:.7rem; }",
+    ".net-pal-group .plabel { font-size:.72rem; color:#9ca3af; margin:.3rem 0 .2rem; }",
+    ".pal-item { display:block; width:100%; text-align:left; padding:.45rem .6rem;",
+    "  margin:.15rem 0; border:1px solid #e2e4e8; border-radius:8px; background:#fff;",
+    "  cursor:pointer; font-size:.85rem; }",
+    ".pal-item:hover { border-color:#5b8def; background:#eef4ff; }",
+    ".pal-item .ptask { font-weight:600; font-family:monospace; }",
+    ".pal-item .pdesc { display:block; color:#6b7280; font-size:.75rem; }",
+    ".net-stage { position:relative; }",
+    ".net-toolbar { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:.6rem;",
+    "  align-items:center; }",
+    ".net-toolbar button { background:#fff; border:1px solid #d1d5db; border-radius:8px;",
+    "  padding:.4rem .7rem; cursor:pointer; font-size:.82rem; }",
+    ".net-toolbar button:hover { background:#f3f4f6; }",
+    ".net-toolbar .primary { background:#0057ff; color:#fff; border-color:#0057ff; }",
+    ".net-canvas { position:relative; border:1px solid #e5e7eb; border-radius:12px;",
+    "  background-image:radial-gradient(#e2e8f0 1px, transparent 1px);",
+    "  background-size:22px 22px; height:460px; overflow:hidden; cursor:grab;",
+    "  touch-action:none; }",
+    ".net-canvas.panning { cursor:grabbing; }",
+    ".net-node-el { position:absolute; background:#fff; border:1.5px solid #5b8def;",
+    "  border-radius:10px; box-shadow:0 2px 6px rgba(0,0,0,.08); padding:.5rem .7rem;",
+    "  font-family:monospace; font-size:.85rem; cursor:grab; user-select:none;",
+    "  min-width:96px; transition:box-shadow .12s; }",
+    ".net-node-el.sel { border-color:#111827; box-shadow:0 0 0 2px rgba(17,24,39,.15); }",
+    ".net-node-el.err { border-color:#dc2626; }",
+    ".net-node-el.ok { border-color:#16a34a; }",
+    ".net-node-title { display:flex; align-items:center; gap:.4rem; font-weight:600;",
+    "  font-size:.8rem; }",
+    ".net-node-task { color:#6b7280; font-size:.72rem; }",
+    ".net-node-val { margin-top:.3rem; font-size:.8rem; color:#111827;",
+    "  background:#f3f4f6; border-radius:6px; padding:.15rem .4rem; white-space:nowrap;",
+    "  overflow:hidden; text-overflow:ellipsis; max-width:150px; }",
+    ".net-node-el .net-port { display:inline-block; width:12px; height:12px;",
+    "  border-radius:50%; background:#5b8def; cursor:crosshair; vertical-align:middle; }",
+    ".net-node-el .net-port.in { background:#22a06b; }",
+    ".net-node-el .net-port:hover { transform:scale(1.3); }",
+    ".net-svg { position:absolute; top:0; left:0; overflow:visible; pointer-events:none; }",
+    ".net-edge-path { pointer-events:stroke; stroke:#94a3b8; stroke-width:2; fill:none;",
+    "  cursor:pointer; }",
+    ".net-edge-path.sel { stroke:#111827; stroke-width:3; }",
+    ".net-inspector { background:#f8fafc; border:1px solid #e5e7eb; border-radius:12px;",
+    "  padding:.9rem; }",
+    ".net-inspector h4 { margin:0 0 .6rem; font-size:.8rem; text-transform:uppercase;",
+    "  letter-spacing:.04em; color:#6b7280; }",
+    ".insp-field { margin:.5rem 0; }",
+    ".insp-field label { display:block; font-size:.78rem; color:#4b5563; }",
+    ".insp-field input { width:100%; padding:.35rem .5rem; border:1px solid #d1d5db;",
+    "  border-radius:6px; font-family:monospace; font-size:.8rem; }",
+    ".insp-sec { border-top:1px solid #e5e7eb; margin-top:.7rem; padding-top:.6rem; }",
+    ".net-status { font-family:monospace; font-size:.78rem; color:#6b7280; margin-top:.6rem;",
+    "  white-space:pre-wrap; }",
 ])
 
 # The model text-box client script (kept out of the f-string so its JS object
@@ -2215,33 +2288,101 @@ _PROVISION_JS = r"""\
 # JS object braces are not mistaken for f-string interpolations).
 _NETWORK_JS = r"""\
 <script>
-  // A dependency-free, drag-and-drop node-and-wire canvas for Component
-  // Networks. Nodes are absolutely-positioned divs; edges are SVG paths. The
-  // editor serializes to the exact ComponentNetwork JSON the verified spine
-  // runs — no third-party library, no CDN, fully client-side.
+  // A full-featured, dependency-free component-network editor. Nodes are
+  // absolutely-positioned divs; edges are SVG paths. The editor serializes to
+  // the ComponentNetwork JSON the verified spine runs. No libs, no CDN.
+  const netPalette = [
+    {group: 'Arithmetic', items: [
+      {task: 'double', desc: 'value * 2', args: {value: 1}},
+      {task: 'square', desc: 'value * value', args: {value: 3}},
+      {task: 'negate', desc: 'value * -1', args: {value: 5}},
+    ]},
+    {group: 'Derived', items: [
+      {task: 'sum', desc: 'a + b', args: {a: 1, b: 1}},
+      {task: 'product', desc: 'a * b', args: {a: 2, b: 3}},
+      {task: 'concat', desc: 'a + b (str)', args: {a: 'x', b: 'y'}},
+    ]},
+    {group: 'Checks', items: [
+      {task: 'even', desc: 'is value even?', args: {value: 0}},
+      {task: 'odd', desc: 'is value odd?', args: {value: 1}},
+      {task: 'positive', desc: 'is value > 0?', args: {value: 1}},
+    ]},
+  ];
+  const verifierChoices = ['', 'even', 'odd', 'positive'];
+
   const netState = {components: [], edges: []};
+  const netLayout = {};
   let netSeq = 1;
-  let netPending = null;   // {source, source_field} awaiting a target click
-  let netDrag = null;      // {id, dx, dy} while dragging
-  const $netOut = () => document.getElementById('net-result');
+  let netPending = null;
+  let netSel = null;
+  let netDrag = null;
+  let netPan = null;
+  let netZoom = 1;
+  let netResult = {};
   const $netSpin = () => document.getElementById('net-spinner');
-  const $netBtn = () => document.getElementById('net-run');
   const $netSvg = () => document.getElementById('net-svg');
   const $netCanvas = () => document.getElementById('net-canvas');
+  const $netStatus = () => document.getElementById('net-status');
 
   function netNodeEl(id) { return document.getElementById('net-n-' + id); }
 
-  function netAddComponent(task) {
+  function netBuildPalette() {
+    const box = document.getElementById('net-pal');
+    if (!box) return;
+    box.innerHTML = '';
+    netPalette.forEach(g => {
+      const wrap = document.createElement('div');
+      wrap.className = 'net-pal-group';
+      wrap.innerHTML = '<div class="plabel">' + g.group + '</div>';
+      g.items.forEach(it => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'pal-item';
+        b.innerHTML = '<span class="ptask">' + it.task + '</span>' +
+          '<span class="pdesc">' + it.desc + '</span>';
+        b.addEventListener('click', () => netAddComponent(it.task, it.args));
+        wrap.appendChild(b);
+      });
+      box.appendChild(wrap);
+    });
+  }
+
+  function netPlaceId() {
+    const n = netState.components.length;
+    return {x: 40 + (n % 3) * 220, y: 40 + Math.floor(n / 3) * 130};
+  }
+
+  function netAddComponent(task, args) {
     const id = 'c' + netSeq++;
-    netState.components.push({id: id, task: task, args: {}});
+    netState.components.push({id: id, task: task, args: Object.assign({}, args || {})});
+    netLayout[id] = netPlaceId();
     netRender();
   }
 
   function netRemoveComponent(id) {
     netState.components = netState.components.filter(c => c.id !== id);
     netState.edges = netState.edges.filter(e => e.source !== id && e.target !== id);
-    if (netPending && netPending.source === id) netPending = null;
+    delete netLayout[id];
+    delete netResult[id];
+    if (netPending && netPending.sourceNode === id) netPending = null;
+    if (netSel === id) { netSel = null; netRenderInspector(); }
     netRender();
+  }
+
+  function netClear() {
+    netState.components = [];
+    netState.edges = [];
+    Object.keys(netLayout).forEach(k => delete netLayout[k]);
+    netPending = null; netSel = null; netResult = {};
+    netRender(); netRenderInspector();
+    netSetStatus('Empty network - add components from the palette.');
+  }
+
+  function netSetStatus(t) { if ($netStatus()) $netStatus().textContent = t; }
+
+  function netNodeInputs(id) {
+    const c = netState.components.find(x => x.id === id);
+    if (!c || !c.args) return [];
+    return Object.keys(c.args);
   }
 
   function netPortPos(id, which) {
@@ -2249,143 +2390,206 @@ _NETWORK_JS = r"""\
     if (!el) return {x: 0, y: 0};
     const r = el.getBoundingClientRect();
     const cr = $netCanvas().getBoundingClientRect();
-    const x = r.left - cr.left + (which === 'in' ? 0 : r.width);
-    const y = r.top - cr.top + r.height / 2;
-    return {x: x, y: y};
+    const x = (r.left - cr.left) + (which === 'in' ? 0 : r.width);
+    const y = (r.top - cr.top) + r.height / 2;
+    return {x: x / netZoom, y: y / netZoom};
+  }
+
+  function netSelect(id, ev) {
+    if (ev) ev.stopPropagation();
+    netSel = id;
+    netRender(); netRenderInspector();
+  }
+
+  function netRenderInspector() {
+    const box = document.getElementById('net-insp');
+    if (!box) return;
+    if (!netSel) { box.innerHTML = 'Select a node to edit it.'; return; }
+    const c = netState.components.find(x => x.id === netSel);
+    if (!c) { box.innerHTML = 'Select a node.'; return; }
+    let h = '<div class="insp-field"><label>id</label><input disabled value="' + c.id + '"/></div>';
+    h += '<div class="insp-field"><label>task</label>' +
+      '<input disabled value="' + c.task + '"/></div>';
+    const keys = Object.keys(c.args || {});
+    keys.forEach(k => {
+      h += '<div class="insp-field"><label>arg - ' + k + '</label>' +
+        '<input data-arg="' + k + '" value="' + String(c.args[k]) + '"' +
+        ' onchange="netSetArg(\'' + c.id + '\',\'' + k + '\',this.value)"/></div>';
+    });
+    if (!keys.length) h += '<p class="note">This task has no editable inputs.</p>';
+    h += '<div class="insp-sec"><label>verifier</label>' +
+      '<select data-verf onchange="netSetVer(this)">' +
+      verifierChoices.map(v => '<option value="' + v + '"' + (c.verifier === v ? ' selected' : '') +
+        '>' + (v || '- none -') + '</option>').join('') + '</select></div>';
+    h += '<div class="insp-sec"><label>child (delegate)</label><input value="' + (c.child || '') +
+      '" onchange="netSetChild(this)"/></div>';
+    h += '<div class="insp-sec"><button type="button" onclick="netRemoveComponent(\'' + c.id +
+      '\')">Delete node</button></div>';
+    box.innerHTML = h;
+  }
+
+  function netSetArg(id, key, raw) {
+    const c = netState.components.find(x => x.id === id);
+    if (!c) return;
+    const v = (raw || '').trim();
+    c.args[key] = (v === '' || isNaN(Number(v))) ? v : Number(v);
+    netRender();
+  }
+  function netSetVer(sel) {
+    const c = netState.components.find(x => x.id === netSel);
+    if (c) { c.verifier = sel.value || null; netRender(); }
+  }
+  function netSetChild(inp) {
+    const c = netState.components.find(x => x.id === netSel);
+    if (c) { c.child = (inp.value || '').trim() || null; netRender(); }
   }
 
   function netRender() {
     const canvas = $netCanvas();
     const svg = $netSvg();
-    // Clear node divs (keep svg, we rebuild its content).
     canvas.querySelectorAll('.net-node-el').forEach(n => n.remove());
-    // Place nodes.
-    netState.components.forEach((c, i) => {
+    canvas.style.transform = 'scale(' + netZoom + ')';
+    canvas.style.transformOrigin = '0 0';
+    netState.components.forEach(c => {
+      const p = netLayout[c.id] || {x: 20, y: 20};
+      if (!netLayout[c.id]) netLayout[c.id] = p;
       const el = document.createElement('div');
-      el.className = 'net-node-el';
+      el.className = 'net-node-el' +
+        (netSel === c.id ? ' sel' : '') +
+        (netResult[c.id] && netResult[c.id].verified ? ' ok' : '') +
+        (netResult[c.id] && !netResult[c.id].verified ? ' err' : '');
       el.id = 'net-n-' + c.id;
-      el.style.left = (40 + (i % 4) * 150) + 'px';
-      el.style.top = (30 + Math.floor(i / 4) * 70) + 'px';
-      el.innerHTML = '<span class="net-port out" title="out"></span>' +
-        '<span class="net-node-label">' + c.id + ' : ' + c.task + '</span>' +
-        '<span class="net-port in" title="in"></span>';
-      // Drag to move.
+      el.style.left = p.x + 'px';
+      el.style.top = p.y + 'px';
+      el.innerHTML =
+        '<span class="net-port in"></span>' +
+        '<span class="net-node-title">' + c.id +
+        '<span class="net-node-task">' + c.task + '</span></span>' +
+        (netResult[c.id] ?
+          '<div class="net-node-val">' +
+          (netResult[c.id].verified ? 'check ' : 'x ') +
+          String(netResult[c.id].value === undefined ? '' : netResult[c.id].value) +
+          '</div>' : '') +
+        '<span class="net-port out"></span>';
       el.addEventListener('mousedown', (ev) => {
         if (ev.target.classList.contains('net-port')) return;
-        netDrag = {id: c.id, dx: ev.clientX - el.offsetLeft, dy: ev.clientY - el.offsetTop};
+        ev.stopPropagation();
+        netSelect(c.id);
+        netDrag = {id: c.id, dx: ev.clientX - p.x * netZoom, dy: ev.clientY - p.y * netZoom};
         ev.preventDefault();
       });
-      // Double-click to remove.
-      el.addEventListener('dblclick', () => netRemoveComponent(c.id));
-      // Ports: out starts a pending edge, in completes it.
+      el.addEventListener('click', (ev) => { ev.stopPropagation(); netSelect(c.id); });
+      el.addEventListener('dblclick', (ev) => { ev.stopPropagation(); netRemoveComponent(c.id); });
       el.querySelector('.net-port.out').addEventListener('click', (ev) => {
         ev.stopPropagation();
-        netPending = {source: c.id, source_field: 'value'};
-        el.style.borderColor = '#e09b00';
+        netPending = {sourceNode: c.id};
+        netSelect(c.id);
+        netSetStatus('Now click the input port of the target node.');
       });
       el.querySelector('.net-port.in').addEventListener('click', (ev) => {
         ev.stopPropagation();
-        if (!netPending) return;
-        if (netPending.source === c.id) { netPending = null; el.style.borderColor=''; return; }
-        netState.edges.push({source: netPending.source, source_field: netPending.source_field,
+        if (!netPending || netPending.sourceNode === c.id) {
+          netPending = null; netRender(); return; }
+        netState.edges.push({source: netPending.sourceNode, source_field: 'value',
           target: c.id, target_arg: 'value'});
-        netPending = null;
+        netPending = null; netResult = {};
         netRender();
       });
       canvas.appendChild(el);
     });
-    // Draw edges as SVG paths.
-    let paths = '';
-    netState.edges.forEach((e) => {
-      const s = netPortPos(e.source, 'out');
-      const t = netPortPos(e.target, 'in');
-      const mx = (s.x + t.x) / 2;
-      paths += '<path d="M' + s.x + ',' + s.y + ' C' + mx + ',' + s.y + ' ' +
-        mx + ',' + t.y + ' ' + t.x + ',' + t.y + '" fill="none" stroke="#5b8def" ' +
-        'stroke-width="2"/>';
-    });
-    svg.innerHTML = paths;
-    document.getElementById('net-json').value = JSON.stringify(netState, null, 2);
+    netRenderEdges();
   }
 
-  // Drag handling on the canvas.
-  document.addEventListener('mousemove', (ev) => {
-    if (!netDrag) return;
-    const el = netNodeEl(netDrag.id);
-    if (!el) return;
-    el.style.left = (ev.clientX - netDrag.dx) + 'px';
-    el.style.top = (ev.clientY - netDrag.dy) + 'px';
-    netRenderEdgesOnly();
-  });
-  document.addEventListener('mouseup', () => { netDrag = null; });
-
-  function netRenderEdgesOnly() {
+  function netRenderEdges() {
     const svg = $netSvg();
     let paths = '';
-    netState.edges.forEach((e) => {
+    netState.edges.forEach(e => {
       const s = netPortPos(e.source, 'out');
       const t = netPortPos(e.target, 'in');
       const mx = (s.x + t.x) / 2;
-      paths += '<path d="M' + s.x + ',' + s.y + ' C' + mx + ',' + s.y + ' ' +
-        mx + ',' + t.y + ' ' + t.x + ',' + t.y + '" fill="none" stroke="#5b8def" ' +
-        'stroke-width="2"/>';
+      paths += '<path class="net-edge-path" d="M' + s.x + ',' + s.y + ' C' + mx + ',' + s.y +
+        ' ' + mx + ',' + t.y + ' ' + t.x + ',' + t.y + '" data-ed="' + netEdgeKey(e) + '"/>';
     });
     svg.innerHTML = paths;
+    svg.setAttribute('width', $netCanvas().clientWidth || 600);
+    svg.setAttribute('height', $netCanvas().clientHeight || 460);
   }
 
+  function netEdgeKey(e) {
+    return e.source + '::' + e.source_field + '::' + e.target + '::' + e.target_arg;
+  }
+
+  $netCanvas().addEventListener('mousedown', (ev) => {
+    if (ev.target === $netCanvas()) {
+      netPan = {x0: ev.clientX, y0: ev.clientY};
+      $netCanvas().classList.add('panning');
+    }
+  });
+  document.addEventListener('mouseup', () => {
+    netPan = null; $netCanvas().classList.remove('panning');
+  });
+  document.addEventListener('mousemove', (ev) => {
+    if (netDrag) {
+      const el = netNodeEl(netDrag.id); if (!el) return;
+      const p = {x: (ev.clientX - netDrag.dx) / netZoom, y: (ev.clientY - netDrag.dy) / netZoom};
+      netLayout[netDrag.id] = p;
+      el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
+      netRenderEdges();
+    }
+  });
+  $netCanvas().addEventListener('wheel', (ev) => {
+    ev.preventDefault();
+    netZoom = Math.min(2.5, Math.max(0.5, netZoom * (ev.deltaY < 0 ? 1.1 : 0.9)));
+    netRender();
+  }, {passive: false});
+
   async function netRun() {
-    const out = $netOut(); const spin = $netSpin(); const btn = $netBtn();
-    out.textContent = ''; out.className = 'note';
+    const spin = $netSpin();
+    netResult = {};
+    netRender();
+    if (netState.components.length === 0) { netSetStatus('Nothing to run.'); return; }
     if (spin) spin.style.display = 'inline-block';
-    if (btn) btn.disabled = true;
+    netSetStatus('Running via the verified spine...');
     try {
       const r = await fetch('/network', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(netState)
       });
       const data = await r.json();
-      if (!r.ok) {
-        out.textContent = 'HTTP ' + r.status + ': ' + JSON.stringify(data);
-        out.className='error'; return;
-      }
-      if (data.ok) {
-        let lines = data.results.map((s) =>
-          (s.verified ? '✔' : '✘') + ' step ' + s.step + ' ' + s.task +
-          (s.value !== undefined ? ' = ' + JSON.stringify(s.value) : '') +
-          (s.error ? ' error=' + s.error : '')
-        ).join('\n');
-        out.textContent = 'Network ok (' + data.completed + ' step(s)):\n' + lines;
-      } else {
-        out.textContent = 'Network FAILED: ' + (data.error || 'unverified step');
-        out.className = 'error';
-      }
+      if (data.results) data.results.forEach(s => {
+        netResult[s.id] = {verified: s.verified, value: s.value};
+      });
+      if (data.ok) netSetStatus('Network ok (' + data.completed + ' step(s))');
+      else netSetStatus('Network FAILED: ' + (data.error || 'unverified step'));
     } catch (err) {
-      out.textContent = 'request failed: ' + err; out.className='error';
+      netSetStatus('request failed: ' + err);
     } finally {
       if (spin) spin.style.display = 'none';
-      if (btn) btn.disabled = false;
     }
+    netRender();
   }
 
   async function netSave() {
-    const name = document.getElementById('net-name').value.trim();
-    if (!name) { alert('enter a network name to save'); return; }
+    const ni = document.getElementById('net-name');
+    const name = ni ? ni.value.trim() : '';
+    if (!name) { netSetStatus('Enter a network name to save.'); return; }
     const r = await fetch('/network/save', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({name: name, network: netState})
     });
     const data = await r.json();
-    if (data.ok) { netRefreshList(); alert('saved ' + name); }
-    else { alert('save failed: ' + (data.error || 'unknown')); }
+    if (data.ok) { netRefreshList(); netSetStatus('Saved "' + name + '".'); }
+    else netSetStatus('Save failed: ' + (data.error || 'unknown'));
   }
 
   async function netRefreshList() {
     try {
+      const sel = document.getElementById('net-load-sel');
+      if (!sel) return;
       const r = await fetch('/network/list');
       const data = await r.json();
-      const sel = document.getElementById('net-load-sel');
       sel.innerHTML = '';
-      (data.names || []).forEach((n) => {
+      (data.names || []).forEach(n => {
         const o = document.createElement('option'); o.value = n; o.textContent = n;
         sel.appendChild(o);
       });
@@ -2394,27 +2598,56 @@ _NETWORK_JS = r"""\
 
   async function netLoad() {
     const sel = document.getElementById('net-load-sel');
-    const name = sel.value;
-    if (!name) { alert('select a saved network to load'); return; }
+    const name = sel && sel.value;
+    if (!name) { netSetStatus('Select a saved network to load.'); return; }
     const r = await fetch('/network/load/' + encodeURIComponent(name));
     const data = await r.json();
     if (data.ok) {
-      netState.components = (data.network.components || []).map(c => ({...c}));
-      netState.edges = (data.network.edges || []).map(e => ({...e}));
-      netRender();
-    } else { alert('load failed: ' + (data.error || 'unknown')); }
+      netState.components = (data.network.components || []).map(c => Object.assign({}, c));
+      netState.edges = (data.network.edges || []).map(e => Object.assign({}, e));
+      Object.keys(netLayout).forEach(k => delete netLayout[k]);
+      netState.components.forEach((c, i) => {
+        netLayout[c.id] = {x: 40 + (i % 3) * 220, y: 40 + Math.floor(i / 3) * 130};
+      });
+      netResult = {}; netSel = null; netPending = null;
+      netRender(); netRenderInspector();
+      netSetStatus('Loaded "' + name + '".');
+    } else netSetStatus('Load failed: ' + (data.error || 'unknown'));
   }
 
-  document.getElementById('net-add-c').addEventListener('click', () => netAddComponent('double'));
-  document.getElementById('net-add-e').addEventListener('click', () => netAddComponent('even'));
-  document.getElementById('net-add-s').addEventListener('click', () => netAddComponent('sum'));
-  document.getElementById('net-clear').addEventListener('click', () => {
-    netState.components = []; netState.edges = []; netPending = null;
+  function netAutoLayout() {
+    const col = {};
+    netState.components.forEach(c => col[c.id] = 0);
+    let changed = true, guard = 0;
+    while (changed && guard++ < 100) {
+      changed = false;
+      netState.edges.forEach(e => {
+        if (col[e.target] <= col[e.source]) { col[e.target] = col[e.source] + 1; changed = true; }
+      });
+    }
+    const buckets = {};
+    netState.components.forEach(c => {
+      const cv = col[c.id] || 0;
+      (buckets[cv] = buckets[cv] || []).push(c.id);
+    });
+    Object.keys(buckets).forEach(k => {
+      const colX = 40 + Number(k) * 230;
+      let row = 0;
+      buckets[k].sort().forEach(id => {
+        netLayout[id] = {x: colX, y: 40 + row * 130};
+        row++;
+      });
+    });
     netRender();
-  });
+    netSetStatus('Auto-layout applied.');
+  }
+
   document.getElementById('net-run').addEventListener('click', netRun);
+  document.getElementById('net-clear').addEventListener('click', netClear);
+  document.getElementById('net-layout').addEventListener('click', netAutoLayout);
   document.getElementById('net-save').addEventListener('click', netSave);
   document.getElementById('net-load').addEventListener('click', netLoad);
+  netBuildPalette();
   netRefreshList();
   netRender();
 </script>
@@ -2740,28 +2973,43 @@ over-budget plans, and missing grants fail closed.</p>
 <code>task</code>; each edge feeds a target's input from a source's output. The
 network compiles to an ordered plan and runs through the verified spine — cycles
 and unknown references fail closed.</p>
-<div class='net-panel'>
-  <b>Component palette</b>
-  <button id='net-add-c' type='button'>+ double</button>
-  <button id='net-add-e' type='button'>+ even</button>
-  <button id='net-add-s' type='button'>+ sum</button>
-  <button id='net-clear' type='button'>Clear</button>
-  <button id='net-run' type='button'>Run network</button>
-  <span id='net-spinner' class='spinner' style='display:none'></span>
-  <br/>
-  <input id='net-name' placeholder='network name'/>
-  <button id='net-save' type='button'>Save</button>
-  <button id='net-load' type='button'>Load</button>
-  <select id='net-load-sel'></select>
-  <p class='note'>Drag nodes on the canvas. Click a node's <b>out</b> port, then a
-  target's <b>in</b> port, to wire an edge. Double-click a node to remove it.</p>
-  <div id='net-canvas' class='net-canvas'>
-    <svg id='net-svg' width='100%' height='360'></svg>
+
+<div class='net-grid'>
+
+  <div class='net-palette'>
+    <h4>Component palette</h4>
+    <div id='net-pal'></div>
+    <div class='insp-sec'><h4 style='margin-top:0'>Saved</h4>
+      <input id='net-name' placeholder='network name'/>
+      <div class='net-toolbar' style='margin-top:.4rem'>
+        <button id='net-save' type='button'>Save</button>
+        <button id='net-load' type='button'>Load</button>
+        <select id='net-load-sel'></select>
+      </div>
+    </div>
   </div>
-  <textarea id='net-json' rows='5' cols='72' class='note'></textarea>
-  <pre id='net-result' class='note'></pre>
-{_NETWORK_JS}
+
+  <div class='net-stage'>
+    <div class='net-toolbar'>
+      <button id='net-layout' type='button'>⇲ Auto-layout</button>
+      <button id='net-clear' type='button'>Clear</button>
+      <button id='net-run' class='primary' type='button'>▶ Run network</button>
+      <span id='net-spinner' class='spinner' style='display:none'></span>
+      <span class='net-hint'>drag bg to pan·wheel to zoom·dbl-click a node to delete</span>
+    </div>
+    <div id='net-canvas' class='net-canvas'>
+      <svg id='net-svg'></svg>
+    </div>
+    <div id='net-status' class='net-status'>Empty network — add components, then wire ports.</div>
+  </div>
+
+  <div class='net-inspector'>
+    <h4>Inspector</h4>
+    <div id='net-insp'>Select a node to edit its inputs, verifier, and child.</div>
+  </div>
+
 </div>
+{_NETWORK_JS}
 </div>
 </section>
 

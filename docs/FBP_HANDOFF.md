@@ -41,7 +41,7 @@ we are.
   relaxed, but confirm each time for a given commit.)
 
 ### Validation (run this session, all live)
-- `uv run pytest` → **957 passed** (was 908; added transport security + real credential-wiring + base-model catalog + web catalog wiring tests)
+- `uv run pytest` → **959 passed** (was 908; added transport security + real credential-wiring + base-model catalog + web catalog wiring + Designer-surface tests)
 - `uv run ruff check .` → clean
 - `uv run mypy src` → clean (**91 source files**)
 - FBP coverage: `experts.py` 94%, `domainrepo.py` **100%**, driver 91%.
@@ -87,6 +87,13 @@ that page:
 | **Chat-context** | `fbp/web.py` (`_build_chat_context`) | prior (durable) transcript turns fold into the next model prompt (oldest-first, bounded), so the model answers with continuity — wired into both the audited `/model` and the streaming preview path |
 | **Schema-driven orchestration** | `fbp/orchestrate.py`, `fbp/web.py` | **Typed, schema-constrained intents** (`SCHEMAS`: `run`/`double`/`sum` + the full bills surface `bills_intake`/`bills_accept`/`bills_calendar`/`bills_registry`/`bills_mark_paid`/`bills_mark_status`/`bills_accept_deterministic`/`bills_rule_add`): `plan_from_schema` validates + coerces a typed artifact fail-closed before planning; the landing page gains a **schema-driven form** (`/orchestrate/schema` serves the schemas) — same verified spine, typed form instead of free-form JSON. Additive (`plan_from_artifact` unchanged) |
 | **Bills workflow on the landing page** | `fbp/web.py`, `fbp/bills_agent.py`, `fbp/store_agent.py` | The mission-relevant loop is now a **live, runnable card** on the landing page: `/bills/intake` → `/bills/accept` (human-gated, the only registry write) → `/bills/registry` (read-only snapshot) → `/bills/calendar` (verified projection). **Prefix grants** (`bill-*`) let the UI accept arbitrary bill ids under a granted namespace while still failing closed outside it. Durable via `fbp-web --bills <path>`. Store teardown made **thread-safe** (cross-thread close no longer crashes) |
+
+> **Demo framing (lead direction):** the bills loop is a **demonstration** of the
+> platform's deterministic, human-gated, verified-loop pattern — it lives in
+> **testing** and **docs/examples** to show *how* a domain loop is built. It is
+> **not** the production accounting package. The eventual **accounting package**
+> and all its sub-components will live in the **domain platform** (roadmap); the
+> bills demo here is the reference pattern, not that platform.
 | **Expert selection + cost ledger** | `fbp/experts.py`, `fbp/web.py`, `fbp/driver.py` | The deterministic core of **"Network of Experts AI"** (the coinded axiom): `select_expert(domain)` picks deterministic / learned (per-domain SLM) / human for each component (domain), and `CostLedger` accounts cost + irreducible residue per run. Read-only **Network of Experts** card on the landing page (`/experts`). Driver surfaces configured verifier names (read-only). Additive |
 | **Domain-expert SLM provider contract** | `fbp/slm.py`, `fbp/web.py`, `docs/domain_slm.md` | The **learned** tier: an opt-in external provider (`SlmProvider`/`SlmSpec`/`SlmExpert`/`StubSlmProvider`/`build_domain_expert`) turns a domain corpus into a trained per-domain expert with full provenance (base model, corpus, method, dataset size, benchmark, artifact). Training stays external; the core selects (`select_expert`) and verifies, never bypassing a verifier. Read-only **Domain SLM** card (`/slm`) shows which domains warrant a learned expert. `docs/domain_slm.md` is the 2026 engineering reference |
 | **Micro-payment / settlement adapter** | `fbp/settlement.py` | The **paid** tier: an opt-in external provider (`SettlementProvider`/`SettlementGrant`/`Settlement`/`StubSettlementProvider`/`settle_run`) settles a `CostAccount`'s cost under an explicit operator grant. **Never auto-charges**: a settlement without a matching grant, a cost over the grant's cap, a domain mismatch, or a negative cost all fail closed. Stub is offline/deterministic (CI-safe). Slots into the `CostLedger` contract |
@@ -96,7 +103,7 @@ that page:
 | **End-to-end expert provisioning** | `fbp/provision.py` | Ties select → plan → train → account → settle into one deterministic, workable path: `provision_expert(domain, corpus, provider, grant, ledger)` selects the expert kind, plans the hardware tier, trains via an opt-in provider (default stub, offline/CI-safe), records the `CostAccount` in a `CostLedger`, and settles under an explicit `SettlementGrant`. Fail-closed: unverifiable domain / over-budget plan / provider failure / missing grant all abort. The Modal adapter is **workable** with an injected HTTP client (real transport seam, fail-closed without one) |
 | **Provisioning card on the landing page** | `fbp/web.py` | **Easy-UX surface for the provisioning path**: a runnable **Provision a domain expert** card (`/provision`, `/provision/domains`) that selects the domain from the live tree, plans the tier, trains via the offline stub, accounts cost, and settles under a grant — recording the expert's artifact into the Artifact Vault as write-once evidence. Real providers never run here; unknown domains, over-budget plans, and invalid bodies fail closed. Additive |
 | **Domain Registry + artifact vault** | `fbp/domainrepo.py`, `fbp/web.py` | The **observability + provenance** layer (catalog → decision → accounting → evidence): `DomainRegistry` (read-only, **tenant-aware** catalog — passive, never an authority) + `ArtifactVault` (append-only, write-once evidence keyed by (tenant, domain, run), never mutable). Read-only **registry** + **artifact** cards (`/domains`, `/artifacts`); durable via `fbp-web --registry <path>` (explicit grant). Tenant-awareness makes a future paid multi-tenant web service additive, not a rewrite; the service would be a shared observability/provenance layer, never the governance layer. Additive |
-| **Component Networks** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. **True dataflow** (a downstream component consumes the *computed* verified output of its upstreams, not their args). Cycles / unknown refs / unverified steps fail closed. Landing page has a **dependency-free drag-and-drop node-and-wire canvas** editor (palette, draggable nodes, click-to-connect ports, SVG edges, run) + **durable save/load** (`fbp-web --networks <path>`, `/network/save|/list|/load`) |
+| **Component Networks** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. **True dataflow** (a downstream component consumes the *computed* verified output of its upstreams, not their args). Cycles / unknown refs / unverified steps fail closed. The **Designer** is now a full **three-pane editor**: categorized palette → canvas (pan/zoom, grid) → inspector (per-node args/verifier/child). Drag-and-drop nodes, click-to-wire ports, edge delete on double-click, **per-node results painted on the canvas**, **auto-layout** (topological), run/save/load (`fbp-web --networks <path>`, `/network/save|/list|/load`). Richer deterministic palette (Arithmetic/Derived/Checks). Verified true dataflow end-to-end |
 | **Card-based UI + mode switch** | `fbp/web.py` | Card-based landing page with a **Chat / Designer** mode switch: Chat = model box + chat history + run-an-artifact (general-purpose); Designer = Component Network editor. Clear functional division |
 
 ### Easy-UX driver & CLI
@@ -115,7 +122,8 @@ that page:
 ### Tooling / commands
 ```sh
 uv sync --extra dev
-uv run pytest                  # 957 passed (as of this handoff)
+uv sync --extra dev
+uv run pytest                  # 959 passed (as of this handoff)
 uv run ruff check .            # clean
 uv run mypy src                # clean, 91 source files
 uv run pytest --cov=agent_centric.fbp --cov-report=term   # ~88%
