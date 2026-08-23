@@ -323,6 +323,30 @@ deterministic chat-context (oldest-first, bounded, auditable): the model answers
 with continuity, and the same context prefix feeds both the audited `/model`
 path and the streaming preview.
 
+### Component Networks (visual programming)
+
+A component network is a directed graph of components wired by data-flow edges
+(`network.py`): place components (each an FBP `task`), connect an output field
+of one to an input arg of another, and the network compiles to an ordered FBP
+`run` plan that runs through the verified spine.
+
+```python
+from agent_centric.fbp import Component, ComponentNetwork, Edge, run_network
+
+net = ComponentNetwork()
+net.add_component(Component(id="a", task="double", args={"value": 21}))
+net.add_component(Component(id="b", task="even", args={}))
+net.add_edge(Edge(source="a", source_field="value", target="b", target_arg="value"))
+result = run_network(driver, net)  # double(21) -> even(42); both verified
+```
+
+- **Deterministic by construction**: compile order is a topological sort
+  (ties by id), so the same graph always yields the same ordered plan.
+- **Fail-closed**: cycles, self-loops, and edges to unknown components/output
+  fields are rejected — a half-wired network never silently runs.
+- The landing page has a **Component Network** visual editor (add
+  components/edges, view the graph, run).
+
 ### Determinism rating + approved rules (determinize-then-decide)
 
 `determinism.py` is a pure capability that makes the "never rely on a

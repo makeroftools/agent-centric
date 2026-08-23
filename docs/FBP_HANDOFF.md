@@ -37,9 +37,9 @@ we are.
   relaxed, but confirm each time for a given commit.)
 
 ### Validation (run this session, all live)
-- `uv run pytest` → **726 passed** (was 723; added chat-context)
+- `uv run pytest` → **743 passed** (was 726; added Component Networks)
 - `uv run ruff check .` → clean
-- `uv run mypy src` → clean (**80 source files**)
+- `uv run mypy src` → clean (**81 source files**)
 - FBP coverage (`uv run pytest --cov=agent_centric.fbp --cov-report=term`) →
   **~88% total**; key files: registry 97%, bills 94%, store 93%, store_agent
   89%, web 83%.
@@ -80,6 +80,7 @@ that page:
 | **Post-return determinism** | `fbp/chat_pipeline.py` | The "model proposes, code accepts" seam: deterministic repair → schema-parse → canonicalize → request-key → pin. `PinCache` serves the first accepted artifact for identical inputs (lexical determinism by caching). Pure/offline |
 | **Chat → FBP orchestration** | `fbp/orchestrate.py`, `fbp/web.py` `/orchestrate` | A canonical JSON artifact (single `task` or `steps`) maps to an ordered FBP `run` plan executed through the driver's verified spine (parent re-verified, ledgered, replayable). Fail-closed on invalid/unorchestrable artifacts |
 | **Chat-context** | `fbp/web.py` (`_build_chat_context`) | prior (durable) transcript turns fold into the next model prompt (oldest-first, bounded), so the model answers with continuity — wired into both the audited `/model` and the streaming preview path |
+| **Component Networks** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. Cycles / unknown refs fail closed. Landing page has a visual editor (add component/edge, run) |
 
 ### Easy-UX driver & CLI
 - `FbpDriver` API: `register`, `resolve`, `configure`, `configure_child`,
@@ -197,6 +198,12 @@ of decisions and working style that a fresh session must inherit.
    the next model prompt (oldest-first, bounded), giving the model continuity
    without relaxing determinism. Wired into both the audited `/model` path and
    the streaming preview (`_build_chat_context`).
+13. **Component Networks** (`69df3d8`) — a deterministic visual-programming
+   core (`fbp/network.py`): a directed graph of components wired by data-flow
+   edges, validated as a DAG, compiled (topological, ties by id) to an ordered
+   FBP `run` plan run through the verified spine. Cycles / unknown refs fail
+   closed. The landing page gains a **Component Network** visual editor
+   (`/network` route: add components/edges, run).
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -257,9 +264,10 @@ real trust boundary.
 These are listed in `STATUS.md`'s "out of scope / future volleys".
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (2):** `c4afa94` (chat-context) and the handoff update for
-  it are local but not yet on GitHub. The remote was at `87e7bbe` (the user
-  pushed). The user pushes directly; confirm before pushing anything yourself.
+- **Unpushed commits (3):** `c4afa94` (chat-context), `46b3948` (handoff), and
+  `69df3d8` (Component Networks) are local but not yet on GitHub; plus this
+  handoff update. The remote was at `87e7bbe`. The user pushes directly;
+  confirm before pushing anything yourself.
 - **Terminal glitch (this session):** the session's local terminal began
   rejecting ``cd`` into the project with "not in any of the project's
   worktrees"; the same command had worked minutes earlier. The sub-agent (which
@@ -308,7 +316,7 @@ uv run python examples/fbp_arc_demo.py
 - Deterministic-first north star; LLM as ordinary agent; grants; fail-closed;
   no auto-pres ids.
 - The AC Router is spun out, gitignored, and **not** our work here.
-- Trust only what 726 tests prove and what is committed; say clearly when
+- Trust only what 743 tests prove and what is committed; say clearly when
   something is unverifiable or unpushed.
 
 ---
