@@ -1,6 +1,10 @@
 # FBP Transport Trust Boundary
 
-**Status:** explicit design note (not yet enforced in code).
+**Status:** partially enforced in code. §5.1 (trust-boundary switch) and §5.3
+(owner-only IPC sockets) are now implemented in `fbp/transport.py` and wired
+into `FbpDriver` (root bind) and `Agent._spawn` (child binds), with tests in
+`tests/test_fbp_transport.py`. §5.2 (mutual TLS), §5.4 (per-peer authorization),
+and §5.5 (traffic integrity) remain unbuilt.
 **Scope:** the `agent_centric.fbp` directive/response protocol over its three
 transports (`inproc://`, `tcp://`, `ipc://`).
 
@@ -78,13 +82,15 @@ about **who may drive the tree** and **whether traffic is readable**.
 
 To move to a real trust boundary (recommended TOTI, in order of value):
 
-1. **Document + enforce a trust boundary switch.** Add an explicit driver
-   assertion that fails closed if a non-loopback bind is requested without
-   having opted in to a security profile (`security=local | tls`).
+1. **Document + enforce a trust boundary switch.** ✅ **BUILT.** The driver
+   (`FbpDriver(security=...)`) and `Agent._spawn` refuse a non-loopback `tcp://`
+   bind unless the caller opts in to a security profile (`security="local"` or
+   `"tls"`). The default profile `loopback` fails closed. See `fbp/transport.py`.
 2. **Mutual TLS (or at least TLS + client auth) on `tcp://`.** A CA-issued cert
    per peer; directives rejected unless the peer presents a known identity.
-3. **IPC socket permissions** — validate mode/owner of the Unix socket, and
-   create it with `0700` (owner-only) so other local users cannot connect.
+3. **IPC socket permissions** — ✅ **BUILT.** An `ipc://` socket is created
+   with mode `0o600` (owner-only) after bind, and existing sockets are validated
+   as owner-only before use. See `fbp/transport.py`.
 4. **Per-peer authorization map.** A mapping from authenticated peer → allowed
    directive kinds / subtrees, enforced at the driver boundary.
 5. **Traffic integrity.** HMAC or AEAD on frames so the wire cannot be replayed

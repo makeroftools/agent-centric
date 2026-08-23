@@ -129,6 +129,14 @@ from .orchestrate import (
     run_artifact_plan,
 )
 from .pdf_intake import draft_from_pdf_text, extract_text
+from .settlement import (
+    Settlement,
+    SettlementError,
+    SettlementGrant,
+    SettlementProvider,
+    StubSettlementProvider,
+    settle_run,
+)
 from .shell import Shell
 from .slm import (
     SlmError,
@@ -140,6 +148,17 @@ from .slm import (
 )
 from .store import StateStore, StoreError, TrajectoryStore, open_state, open_trajectory
 from .store_agent import STORE_GET, STORE_KEYS, STORE_SET, StoreAgent
+from .transport import (
+    IPC_SOCKET_MODE,
+    SECURITY_DEFAULT,
+    SECURITY_LOCAL,
+    SECURITY_LOOPBACK,
+    SECURITY_TLS,
+    TransportSecurityError,
+    check_tcp_bind,
+    enforce_ipc_socket_mode,
+    validate_ipc_socket_mode,
+)
 from .web import DEFAULT_HOST, DEFAULT_PORT, FbpLandingServer
 from .web import serve as serve_landing
 from .workspace import (
@@ -224,6 +243,16 @@ __all__ = [
     "STORE_GET",
     "STORE_SET",
     "STORE_KEYS",
+    # Transport trust-boundary enforcement (docs/transport_trust_boundary.md)
+    "TransportSecurityError",
+    "check_tcp_bind",
+    "enforce_ipc_socket_mode",
+    "validate_ipc_socket_mode",
+    "SECURITY_LOOPBACK",
+    "SECURITY_LOCAL",
+    "SECURITY_TLS",
+    "SECURITY_DEFAULT",
+    "IPC_SOCKET_MODE",
     # CPM: a read-only, deterministic capability (not an agent)
     "CpmAnalysis",
     "CpmNode",
@@ -264,6 +293,13 @@ __all__ = [
     "SlmError",
     "StubSlmProvider",
     "build_domain_expert",
+    # Micro-payment / settlement adapter (the paid tier; opt-in, never auto-charge)
+    "SettlementProvider",
+    "SettlementGrant",
+    "Settlement",
+    "SettlementError",
+    "StubSettlementProvider",
+    "settle_run",
     # Model agent (an LLM as an ordinary first-class agent)
     "ModelAgent",
     "TASK_MODEL",

@@ -29,6 +29,9 @@ class AgentConfig:
         context: An optional shared ZeroMQ context. When None, the agent
             creates (and owns) its own context. A shared context is required
             for ``inproc://`` links, which only connect within one context.
+        transport_security: The trust-boundary security profile. The default
+            ``loopback`` permits loopback binds only (fail-closed); ``local``
+            and ``tls`` are explicit opt-ins for non-loopback binds.
     """
 
     identity: str
@@ -36,3 +39,4 @@ class AgentConfig:
     transport: str = "inproc"
     protocol: str = PROTOCOL_VERSION
     context: Any | None = None
+    transport_security: str = "local"

@@ -37,6 +37,7 @@ import zmq
 import zmq.asyncio
 
 from . import ledger as _ledger
+from . import transport as _transport
 from .agent import Agent, _resolve_entry, register_callable
 from .audit import AuditChain
 from .config import AgentConfig
@@ -74,6 +75,9 @@ class FbpDriver:
         endpoint: The root channel name (default ``root``).
         transport: The transport to use (``inproc``, ``tcp``, ``ipc``).
         identity: The root agent's identity (default ``root``).
+        security: The trust-boundary security profile. The default
+            ``loopback`` permits loopback binds only (fail-closed); ``local``
+            and ``tls`` are explicit opt-ins for non-loopback ``tcp`` binds.
     """
 
     def __init__(
@@ -82,11 +86,12 @@ class FbpDriver:
         endpoint: str = "root",
         transport: str = "inproc",
         identity: str = "root",
+        security: str = _transport.SECURITY_DEFAULT,
         replay_state_isolate: bool = False,
         ledger_path: str | None = None,
     ) -> None:
         self._transport = transport
-        # When replaying a full session, on-disk state grants are redirected to
+        self._security = security
         # fresh temp paths so the replayed tree never reads or writes the
         # original (live) store files. This makes stateful trees (e.g. bills)
         # replay cleanly and keeps replay side-effect-free on real data.
@@ -103,6 +108,13 @@ class FbpDriver:
         if self._ledger_store is not None:
             self._ledger_store.open()
         self._endpoint = f"{transport}://{endpoint}"
+        # Trust-boundary enforcement (docs/transport_trust_boundary.md §5.1): a
+        # non-loopback tcp bind is refused unless the caller opted in explicitly.
+        # Fail closed rather than silently exposing the tree to the network.
+        if transport == "tcp":
+            reason = _transport.check_tcp_bind(endpoint, security=security)
+            if reason is not None:
+                raise _transport.TransportSecurityError(reason)
         # The driver owns a private, dedicated event loop. It is set as the
         # current loop so ZeroMQ's async sockets resolve the right loop (in
         # Python 3.13 ``get_event_loop`` raises if none is set, which otherwise
@@ -112,12 +124,19 @@ class FbpDriver:
         self._context = zmq.asyncio.Context()
         self._root_socket = self._context.socket(zmq.ROUTER)
         self._root_socket.bind(self._endpoint)
+        # Trust-boundary enforcement (docs/transport_trust_boundary.md §5.3):
+        # an ipc socket must be owner-only so other local users cannot connect.
+        if transport == "ipc":
+            reason = _transport.enforce_ipc_socket_mode(self._endpoint)
+            if reason is not None:
+                raise _transport.TransportSecurityError(reason)
         self._root = Agent(
             AgentConfig(
                 identity=identity,
                 parent_endpoint=self._endpoint,
                 transport=transport,
                 context=self._context,
+                transport_security=security,
             )
         )
         self._root.init()
@@ -830,6 +849,20 @@ class FbpDriver:
         """
         if endpoint is None or "://" not in endpoint:
             endpoint = self._child_endpoint(identity)
+        # Trust-boundary enforcement: a child bind must obey the same policy as
+        # the root bind. Fail closed rather than let a child expose the tree.
+        if endpoint.startswith("tcp://"):
+            reason = _transport.check_tcp_bind(
+                endpoint[len("tcp://") :], security=self._security
+            )
+            if reason is not None:
+                return Response(
+                    correlation_id="",
+                    kind=RESPONSE_ERROR,
+                    verified=False,
+                    node=self._root.identity,
+                    error=reason,
+                )
         payload: dict[str, Any] = {"identity": identity, "endpoint": endpoint}
         if kind is not None:
             payload["kind"] = kind

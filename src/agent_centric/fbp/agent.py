@@ -25,6 +25,7 @@ import zmq
 import zmq.asyncio
 
 from . import store as _store
+from . import transport as _transport
 from .config import AgentConfig
 from .envelopes import EnvelopeGuard, ResourceEnvelope
 from .message import (
@@ -891,8 +892,25 @@ class Agent:
         if guard is not None:
             guard.record_step(is_spawn=True)
 
+        # Trust-boundary enforcement (docs/transport_trust_boundary.md §5.1,
+        # §5.3): a child bind must obey the same policy as the root bind. A
+        # non-loopback tcp bind fails closed; an ipc socket is made owner-only.
+        resolved_child_endpoint = self._endpoint(child_endpoint)
+        if resolved_child_endpoint.startswith("tcp://"):
+            reason = _transport.check_tcp_bind(
+                resolved_child_endpoint[len("tcp://") :],
+                security=self._config.transport_security,
+            )
+            if reason is not None:
+                return self._error(directive, reason)
+
         child_socket = self._context.socket(zmq.ROUTER)
-        child_socket.bind(self._endpoint(child_endpoint))
+        child_socket.bind(resolved_child_endpoint)
+        if resolved_child_endpoint.startswith("ipc://"):
+            reason = _transport.enforce_ipc_socket_mode(resolved_child_endpoint)
+            if reason is not None:
+                child_socket.close(0)
+                return self._error(directive, reason)
         child_cls = self._child_class_for(payload.get("kind"))
         child = child_cls(
             AgentConfig(
