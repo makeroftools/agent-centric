@@ -148,9 +148,11 @@ class FbpLandingServer:
         driver = FbpDriver()
         driver.register("double", lambda value: value * 2, source_url="file:///tasks/double")
         driver.register("even", lambda value: isinstance(value, int) and value % 2 == 0)
+        driver.register("odd", lambda value: isinstance(value, int) and value % 2 == 1)
+        driver.register("sum", lambda a, b: a + b, source_url="file:///tasks/sum")
         # No global verifier: the ``double`` demo passes ``even`` per-run, and
         # the model agent (string output) is not gated by a numeric verifier.
-        driver.configure(tasks=("double",), verifiers=("even",))
+        driver.configure(tasks=("double", "even", "odd", "sum"), verifiers=("even", "odd"))
         # Provision a couple of real children so the tree shows substance.
         driver.spawn("child")
         driver.configure_child("child", tasks=("double",))
@@ -808,6 +810,16 @@ _PAGE_CSS = "\n".join([
     "  margin:.15rem 0 .15rem 1rem; }",
     ".net-panel { border:1px solid #ddd; border-radius:6px; padding:.6rem;",
     "  margin:.5rem 0; }",
+    ".net-canvas { position:relative; border:1px dashed #bbb; border-radius:6px;",
+    "  background:#fafbfc; margin:.4rem 0; overflow:hidden; }",
+    ".net-node-el { position:absolute; background:#e8f0fe; border:1px solid #5b8def;",
+    "  border-radius:6px; padding:.3rem .5rem; font-family:monospace; font-size:.85rem;",
+    "  cursor:grab; user-select:none; min-width:90px; }",
+    ".net-node-el .net-port { display:inline-block; width:10px; height:10px;",
+    "  border-radius:50%; background:#5b8def; margin-right:.3rem; cursor:crosshair;",
+    "  vertical-align:middle; }",
+    ".net-node-el .net-port.in { background:#22a06b; }",
+    ".net-svg { display:block; }",
 ])
 
 # The model text-box client script (kept out of the f-string so its JS object
@@ -977,52 +989,122 @@ _ORCHESTRATE_JS = r"""\
 # JS object braces are not mistaken for f-string interpolations).
 _NETWORK_JS = r"""\
 <script>
+  // A dependency-free, drag-and-drop node-and-wire canvas for Component
+  // Networks. Nodes are absolutely-positioned divs; edges are SVG paths. The
+  // editor serializes to the exact ComponentNetwork JSON the verified spine
+  // runs — no third-party library, no CDN, fully client-side.
   const netState = {components: [], edges: []};
+  let netSeq = 1;
+  let netPending = null;   // {source, source_field} awaiting a target click
+  let netDrag = null;      // {id, dx, dy} while dragging
   const $netOut = () => document.getElementById('net-result');
   const $netSpin = () => document.getElementById('net-spinner');
   const $netBtn = () => document.getElementById('net-run');
+  const $netSvg = () => document.getElementById('net-svg');
+  const $netCanvas = () => document.getElementById('net-canvas');
 
-  function netRender() {
-    const box = document.getElementById('net-graph');
-    if (!box) return;
-    box.innerHTML = '';
-    for (const c of netState.components) {
-      const div = document.createElement('div');
-      div.className = 'net-node';
-      div.textContent = c.id + ' : ' + c.task;
-      box.appendChild(div);
-    }
-    for (const e of netState.edges) {
-      const div = document.createElement('div');
-      div.className = 'net-edge';
-      div.textContent = e.source + '.' + e.source_field + ' -> ' + e.target + '.' + e.target_arg;
-      box.appendChild(div);
-    }
-    document.getElementById('net-json').value = JSON.stringify(netState, null, 2);
-  }
+  function netNodeEl(id) { return document.getElementById('net-n-' + id); }
 
-  function netAddComponent() {
-    const id = document.getElementById('net-cid').value.trim();
-    const task = document.getElementById('net-task').value.trim();
-    if (!id || !task) { alert('component needs an id and a task'); return; }
+  function netAddComponent(task) {
+    const id = 'c' + netSeq++;
     netState.components.push({id: id, task: task, args: {}});
     netRender();
   }
 
-  function netAddEdge() {
-    const src = document.getElementById('net-src').value.trim();
-    const sf = document.getElementById('net-sf').value.trim();
-    const tgt = document.getElementById('net-tgt').value.trim();
-    const ta = document.getElementById('net-ta').value.trim();
-    if (!src || !tgt) { alert('edge needs source and target'); return; }
-    netState.edges.push({source: src, source_field: sf || 'value',
-      target: tgt, target_arg: ta || 'value'});
+  function netRemoveComponent(id) {
+    netState.components = netState.components.filter(c => c.id !== id);
+    netState.edges = netState.edges.filter(e => e.source !== id && e.target !== id);
+    if (netPending && netPending.source === id) netPending = null;
     netRender();
   }
 
-  function netClear() {
-    netState.components = []; netState.edges = [];
-    netRender();
+  function netPortPos(id, which) {
+    const el = netNodeEl(id);
+    if (!el) return {x: 0, y: 0};
+    const r = el.getBoundingClientRect();
+    const cr = $netCanvas().getBoundingClientRect();
+    const x = r.left - cr.left + (which === 'in' ? 0 : r.width);
+    const y = r.top - cr.top + r.height / 2;
+    return {x: x, y: y};
+  }
+
+  function netRender() {
+    const canvas = $netCanvas();
+    const svg = $netSvg();
+    // Clear node divs (keep svg, we rebuild its content).
+    canvas.querySelectorAll('.net-node-el').forEach(n => n.remove());
+    // Place nodes.
+    netState.components.forEach((c, i) => {
+      const el = document.createElement('div');
+      el.className = 'net-node-el';
+      el.id = 'net-n-' + c.id;
+      el.style.left = (40 + (i % 4) * 150) + 'px';
+      el.style.top = (30 + Math.floor(i / 4) * 70) + 'px';
+      el.innerHTML = '<span class="net-port out" title="out"></span>' +
+        '<span class="net-node-label">' + c.id + ' : ' + c.task + '</span>' +
+        '<span class="net-port in" title="in"></span>';
+      // Drag to move.
+      el.addEventListener('mousedown', (ev) => {
+        if (ev.target.classList.contains('net-port')) return;
+        netDrag = {id: c.id, dx: ev.clientX - el.offsetLeft, dy: ev.clientY - el.offsetTop};
+        ev.preventDefault();
+      });
+      // Double-click to remove.
+      el.addEventListener('dblclick', () => netRemoveComponent(c.id));
+      // Ports: out starts a pending edge, in completes it.
+      el.querySelector('.net-port.out').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        netPending = {source: c.id, source_field: 'value'};
+        el.style.borderColor = '#e09b00';
+      });
+      el.querySelector('.net-port.in').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (!netPending) return;
+        if (netPending.source === c.id) { netPending = null; el.style.borderColor=''; return; }
+        netState.edges.push({source: netPending.source, source_field: netPending.source_field,
+          target: c.id, target_arg: 'value'});
+        netPending = null;
+        netRender();
+      });
+      canvas.appendChild(el);
+    });
+    // Draw edges as SVG paths.
+    let paths = '';
+    netState.edges.forEach((e) => {
+      const s = netPortPos(e.source, 'out');
+      const t = netPortPos(e.target, 'in');
+      const mx = (s.x + t.x) / 2;
+      paths += '<path d="M' + s.x + ',' + s.y + ' C' + mx + ',' + s.y + ' ' +
+        mx + ',' + t.y + ' ' + t.x + ',' + t.y + '" fill="none" stroke="#5b8def" ' +
+        'stroke-width="2"/>';
+    });
+    svg.innerHTML = paths;
+    document.getElementById('net-json').value = JSON.stringify(netState, null, 2);
+  }
+
+  // Drag handling on the canvas.
+  document.addEventListener('mousemove', (ev) => {
+    if (!netDrag) return;
+    const el = netNodeEl(netDrag.id);
+    if (!el) return;
+    el.style.left = (ev.clientX - netDrag.dx) + 'px';
+    el.style.top = (ev.clientY - netDrag.dy) + 'px';
+    netRenderEdgesOnly();
+  });
+  document.addEventListener('mouseup', () => { netDrag = null; });
+
+  function netRenderEdgesOnly() {
+    const svg = $netSvg();
+    let paths = '';
+    netState.edges.forEach((e) => {
+      const s = netPortPos(e.source, 'out');
+      const t = netPortPos(e.target, 'in');
+      const mx = (s.x + t.x) / 2;
+      paths += '<path d="M' + s.x + ',' + s.y + ' C' + mx + ',' + s.y + ' ' +
+        mx + ',' + t.y + ' ' + t.x + ',' + t.y + '" fill="none" stroke="#5b8def" ' +
+        'stroke-width="2"/>';
+    });
+    svg.innerHTML = paths;
   }
 
   async function netRun() {
@@ -1059,9 +1141,13 @@ _NETWORK_JS = r"""\
     }
   }
 
-  document.getElementById('net-add-c').addEventListener('click', netAddComponent);
-  document.getElementById('net-add-e').addEventListener('click', netAddEdge);
-  document.getElementById('net-clear').addEventListener('click', netClear);
+  document.getElementById('net-add-c').addEventListener('click', () => netAddComponent('double'));
+  document.getElementById('net-add-e').addEventListener('click', () => netAddComponent('even'));
+  document.getElementById('net-add-s').addEventListener('click', () => netAddComponent('sum'));
+  document.getElementById('net-clear').addEventListener('click', () => {
+    netState.components = []; netState.edges = []; netPending = null;
+    netRender();
+  });
   document.getElementById('net-run').addEventListener('click', netRun);
   netRender();
 </script>
@@ -1171,19 +1257,20 @@ replayable. Invalid artifacts fail closed.</p>
 network compiles to an ordered plan and runs through the verified spine — cycles
 and unknown references fail closed.</p>
 <div class='net-panel'>
-  <b>Components</b><br/>
-  <input id='net-cid' placeholder='id'/><input id='net-task' placeholder='task'/>
-  <button id='net-add-c' type='button'>Add component</button><br/>
-  <b>Edges</b><br/>
-  <input id='net-src' placeholder='src'/><input id='net-sf' placeholder='outField'/>
-  <input id='net-tgt' placeholder='tgt'/><input id='net-ta' placeholder='inArg'/>
-  <button id='net-add-e' type='button'>Add edge</button><br/>
+  <b>Component palette</b>
+  <button id='net-add-c' type='button'>+ double</button>
+  <button id='net-add-e' type='button'>+ even</button>
+  <button id='net-add-s' type='button'>+ sum</button>
   <button id='net-clear' type='button'>Clear</button>
   <button id='net-run' type='button'>Run network</button>
   <span id='net-spinner' class='spinner' style='display:none'></span>
-<div id='net-graph' class='net-panel'></div>
-<textarea id='net-json' rows='6' cols='72' class='note'></textarea>
-<pre id='net-result' class='note'></pre>
+  <p class='note'>Drag nodes on the canvas. Click a node's <b>out</b> port, then a
+  target's <b>in</b> port, to wire an edge. Double-click a node to remove it.</p>
+  <div id='net-canvas' class='net-canvas'>
+    <svg id='net-svg' width='100%' height='360'></svg>
+  </div>
+  <textarea id='net-json' rows='5' cols='72' class='note'></textarea>
+  <pre id='net-result' class='note'></pre>
 {_NETWORK_JS}
 
 <h2>Standing invariants</h2>
