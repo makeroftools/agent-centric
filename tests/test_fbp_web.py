@@ -9,6 +9,8 @@ port (the server is held in-process).
 
 from __future__ import annotations
 
+import json
+
 from agent_centric.fbp.web import (
     FbpLandingServer,
     _build_openrouter_providers,
@@ -82,6 +84,90 @@ class TestOrchestrateRoute:
 
         assert set(SCHEMAS) >= {"run", "double", "sum"}
         assert SCHEMAS["sum"]["fields"]["a"]["required"] is True
+
+
+class TestBillsRoutes:
+    """The bills workflow exposed on the landing page: intake -> human-gated
+    accept -> durable registry -> verified calendar. Every step runs through the
+    verified spine; nothing auto-accepts."""
+
+    def _draft(self) -> dict:
+        return {
+            "id": "bill-b1",
+            "vendor": "GasCo",
+            "amount_cents": 12345,
+            "due_date": "2026-10-01",
+        }
+
+    def test_registry_starts_empty(self) -> None:
+        server = FbpLandingServer()
+        try:
+            reg = server._bills_registry()
+            assert reg["ok"] is True
+            assert reg["count"] == 0
+        finally:
+            server._driver.close()
+
+    def test_intake_accept_registry_calendar(self) -> None:
+        server = FbpLandingServer()
+        try:
+            draft = self._draft()
+            intake = server._bills_intake(json.dumps({"draft": draft}))
+            assert intake["ok"] is True
+            assert intake["draft"]["id"] == "bill-b1"
+            # Intake alone does not write the registry.
+            assert server._bills_registry()["count"] == 0
+
+            accept = server._bills_accept(json.dumps({"draft": draft}))
+            assert accept["ok"] is True
+            assert accept["id"] == "bill-b1"
+            assert server._bills_registry()["count"] == 1
+
+            cal = server._bills_calendar(
+                json.dumps({"from_date": "2026-10-01", "to_date": "2026-10-31"})
+            )
+            assert cal["ok"] is True
+            assert [e["id"] for e in cal["entries"]] == ["bill-b1"]
+            assert cal["total_cents"] == 12345
+        finally:
+            server._driver.close()
+
+    def test_accept_rejects_malformed_draft(self) -> None:
+        server = FbpLandingServer()
+        try:
+            bad = self._draft()
+            bad["amount_cents"] = "NaN"
+            result = server._bills_accept(json.dumps({"draft": bad}))
+            assert result["ok"] is False
+            assert "error" in result
+        finally:
+            server._driver.close()
+
+    def test_intake_rejects_invalid_payload(self) -> None:
+        server = FbpLandingServer()
+        try:
+            result = server._bills_intake("{not json")
+            assert result["ok"] is False
+        finally:
+            server._driver.close()
+
+    def test_bills_registry_durable_across_restart(self, tmp_path) -> None:
+        """With a granted bills path, the registry survives a restart."""
+        path = str(tmp_path / "registry.db")
+        s1 = FbpLandingServer(bills_path=path)
+        try:
+            draft = self._draft()
+            s1._bills_accept(json.dumps({"draft": draft}))
+            assert s1._bills_registry()["count"] == 1
+        finally:
+            s1._driver.close()
+        s2 = FbpLandingServer(bills_path=path)
+        try:
+            reg = s2._bills_registry()
+            assert reg["count"] == 1
+            assert reg["registry"]["bill-b1"]["status"] == "open"
+        finally:
+            s2._driver.close()
 
 
 class TestChatContext:

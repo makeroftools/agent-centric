@@ -64,13 +64,27 @@ class StoreAgent(Agent):
         return super()._handle(directive)
 
     def _configure_extra(self, payload: dict[str, Any]) -> None:
-        """Pick up the parent-granted key allowlist from a configure directive."""
+        """Pick up the parent-granted key allowlist from a configure directive.
+
+        A key entry ending in ``*`` is a **prefix grant**: it authorises every
+        key beginning with the prefix (e.g. ``bill-*`` grants ``bill-b1``,
+        ``bill-b2``, ...). This lets a parent grant a namespace of keys (so a
+        domain agent can accept arbitrary ids under a known prefix) while still
+        failing closed on anything outside the grant. A bare ``*`` grants all
+        keys (an explicit, broad grant).
+        """
         keys = payload.get("store_keys", ())
         if isinstance(keys, (list, tuple)):
             self._store_keys = {k for k in keys if isinstance(k, str)}
 
     def _is_served(self, key: str) -> bool:
-        return key in self._store_keys
+        """True if ``key`` is inside the granted allowlist (exact or prefix)."""
+        if key in self._store_keys:
+            return True
+        for granted in self._store_keys:
+            if granted.endswith("*") and key.startswith(granted[:-1]):
+                return True
+        return False
 
     def _op_args(self, directive: Directive) -> dict[str, Any]:
         """The run payload's arguments (``args`` dict, or the payload itself)."""

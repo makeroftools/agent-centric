@@ -39,7 +39,7 @@ we are.
   relaxed, but confirm each time for a given commit.)
 
 ### Validation (run this session, all live)
-- `uv run pytest` → **751 passed** (was 749; added card/mode-switch render tests)
+- `uv run pytest` → **771 passed** (was 765; added bills-web + prefix-grant tests)
 - `uv run ruff check .` → clean
 - `uv run mypy src` → clean (**81 source files**)
 - FBP coverage (`uv run pytest --cov=agent_centric.fbp --cov-report=term`) →
@@ -83,6 +83,7 @@ that page:
 | **Chat → FBP orchestration** | `fbp/orchestrate.py`, `fbp/web.py` `/orchestrate` | A canonical JSON artifact (single `task` or `steps`) maps to an ordered FBP `run` plan executed through the driver's verified spine (parent re-verified, ledgered, replayable). Fail-closed on invalid/unorchestrable artifacts |
 | **Chat-context** | `fbp/web.py` (`_build_chat_context`) | prior (durable) transcript turns fold into the next model prompt (oldest-first, bounded), so the model answers with continuity — wired into both the audited `/model` and the streaming preview path |
 | **Schema-driven orchestration** | `fbp/orchestrate.py`, `fbp/web.py` | **Typed, schema-constrained intents** (`SCHEMAS`: `run`/`double`/`sum`): `plan_from_schema` validates + coerces a typed artifact fail-closed before planning; the landing page gains a **schema-driven form** (`/orchestrate/schema` serves the schemas) — same verified spine, typed form instead of free-form JSON. Additive (`plan_from_artifact` unchanged) |
+| **Bills workflow on the landing page** | `fbp/web.py`, `fbp/bills_agent.py`, `fbp/store_agent.py` | The mission-relevant loop is now a **live, runnable card** on the landing page: `/bills/intake` → `/bills/accept` (human-gated, the only registry write) → `/bills/registry` (read-only snapshot) → `/bills/calendar` (verified projection). **Prefix grants** (`bill-*`) let the UI accept arbitrary bill ids under a granted namespace while still failing closed outside it. Durable via `fbp-web --bills <path>`. Store teardown made **thread-safe** (cross-thread close no longer crashes) |
 | **Component Networks** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. **True dataflow** (a downstream component consumes the *computed* verified output of its upstreams, not their args). Cycles / unknown refs / unverified steps fail closed. Landing page has a **dependency-free drag-and-drop node-and-wire canvas** editor (palette, draggable nodes, click-to-connect ports, SVG edges, run) + **durable save/load** (`fbp-web --networks <path>`, `/network/save|/list|/load`) |
 | **Card-based UI + mode switch** | `fbp/web.py` | Card-based landing page with a **Chat / Designer** mode switch: Chat = model box + chat history + run-an-artifact (general-purpose); Designer = Component Network editor. Clear functional division |
 
@@ -237,6 +238,13 @@ of decisions and working style that a fresh session must inherit.
    fail-closed and runs through the same verified spine. The landing page gains
    a **schema-driven form** card in Chat mode (`/orchestrate/schema` serves the
    schemas). Additive — `plan_from_artifact` etc. unchanged. 765 tests.
+19. **Bills workflow on the landing page** (current) — the mission-relevant loop
+   is now a live, runnable card: `/bills/intake` → `/bills/accept` (human-gated)
+   → `/bills/registry` (read-only) → `/bills/calendar` (verified). **Prefix
+   grants** (`bill-*`) in `store_agent.py` let the UI accept arbitrary bill ids
+   under a granted namespace. Durable via `fbp-web --bills <path>`. Store
+   teardown made **thread-safe** (cross-thread close no longer crashes). 771
+   tests.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -345,11 +353,13 @@ These are listed in `STATUS.md`'s "out of scope / future volleys".
 - Future UX idea for the model box: **schema-driven orchestration — now built**
   (typed intents via `SCHEMAS`/`plan_from_schema`; the landing page has a
   schema-driven form). The typed-intent surface is currently the demo tasks
-  (`run`/`double`/`sum`); the natural next step is richer intents mapped onto
-  the real bills loop (intake → accept → calendar) and other domain agent
-  operations.**Chat-context** (feed prior turns into the next prompt) is now
-  built (`c4afa94`); **persisted** (durable) chat history and streaming were
-  already in.
+  (`run`/`double`/`sum`); the **bills workflow is now also a first-class card**
+  on the landing page (`/bills/*` routes, durable via `--bills <path>`). The
+  natural next step is richer typed intents mapped onto the bills loop (intake
+  → accept → calendar) and other domain agent operations, so the chat window
+  can drive them through the schema form.**Chat-context** (feed prior turns
+  into the next prompt) is now built (`c4afa94`); **persisted** (durable) chat
+  history and streaming were already in.
 
 ---
 
@@ -363,6 +373,7 @@ uv run agent-centric fbp-web            # landing page + model box
 uv run agent-centric fbp-web --reload   # auto-restart on source edits
 uv run agent-centric fbp-web --history chat.db   # durable transcript across restarts
 uv run agent-centric fbp-web --networks networks.json  # durable saved networks
+uv run agent-centric fbp-web --bills registry.db  # durable bills registry across restarts
 uv run agent-centric fbp-web --kill     # stop the server on the port (flag)
 uv run agent-centric fbp-web-kill       # stop the server on the port (legacy subcommand)
 uv run agent-centric fbp-replay sess.db

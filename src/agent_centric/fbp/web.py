@@ -74,9 +74,19 @@ class FbpLandingServer:
         port: int = DEFAULT_PORT,
         history_path: str | os.PathLike[str] | None = None,
         networks_path: str | os.PathLike[str] | None = None,
+        bills_path: str | os.PathLike[str] | None = None,
     ) -> None:
         self._host = host
         self._port = port
+        # The bills registry store. In-memory (temp) by default; a caller grants
+        # a durable path via ``--bills <path>`` (explicit grant).
+        if bills_path is not None:
+            self._bills_state_path = str(bills_path)
+        else:
+            import tempfile
+
+            self._bills_tmp = tempfile.TemporaryDirectory(prefix="agent-centric-fbp-bills-")
+            self._bills_state_path = os.path.join(self._bills_tmp.name, "registry.db")
         # One driver, in-process and reused. We register and run a small
         # deterministic demo tree so the page has something real to show.
         self._providers = _build_openrouter_providers()
@@ -253,6 +263,20 @@ class FbpLandingServer:
         provider = next(iter(self._providers.values()), None)
         if provider is not None:
             driver.configure_provider("model", provider, model_id=next(iter(self._providers)))
+        # A bills loop: intake -> human-gated accept -> durable registry ->
+        # calendar. The store is granted a ``bill-*`` prefix so the landing page
+        # can accept arbitrary bill ids under the namespace (still fail-closed
+        # on anything outside it). The registry is in-memory (temp) by default;
+        # a caller grants a durable path via ``--bills <path>``.
+        driver.spawn("bills", kind="bills")
+        driver.run(
+            "bills_setup",
+            {
+                "state": self._bills_state_path,
+                "store_keys": ["bill-*"],
+            },
+            child="bills",
+        )
         return driver
 
     # -- page state --------------------------------------------------------
@@ -366,6 +390,21 @@ class FbpLandingServer:
                     from .orchestrate import SCHEMAS
 
                     self._send_json({"schemas": SCHEMAS})
+                elif self.path == "/bills/registry":
+                    # Read-only snapshot of the durable bills registry.
+                    self._send_json(server._bills_registry())
+                elif self.path == "/bills/intake":
+                    # Intake a bill draft (unverified; requires accept).
+                    body = self._read_body()
+                    self._send_json(server._bills_intake(body))
+                elif self.path == "/bills/accept":
+                    # Human-gated accept: promote a draft to the registry.
+                    body = self._read_body()
+                    self._send_json(server._bills_accept(body))
+                elif self.path == "/bills/calendar":
+                    # Deterministic calendar projection from the registry.
+                    body = self._read_body()
+                    self._send_json(server._bills_calendar(body))
                 elif self.path == "/network":
                     # Component Networks: a visual-programming graph payload
                     # (components + edges) compiles to an ordered FBP plan and
@@ -528,6 +567,102 @@ class FbpLandingServer:
             return {"ok": False, "results": [], "completed": 0,
                     "error": f"network rejected: {exc}"}
         return run_network(self._driver, network)
+
+    # -- bills workflow (intake -> human-gated accept -> durable registry) ---
+
+    def _bills_registry(self) -> dict[str, Any]:
+        """A read-only snapshot of the durable bills registry.
+
+        Delegates ``bills_registry`` to the bills child (mediated, grant-bound,
+        verified). Returns ``{"ok", "registry", "count", "error"?}``.
+        """
+        resp = self._driver.run("bills_registry", {}, child="bills")
+        if not resp.verified:
+            return {"ok": False, "registry": {}, "count": 0,
+                    "error": resp.error or "bills_registry not verified"}
+        value = resp.value if isinstance(resp.value, dict) else {}
+        return {
+            "ok": True,
+            "registry": value.get("registry", {}),
+            "count": value.get("count", 0),
+        }
+
+    def _bills_intake(self, body: str) -> dict[str, Any]:
+        """Intake a bill draft (unverified; still requires the accept gate).
+
+        Body is ``{"draft": {...}}`` (id, vendor, amount_cents, due_date).
+        Delegates ``bills_intake`` to the bills child; the produced draft is
+        unverified and must be accepted before it enters the registry.
+        """
+        try:
+            data = json.loads(body)
+        except (ValueError, TypeError) as exc:
+            return {"ok": False, "error": f"invalid payload: {exc}"}
+        if not isinstance(data, dict):
+            return {"ok": False, "error": "payload must be a JSON object"}
+        draft = data.get("draft")
+        if not isinstance(draft, dict):
+            return {"ok": False, "error": "intake requires a 'draft' object"}
+        resp = self._driver.run("bills_intake", {"draft": draft}, child="bills")
+        if not resp.verified:
+            return {"ok": False, "error": resp.error or "bills_intake not verified"}
+        return {"ok": True, "draft": resp.value}
+
+    def _bills_accept(self, body: str) -> dict[str, Any]:
+        """Human-gated accept: promote a draft to the durable registry.
+
+        Body is ``{"draft": {...}}`` (the draft from intake). Delegates
+        ``bills_accept`` to the bills child — the only path that writes the
+        registry. Fail-closed: a malformed draft or an unverified write returns
+        ``ok=False``.
+        """
+        try:
+            data = json.loads(body)
+        except (ValueError, TypeError) as exc:
+            return {"ok": False, "error": f"invalid payload: {exc}"}
+        if not isinstance(data, dict):
+            return {"ok": False, "error": "payload must be a JSON object"}
+        draft = data.get("draft")
+        if not isinstance(draft, dict):
+            return {"ok": False, "error": "accept requires a 'draft' object"}
+        # Fail-closed: validate the draft shape (id/vendor/amount/due) before it
+        # may enter the registry. ``draft_from_intake`` is the deterministic
+        # validator intake uses, so a malformed draft can never be accepted.
+        from .bills import draft_from_intake
+
+        try:
+            draft = draft_from_intake(draft)
+        except Exception as exc:  # noqa: BLE001 - fail closed on the UX path
+            return {"ok": False, "error": f"accept rejected: {exc}"}
+        resp = self._driver.run("bills_accept", {"draft": draft}, child="bills")
+        if not resp.verified:
+            return {"ok": False, "error": resp.error or "bills_accept not verified"}
+        return {"ok": True, "id": resp.value}
+
+    def _bills_calendar(self, body: str) -> dict[str, Any]:
+        """Project a deterministic calendar from the durable registry.
+
+        Body is ``{"from_date": str, "to_date": str}`` (ISO, inclusive).
+        Delegates ``bills_calendar`` to the bills child (read-only, verified).
+        """
+        try:
+            data = json.loads(body)
+        except (ValueError, TypeError) as exc:
+            return {"ok": False, "error": f"invalid payload: {exc}"}
+        if not isinstance(data, dict):
+            return {"ok": False, "error": "payload must be a JSON object"}
+        from_date = data.get("from_date", "")
+        to_date = data.get("to_date", "")
+        resp = self._driver.run(
+            "bills_calendar",
+            {"from_date": from_date, "to_date": to_date},
+            child="bills",
+        )
+        if not resp.verified:
+            return {"ok": False, "error": resp.error or "bills_calendar not verified"}
+        value = resp.value if isinstance(resp.value, dict) else {}
+        return {"ok": True, "entries": value.get("entries", []),
+                "total_cents": value.get("total_cents", 0)}
 
     def _run_demo(self) -> dict[str, Any]:
         """A deterministic demo action: run the double task through the driver.
@@ -934,6 +1069,10 @@ _PAGE_CSS = "\n".join([
     ".schema-field label { display:block; font-size:.85rem; color:#333; margin-bottom:.15rem; }",
     ".schema-field input { width:60%; padding:.35rem .5rem; border:1px solid #ccc;",
     "  border-radius:6px; font-family:monospace; }",
+    ".bills-form label { display:inline-block; font-size:.85rem; color:#333;",
+    "  margin:.4rem .4rem .2rem 0; }",
+    ".bills-form input { padding:.35rem .5rem; border:1px solid #ccc;",
+    "  border-radius:6px; font-family:monospace; margin-right:.6rem; }",
 ])
 
 # The model text-box client script (kept out of the f-string so its JS object
@@ -1195,6 +1334,115 @@ _SCHEMA_JS = r"""\
   document.getElementById('schema-intent').addEventListener('change', schemaRenderFields);
   document.getElementById('schema-run').addEventListener('click', schemaRun);
   schemaLoad();
+</script>
+"""
+
+# The bills-workflow client script: intake -> accept -> registry + calendar.
+_BILLS_JS = r"""\
+<script>
+  const $billOut = () => document.getElementById('bill-result');
+  const $billSpin = () => document.getElementById('bill-spinner');
+  const $billReg = () => document.getElementById('bill-registry');
+  const $billCal = () => document.getElementById('bill-calendar');
+
+  function billDraft() {
+    return {
+      id: document.getElementById('bill-id').value.trim(),
+      vendor: document.getElementById('bill-vendor').value.trim(),
+      amount_cents: document.getElementById('bill-amount').value.trim(),
+      due_date: document.getElementById('bill-due').value.trim()
+    };
+  }
+
+  function billRenderRegistry(registry) {
+    const box = $billReg(); if (!box) return;
+    box.innerHTML = '';
+    const ids = Object.keys(registry || {}).sort();
+    if (!ids.length) { box.textContent = 'no bills in the registry yet.'; return; }
+    for (const id of ids) {
+      const b = registry[id];
+      const div = document.createElement('div');
+      div.className = 'chat-turn';
+      div.innerHTML = '<b>' + esc(id) + '</b> ' + esc(b.vendor) +
+        ' · ' + esc(b.amount_cents) + '¢ · due ' + esc(b.due_date) +
+        ' · <span class=\'pill\'>' + esc(b.status || 'open') + '</span>';
+      box.appendChild(div);
+    }
+  }
+
+  function billRenderCalendar(entries) {
+    const box = $billCal(); if (!box) return;
+    box.innerHTML = '';
+    if (!entries || !entries.length) { box.textContent = 'no open bills in range.'; return; }
+    for (const e of entries) {
+      const div = document.createElement('div');
+      div.className = 'chat-turn';
+      div.innerHTML = '<b>' + esc(e.due_date) + '</b> ' + esc(e.vendor) +
+        ' · ' + esc(e.amount_cents) + '¢';
+      box.appendChild(div);
+    }
+  }
+
+  async function billRefresh() {
+    try {
+      const r = await fetch('/bills/registry');
+      const data = await r.json();
+      if (data.ok) billRenderRegistry(data.registry);
+    } catch (e) { /* best-effort */ }
+    try {
+      const r = await fetch('/bills/calendar', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({from_date: '1900-01-01', to_date: '2999-12-31'})
+      });
+      const data = await r.json();
+      if (data.ok) billRenderCalendar(data.entries);
+    } catch (e) { /* best-effort */ }
+  }
+
+  async function billIntake() {
+    const out = $billOut(); const spin = $billSpin();
+    out.textContent = ''; out.className = 'note';
+    if (spin) spin.style.display = 'inline-block';
+    try {
+      const r = await fetch('/bills/intake', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({draft: billDraft()})
+      });
+      const data = await r.json();
+      if (data.ok) {
+        out.textContent = 'Draft ready (unverified): ' + JSON.stringify(data.draft);
+      } else {
+        out.textContent = 'Intake failed: ' + (data.error || 'unknown'); out.className='error';
+      }
+    } catch (err) {
+      out.textContent = 'request failed: ' + err; out.className='error';
+    } finally { if (spin) spin.style.display = 'none'; }
+  }
+
+  async function billAccept() {
+    const out = $billOut(); const spin = $billSpin();
+    out.textContent = ''; out.className = 'note';
+    if (spin) spin.style.display = 'inline-block';
+    try {
+      const r = await fetch('/bills/accept', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({draft: billDraft()})
+      });
+      const data = await r.json();
+      if (data.ok) {
+        out.textContent = 'Accepted ' + data.id + ' into the registry (verified).';
+        billRefresh();
+      } else {
+        out.textContent = 'Accept failed: ' + (data.error || 'unknown'); out.className='error';
+      }
+    } catch (err) {
+      out.textContent = 'request failed: ' + err; out.className='error';
+    } finally { if (spin) spin.style.display = 'none'; }
+  }
+
+  document.getElementById('bill-intake').addEventListener('click', billIntake);
+  document.getElementById('bill-accept').addEventListener('click', billAccept);
+  billRefresh();
 </script>
 """
 
@@ -1550,6 +1798,34 @@ free-form JSON.</p>
 <pre id='schema-result' class='note'></pre>
 {_SCHEMA_JS}
 </div>
+
+<div class='card'>
+<h2>Bills workflow</h2>
+<p class='note'>The mission-relevant loop: <b>intake</b> an unverified draft,
+<b>accept</b> it (human-gated — the only path that writes the durable
+registry), and <b>project</b> a verified calendar. Every step runs through the
+verified spine; money stays integer cents and dates ISO; nothing auto-accepts.</p>
+<div class='bills-form'>
+  <label for='bill-id'>Bill id</label>
+  <input id='bill-id' placeholder='bill-b1'/>
+  <label for='bill-vendor'>Vendor</label>
+  <input id='bill-vendor' placeholder='GasCo'/>
+  <label for='bill-amount'>Amount (cents)</label>
+  <input id='bill-amount' type='number' placeholder='12345'/>
+  <label for='bill-due'>Due date (YYYY-MM-DD)</label>
+  <input id='bill-due' placeholder='2026-10-01'/>
+  <br/>
+  <button id='bill-intake' type='button'>Intake draft</button>
+  <button id='bill-accept' type='button'>Accept → registry</button>
+  <span id='bill-spinner' class='spinner' style='display:none'></span>
+</div>
+<pre id='bill-result' class='note'></pre>
+<h3>Registry</h3>
+<div id='bill-registry' class='chat-history'></div>
+<h3>Calendar</h3>
+<div id='bill-calendar' class='chat-history'></div>
+{_BILLS_JS}
+</div>
 </div>
 
 <div id='pane-designer' class='mode-pane' style='display:none'>
@@ -1647,6 +1923,7 @@ def serve(
     open_browser: bool = False,
     history_path: str | os.PathLike[str] | None = None,
     networks_path: str | os.PathLike[str] | None = None,
+    bills_path: str | os.PathLike[str] | None = None,
 ) -> None:
     """Serve the FBP landing page (blocking). Pass --open to open a browser.
 
@@ -1654,10 +1931,13 @@ def serve(
     store (an explicit opt-in; without it the transcript is in-memory only).
     ``networks_path`` optionally grants durable, cross-restart storage for
     saved component networks (an explicit opt-in; without it they are
-    in-memory only).
+    in-memory only). ``bills_path`` optionally grants a durable, cross-restart
+    bills registry (an explicit opt-in; without it the registry is in-memory
+    only).
     """
     server = FbpLandingServer(
-        host=host, port=port, history_path=history_path, networks_path=networks_path
+        host=host, port=port, history_path=history_path, networks_path=networks_path,
+        bills_path=bills_path,
     )
     if open_browser:
         url = f"http://{host}:{port}"

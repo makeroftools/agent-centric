@@ -361,7 +361,43 @@ class TestStoreAgent:
             assert resp.verified is False
             assert "not granted" in (resp.error or "")
 
-    def test_store_agent_is_durable_across_reopen(self, tmp_path: Path) -> None:
+    def test_store_agent_prefix_grant(self, tmp_path: Path) -> None:
+        """A ``bill-*`` grant authorises every key under the prefix, but still
+        fails closed on keys outside it (a namespace grant, not a wildcard)."""
+        with FbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store",
+                state=str(tmp_path / "store.db"),
+                store_keys=("bill-*",),
+            )
+            # Any key under the granted prefix is served.
+            ok = driver.run(
+                "store_set",
+                {"key": "bill-b1", "value": {"status": "open"}},
+                child="store",
+            )
+            assert ok.verified is True
+            ok2 = driver.run(
+                "store_set",
+                {"key": "bill-b2", "value": {"status": "open"}},
+                child="store",
+            )
+            assert ok2.verified is True
+            got = driver.run("store_get", {"key": "bill-b1"}, child="store")
+            assert got.verified is True
+            assert got.value["status"] == "open"
+            keys = driver.run("store_keys", {}, child="store")
+            assert keys.verified is True
+            assert set(keys.value) == {"bill-b1", "bill-b2"}
+            # A key outside the prefix still fails closed.
+            denied = driver.run(
+                "store_set",
+                {"key": "other-x", "value": {"status": "open"}},
+                child="store",
+            )
+            assert denied.verified is False
+            assert "not granted" in (denied.error or "")
         state_path = tmp_path / "store.db"
         with FbpDriver() as driver:
             driver.spawn("store", kind="store")
@@ -555,7 +591,43 @@ class TestBillsLoop:
             assert st.get("b1")["amount_cents"] == 12345
             st.close()
 
-    def test_no_auto_accept(self, tmp_path: Path) -> None:
+    def test_registry_readout(self, tmp_path: Path) -> None:
+        """bills_registry is a read-only snapshot of the durable registry."""
+        from agent_centric.fbp.bills_agent import (
+            TASK_ACCEPT,
+            TASK_INTAKE,
+            TASK_REGISTRY,
+        )
+
+        with FbpDriver() as driver:
+            self._setup(driver, tmp_path)
+            draft = driver.run(
+                TASK_INTAKE,
+                {
+                    "draft": {
+                        "id": "b1",
+                        "vendor": "GasCo",
+                        "amount_cents": 12345,
+                        "due_date": "2026-10-01",
+                    }
+                },
+                child="bills",
+            )
+            driver.run(TASK_ACCEPT, {"draft": draft.value}, child="bills")
+            reg = driver.run(TASK_REGISTRY, {}, child="bills")
+            assert reg.verified is True
+            assert reg.value["count"] == 1
+            assert reg.value["registry"]["b1"]["status"] == "open"
+
+    def test_registry_readout_empty(self, tmp_path: Path) -> None:
+        from agent_centric.fbp.bills_agent import TASK_REGISTRY
+
+        with FbpDriver() as driver:
+            self._setup(driver, tmp_path)
+            reg = driver.run(TASK_REGISTRY, {}, child="bills")
+            assert reg.verified is True
+            assert reg.value["count"] == 0
+            assert reg.value["registry"] == {}
         """Intake alone never writes the registry; only accept does."""
         from agent_centric.fbp import store
         from agent_centric.fbp.bills_agent import TASK_INTAKE

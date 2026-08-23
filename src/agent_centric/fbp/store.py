@@ -60,6 +60,11 @@ class _Base:
     def __init__(self, path: str | Path) -> None:
         self._path = Path(path)
         self._conn: sqlite3.Connection | None = None
+        # The thread that opened the connection. SQLite connections are bound to
+        # the thread that created them; ``close()`` from a different thread (e.g.
+        # an operator tearing the driver down from another thread during
+        # shutdown) must not call the thread-checked ``conn.close()``.
+        self._owner_thread: int | None = None
 
     def open(self, *, read_only: bool = False) -> None:
         """Create (or recurse broken) parent dirs and open the store.
@@ -67,14 +72,18 @@ class _Base:
         A store may be opened read-only—e.g. a child reading a parent-provisioned
         state file. A trajectory is always append-write.
         """
+        import threading
+
         if read_only:
             if not self._path.exists():
                 raise StoreError(f"read-only store {self._path} does not exist")
             uri = f"file:{self._path.as_posix()}?mode=ro"
             self._conn = sqlite3.connect(uri, uri=True)
+            self._owner_thread = threading.get_ident()
             return
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self._path)
+        self._owner_thread = threading.get_ident()
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._create_schema()
         self._conn.commit()
@@ -84,9 +93,26 @@ class _Base:
         return self._conn is not None
 
     def close(self) -> None:
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
+        """Close the store, tolerating a cross-thread teardown.
+
+        SQLite forbids calling ``Connection.close()`` from a thread other than
+        the one that created the connection. During shutdown an operator (or a
+        test harness) may close the driver from a different thread than the one
+        that opened the store; in that case we drop the reference and let the
+        connection's ``__del__`` (which is thread-safe at the C level) release
+        it, rather than raising ``ProgrammingError``. Same-thread close calls
+        the explicit ``close()`` as before.
+        """
+        import threading
+
+        conn = self._conn
+        self._conn = None
+        if conn is None:
+            return
+        if self._owner_thread is not None and threading.get_ident() != self._owner_thread:
+            # Cross-thread teardown: drop the reference; ``__del__`` closes it.
+            return
+        conn.close()
 
     def _create_schema(self) -> None:
         raise NotImplementedError

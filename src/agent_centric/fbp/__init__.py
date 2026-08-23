@@ -34,7 +34,12 @@ from .bills import (
     mark_bill_status,
     project_calendar,
 )
-from .bills_agent import TASK_ACCEPT_DETERMINISTIC, TASK_RULE_ADD, BillsAgent
+from .bills_agent import (
+    TASK_ACCEPT_DETERMINISTIC,
+    TASK_REGISTRY,
+    TASK_RULE_ADD,
+    BillsAgent,
+)
 from .chat_pipeline import (
     PinCache,
     canonical_json,
@@ -212,6 +217,7 @@ __all__ = [
     # Bills loop (real end-to-end FBP graph)
     "BillsAgent",
     "TASK_ACCEPT_DETERMINISTIC",
+    "TASK_REGISTRY",
     "TASK_RULE_ADD",
     "BillsError",
     "bill_total",

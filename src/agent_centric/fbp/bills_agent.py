@@ -49,6 +49,7 @@ TASK_ACCEPT = "bills_accept"
 TASK_ACCEPT_DETERMINISTIC = "bills_accept_deterministic"
 TASK_RULE_ADD = "bills_rule_add"
 TASK_CALENDAR = "bills_calendar"
+TASK_REGISTRY = "bills_registry"
 TASK_MARK_PAID = "bills_mark_paid"
 TASK_MARK_STATUS = "bills_mark_status"
 TASK_SETUP = "bills_setup"
@@ -118,6 +119,8 @@ class BillsAgent(Agent):
                 return self._op_rule_add(directive)
             if task == TASK_CALENDAR:
                 return self._op_calendar(directive)
+            if task == TASK_REGISTRY:
+                return self._op_registry(directive)
             if task in (TASK_MARK_PAID, TASK_MARK_STATUS):
                 return self._op_mark_status(directive, task)
             if task == TASK_SETUP:
@@ -512,6 +515,51 @@ class BillsAgent(Agent):
             correlation_id=directive.correlation_id,
             kind=RESPONSE_RESULT,
             value=agenda,
+            verified=True,
+            node=self.identity,
+        )
+
+    # -- registry readout (read-only) ---------------------------------------
+
+    def _op_registry(self, directive: Directive) -> Response:
+        """Return the durable registry as a read-only, deterministic snapshot.
+
+        Reads every granted key through the store child (mediated, grant-bound)
+        and returns ``{"registry": {bill_id: bill_dict}, "count": int}`` sorted
+        by id. Read-only — nothing is mutated. This lets an operator (or the
+        landing page) see the durable registry without reaching into the store
+        directly.
+        """
+        store_child = self._child_agents.get(_STORE_CHILD)
+        if store_child is None:
+            return self._error(directive, "bills agent has no store child")
+        store = cast(StoreAgent, store_child)
+        keys_resp = store._op_store_keys(
+            Directive(
+                correlation_id=f"{directive.correlation_id}:store-keys",
+                kind=DIRECTIVE_RUN,
+                payload={"task": "store_keys", "args": {}},
+            )
+        )
+        if not keys_resp.verified:
+            return self._error(directive, f"registry read failed: {keys_resp.error}")
+        registry: dict[str, dict[str, Any]] = {}
+        for key in (keys_resp.value or ()):
+            if key == _RULES_KEY:
+                continue
+            resp = store._op_store_get(
+                Directive(
+                    correlation_id=f"{directive.correlation_id}:store-get",
+                    kind=DIRECTIVE_RUN,
+                    payload={"task": "store_get", "args": {"key": key}},
+                )
+            )
+            if resp.verified and isinstance(resp.value, dict):
+                registry[key] = resp.value
+        return Response(
+            correlation_id=directive.correlation_id,
+            kind=RESPONSE_RESULT,
+            value={"registry": registry, "count": len(registry)},
             verified=True,
             node=self.identity,
         )

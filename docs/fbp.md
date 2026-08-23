@@ -189,7 +189,8 @@ mission-relevant workflow. Topology: `root -> bills -> store`.
 
 - **`BillsAgent`** (`bills_agent.py`) is a coordinating agent that drives the
   loop over a single-writer `StoreAgent` child (the durable registry). It
-  serves `bills_setup`, `bills_intake`, `bills_accept`, `bills_calendar`.
+  serves `bills_setup`, `bills_intake`, `bills_accept`, `bills_calendar`,
+  `bills_registry` (a read-only snapshot of the durable registry).
 - **Pure domain functions** (`bills.py`) are registered capabilities:
   `bill_total`, `draft_from_intake`, `accept_draft`, `project_calendar`.
 - **Agent-level intake tasks** — `bills_intake_file` (json/csv/txt text),
@@ -200,7 +201,10 @@ mission-relevant workflow. Topology: `root -> bills -> store`.
   `bills_accept`; nothing auto-accepts. Amounts are integer cents; dates are
   ISO; malformed intake fails closed (no invented facts).
 - **Single-writer registry**: only the store child writes the registry file,
-  under a key allowlist; the BillsAgent reads/writes *through* it.
+  under a key allowlist; the BillsAgent reads/writes *through* it. A granted
+  key ending in `*` is a **prefix grant** (e.g. `bill-*` authorises every key
+  under the namespace), so a parent can grant a namespace of ids while still
+  failing closed on anything outside it.
 
 ```python
 with FbpDriver() as d:
@@ -520,8 +524,13 @@ read/verify-only) over an in-process `FbpDriver`, with routes `/`, `/action/run`
 `/model` (a model box — dropdown + spinner; OpenRouter when `OPENROUTER_API_KEY`
 is set, deterministic stub otherwise, showing `[verified]`/source),
 `/model/stream` (SSE token streaming), `/history` + `/history/clear` (bounded
-in-page chat), `/ledger`, `/state.json`, and `/health`. `fbp-web --reload`
-auto-restarts on source edits; `fbp-web-kill` stops the server on the port.
+in-page chat), `/orchestrate` + `/orchestrate/schema` (run-an-artifact and the
+schema-driven typed form), `/network` (+ `/network/save|/list|/load`), the
+**bills workflow** (`/bills/intake`, `/bills/accept`, `/bills/registry`,
+`/bills/calendar` — intake → human-gated accept → durable registry → verified
+calendar, all through the verified spine), `/ledger`, `/state.json`, and
+`/health`. `fbp-web --reload` auto-restarts on source edits; `fbp-web-kill`
+stops the server on the port.
 
 Pass `--history <path>` to give the model box a **durable** transcript: each turn
 is appended to an on-disk, single-writer, append-only store (SQLite, WAL,
@@ -529,6 +538,9 @@ append-only like `TrajectoryStore`, bounded like the in-memory transcript), so
 the chat history survives server restarts and replays identically. Without the
 flag the transcript stays in-memory only (the default — persistence is an
 explicit grant).
+
+Pass `--bills <path>` to give the bills workflow a **durable** registry: accepted
+bills persist across server restarts (explicit grant; in-memory by default).
 
 ## Full arc demo
 
