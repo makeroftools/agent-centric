@@ -767,6 +767,13 @@ _MODEL_JS = r"""\
     }
   });
 
+  document.getElementById('model-prompt').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      document.getElementById('model-form').requestSubmit();
+    }
+  });
+
   document.getElementById('history-clear').addEventListener('click', async () => {
     await fetch('/history/clear', {method: 'POST'});
     loadHistory();
