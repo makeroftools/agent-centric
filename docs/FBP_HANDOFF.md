@@ -179,6 +179,12 @@ of decisions and working style that a fresh session must inherit.
    (`fbp/chatstore.py`); the transcript survives restarts and replays
    identically, matching the durability spine (`TrajectoryStore` philosophy).
    In-memory by default (no write without an explicit grant).
+10. **Reload opens one browser tab** (`3e391c4`) — `fbp-web --reload` now passes
+   `--open` only on the initial launch and restarts the child with
+   `open_browser=False`, so a source-change reload re-freshes the already-open
+   tab instead of spawning a second one. `_fbp_kill_stale_web(port)` already
+   guarantees no second instance runs (`--reload`/`fbp-web-kill` take the port
+   over, leaving unrelated processes untouched).
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
