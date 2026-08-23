@@ -84,40 +84,40 @@ work (the **critical path**) and the **slack/float** of every other element.
 
 CPM is a **deterministic, read-only observational aid**: a pure,
 side-effect-free function over a plan (and optionally recorded consumption).
-It never mutates tasks, envelopes, schedules, or accounting. It is used for
-planning and observation — identifying which agents/stages dominate the
-duration and where slack allows flexibility — not for driving execution.
+It never mutates exposed state. It identifies which paths dominate the duration
+and where slack allows flexibility — for planning and observation, never for
+driving execution.
 
-CPM is especially valuable in the fractal, agent-centric model: at every level
-of the tree it reveals which path dominates and where slack exists, making the
-system's timing transparent and auditable.
+## 10. Registries Are Passive Catalogs; Evidence Is Immutable
 
-## 10. The Registry Is a Passive Metadata Catalog
+This is two laws bound together, the backbone of the **Network of Experts AI**
+model.
 
-The registry is not a module-level structure; it is an **agent**. But it is a
-**passive catalog — nothing more**. It holds a list of records of metadata,
-where each record describes an agent/capability: its name, its metadata, and
-the **location** (URL) of its source code or executable. The registry does
-**not** compile, does **not** run, and does **not** hold code.
+1. **A registry is a passive metadata catalog — never an authority.** It holds
+   records of *what* and *where* (a domain's contract, provenance). It does
+   **not** compile, does **not** run, and does **not** decide. Authority lives
+   in the topology — the tree, where each parent governs its subtree. The
+   Domain Registry (`DomainRegistry`) exercises this: it records how a domain
+   is served but never grants authority.
+2. **Evidence is write-once and immutable.** An artifact (a verified run
+   outcome) is append-only, keyed by `(tenant, domain, run)`, and is never
+   mutated. Re-recording fails closed. The Artifact Vault holds *evidence*,
+   never editable storage.
 
-Other agents take the *information* (the location) and act on it — fetch,
-compile, run — as their own governed directives allow. Because agents are
-self-contained executable processes (potentially different runtimes), the
-system can accommodate **multiple programming languages simultaneously**,
-communicating over the ZeroMQ protocol rather than by sharing memory.
+Together these keep the network-of-experts machinery trustworthy: the catalog
+can be queried, provenance can be proven, and nothing changes underneath you.
 
-This is the fractal principle applied to the registry itself: the registry is
-an agent, the compile step is an agent, and each registered capability is an
-agent. Registration, compilation, and resolution are all directives — never
-module-level globals.
+## 11. Immutable, Atomic File Replacements (No In-Place Mutation)
 
-**The trust boundary (clamp down) applies at three distinct points:**
+Files are **never edited in place**. To change a file, always:
 
-1. **Registry writes** — who may register a record (explicit, audited).
-2. **Consumption** — who may act on a recorded location (allowlist/grant).
-3. **Execution** — what a runtime agent may run, under what envelope, with
-   what verification and audit.
+1. Copy the current file's contents to a temporary file.
+2. Apply all changes to the temporary copy.
+3. Delete the original file.
+4. Create the new, fully revised file in place of the original.
 
-The registry itself has a low trust surface: it only stores and serves
-metadata. The power to compile and run lives in the agents that consume the
-metadata, and that is where the clamp-down is hardest.
+Rationale: in-place editing in the authoring environment is unreliable — it
+forces repeated authorization prompts and risks partial or corrupt writes on
+mission-critical files. Atomically replacing the whole file is a complete,
+auditable, deterministic write. This law applies to source, docs, and tests
+alike, with no exceptions for convenience.
