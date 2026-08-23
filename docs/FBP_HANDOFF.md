@@ -25,26 +25,30 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `de853a5` (full three-pane Designer). This session added several
-commits on top of the earlier sequence (all local, none pushed by me):
-`a7e72b2` (provisioning card on the landing page), `1266eb4` (transport
-hardening §5.2/§5.4/§5.5 + real credential wiring), `683e9c2` (roadmap-only
-paid-service entry), `9e6c3e2` (base-model catalog + size-class gating),
-`4cfee32` (catalog wired into website), `6c460cb` (landing page + dashboard
-sidebar), `de853a5` (full three-pane Designer).
-- **Pushed to origin:** the user pushes directly. **Unpushed (45 commits):** the
-full `agent-centric-fbp` sequence from `c4afa94` onward. Run
-`git log origin/agent-centric-fbp..HEAD` to see the exact unpushed set. No
-push is made by the agent; the lead pushes when they choose.
+- **HEAD:** `9eedd69` (bills agent in the Designer + edge value labels). This
+  session added commits on top of the earlier sequence (all local, none pushed by
+  the agent): `4b19ee0` (operator activity feed), `7c9a546` (wire activity feed
+  into landing page + CLI), `e9c2caf` (remove the Bills tab — demonstration
+  only), `7375698` (full-surface HTTP route coverage), `d5cb164` (Designer node
+  stick-to-cursor fix), `87e353e` (drag-and-drop connectors), `d86c203`
+  (drag-preview wire fix), `24bda00` (agent-composition demo in the Designer),
+  `9eedd69` (bills agent in the Designer + edge value labels).
+- **Pushed to origin:** the user pushes directly. **Unpushed (55 commits):** the
+  full `agent-centric-fbp` sequence from `c4afa94` onward (all of this session's
+  work is unpushed). Run `git log origin/agent-centric-fbp..HEAD` to see the
+  exact unpushed set. No push is made by the agent; the lead pushes when they
+  choose.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule: **do not push unless the lead explicitly says push.** The lead
 has been pushing directly; confirm per commit.
 
 ### Validation (run this session, all live)
-- `uv run pytest` → **959 passed** (was 908; added transport security + real credential-wiring + base-model catalog + web catalog wiring + Designer-surface tests)
+- `uv run pytest` → **1010 passed** (was 959 at the prior handoff; added operator
+  activity feed, full-surface HTTP route coverage, and the agent/Designer work)
 - `uv run ruff check .` → clean
-- `uv run mypy src` → clean (**91 source files**)
-- FBP coverage: `experts.py` 94%, `domainrepo.py` **100%**, driver 91%.
+- `uv run mypy src` → clean (**92 source files**)
+- FBP coverage: `experts.py` 94%, `domainrepo.py` **100%**, driver 91%, web.py
+  **79%** (was 72%) after the full-surface HTTP route suite.
 - Cross-transport durable replay: 19/19 on inproc/ipc/tcp. Full production-arc
   demo: crash-safe replay 6/6.
 
@@ -103,7 +107,7 @@ that page:
 | **End-to-end expert provisioning** | `fbp/provision.py` | Ties select → plan → train → account → settle into one deterministic, workable path: `provision_expert(domain, corpus, provider, grant, ledger)` selects the expert kind, plans the hardware tier, trains via an opt-in provider (default stub, offline/CI-safe), records the `CostAccount` in a `CostLedger`, and settles under an explicit `SettlementGrant`. Fail-closed: unverifiable domain / over-budget plan / provider failure / missing grant all abort. The Modal adapter is **workable** with an injected HTTP client (real transport seam, fail-closed without one) |
 | **Provisioning card on the landing page** | `fbp/web.py` | **Easy-UX surface for the provisioning path**: a runnable **Provision a domain expert** card (`/provision`, `/provision/domains`) that selects the domain from the live tree, plans the tier, trains via the offline stub, accounts cost, and settles under a grant — recording the expert's artifact into the Artifact Vault as write-once evidence. Real providers never run here; unknown domains, over-budget plans, and invalid bodies fail closed. Additive |
 | **Domain Registry + artifact vault** | `fbp/domainrepo.py`, `fbp/web.py` | The **observability + provenance** layer (catalog → decision → accounting → evidence): `DomainRegistry` (read-only, **tenant-aware** catalog — passive, never an authority) + `ArtifactVault` (append-only, write-once evidence keyed by (tenant, domain, run), never mutable). Read-only **registry** + **artifact** cards (`/domains`, `/artifacts`); durable via `fbp-web --registry <path>` (explicit grant). Tenant-awareness makes a future paid multi-tenant web service additive, not a rewrite; the service would be a shared observability/provenance layer, never the governance layer. Additive |
-| **Component Networks** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. **True dataflow** (a downstream component consumes the *computed* verified output of its upstreams, not their args). Cycles / unknown refs / unverified steps fail closed. The **Designer** is now a full **three-pane editor**: categorized palette → canvas (pan/zoom, grid) → inspector (per-node args/verifier/child). Drag-and-drop nodes, click-to-wire ports, edge delete on double-click, **per-node results painted on the canvas**, **auto-layout** (topological), run/save/load (`fbp-web --networks <path>`, `/network/save|/list|/load`). Richer deterministic palette (Arithmetic/Derived/Checks). Verified true dataflow end-to-end |
+| **Component Networks / Designer** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. **True dataflow** (a downstream component consumes the *computed* verified output of its upstreams, not their args). Cycles / unknown refs / unverified steps fail closed. The **Designer** is a **three-pane editor** (palette → canvas → inspector). This session made it a **real agent-composition demo**: the palette's primary **Agents** group exposes the actual spawned demo agents (`child`/`store`/`model`/`bills`) as draggable nodes that delegate via the component `child` field, alongside a secondary **Primitives** group. **Drag-and-drop connectors** with a live dashed preview wire (plus click-to-connect fallback), per-node results painted on the canvas, **edge value labels** showing the computed value flowing along each wire after a run, a **Load agent demo** one-click button, per-node args/verifier/child editing, auto-layout, run/save/load (`/network/save|/list|/load`, durable via `fbp-web --networks <path>`), edge delete on double-click. Verified true dataflow end-to-end |
 | **Card-based UI + mode switch** | `fbp/web.py` | Card-based landing page with a **Chat / Designer** mode switch: Chat = model box + chat history + run-an-artifact (general-purpose); Designer = Component Network editor. Clear functional division |
 | **Operator activity feed** | `fbp/activity.py`, `fbp/web.py` | The **audit of what an operator did**: a bounded, append-only, optionally-durable feed of operator actions, each with a kind (`model`/`orchestrate`/`network`/`bills`/`provision`/`action`) and its **verification status**. Deterministic ordering by sequence number; fail-closed on malformed/corrupt input; durable via `fbp-web --activity <path>` (explicit grant). The landing page gains a **dashboard Activity card** + a read-only `/activity` route; real actions (demo, bills intake/accept, network runs, orchestration, provisioning) record automatically through the verified spine. Additive |
 
@@ -360,6 +364,51 @@ of decisions and working style that a fresh session must inherit.
    production accounting package. The eventual **accounting package** + its
    sub-components will live in the **domain platform** (roadmap). Documented in
    the handoff; code stays (its tests depend on it) as the reference pattern.
+35. **Operator activity feed** (`4b19ee0`) — new `fbp/activity.py`: the **audit
+   of what an operator did**. Bounded, append-only, immutable entries
+   (kind/action/verification status) ordered by sequence number; fail-closed on
+   malformed/corrupt input; durable by explicit grant (`fbp-web --activity
+   <path>`, temp + atomic `os.replace`). Exported additively. 16 tests +
+   `examples/fbp_activity_demo.py`.
+36. **Wire the activity feed into the landing page + CLI** (`7c9a546`) — real
+   operator actions (demo, bills intake/accept, network runs, orchestration,
+   provisioning) record through the verified spine into an `ActivityFeed`;
+   read-only `/activity` route + a dashboard **Activity card**; `--activity
+   <path>` threaded through `serve()` and `--reload`. 7 web-tier tests.
+37. **Remove the Bills tab from the dashboard** (`e9c2caf`) — per lead direction
+   the bills loop is demonstration-only, so it no longer has a **Bills** tab.
+   The demonstration **backend** stays intact (the `/bills/*` routes, `_bills_*`
+   methods, driver wiring, `--bills`/`--activity` grants, tests, examples) so the
+   loop remains runnable/testable as the reference pattern. The web-render test
+   asserts the tab is absent.
+38. **Full-surface HTTP route coverage** (`7375698`) — new
+   `tests/test_fbp_web_routes.py` drives every served route over a real bound
+   stdlib HTTP server (not method calls), catching wiring/JSON/status/content-type
+   bugs; includes a raw-socket SSE reader loop for `/model/stream` (which
+   `urlopen` can't consume). **web.py coverage 72% → 79%**; the route-dispatch
+   surface is fully exercised. 1005 tests.
+39. **Designer drag fix** (`d5cb164`) — a node no longer **sticks to the cursor**
+   after a drag (the `mouseup` handler cleared `netPan` but never `netDrag`).
+40. **Drag-preview wire fix** (`d86c203`) — the drag-preview wire was invisible
+   because it drew from `netWire` to itself (a zero-length line); the source port
+   position is now stored in `sx`/`sy` and the preview draws from there to the
+   live cursor.
+41. **Drag-and-drop connectors** (`87e353e`) — drag from an output port to an
+   input port with a live dashed preview wire; release over an input port to
+   complete, elsewhere to cancel. Click-to-connect is kept as a fallback.
+42. **Agent-composition demo in the Designer** (`24bda00`) — the palette gains a
+   primary **Agents** group (`child`/`store`/`model`) that delegates via the
+   component `child` field, with the arithmetic primitives kept as a secondary
+   **Primitives** group. A **Load agent demo** button injects a canonical
+   `child(double) → store_set`, `model → store_set` chain. The store agent is
+   granted a temp state path + `demo*`/`answer*` keys so the demo's writes are
+   served (it previously failed with “no granted state store”).
+43. **Bills agent in the Designer + edge value labels** (`9eedd69`) — the **bills**
+   agent is added to the Agents palette (`bills_intake`/`bills_accept`/
+   `bills_calendar`/`bills_registry`) so a full demo loop (intake → accept →
+   calendar) is composable through the spine. After a run each edge shows the
+   computed value that flowed along it (a small SVG label). The running demo
+   confirms “Network ok (4 step(s))”. 1010 tests.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -527,7 +576,17 @@ despite 751 passing tests:
 - **No distribution/networking/cloud** and **no MCP/A2A** baked in.
 These are listed in `STATUS.md`'s "out of scope / future volleys".
 
-### Roadmap — standalone multi-tenant paid web service (roadmap only, NOT built)
+### Suggested next (the widest seam gap, low risk, additive)
+- **Wire the ACP adapter to the FBP platform.** The `agent-centric-acp`
+  adapter is still a thin edge over the *older* `AgentManager` demo agents
+  (`reverse`/`upper`/`counter`/`model`) and is **disconnected from the FBP
+  subsystem that is now the real architecture**. Making ACP route through
+  `FbpDriver` — component networks, schema-driven orchestration, and the
+  verified spine — would make the whole deterministic platform reachable from
+  Zed. Additive, offline-testable, touches none of the risky network/credential
+  surface. The user was asked; build only on explicit go-ahead.
+
+### Production roadmap — standalone multi-tenant paid web service (roadmap only, NOT built)
 
 The user asked this be captured **for the roadmap only** — documented as a
 future direction, **not** started. It is the natural extension of the
@@ -553,11 +612,12 @@ service; the existing loopback (`fbp-web --registry`) surface remains the only
 hosted layer.
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (45):** the whole `agent-centric-fbp` sequence from
-  `c4afa94` onward is local — including this session's `a7e72b2`, `1266eb4`,
-  `683e9c2`, `9e6c3e2`, `4cfee32`, `6c460cb`, `de853a5` — none on GitHub. The
-  lead pushes directly; confirm before pushing anything yourself. Run
-  `git log origin/agent-centric-fbp..HEAD` for the exact set.
+- **Unpushed commits (55):** the whole `agent-centric-fbp` sequence from
+  `c4afa94` onward is local — including all of this session's work
+  (`4b19ee0`, `7c9a546`, `e9c2caf`, `7375698`, `d5cb164`, `87e353e`, `d86c203`,
+  `24bda00`, `9eedd69`) — none on GitHub. The lead pushes directly; confirm
+  before pushing anything yourself. Run `git log origin/agent-centric-fbp..HEAD`
+  for the exact set.
 - **Terminal glitch (this session):** the session's local terminal began
   rejecting ``cd`` into the project with "not in any of the project's
   worktrees"; the same command had worked minutes earlier. The sub-agent (which
@@ -684,6 +744,14 @@ uv run python examples/fbp_activity_demo.py
   authorization, traffic integrity (HMAC), and mutual-TLS credential config — all
   default-off. A real cross-host deployment still supplies live certs + a TLS
   transport.
+- **Interface-first posture.** The lead twice gated additions on "is the
+  interface working to our liking" — the result is the full-surface HTTP route
+  test suite and a strong preference that every user-facing function be proven
+  human-reachable from the UI before adding more. Keep this posture.
+- **The Designer is now a working agent-composition demo** (child/store/model/bills
+  delegating via `child`; drag-and-drop connectors with preview; edge value
+  labels; one-click agent demo). It is the reference for how a domain loop is
+  built visually, and the place to keep iterating Designer functionality.
 - The AC Router is spun out, gitignored, and **not** our work here.
 - Trust only what the tests prove and what is committed; say clearly when
   something is unverifiable or unpushed.
