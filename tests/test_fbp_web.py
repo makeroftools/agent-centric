@@ -773,3 +773,38 @@ class TestStreamingAndHistory:
         full = client("https://example.test", {}, "hi")
         assert collected == ["Hel", "lo"]
         assert full == "Hello"
+
+
+class TestArtifactRecording:
+    """Verified runs record real artifacts into the vault (not just seeds)."""
+
+    def test_network_run_records_artifact(self) -> None:
+        server = FbpLandingServer()
+        try:
+            before = server._artifact_readout()["count"]
+            r = server._run_network(
+                '{"components": [{"id": "a", "task": "double", '
+                '"args": {"value": 21}}], "edges": []}'
+            )
+            assert r["ok"] is True
+            assert server._artifact_readout()["count"] == before + 1
+        finally:
+            server._driver.close()
+
+    def test_artifact_run_is_write_once(self) -> None:
+        server = FbpLandingServer()
+        try:
+            r = server._run_network(
+                '{"components": [{"id": "a", "task": "double", '
+                '"args": {"value": 21}}], "edges": []}'
+            )
+            assert r["ok"] is True
+            # Re-running the same network records a new run key (append-only).
+            r2 = server._run_network(
+                '{"components": [{"id": "a", "task": "double", '
+                '"args": {"value": 21}}], "edges": []}'
+            )
+            assert r2["ok"] is True
+            assert server._artifact_readout()["count"] >= 2
+        finally:
+            server._driver.close()

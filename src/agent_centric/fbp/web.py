@@ -337,7 +337,33 @@ class FbpLandingServer:
         self._domain_registry = registry
         self._artifact_vault = repo
 
+    def _record_run_artifact(self, task: str, result: dict[str, Any]) -> None:
+        """Record a verified run's artifact into the Artifact Vault.
+
+        Called by the run paths when a step verifies, so the vault reflects real
+        runs (not just the startup seeds). Fail-closed: an unverified result or a
+        missing vault is a no-op (evidence is only ever written for verified
+        outcomes).
+        """
+        if self._artifact_vault is None or not result.get("verified"):
+            return
+        from .domainrepo import Artifact
+
+        try:
+            self._artifact_vault.record(Artifact(
+                tenant="local",
+                domain=task,
+                run=f"run-{self._artifact_vault.count()}",
+                value=result.get("value"),
+                kind="deterministic",
+                residue=0.0,
+                cost=1,
+            ))
+        except Exception:  # noqa: BLE001 - evidence recording must never break a run
+            return
+
     def _domain_readout(self) -> dict[str, Any]:
+
         """A read-only view of the Domain Registry."""
         if self._domain_registry is None:
             return {"ok": False, "domains": []}
@@ -718,7 +744,11 @@ class FbpLandingServer:
                 "completed": 0,
                 "error": f"artifact rejected: {exc}",
             }
-        return run_artifact_plan(self._driver, artifact)
+        plan_result = run_artifact_plan(self._driver, artifact)
+        for step in plan_result.get("results", []):
+            if step.get("verified"):
+                self._record_run_artifact(step.get("task", "task"), step)
+        return plan_result
 
     def _run_network(self, body: str) -> dict[str, Any]:
         """Run a component network (visual-programming payload) as an FBP plan.
@@ -741,7 +771,11 @@ class FbpLandingServer:
         except (ValueError, TypeError) as exc:
             return {"ok": False, "results": [], "completed": 0,
                     "error": f"network rejected: {exc}"}
-        return run_network(self._driver, network)
+        net_result = run_network(self._driver, network)
+        for step in net_result.get("results", []):
+            if step.get("verified"):
+                self._record_run_artifact(step.get("task", "task"), step)
+        return net_result
 
     # -- bills workflow (intake -> human-gated accept -> durable registry) ---
 
