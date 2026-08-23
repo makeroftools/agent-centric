@@ -18,9 +18,9 @@ mission-critical instructions.
    `select_expert` (deterministic method → learned per-domain SLM → human,
    fail-closed), and `CostLedger`/`CostAccount`. Landing page has a read-only
    **Network of Experts** card (`/experts`).
-3. **Domain-of-Experts registry + artifact repository** (`fbp/domainrepo.py`)
+3. **Domain Registry registry + artifact vault** (`fbp/domainrepo.py`)
    was built: `DomainRegistry` (read-only, tenant-aware catalog) +
-   `ArtifactRepository` (append-only, write-once evidence keyed by (tenant,
+   `ArtifactVault` (append-only, write-once evidence keyed by (tenant,
    domain, run)). Cards at `/domains`, `/artifacts`; durable via
    `fbp-web --registry <path>`.
 4. **The user completed the rename decision:** "Domain of Experts" was the
@@ -28,7 +28,7 @@ mission-critical instructions.
    crowded trademark space). **The agreed names are now:**
 
    - **Domain Registry** (was `DomainRegistry` — the catalog)
-   - **Artifact Vault** (was `ArtifactRepository` — the write-once evidence store)
+   - **Artifact Vault** (was `ArtifactVault` — the write-once evidence store)
 
    **The rename is PENDING and MUST be completed.** See §3 below.
 
@@ -76,13 +76,13 @@ them. `cp` + `write_file` (to temp/new) + `rm` is the supported primitive set.
 
 ### 3a. PERFORM THE RENAME (user-approved, authoritative)
 
-Rename everywhere "Domain-of-Experts registry + artifact repository" /
-`DomainRegistry` / `ArtifactRepository` to the new vocabulary:
+Rename everywhere "Domain Registry registry + artifact vault" /
+`DomainRegistry` / `ArtifactVault` to the new vocabulary:
 
 - `DomainRegistry` → **`DomainRegistry`** (keep the class name; it's already
   good) — but the **user-facing name is "Domain Registry."** Hmm — see the
   precise mapping in §4 to avoid ambiguity.
-- `ArtifactRepository` → **`ArtifactVault`** (class + module reference change),
+- `ArtifactVault` → **`ArtifactVault`** (class + module reference change),
   and user-facing "Artifact Vault."
 
 Sweep ALL of: `fbp/domainrepo.py` (class names + docstrings), `fbp/web.py`
@@ -95,9 +95,9 @@ and the docs (`docs/fbp.md`, `README_FBP.md`, `docs/FBP_HANDOFF.md`,
 ### 3b. Confirm the exact final naming with the user's intent
 
 The user picked **"Domain Registry + Artifact Vault."** Apply the terms
-consistently so that "Artifact Vault" replaces "Artifact Repository," and
+consistently so that "Artifact Vault" replaces "Artifact Vault," and
 "Domain Registry" is the catalog. Keep the `DomainRegistry` Python class name
-as-is (it matches); rename `ArtifactRepository` → `ArtifactVault`.
+as-is (it matches); rename `ArtifactVault` → `ArtifactVault`.
 
 ### 3c. Optionally tighten Law 11's wording
 

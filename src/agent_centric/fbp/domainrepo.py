@@ -1,4 +1,4 @@
-"""Domain-of-Experts registry + artifact repository (observability + provenance).
+"""Network-of-Experts registry + artifact vault (observability + provenance).
 
 This is the **catalog → decision → accounting → evidence** layer that completes
 the "Network of Experts AI" model. Two pure, deterministic stores:
@@ -8,7 +8,7 @@ the "Network of Experts AI" model. Two pure, deterministic stores:
   expert kind, and provenance. It is a *passive catalog, never an authority* —
   authority stays in the tree topology. It records *what* and *how*; it never
   decides.
-- ``ArtifactRepository`` — an **append-only, write-once** store of domain run
+- ``ArtifactVault`` — an **append-only, write-once** store of domain run
   artifacts: the verified output of each run, keyed by ``(tenant, domain,
   run)``, carrying source refs, residue, cost, and the expert kind that served
   it. It is *evidence*, never mutable.
@@ -32,7 +32,7 @@ from .experts import EXPERT_KINDS, Domain, ExpertSelection, select_expert
 
 
 class RegistryError(ValueError):
-    """A registry/repository input violated its contract (fail-closed)."""
+    """A registry/vault input violated its contract (fail-closed)."""
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +137,7 @@ class DomainRegistry:
 
 
 # ---------------------------------------------------------------------------
-# Artifact repository (append-only, write-once evidence)
+# Artifact vault (append-only, write-once evidence)
 # ---------------------------------------------------------------------------
 
 
@@ -179,7 +179,7 @@ class Artifact:
         }
 
 
-class ArtifactRepository:
+class ArtifactVault:
     """An append-only, write-once store of domain run artifacts.
 
     Artifacts are keyed by ``(tenant, domain, run)``. Re-recording the same key

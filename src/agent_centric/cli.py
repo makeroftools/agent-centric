@@ -616,7 +616,7 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         metavar="PATH",
-        help="Optional durable Domain-of-Experts registry + artifact repository. "
+        help="Optional durable Domain Registry + artifact vault. "
         "The domain catalog + artifacts persist across restarts (explicit grant; "
         "with default: in-memory only).",
     )
@@ -1022,8 +1022,8 @@ def _cmd_fbp_web(
     up without a manual restart). ``history`` optionally grants a durable,
     cross-restart chat-history store; ``networks`` optionally grants durable
     storage for saved component networks; ``bills`` optionally grants a durable
-    bills registry; ``registry`` optionally grants a durable Domain-of-Experts
-    registry + artifact repository. ``kill=True`` stops a running server on the
+    bills registry; ``registry`` optionally grants a durable Domain Registry
+    registry + artifact vault. ``kill=True`` stops a running server on the
     port instead of serving.
     """
     if kill:

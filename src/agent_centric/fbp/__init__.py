@@ -54,7 +54,7 @@ from .critical_path import CpmAnalysis, CpmError, CpmNode, analyse_cpm, cpm_from
 from .determinism import DeterminismRating, Rule, RuleSet, resolve_with_rules, score_determinism
 from .domainrepo import (
     Artifact,
-    ArtifactRepository,
+    ArtifactVault,
     DomainRecord,
     DomainRegistry,
     RegistryError,
@@ -243,10 +243,10 @@ __all__ = [
     "EXPERT_HUMAN",
     "ExpertsError",
     "domain_from_dict",
-    # Domain-of-Experts registry + artifact repository (observability/provenance)
+    # Domain Registry + artifact vault (observability/provenance)
     "DomainRegistry",
     "DomainRecord",
-    "ArtifactRepository",
+    "ArtifactVault",
     "Artifact",
     "RegistryError",
     # Model agent (an LLM as an ordinary first-class agent)

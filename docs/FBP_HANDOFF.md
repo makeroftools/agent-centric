@@ -27,7 +27,7 @@ we are.
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
 - **HEAD:** `583972f` (handoff). Commits in this session: `a9e4647` (expert
   selection + cost ledger), this handoff, and — awaiting commit from this turn —
-  the **Domain-of-Experts registry + artifact repository**. **Pushed to origin:**
+  the **Domain Registry + artifact vault**. **Pushed to origin:**
   up through `87e7bbe` (the user pushed). **Unpushed (~18-19 commits):** the
   full `agent-centric-fbp` sequence from `c4afa94` onward. Run
   `git log origin/agent-centric-fbp..HEAD` to see the exact unpushed set.
@@ -82,7 +82,7 @@ that page:
 | **Schema-driven orchestration** | `fbp/orchestrate.py`, `fbp/web.py` | **Typed, schema-constrained intents** (`SCHEMAS`: `run`/`double`/`sum`): `plan_from_schema` validates + coerces a typed artifact fail-closed before planning; the landing page gains a **schema-driven form** (`/orchestrate/schema` serves the schemas) — same verified spine, typed form instead of free-form JSON. Additive (`plan_from_artifact` unchanged) |
 | **Bills workflow on the landing page** | `fbp/web.py`, `fbp/bills_agent.py`, `fbp/store_agent.py` | The mission-relevant loop is now a **live, runnable card** on the landing page: `/bills/intake` → `/bills/accept` (human-gated, the only registry write) → `/bills/registry` (read-only snapshot) → `/bills/calendar` (verified projection). **Prefix grants** (`bill-*`) let the UI accept arbitrary bill ids under a granted namespace while still failing closed outside it. Durable via `fbp-web --bills <path>`. Store teardown made **thread-safe** (cross-thread close no longer crashes) |
 | **Expert selection + cost ledger** | `fbp/experts.py`, `fbp/web.py`, `fbp/driver.py` | The deterministic core of **"Network of Experts AI"** (the coinded axiom): `select_expert(domain)` picks deterministic / learned (per-domain SLM) / human for each component (domain), and `CostLedger` accounts cost + irreducible residue per run. Read-only **Network of Experts** card on the landing page (`/experts`). Driver surfaces configured verifier names (read-only). Additive |
-| **Domain-of-Experts registry + artifact repository** | `fbp/domainrepo.py`, `fbp/web.py` | The **observability + provenance** layer (catalog → decision → accounting → evidence): `DomainRegistry` (read-only, **tenant-aware** catalog — passive, never an authority) + `ArtifactRepository` (append-only, write-once evidence keyed by (tenant, domain, run), never mutable). Read-only **registry** + **artifact** cards (`/domains`, `/artifacts`); durable via `fbp-web --registry <path>` (explicit grant). Tenant-awareness makes a future paid multi-tenant web service additive, not a rewrite; the service would be a shared observability/provenance layer, never the governance layer. Additive |
+| **Domain Registry + artifact vault** | `fbp/domainrepo.py`, `fbp/web.py` | The **observability + provenance** layer (catalog → decision → accounting → evidence): `DomainRegistry` (read-only, **tenant-aware** catalog — passive, never an authority) + `ArtifactVault` (append-only, write-once evidence keyed by (tenant, domain, run), never mutable). Read-only **registry** + **artifact** cards (`/domains`, `/artifacts`); durable via `fbp-web --registry <path>` (explicit grant). Tenant-awareness makes a future paid multi-tenant web service additive, not a rewrite; the service would be a shared observability/provenance layer, never the governance layer. Additive |
 | **Component Networks** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. **True dataflow** (a downstream component consumes the *computed* verified output of its upstreams, not their args). Cycles / unknown refs / unverified steps fail closed. Landing page has a **dependency-free drag-and-drop node-and-wire canvas** editor (palette, draggable nodes, click-to-connect ports, SVG edges, run) + **durable save/load** (`fbp-web --networks <path>`, `/network/save|/list|/load`) |
 | **Card-based UI + mode switch** | `fbp/web.py` | Card-based landing page with a **Chat / Designer** mode switch: Chat = model box + chat history + run-an-artifact (general-purpose); Designer = Component Network editor. Clear functional division |
 
@@ -252,9 +252,9 @@ of decisions and working style that a fresh session must inherit.
    landing page gains a read-only **Network of Experts** card (`/experts`).
    `FbpDriver` surfaces its configured verifier names (read-only). Additive;
    789 tests.
-21. **Domain-of-Experts registry + artifact repository** (current) — the agreed
+21. **Domain Registry + artifact vault** (current) — the agreed
    increment realized. `domainrepo.py`: `DomainRegistry` (read-only, tenant-aware
-   catalog — passive, never an authority) + `ArtifactRepository` (append-only,
+   catalog — passive, never an authority) + `ArtifactVault` (append-only,
    write-once evidence keyed by (tenant, domain, run), never mutable). Read-only
    **registry** + **artifact** cards (`/domains`, `/artifacts`); write-once
    evidence durable via `fbp-web --registry <path>` (explicit grant). Tenant-
@@ -320,14 +320,14 @@ of decisions and working style that a fresh session must inherit.
   payment infrastructure itself (X402 or any provider) is an **opt-in external
   adapter**, never auto-charge without an explicit grant. This led directly to
   the built `experts.py` foundation.
-- **Domain-of-Experts registry + artifact repository (now built):** the user
-  proposed a **Domain of Experts registry and artifact repository.** The lead's
+- **Domain Registry + artifact vault (now built):** the user
+  proposed a **Domain of Experts registry and artifact vault.** The lead's
   take: it is the **observability + provenance layer** that completes the
   network-of-experts model (catalog → decision → accounting → evidence),
   self-describing and the natural home for learned-expert artifacts. Two hard
   rules held throughout: (1) the **registry stays a passive catalog, never an
   authority** (authority stays in the tree topology — no central boss); (2) the
-  **artifact repository is write-once evidence** — append-only, keyed by
+  **artifact vault is write-once evidence** — append-only, keyed by
   (tenant, domain, run), carrying source refs + residue + cost, never mutable.
   Built as `domainrepo.py` + `/domains`, `/artifacts` cards (`--registry <path>`
   durable). This completes catalog → decision → accounting → evidence.
@@ -437,9 +437,9 @@ These are listed in `STATUS.md`'s "out of scope / future volleys".
   **micro-payment / X402-style settlement adapter** for per-run cost (external,
   opt-in, never auto-charge without an explicit grant). Both slot into the
   contracts `experts.py` already defines.
-- **Domain-of-Experts registry + artifact repository — now built** as the
+- **Domain Registry + artifact vault — now built** as the
   agreed increment. `DomainRegistry` (read-only, tenant-aware catalog) +
-  `ArtifactRepository` (append-only, write-once evidence keyed by (tenant,
+  `ArtifactVault` (append-only, write-once evidence keyed by (tenant,
   domain, run)) + read-only **registry**/**artifact** cards (`/domains`,
   `/artifacts`); durable via `fbp-web --registry <path>`. The two hard rules
   held: the registry is a **passive catalog, never an authority**; the artifact
@@ -480,9 +480,9 @@ uv run python examples/fbp_arc_demo.py
   verified by a deterministic verifier; a general model is one (fallible) kind
   of expert. Enshrined at the top of `README_FBP.md` and `spec.md` §0. Treat it
   as the conceptual north star for any future expert-selection / per-domain-SLM
-  work. Two hard rules for the agreed **Domain-of-Experts registry + artifact
+  work. Two hard rules for the agreed **Domain Registry + artifact
   repository** increment: the registry is a **passive catalog, never an
-  authority** (authority stays in the tree topology); the artifact repository
+  authority** (authority stays in the tree topology); the artifact vault
   is **write-once evidence, never mutable** (append-only, keyed by (domain,
   run), carrying source refs + residue + cost).
 - The AC Router is spun out, gitignored, and **not** our work here.

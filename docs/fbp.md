@@ -375,7 +375,7 @@ for each domain in the live tree it shows the chosen expert kind and running
 cost. `FbpDriver` now also surfaces its configured **verifier names** (read-only)
 so the readout knows which domains are verifiable.
 
-### Domain-of-Experts registry + artifact repository
+### Domain Registry registry + artifact vault
 
 `domainrepo.py` is the **observability + provenance** layer that completes the
 network-of-experts model (*catalog → decision → accounting → evidence*):
@@ -384,12 +384,12 @@ network-of-experts model (*catalog → decision → accounting → evidence*):
   measured determinism/residue, chosen expert kind, provenance), **tenant-aware**
   and queryable by id too. It is a *passive catalog, never an authority* — it
   records what and how, it never decides.
-- `ArtifactRepository` — an **append-only, write-once** store of domain run
+- `ArtifactVault` — an **append-only, write-once** store of domain run
   artifacts (verified output keyed by (tenant, domain, run), with residue, cost,
   and source refs). Re-recording a key fails closed; it is *evidence*, never
   mutable.
 
-The landing page exposes read-only **Domain-of-Experts registry** and **Artifact
+The landing page exposes read-only **Domain Registry registry** and **Artifact
 repository** cards (`/domains`, `/artifacts`); the write-once artifact evidence
 persists across restarts via `fbp-web --registry <path>` (explicit grant).
 Tenant-awareness from the start is what makes a future paid, multi-tenant web

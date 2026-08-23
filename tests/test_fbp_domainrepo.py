@@ -1,8 +1,8 @@
-"""Tests for the Domain-of-Experts registry + artifact repository.
+"""Tests for the Domain Registry + artifact vault.
 
 This is the observability + provenance layer (catalog -> decision -> accounting
 -> evidence) of "Network of Experts AI". The registry is a passive catalog
-(never an authority); the artifact repository is append-only, write-once
+(never an authority); the artifact vault is append-only, write-once
 evidence. Both are tenant-aware and deterministic.
 """
 
@@ -12,7 +12,7 @@ import pytest
 
 from agent_centric.fbp.domainrepo import (
     Artifact,
-    ArtifactRepository,
+    ArtifactVault,
     DomainRegistry,
     RegistryError,
 )
@@ -84,9 +84,9 @@ class TestDomainRegistry:
         assert d["provenance"] == "net:demo"
 
 
-class TestArtifactRepository:
+class TestArtifactVault:
     def test_record_and_get(self) -> None:
-        repo = ArtifactRepository()
+        repo = ArtifactVault()
         a = Artifact(
             tenant="acme", domain="bill-extract", run="r1",
             value={"vendor": "GasCo"}, kind=EXPERT_DETERMINISTIC,
@@ -96,7 +96,7 @@ class TestArtifactRepository:
         assert repo.get("bill-extract", "r1", tenant="acme") is a
 
     def test_write_once(self) -> None:
-        repo = ArtifactRepository()
+        repo = ArtifactVault()
         repo.record(Artifact(tenant="acme", domain="d", run="r1", value=1,
                              kind=EXPERT_DETERMINISTIC, residue=0.0, cost=1))
         with pytest.raises(RegistryError):
@@ -104,13 +104,13 @@ class TestArtifactRepository:
                                  kind=EXPERT_DETERMINISTIC, residue=0.0, cost=1))
 
     def test_rejects_unknown_kind(self) -> None:
-        repo = ArtifactRepository()
+        repo = ArtifactVault()
         with pytest.raises(RegistryError):
             repo.record(Artifact(tenant="acme", domain="d", run="r1", value=1,
                                  kind="magic", residue=0.0, cost=1))
 
     def test_tenant_and_domain_filter(self) -> None:
-        repo = ArtifactRepository()
+        repo = ArtifactVault()
         repo.record(Artifact(tenant="acme", domain="d1", run="r1", value=1,
                              kind=EXPERT_DETERMINISTIC, residue=0.0, cost=5))
         repo.record(Artifact(tenant="acme", domain="d2", run="r1", value=1,
@@ -127,7 +127,7 @@ class TestIntegration:
     def test_registry_and_repository_share_domain(self) -> None:
         """A domain observed in the registry can have artifacts recorded for it."""
         reg = DomainRegistry()
-        repo = ArtifactRepository()
+        repo = ArtifactVault()
         domain = _domain()
         rec = reg.observe(domain, tenant="acme")
         repo.record(Artifact(

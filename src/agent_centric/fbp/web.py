@@ -38,7 +38,7 @@ from .chatstore import ChatHistoryStore
 from .driver import FbpDriver
 
 if TYPE_CHECKING:
-    from .domainrepo import ArtifactRepository, DomainRegistry
+    from .domainrepo import ArtifactVault, DomainRegistry
 
 # The default loopback bind host and port for the landing-server.
 DEFAULT_HOST = "127.0.0.1"
@@ -91,22 +91,22 @@ class FbpLandingServer:
 
             self._bills_tmp = tempfile.TemporaryDirectory(prefix="agent-centric-fbp-bills-")
             self._bills_state_path = os.path.join(self._bills_tmp.name, "registry.db")
-        # The Domain-of-Experts registry + artifact repository (observability +
+        # The Domain Registry + artifact vault (observability +
         # provenance layer). In-memory by default; durable via ``registry_path``
         # (explicit grant). Set up after the driver so we can observe its tree.
         self._registry_path = str(registry_path) if registry_path is not None else None
         self._domain_registry: DomainRegistry | None = None
-        self._artifact_repo: ArtifactRepository | None = None
+        self._artifact_vault: ArtifactVault | None = None
         # One driver, in-process and reused. We register and run a small
         # deterministic demo tree so the page has something real to show.
         self._providers = _build_openrouter_providers()
         self._driver = self._build_driver()
-        # Build the Domain-of-Experts registry + artifact repository from the
+        # Build the Domain Registry + artifact vault from the
         # live tree (read-only observations of how each domain is served).
         self._build_domain_repo()
         # A granted path (--registry) persists the write-once artifact evidence
         # across restarts (explicit grant; load any prior evidence now).
-        if self._registry_path and self._artifact_repo is not None:
+        if self._registry_path and self._artifact_vault is not None:
             self._load_artifacts()
         # Saved component networks (name -> to_dict payload). In-memory by
         # default; persisted to ``networks_path`` when granted (explicit grant).
@@ -296,22 +296,22 @@ class FbpLandingServer:
         )
         return driver
 
-    # -- Domain-of-Experts registry + artifact repository --------------------
+    # -- Domain Registry + artifact vault --------------------
 
     def _build_domain_repo(self) -> None:
-        """Observe the live tree into the DomainRegistry + ArtifactRepository.
+        """Observe the live tree into the DomainRegistry + ArtifactVault.
 
         Each registered capability on a node is observed as a domain (with its
         expert selection determined deterministically), and a representative
         verified artifact is recorded per domain. Read-only — this only mirrors
         what the tree already serves; it never grants authority.
         """
-        from .domainrepo import Artifact, ArtifactRepository, DomainRegistry
+        from .domainrepo import Artifact, ArtifactVault, DomainRegistry
         from .experts import Domain
 
         tenant = "local"
         registry = DomainRegistry()
-        repo = ArtifactRepository()
+        repo = ArtifactVault()
         tree = self._driver.tree()
         verifiers: set[str] = set()
         for node in tree:
@@ -335,10 +335,10 @@ class FbpLandingServer:
                     residue=domain.residue or 0.0, cost=1,
                 ))
         self._domain_registry = registry
-        self._artifact_repo = repo
+        self._artifact_vault = repo
 
     def _domain_readout(self) -> dict[str, Any]:
-        """A read-only view of the Domain-of-Experts registry."""
+        """A read-only view of the Domain Registry."""
         if self._domain_registry is None:
             return {"ok": False, "domains": []}
         return {
@@ -349,14 +349,14 @@ class FbpLandingServer:
         }
 
     def _artifact_readout(self) -> dict[str, Any]:
-        """A read-only view of the artifact repository (write-once evidence)."""
-        if self._artifact_repo is None:
+        """A read-only view of the artifact vault (write-once evidence)."""
+        if self._artifact_vault is None:
             return {"ok": False, "artifacts": []}
         return {
             "ok": True,
-            "artifacts": [a.to_dict() for a in self._artifact_repo.all()],
-            "count": self._artifact_repo.count(),
-            "total_cost": self._artifact_repo.total_cost(),
+            "artifacts": [a.to_dict() for a in self._artifact_vault.all()],
+            "count": self._artifact_vault.count(),
+            "total_cost": self._artifact_vault.total_cost(),
             "durable": self._registry_path is not None,
         }
 
@@ -365,14 +365,14 @@ class FbpLandingServer:
     def _load_artifacts(self) -> None:
         """Load prior recorded artifacts from the granted path (fail-closed).
 
-        The artifact repository is the append-only, write-once evidence that
+        The artifact vault is the append-only, write-once evidence that
         genuinely accumulates across runs (unlike the registry catalog, which is
         re-derived from the live tree). When ``--registry <path>`` is granted, we
         reload any previously-recorded evidence so it survives a restart.
         """
         import os as _os
 
-        if not self._registry_path or self._artifact_repo is None:
+        if not self._registry_path or self._artifact_vault is None:
             return
         if not _os.path.exists(self._registry_path):
             return
@@ -387,7 +387,7 @@ class FbpLandingServer:
                     if not isinstance(a, dict):
                         continue
                     try:
-                        self._artifact_repo.record(_A(
+                        self._artifact_vault.record(_A(
                             tenant=str(a.get("tenant", "")),
                             domain=str(a.get("domain", "")),
                             run=str(a.get("run", "")),
@@ -403,7 +403,7 @@ class FbpLandingServer:
 
     def _save_artifacts(self) -> None:
         """Atomically persist the artifact evidence to the granted path."""
-        if not self._registry_path or self._artifact_repo is None:
+        if not self._registry_path or self._artifact_vault is None:
             return
         import os
         import tempfile
@@ -411,7 +411,7 @@ class FbpLandingServer:
         directory = os.path.dirname(os.path.abspath(self._registry_path)) or "."
         os.makedirs(directory, exist_ok=True)
         payload = {
-            "artifacts": [a.to_dict() for a in self._artifact_repo.all()]
+            "artifacts": [a.to_dict() for a in self._artifact_vault.all()]
         }
         (fd, tmp_path) = tempfile.mkstemp(dir=directory, suffix=".tmp")
         try:
@@ -558,10 +558,10 @@ class FbpLandingServer:
                     # in the live tree (Network of Experts AI). Deterministic.
                     self._send_json(server._experts_readout())
                 elif self.path == "/domains":
-                    # Read-only Domain-of-Experts registry (catalog, tenant-aware).
+                    # Read-only Domain Registry (catalog, tenant-aware).
                     self._send_json(server._domain_readout())
                 elif self.path == "/artifacts":
-                    # Read-only artifact repository (write-once evidence).
+                    # Read-only artifact vault (write-once evidence).
                     self._send_json(server._artifact_readout())
                 elif self.path == "/model":
                     # Run a prompt through the model agent (LLM as an ordinary
@@ -1709,7 +1709,7 @@ _EXPERTS_JS = r"""\
 </script>
 """
 
-# The Domain-of-Experts registry readout client script.
+# The Domain Registry readout client script.
 _DOMAINS_JS = r"""\
 <script>
   async function domainsLoad() {
@@ -1736,7 +1736,7 @@ _DOMAINS_JS = r"""\
 </script>
 """
 
-# The artifact repository readout script (append-only, write-once evidence).
+# The artifact vault readout script (append-only, write-once evidence).
 _ARTIFACTS_JS = r"""\
 <script>
   async function artifactsLoad() {
@@ -2156,7 +2156,7 @@ the expert; the network is.</p>
 </div>
 
 <div class='card'>
-<h2>Domain-of-Experts registry</h2>
+<h2>Domain Registry</h2>
 <p class='note'>The read-only <b>catalog</b> of domains (tenant-aware): id, name,
 contract, and the chosen expert kind. It records <i>what</i> and <i>how</i>;
 it never decides — authority stays in the tree topology.</p>
@@ -2165,7 +2165,7 @@ it never decides — authority stays in the tree topology.</p>
 </div>
 
 <div class='card'>
-<h2>Artifact repository</h2>
+<h2>Artifact Vault</h2>
 <p class='note'>The read-only, <b>write-once evidence</b> of what each domain
 produced — each run's verified output, source refs, residue, and cost. Keyed by
 (tenant, domain, run); never mutable.</p>
@@ -2282,7 +2282,7 @@ def serve(
     in-memory only). ``bills_path`` optionally grants a durable, cross-restart
     bills registry (an explicit opt-in; without it the registry is in-memory
     only). ``registry_path`` optionally grants durable, cross-restart storage
-    for the Domain-of-Experts registry + artifact repository.
+    for the Domain Registry + artifact vault.
     """
     server = FbpLandingServer(
         host=host, port=port, history_path=history_path, networks_path=networks_path,

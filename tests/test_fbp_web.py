@@ -199,7 +199,7 @@ class TestExpertsRoute:
 
 
 class TestDomainRepoRoutes:
-    """The Domain-of-Experts registry + artifact repository (observability +
+    """The Domain Registry + artifact vault (observability +
     provenance layer, tenant-aware, read-only, write-once)."""
 
     def test_domains_readout_observes_tree(self) -> None:
