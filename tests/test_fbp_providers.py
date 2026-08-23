@@ -64,10 +64,20 @@ class TestAdaptersServeContract:
         return ["vendor GasCo amount 12345", "vendor ElectricCo amount 9000"]
 
     def test_modal_returns_provenance(self) -> None:
-        expert = ModalSlmProvider().train(_domain(), self._corpus(), SlmSpec())
+        def _fake(endpoint, headers, body):
+            return '{"artifact": "expert-1"}'
+        expert = ModalSlmProvider(http_client=_fake).train(
+            _domain(), self._corpus(), SlmSpec()
+        )
         assert expert.domain == "bill-extract"
         assert expert.artifact.startswith("modal://")
         assert expert.dataset_size == 2
+
+    def test_modal_without_client_fails_closed(self) -> None:
+        # A Modal provider built without an injected http_client must fail
+        # closed on train (never accidentally reaches the network).
+        with pytest.raises(SlmError, match="No HTTP transport"):
+            ModalSlmProvider().train(_domain(), self._corpus(), SlmSpec())
 
     def test_runpod_returns_provenance(self) -> None:
         expert = RunpodSlmProvider(pod_id="pod-1").train(_domain(), self._corpus(), SlmSpec())
@@ -81,3 +91,78 @@ class TestAdaptersServeContract:
     def test_empty_corpus_fails_closed(self) -> None:
         with pytest.raises(SlmError, match="empty corpus"):
             ModalSlmProvider().train(_domain(), [], SlmSpec())
+
+class TestModalWorkableTransport:
+    """The Modal adapter is genuinely workable with an injected HTTP client."""
+
+    def _corpus(self):
+        return ["vendor GasCo amount 12345", "vendor ElectricCo amount 9000"]
+
+    def test_posts_corpus_and_parses_artifact(self) -> None:
+        seen = {}
+
+        def _fake(endpoint, headers, body):
+            seen["endpoint"] = endpoint
+            seen["headers"] = headers
+            seen["body"] = body
+            return '{"artifact": "modal-model-7b"}'
+
+        expert = ModalSlmProvider(
+            app_name="fbp-domain-expert", gpu="A10G", http_client=_fake
+        ).train(_domain(), self._corpus(), SlmSpec())
+        assert expert.artifact.endswith("modal-model-7b")
+        assert seen["endpoint"] == "fbp-domain-expert"
+        assert seen["headers"]["Content-Type"] == "application/json"
+        import json as _json
+        payload = _json.loads(seen["body"])
+        assert payload["domain"] == "bill-extract"
+        assert payload["gpu"] == "A10G"
+        assert payload["base_model"] == "llama-3.2-3b"
+        assert len(payload["corpus"]) == 2
+
+    def test_plain_artifact_id_response(self) -> None:
+        def _fake(endpoint, headers, body):
+            return "modal-model-7b"
+        expert = ModalSlmProvider(http_client=_fake).train(
+            _domain(), self._corpus(), SlmSpec()
+        )
+        assert expert.artifact.endswith("modal-model-7b")
+
+    def test_bad_response_fails_closed(self) -> None:
+        def _fake(endpoint, headers, body):
+            return "{not json"
+        with pytest.raises(SlmError, match="unexpected Modal training response"):
+            ModalSlmProvider(http_client=_fake).train(
+                _domain(), self._corpus(), SlmSpec()
+            )
+
+    def test_client_failure_fails_closed(self) -> None:
+        def _boom(endpoint, headers, body):
+            raise RuntimeError("provider down")
+        with pytest.raises(SlmError, match="Modal training request failed"):
+            ModalSlmProvider(http_client=_boom).train(
+                _domain(), self._corpus(), SlmSpec()
+            )
+
+    def test_build_modal_provider_factory(self) -> None:
+        from agent_centric.fbp.providers import build_modal_provider
+        p = build_modal_provider(http_client=lambda e, h, b: "model-1")
+        assert isinstance(p, ModalSlmProvider)
+        expert = p.train(_domain(), self._corpus(), SlmSpec())
+        assert expert.artifact.endswith("model-1")
+
+    def test_modal_returns_provenance(self) -> None:
+        def _fake(endpoint, headers, body):
+            return '{"artifact": "expert-1"}'
+        expert = ModalSlmProvider(http_client=_fake).train(
+            _domain(), self._corpus(), SlmSpec()
+        )
+        assert expert.domain == "bill-extract"
+        assert expert.artifact.startswith("modal://")
+        assert expert.dataset_size == 2
+
+    def test_modal_without_client_fails_closed(self) -> None:
+        # A Modal provider built without an injected http_client must fail
+        # closed on train (never accidentally reaches the network).
+        with pytest.raises(SlmError, match="No HTTP transport"):
+            ModalSlmProvider().train(_domain(), self._corpus(), SlmSpec())

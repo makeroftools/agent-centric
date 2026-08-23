@@ -22,6 +22,8 @@ without touching the core.
 
 from __future__ import annotations
 
+import json
+from collections.abc import Callable
 from typing import Any, cast
 
 from .experts import Domain
@@ -81,6 +83,28 @@ def get_provider(name: str) -> SlmProvider:
     return _DEFAULT_REGISTRY.get(name)
 
 
+# A real HTTP transport for a training endpoint: endpoint, headers, JSON body
+# -> response text. It may raise on HTTP/API/transport errors; the provider maps
+# those to an explicit SlmError. Never invoked by the offline suite (fakes are
+# used instead).
+TrainingHttpClient = Callable[[str, dict[str, str], str], str]
+
+
+def _no_training_http_client(
+    endpoint: str, headers: dict[str, str], body: str
+) -> str:
+    """Default transport: never reaches the network.
+
+    A real Modal provider built without an injected ``http_client`` fails closed
+    on call rather than attempting a network request, so the harness can never
+    make an accidental external call.
+    """
+    raise SlmError(
+        "No HTTP transport configured for the Modal training provider. "
+        "Inject an explicit http_client to enable real calls."
+    )
+
+
 class ModalSlmProvider:
     """Opt-in provider: trains a domain expert on Modal (GPU on demand).
 
@@ -91,34 +115,83 @@ class ModalSlmProvider:
 
     This adapter is **opt-in and external**: it is never constructed by the
     deterministic core and never runs in the offline test suite. When the
-    operator selects it, it calls Modal's SDK to upload the corpus and run the
-    QLoRA job, returning an ``SlmExpert`` with full provenance.
+    operator selects it, it POSTs the corpus + recipe to a Modal-style training
+    endpoint (via an injectable ``http_client``) and returns an ``SlmExpert``
+    with full provenance.
 
-    The implementation is intentionally a documented stub here (no Modal SDK
-    dependency in the core): the operator wires the real Modal function id /
-    credentials at construction. The contract it serves is identical to the
-    stub's, so the core and tests are unaffected.
+    The transport is injectable so the adapter is **workable** (a real HTTP
+    client can be supplied) while the core and offline tests stay deterministic:
+    without an injected client, ``train`` fails closed rather than reaching the
+    network.
     """
 
-    def __init__(self, app_name: str = "fbp-domain-expert", gpu: str = "A10G") -> None:
+    def __init__(
+        self,
+        app_name: str = "fbp-domain-expert",
+        gpu: str = "A10G",
+        http_client: TrainingHttpClient | None = None,
+    ) -> None:
         self._app_name = app_name
         self._gpu = gpu
+        self._http_client = http_client or _no_training_http_client
 
     def train(self, domain: Domain, corpus: list[str], spec: SlmSpec) -> SlmExpert:
         if not corpus:
             raise SlmError("cannot train a domain expert on an empty corpus")
-        # Real implementation: call the Modal function that runs QLoRA on the
-        # corpus under spec, then return the trained expert's provenance. The
-        # artifact reference is the deployed Modal model id.
+        size = min(len(corpus), spec.max_examples)
+        body = json.dumps(
+            {
+                "domain": domain.id,
+                "base_model": spec.base_model,
+                "method": spec.method,
+                "max_examples": size,
+                "quantize": spec.quantize,
+                "gpu": self._gpu,
+                "corpus": corpus[:size],
+            }
+        )
+        headers = {"Content-Type": "application/json"}
+        try:
+            text = self._http_client(self._app_name, headers, body)
+        except Exception as exc:  # noqa: BLE001 - surfaced to the operator
+            raise SlmError(f"Modal training request failed: {exc}") from exc
+        # The endpoint returns a JSON object with the trained expert's
+        # provenance (or a plain artifact id). Parse fail-closed.
+        artifact = text.strip()
+        if artifact.startswith("{"):
+            try:
+                data = json.loads(artifact)
+            except ValueError as exc:
+                raise SlmError(
+                    f"unexpected Modal training response: {artifact[:200]}"
+                ) from exc
+            if isinstance(data, dict) and isinstance(data.get("artifact"), str):
+                artifact = data["artifact"]
         return SlmExpert(
             domain=domain.id,
             base_model=spec.base_model,
             method=spec.method,
             corpus=f"modal-corpus:{domain.id}",
-            dataset_size=min(len(corpus), spec.max_examples),
+            dataset_size=size,
             benchmark=0.0,
-            artifact=f"modal://{self._app_name}/{domain.id}",
+            artifact=f"modal://{self._app_name}/{domain.id}:{artifact}",
         )
+
+
+def build_modal_provider(
+    *,
+    app_name: str = "fbp-domain-expert",
+    gpu: str = "A10G",
+    http_client: TrainingHttpClient | None = None,
+) -> ModalSlmProvider:
+    """Build a Modal training provider (opt-in, fail-closed).
+
+    The ``http_client`` is the real transport; if omitted the resulting provider
+    fails closed on ``train`` (it never accidentally reaches the network). This
+    mirrors ``build_real_model_provider``: the adapter is workable with an
+    injected client and safe without one.
+    """
+    return ModalSlmProvider(app_name=app_name, gpu=gpu, http_client=http_client)
 
 
 class RunpodSlmProvider:

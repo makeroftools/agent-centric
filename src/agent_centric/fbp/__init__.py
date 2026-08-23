@@ -134,8 +134,15 @@ from .providers import (
     ProviderRegistry,
     ReplicateSlmProvider,
     RunpodSlmProvider,
+    TrainingHttpClient,
+    build_modal_provider,
     get_provider,
     provider_names,
+)
+from .provision import (
+    ProvisionError,
+    ProvisionResult,
+    provision_expert,
 )
 from .settlement import (
     Settlement,
@@ -326,6 +333,12 @@ __all__ = [
     "ModalSlmProvider",
     "RunpodSlmProvider",
     "ReplicateSlmProvider",
+    "build_modal_provider",
+    "TrainingHttpClient",
+    # End-to-end expert provisioning (select -> plan -> train -> account -> settle)
+    "provision_expert",
+    "ProvisionResult",
+    "ProvisionError",
     # Deterministic training-plan tier (strategic hardware provisioning)
     "TrainingPlan",
     "TrainingTier",
