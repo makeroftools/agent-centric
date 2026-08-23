@@ -37,7 +37,7 @@ we are.
   relaxed, but confirm each time for a given commit.)
 
 ### Validation (run this session, all live)
-- `uv run pytest` → **743 passed** (was 726; added Component Networks)
+- `uv run pytest` → **749 passed** (was 743; added true dataflow + network save/load)
 - `uv run ruff check .` → clean
 - `uv run mypy src` → clean (**81 source files**)
 - FBP coverage (`uv run pytest --cov=agent_centric.fbp --cov-report=term`) →
@@ -80,7 +80,7 @@ that page:
 | **Post-return determinism** | `fbp/chat_pipeline.py` | The "model proposes, code accepts" seam: deterministic repair → schema-parse → canonicalize → request-key → pin. `PinCache` serves the first accepted artifact for identical inputs (lexical determinism by caching). Pure/offline |
 | **Chat → FBP orchestration** | `fbp/orchestrate.py`, `fbp/web.py` `/orchestrate` | A canonical JSON artifact (single `task` or `steps`) maps to an ordered FBP `run` plan executed through the driver's verified spine (parent re-verified, ledgered, replayable). Fail-closed on invalid/unorchestrable artifacts |
 | **Chat-context** | `fbp/web.py` (`_build_chat_context`) | prior (durable) transcript turns fold into the next model prompt (oldest-first, bounded), so the model answers with continuity — wired into both the audited `/model` and the streaming preview path |
-| **Component Networks** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. Cycles / unknown refs fail closed. Landing page has a **dependency-free drag-and-drop node-and-wire canvas** editor (palette, draggable nodes, click-to-connect ports, SVG edges, run) |
+| **Component Networks** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. **True dataflow** (a downstream component consumes the *computed* verified output of its upstreams, not their args). Cycles / unknown refs / unverified steps fail closed. Landing page has a **dependency-free drag-and-drop node-and-wire canvas** editor (palette, draggable nodes, click-to-connect ports, SVG edges, run) + **durable save/load** (`fbp-web --networks <path>`, `/network/save|/list|/load`) |
 
 ### Easy-UX driver & CLI
 - `FbpDriver` API: `register`, `resolve`, `configure`, `configure_child`,
@@ -208,6 +208,12 @@ of decisions and working style that a fresh session must inherit.
    dependency-free drag-and-drop node-and-wire canvas (SVG): palette buttons,
    draggable nodes, click-to-connect ports, double-click to remove, live JSON.
    No third-party/CDN library — keeps the stdlib-only, fail-closed posture.
+15. **True dataflow + durable save/load** (`fac7a16`) — `run_network` now
+   executes **true dataflow**: each component runs in topological order and its
+   *computed* verified output is threaded into downstream args (a `sum` can
+   consume two `double`s). Results carry the component `id` for the editor.
+   Networks can be **saved/loaded durably** (`fbp-web --networks <path>`,
+   `/network/save|/list|/load`), validated before persist (fail-closed).
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -268,11 +274,11 @@ real trust boundary.
 These are listed in `STATUS.md`'s "out of scope / future volleys".
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (5):** `c4afa94` (chat-context), `46b3948` (handoff),
+- **Unpushed commits (7):** `c4afa94` (chat-context), `46b3948` (handoff),
   `69df3d8` (Component Networks), `9b8f7e5` (handoff), `4a94c16` (canvas
-  editor) are local but not yet on GitHub; plus this handoff update. The remote
-  was at `87e7bbe`. The user pushes directly; confirm before pushing anything
-  yourself.
+  editor), `241d9a3` (handoff), `fac7a16` (dataflow + save/load) are local but
+  not yet on GitHub; plus this handoff update. The remote was at `87e7bbe`. The
+  user pushes directly; confirm before pushing anything yourself.
 - **Terminal glitch (this session):** the session's local terminal began
   rejecting ``cd`` into the project with "not in any of the project's
   worktrees"; the same command had worked minutes earlier. The sub-agent (which
@@ -321,7 +327,7 @@ uv run python examples/fbp_arc_demo.py
 - Deterministic-first north star; LLM as ordinary agent; grants; fail-closed;
   no auto-pres ids.
 - The AC Router is spun out, gitignored, and **not** our work here.
-- Trust only what 743 tests prove and what is committed; say clearly when
+- Trust only what 749 tests prove and what is committed; say clearly when
   something is unverifiable or unpushed.
 
 ---

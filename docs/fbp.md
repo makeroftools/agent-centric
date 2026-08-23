@@ -342,12 +342,19 @@ result = run_network(driver, net)  # double(21) -> even(42); both verified
 
 - **Deterministic by construction**: compile order is a topological sort
   (ties by id), so the same graph always yields the same ordered plan.
-- **Fail-closed**: cycles, self-loops, and edges to unknown components/output
-  fields are rejected — a half-wired network never silently runs.
+- **True dataflow**: each component runs in topological order and its *computed*
+  verified output is threaded into downstream args — a `sum` can consume two
+  `double`s, and the result is the real computed value, not a constant.
+- **Fail-closed**: cycles, self-loops, edges to unknown components/output
+  fields, and unverified steps are rejected — a half-wired or failing network
+  never silently succeeds.
 - The landing page has a **Component Network** visual editor: a dependency-free
   drag-and-drop node-and-wire canvas (palette buttons, draggable nodes,
   click-to-connect ports, SVG edges, double-click to remove, live JSON). No
   third-party/CDN library — it stays stdlib-only and fail-closed.
+- **Durable save/load**: with `fbp-web --networks <path>`, named networks can be
+  saved and reloaded across restarts (`/network/save|/list|/load`); a network is
+  validated before it is persisted (fail-closed).
 
 ### Determinism rating + approved rules (determinize-then-decide)
 
