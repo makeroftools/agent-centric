@@ -17,8 +17,12 @@ from agent_centric.fbp.providers import (
     ProviderRegistry,
     ReplicateSlmProvider,
     RunpodSlmProvider,
+    build_credential_client,
+    build_modal_from_env,
+    credentials_from_env,
     get_provider,
     provider_names,
+    redact_secrets,
 )
 from agent_centric.fbp.slm import SlmError, SlmSpec, StubSlmProvider
 
@@ -166,3 +170,91 @@ class TestModalWorkableTransport:
         # closed on train (never accidentally reaches the network).
         with pytest.raises(SlmError, match="No HTTP transport"):
             ModalSlmProvider().train(_domain(), self._corpus(), SlmSpec())
+
+class TestCredentialWiring:
+    """The opt-in, workable credential wiring for a real training provider."""
+
+    def _corpus(self) -> list[str]:
+        return ["vendor GasCo amount 12345", "vendor ElectricCo amount 9000"]
+
+    def _creds(self, **over: str) -> dict:
+        base = {
+            "TRAIN_ENDPOINT": "https://training.example.test/run",
+            "TRAIN_TOKEN": "sk-train-123456",
+        }
+        base.update(over)
+        return base
+
+    def test_credentials_from_env_reads_endpoint_and_token(self) -> None:
+        creds = credentials_from_env(self._creds())
+        assert creds.configured is True
+        assert creds.endpoint == "https://training.example.test/run"
+        assert creds.token == "sk-train-123456"
+        assert creds.auth_header_value == "Bearer sk-train-123456"
+
+    def test_credentials_subset_fails_closed(self) -> None:
+        assert credentials_from_env({"TRAIN_TOKEN": "sk-x"}).configured is False
+        assert credentials_from_env({"TRAIN_ENDPOINT": "https://e/run"}).configured is False
+
+    def test_credentials_from_env_empty_fails_closed(self) -> None:
+        assert credentials_from_env({}).configured is False
+
+    def test_custom_prefix(self) -> None:
+        creds = credentials_from_env(
+            {"MODAL_ENDPOINT": "https://m/run", "MODAL_TOKEN": "t"}, prefix="MODAL"
+        )
+        assert creds.configured is True
+
+    def test_credentials_to_dict_redacts_token(self) -> None:
+        d = credentials_from_env(self._creds()).to_dict()
+        assert d["token"] == "[REDACTED]"
+        assert "sk-train-123456" not in str(d)
+
+    def test_build_credential_client_requires_configured(self) -> None:
+        with pytest.raises(SlmError, match="not configured"):
+            build_credential_client(credentials_from_env({}))
+
+    def test_build_credential_client_posts_with_auth(self) -> None:
+        import agent_centric.fbp.providers as _p
+
+        seen = {}
+        original = _p.stdlib_http_client
+
+        def _fake(endpoint: str, headers: dict[str, str], body: str, **kwargs: object) -> str:
+            seen["endpoint"] = endpoint
+            seen["headers"] = headers
+            seen["body"] = body
+            return '{"artifact": "expert-9"}'
+
+        _p.stdlib_http_client = _fake
+        try:
+            client = build_credential_client(credentials_from_env(self._creds()))
+            text = client("ignored", {"Content-Type": "application/json"}, "{}")
+        finally:
+            _p.stdlib_http_client = original
+        assert seen["endpoint"] == "https://training.example.test/run"
+        assert seen["headers"]["Authorization"] == "Bearer sk-train-123456"
+        assert text == '{"artifact": "expert-9"}'
+
+    def test_build_modal_from_env_without_creds_is_safe(self) -> None:
+        p = build_modal_from_env({})
+        assert isinstance(p, ModalSlmProvider)
+        with pytest.raises(SlmError, match="No HTTP transport"):
+            p.train(_domain(), self._corpus(), SlmSpec())
+
+    def test_build_modal_from_env_with_creds_sends_auth_header(self) -> None:
+        p = build_modal_from_env(self._creds())
+        assert p._credentials is not None and p._credentials.configured is True
+        seen = {}
+
+        def _fake(endpoint, headers, body):
+            seen["headers"] = headers
+            return '{"artifact": "m"}'
+
+        p._http_client = _fake
+        expert = p.train(_domain(), self._corpus(), SlmSpec())
+        assert expert.artifact.endswith("m")
+        assert seen["headers"]["Authorization"] == "Bearer sk-train-123456"
+
+    def test_redact_secrets(self) -> None:
+        assert "sk-sec" not in redact_secrets("error with sk-sec value", ("sk-sec",))

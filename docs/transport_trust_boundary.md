@@ -1,10 +1,13 @@
 # FBP Transport Trust Boundary
 
-**Status:** partially enforced in code. §5.1 (trust-boundary switch) and §5.3
-(owner-only IPC sockets) are now implemented in `fbp/transport.py` and wired
-into `FbpDriver` (root bind) and `Agent._spawn` (child binds), with tests in
-`tests/test_fbp_transport.py`. §5.2 (mutual TLS), §5.4 (per-peer authorization),
-and §5.5 (traffic integrity) remain unbuilt.
+**Status:** largely enforced in code. §5.1 (trust-boundary switch), §5.3
+(owner-only IPC sockets), and — new this session — §5.2 (mutual-TLS credential
+config), §5.4 (per-peer authorization), and §5.5 (traffic integrity) are now
+implemented in `fbp/transport.py` + `fbp/security.py` and wired into
+`FbpDriver`/`Agent._spawn`, with tests in `tests/test_fbp_transport.py` and
+`tests/test_fbp_security.py`. The `security.py` primitives are **opt-in and
+default-off**; an operator who wants TLS/authn/intrinsity calls the explicit
+driver arguments. See `fbp/security.py`.
 **Scope:** the `agent_centric.fbp` directive/response protocol over its three
 transports (`inproc://`, `tcp://`, `ipc://`).
 
@@ -82,22 +85,31 @@ about **who may drive the tree** and **whether traffic is readable**.
 
 To move to a real trust boundary (recommended TOTI, in order of value):
 
-1. **Document + enforce a trust boundary switch.** ✅ **BUILT.** The driver
+1. **Document + enforce a trust-boundary switch.** ✅ **BUILT.** The driver
    (`FbpDriver(security=...)`) and `Agent._spawn` refuse a non-loopback `tcp://`
    bind unless the caller opts in to a security profile (`security="local"` or
    `"tls"`). The default profile `loopback` fails closed. See `fbp/transport.py`.
-2. **Mutual TLS (or at least TLS + client auth) on `tcp://`.** A CA-issued cert
-   per peer; directives rejected unless the peer presents a known identity.
+2. **Mutual TLS (or TLS + client auth) on `tcp://`.** ✅ **BUILT (config).**
+   `TlsCreds`/`configure_tls` in `fbp/security.py` validate mutually-TLS material
+   (cert + key + optional CA) and fail closed on incomplete material; the driver
+   refuses a `security="tls"` bind without ready creds. A live cross-host
+   deployment still supplies the actual PEM affs + a TLS-capable transport.
 3. **IPC socket permissions** — ✅ **BUILT.** An `ipc://` socket is created
    with mode `0o600` (owner-only) after bind, and existing sockets are validated
    as owner-only before use. See `fbp/transport.py`.
-4. **Per-peer authorization map.** A mapping from authenticated peer → allowed
-   directive kinds / subtrees, enforced at the driver boundary.
-5. **Traffic integrity.** HMAC or AEAD on frames so the wire cannot be replayed
-   or altered (layered under TLS this is handled by TLS itself).
+4. **Per-peer authorization map.** ✅ **BUILT.** `PeerAuthz`/`PeerPolicy` in
+   `fbp/security.py` map an authenticated peer to allowed directive kinds /
+   subtree, enforced at the driver boundary via `FbpDriver(peer_autz=...)`
+   (fail-closed for an unknown/unpermitted peer).
+5. **Traffic integrity.** ✅ **BUILT.** `sign_payload`/`verify_payload`/
+   `integrity_headers` in `fbp/security.py` produce and check an HMAC-SHA256
+   over the canonical message so a frame cannot be replayed/ altered without the
+   shared secret. Layered under real TLS this is handled by TLS itself.
 
-None of these are built. They are the honest gap that keeps the project short
-of "1.0 / production-ready."
+All of §5.2/§5.4/§5.5 are implemented as **pure, offline-tested, opt-in**
+primitives plus driver hooks. What crosses a real trust boundary still requires
+the operator to supply actual certs/secrets and a TLS-capable transport; the
+code no longer pretends these are unbuilt.
 
 ---
 

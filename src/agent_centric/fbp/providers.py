@@ -23,7 +23,11 @@ without touching the core.
 from __future__ import annotations
 
 import json
+import os
+import urllib.error
+import urllib.request
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, cast
 
 from .experts import Domain
@@ -105,6 +109,176 @@ def _no_training_http_client(
     )
 
 
+# ---------------------------------------------------------------------------
+# Real transport + credential wiring (the workable, opt-in path)
+# ---------------------------------------------------------------------------
+
+def redact_secrets(text: str, secrets: tuple[str, ...]) -> str:
+    """Replace concrete secret values in ``text`` with ``[REDACTED]``.
+
+    Mirrors the real-model-provider redaction so credentials (API keys, token
+    headers) can never leak into raised error messages from the real training
+    providers.
+    """
+    out = text
+    for secret in secrets:
+        if secret:
+            out = out.replace(secret, "[REDACTED]")
+    return out
+
+
+def stdlib_http_client(
+    endpoint: str,
+    headers: dict[str, str],
+    body: str,
+    *,
+    timeout: float = 60.0,
+    secrets: tuple[str, ...] = (),
+) -> str:
+    """A real, dependency-free HTTP(JSON) POST transport (opt-in).
+
+    This is the actual network path a workable Modal/Runpod/Replicate adapter
+    uses when the operator injects it. It POSTs ``body`` to ``endpoint`` with
+    ``headers``, returning the response text. HTTP/URL/transport errors are
+    surfaced with secrets redacted so credentials never leak.
+
+    It is *never* invoked by the offline suite — the tests inject fakes instead.
+    """
+    req = urllib.request.Request(
+        endpoint,
+        data=body.encode("utf-8"),
+        headers=headers,
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            text: str = resp.read().decode("utf-8", errors="replace")
+            return text.strip()
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:300]
+        raise SlmError(
+            f"training HTTP {exc.code}: {redact_secrets(str(exc), secrets)}"
+            + (f" body={redact_secrets(detail, secrets)}" if detail else "")
+        ) from exc
+    except urllib.error.URLError as exc:
+        raise SlmError(
+            f"training request failed: {redact_secrets(str(exc), secrets)}"
+        ) from exc
+
+
+@dataclass(frozen=True)
+class TrainingCredentials:
+    """The operator-provided credentials for a real training provider.
+
+    Attributes:
+        endpoint: The training API endpoint (e.g. a Modal webhook or a
+            provider REST URL). Must be a valid ``http(s)://`` URL.
+        token: The API token / auth value (a Bearer token or API key).
+        auth_scheme: ``Bearer`` (default) or ``Token``/other prefix.
+        app_name: A free-form label carried in the artifact provenance.
+    """
+
+    endpoint: str
+    token: str = ""
+    auth_scheme: str = "Bearer"
+    app_name: str = "fbp-domain-expert"
+
+    @property
+    def configured(self) -> bool:
+        """Whether this is a usable, complete credential set."""
+        on_http = self.endpoint.startswith("http://") or self.endpoint.startswith(
+            "https://"
+        )
+        return on_http and bool(self.token)
+
+    @property
+    def auth_header_value(self) -> str:
+        return f"{self.auth_scheme} {self.token}" if self.token else ""
+
+    def to_dict(self) -> dict[str, Any]:
+        """A JSON-safe readout (secret values redacted)."""
+        return {
+            "endpoint": self.endpoint,
+            "auth_scheme": self.auth_scheme,
+            "configured": self.configured,
+            "token": "[REDACTED]" if self.token else "",
+            "app_name": self.app_name,
+        }
+
+
+def credentials_from_env(
+    env: dict[str, str] | None = None,
+    *,
+    prefix: str = "TRAIN",
+) -> TrainingCredentials:
+    """Read training credentials from the environment (opt-in, deterministic).
+
+    Looks up ``{prefix}_ENDPOINT`` and ``{prefix}_TOKEN`` (default ``TRAIN_*``) and
+    returns a ``TrainingCredentials``. A missing/disabled set is signalled by
+    ``configured=False`` (fail-closed) — never a partial half-configured
+    credential that could silently hit the wrong endpoint.
+    """
+    src = env if env is not None else dict(os.environ)
+    endpoint = (src.get(f"{prefix}_ENDPOINT") or "").strip()
+    token = (src.get(f"{prefix}_TOKEN") or "").strip()
+    scheme = (src.get(f"{prefix}_AUTH_SCHEME") or "Bearer").strip()
+    app_name = (src.get(f"{prefix}_APP") or "fbp-domain-expert").strip()
+    return TrainingCredentials(
+        endpoint=endpoint, token=token, auth_scheme=scheme, app_name=app_name
+    )
+
+
+def build_credential_client(
+    credentials: TrainingCredentials,
+    *,
+    timeout: float = 60.0,
+) -> TrainingHttpClient:
+    """Build a workable real HTTP client bound to ``credentials``.
+
+    The returned client (``endpoint, headers, body -> response text``) posts to
+    the credential's endpoint with an ``Authorization`` header. Secrets are
+    captured for redaction in any raised error. This is the opt-in network path;
+    it is never invoked by the offline suite.
+    """
+    if not credentials.configured:
+        raise SlmError(
+            "training credentials are not configured (missing endpoint/token); "
+            "train cannot reach a real provider"
+        )
+    secrets = (credentials.token,) if credentials.token else ()
+
+    def client(endpoint: str, headers: dict[str, str], body: str) -> str:
+        effective = {"Authorization": credentials.auth_header_value}
+        effective.update(headers)
+        return stdlib_http_client(
+            credentials.endpoint,
+            effective,
+            body,
+            timeout=timeout,
+            secrets=secrets,
+        )
+
+    return client
+
+
+def build_modal_from_env(
+    env: dict[str, str] | None = None,
+    *,
+    gpu: str = "A10G",
+) -> ModalSlmProvider:
+    """Build a workable Modal provider from the environment (opt-in).
+
+    Reads ``TRAIN_*`` credentials and constructs a ``ModalSlmProvider`` that is
+    genuinely network-capable when ``TRAIN_ENDPOINT`` + ``TRAIN_TOKEN`` are set;
+    without them it fails closed on ``train`` (never accidentally reaches the
+    network). This is the operator-facing wiring the handoff asked for.
+    """
+    credentials = credentials_from_env(env, prefix="TRAIN")
+    return ModalSlmProvider(
+        app_name=credentials.app_name, gpu=gpu, credentials=credentials
+    )
+
+
 class ModalSlmProvider:
     """Opt-in provider: trains a domain expert on Modal (GPU on demand).
 
@@ -130,10 +304,20 @@ class ModalSlmProvider:
         app_name: str = "fbp-domain-expert",
         gpu: str = "A10G",
         http_client: TrainingHttpClient | None = None,
+        credentials: TrainingCredentials | None = None,
     ) -> None:
         self._app_name = app_name
         self._gpu = gpu
-        self._http_client = http_client or _no_training_http_client
+        self._credentials = credentials
+        self._secrets = (credentials.token,) if credentials is not None else ()
+        if http_client is not None:
+            self._http_client = http_client
+        elif credentials is not None and credentials.configured:
+            # A workable, credential-backed transport: POST with the bearer
+            # header to the real endpoint. Opt-in — never reached offline.
+            self._http_client = build_credential_client(credentials)
+        else:
+            self._http_client = _no_training_http_client
 
     def train(self, domain: Domain, corpus: list[str], spec: SlmSpec) -> SlmExpert:
         if not corpus:
@@ -151,10 +335,14 @@ class ModalSlmProvider:
             }
         )
         headers = {"Content-Type": "application/json"}
+        if self._credentials is not None and self._credentials.configured:
+            headers["Authorization"] = self._credentials.auth_header_value
         try:
             text = self._http_client(self._app_name, headers, body)
         except Exception as exc:  # noqa: BLE001 - surfaced to the operator
-            raise SlmError(f"Modal training request failed: {exc}") from exc
+            raise SlmError(
+                f"Modal training request failed: {redact_secrets(str(exc), self._secrets)}"
+            ) from exc
         # The endpoint returns a JSON object with the trained expert's
         # provenance (or a plain artifact id). Parse fail-closed.
         artifact = text.strip()

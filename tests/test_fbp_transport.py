@@ -155,3 +155,58 @@ class TestIpcSocketMode:
             assert resp.value == 42
             # The bound socket file must be owner-only.
             assert os.stat(sock).st_mode & 0o777 == IPC_SOCKET_MODE
+
+
+class TestSecurityWiring:
+    """The hardening of §5.2 (TLS) and §5.4 (per-peer authz) is wired into the
+    driver boundary, not just exposed as primitives."""
+
+    def test_tls_profile_without_creds_fails_closed(self) -> None:
+        from agent_centric.fbp.transport import SECURITY_TLS
+
+        with pytest.raises(TransportSecurityError, match="TLS profile"):
+            FbpDriver(transport="tcp", endpoint="127.0.0.1:5599", security=SECURITY_TLS)
+
+    def test_tls_profile_with_complete_creds_is_accepted(self, tmp_path: Path) -> None:
+        from agent_centric.fbp.security import TlsCreds
+        from agent_centric.fbp.transport import SECURITY_TLS
+
+        cert = tmp_path / "cert.pem"
+        key = tmp_path / "key.pem"
+        cert.write_bytes(b"cert")
+        key.write_bytes(b"key")
+        creds = TlsCreds(public_cert_path=str(cert), private_key_path=str(key))
+        with FbpDriver(
+            transport="tcp",
+            endpoint="127.0.0.1:5600",
+            security=SECURITY_TLS,
+            tls_creds=creds,
+        ) as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            resp = driver.run("double", {"value": 21})
+            assert resp.verified is True
+            assert resp.value == 42
+
+    def test_peer_authz_blocks_disallowed_kind(self) -> None:
+        from agent_centric.fbp.security import PeerAuthz, PeerPolicy
+
+        authz = PeerAuthz()
+        authz.add(PeerPolicy(peer="root", roles=("configure", "register")))
+        with FbpDriver(peer_autz=authz) as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            with pytest.raises(RuntimeError, match="per-peer authorization refused"):
+                driver.run("double", {"value": 21})
+
+    def test_peer_authz_permits_authorised_kind(self) -> None:
+        from agent_centric.fbp.security import PeerAuthz, PeerPolicy
+
+        authz = PeerAuthz()
+        authz.add(PeerPolicy(peer="root", roles=("run", "configure", "register")))
+        with FbpDriver(peer_autz=authz) as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            resp = driver.run("double", {"value": 21})
+            assert resp.verified is True
+            assert resp.value == 42

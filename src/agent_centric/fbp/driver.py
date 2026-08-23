@@ -89,9 +89,15 @@ class FbpDriver:
         security: str = _transport.SECURITY_DEFAULT,
         replay_state_isolate: bool = False,
         ledger_path: str | None = None,
+        peer_autz: Any = None,
+        integrity_secret: bytes | None = None,
+        tls_creds: Any = None,
     ) -> None:
         self._transport = transport
         self._security = security
+        self._peer_autz = peer_autz
+        self._integrity_secret = integrity_secret
+        self._tls_creds = tls_creds
         # fresh temp paths so the replayed tree never reads or writes the
         # original (live) store files. This makes stateful trees (e.g. bills)
         # replay cleanly and keeps replay side-effect-free on real data.
@@ -130,6 +136,17 @@ class FbpDriver:
             reason = _transport.enforce_ipc_socket_mode(self._endpoint)
             if reason is not None:
                 raise _transport.TransportSecurityError(reason)
+        # §5.2 — an explicit ``security=="tls"`` profile requires real,
+        # complete mutual-TLS material; opting in without it fails closed rather
+        # than silently binding a plaintext link across the trust boundary.
+        if security == _transport.SECURITY_TLS:
+            from . import security as _security
+
+            tls_state = _security.configure_tls(tls_creds)
+            if not tls_state["ready"]:
+                raise _transport.TransportSecurityError(
+                    f"TLS profile requested but not ready: {tls_state['reason']}"
+                )
         self._root = Agent(
             AgentConfig(
                 identity=identity,
@@ -199,6 +216,21 @@ class FbpDriver:
         cached result rather than re-executing).
         """
         correlation_id = self._correlation(prefix)
+        # §5.4 — per-peer authorization at the driver boundary (opt-in). A
+        # configured PeerAuthz refuses a directive the driver (peer) may not
+        # issue before it ever reaches the wire. This never touches the payload.
+        if self._peer_autz is not None:
+            from . import security as _security
+
+            routed = payload.get("child")
+            authz_reason = _security.PeerAuthz.authorize(
+                self._peer_autz,
+                peer=self._root.identity,
+                directive_kind=kind,
+                routed=routed if isinstance(routed, str) else None,
+            )
+            if authz_reason is not None:
+                raise RuntimeError(f"per-peer authorization refused: {authz_reason}")
         # Record the directive in the ledger so it can be replayed later
         # (deterministic re-verification after the fact). This is also persisted
         # to the durable ledger store when one is granted.

@@ -41,7 +41,7 @@ we are.
   relaxed, but confirm each time for a given commit.)
 
 ### Validation (run this session, all live)
-- `uv run pytest` → **908 passed** (was 901; added the landing-page provisioning card + route tests)
+- `uv run pytest` → **939 passed** (was 908; added transport security + real credential-wiring tests)
 - `uv run ruff check .` → clean
 - `uv run mypy src` → clean (**84 source files**)
 - FBP coverage: `experts.py` 94%, `domainrepo.py` **100%**, driver 91%.
@@ -59,6 +59,8 @@ that page:
 |------|-------|-----------|
 | Protocol + transport parity | `fbp/message.py`, `fbp/agent.py` | versioned directive/response over `inproc`/`tcp`/`ipc`; fail-closed on malformed input |
 | **Transport trust-boundary** | `fbp/transport.py`, `fbp/driver.py`, `fbp/agent.py` | §5.1 trust-boundary switch: non-loopback `tcp://` bind fails closed unless the caller opts in (`security="local"`/`"tls"`; default `loopback`); §5.3 owner-only `0o600` IPC sockets. Wired into root + child binds. See `docs/transport_trust_boundary.md` |
+| **Transport security (§5.2/§5.4/§5.5)** | `fbp/security.py`, `fbp/driver.py` | **Per-peer authorization** (`PeerAuthz`/`PeerPolicy`, opt-in `FbpDriver(peer_autz=...)`) + **traffic integrity** (`sign_payload`/`verify_payload`/`integrity_headers`, HMAC-SHA256) + **mutual-TLS credential config** (`TlsCreds`/`configure_tls`, fail-closed on incomplete material for `security="tls"`). All pure/offline-tested; opt-in and default-off so existing binds are untouched |
+| **Real training-provider credential wiring** | `fbp/providers.py` | **Env-driven** (`TRAIN_ENDPOINT`/`TRAIN_TOKEN`/`TRAIN_AUTH_SCHEME`) + a dependency-free `stdlib_http_client` with **secret redaction** (`redact_secrets`); `build_modal_from_env`/`build_credential_client` make the Modal adapter **genuinely workable** against a real endpoint while failing closed with no credentials. Verified live over a bound HTTP server, secret never leaks |
 | Correctness spine | `fbp/agent.py` | parent re-verifies a child's value on the way up; a self-claimed `verified` is not conclusive |
 | Durable single-writer state | `fbp/store.py` | `StateStore` (fingerprint-idempotent) + `TrajectoryStore` (append-only); explicit grants only |
 | Store/registry agent | `fbp/store_agent.py` | single-writer, grant-bound reads/writes; ungranted keys fail closed |
@@ -112,9 +114,9 @@ that page:
 ### Tooling / commands
 ```sh
 uv sync --extra dev
-uv run pytest                  # 908 passed (as of this handoff)
+uv run pytest                  # 939 passed (as of this handoff)
 uv run ruff check .            # clean
-uv run mypy src                # clean, 89 source files
+uv run mypy src                # clean, 90 source files
 uv run pytest --cov=agent_centric.fbp --cov-report=term   # ~88%
 uv run agent-centric fbp --transport inproc|tcp|ipc
 uv run agent-centric fbp-replay <ledger>   # re-verify a durable session
@@ -423,11 +425,14 @@ of decisions and working style that a fresh session must inherit.
 ### Production/deploy gaps the user should resolve (explicit, not built)
 These are the honest reasons the project is **not yet "1.0 / production-ready"**
 despite 751 passing tests:
-- **Transport security (documented, not built):** over `tcp`/`ipc` the
-directive/response protocol is **unauthenticated** — no TLS, no authn/z. The
-trust boundary is now documented in `docs/transport_trust_boundary.md`
-(§4-6 list the exact hardening needed). Fine for localhost/demo; not across a
-real trust boundary.
+- **Transport security (now built, opt-in):** the §5.1 switch, §5.3 IPC modes, and —
+  new this session — §5.2 TLS-credential config, §5.4 per-peer authorization, and
+  §5.5 traffic integrity are implemented in `fbp/security.py` and wired into the
+  driver (opt-in, default-off). The **real production caveat** is now: TLS is
+  validated/config-checked but not yet performing live packet encryption over
+  the ZeroMQ wire itself — a genuine cross-host deployment must supply certs and
+  a TLS-capable transport (or restrict to loopback). Fine for localhost/demo;
+  not yet for an untrusted wide-area network.
 - **Resource envelopes** are now **built and enforced** in the FBP tree
   (`fbp/envelopes.py`: step/size/latency/child bounds, fail-closed) — but only
   when a caller grants one; the Manager line still has richer per-stage

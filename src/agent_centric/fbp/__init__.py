@@ -134,15 +134,36 @@ from .providers import (
     ProviderRegistry,
     ReplicateSlmProvider,
     RunpodSlmProvider,
+    TrainingCredentials,
     TrainingHttpClient,
+    build_credential_client,
+    build_modal_from_env,
     build_modal_provider,
+    credentials_from_env,
     get_provider,
     provider_names,
+    stdlib_http_client,
+)
+from .providers import (
+    redact_secrets as redact_training_secrets,
 )
 from .provision import (
     ProvisionError,
     ProvisionResult,
     provision_expert,
+)
+from .security import (
+    INTEGRITY_TAG,
+    PeerAuthz,
+    PeerPolicy,
+    TlsCreds,
+    configure_tls,
+    integrity_headers,
+    sign_payload,
+    verify_payload,
+)
+from .security import (
+    canonical_json as security_canonical_json,
 )
 from .settlement import (
     Settlement,
@@ -279,6 +300,16 @@ __all__ = [
     "SECURITY_TLS",
     "SECURITY_DEFAULT",
     "IPC_SOCKET_MODE",
+    # Transport security primitives (security.py: §5.2/§5.4/§5.5)
+    "PeerAuthz",
+    "PeerPolicy",
+    "TlsCreds",
+    "configure_tls",
+    "sign_payload",
+    "verify_payload",
+    "integrity_headers",
+    "security_canonical_json",
+    "INTEGRITY_TAG",
     # CPM: a read-only, deterministic capability (not an agent)
     "CpmAnalysis",
     "CpmNode",
@@ -335,6 +366,12 @@ __all__ = [
     "ReplicateSlmProvider",
     "build_modal_provider",
     "TrainingHttpClient",
+    "TrainingCredentials",
+    "credentials_from_env",
+    "build_credential_client",
+    "build_modal_from_env",
+    "stdlib_http_client",
+    "redact_training_secrets",
     # End-to-end expert provisioning (select -> plan -> train -> account -> settle)
     "provision_expert",
     "ProvisionResult",
