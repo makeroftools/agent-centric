@@ -52,6 +52,13 @@ from .config import AgentConfig
 from .context import Context, Verifier
 from .critical_path import CpmAnalysis, CpmError, CpmNode, analyse_cpm, cpm_from_dict
 from .determinism import DeterminismRating, Rule, RuleSet, resolve_with_rules, score_determinism
+from .domainrepo import (
+    Artifact,
+    ArtifactRepository,
+    DomainRecord,
+    DomainRegistry,
+    RegistryError,
+)
 from .driver import (
     FbpDriver,
     ledger_callables,
@@ -236,6 +243,12 @@ __all__ = [
     "EXPERT_HUMAN",
     "ExpertsError",
     "domain_from_dict",
+    # Domain-of-Experts registry + artifact repository (observability/provenance)
+    "DomainRegistry",
+    "DomainRecord",
+    "ArtifactRepository",
+    "Artifact",
+    "RegistryError",
     # Model agent (an LLM as an ordinary first-class agent)
     "ModelAgent",
     "TASK_MODEL",

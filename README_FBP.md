@@ -189,6 +189,7 @@ uv run agent-centric fbp --transport ipc # local inter-process
 | **Component Networks (visual programming)** | A deterministic graph of components wired by data-flow edges (`network.py`), validated as a DAG and compiled (topological, ties by id) into an ordered FBP plan run through the verified spine — with **true dataflow** (a downstream component consumes the *computed* verified output of its upstreams). Cycles / unknown refs / unverified steps fail closed. The landing page has a dependency-free drag-and-drop node-and-wire canvas + durable save/load (`--networks <path>`). |
 | **Schema-driven orchestration** | A typed, schema-constrained artifact resolves to a concrete FBP plan (`plan_from_schema`; `SCHEMAS` for `run`/`double`/`sum`) and runs through the same verified spine. The landing page has a typed form (`/orchestrate/schema`). |
 | **Expert selection + cost ledger** | The deterministic core of "Network of Experts AI": for each component (a domain) `select_expert` picks the kind — deterministic method / learned (per-domain SLM) / human — and `CostLedger` accounts cost + irreducible residue per run. The landing page has a read-only **Network of Experts** card (`/experts`). |
+| **Domain-of-Experts registry + artifact repository** | The observability + provenance layer: `DomainRegistry` (a read-only, **tenant-aware** catalog — passive, never an authority) + `ArtifactRepository` (append-only, write-once run evidence keyed by (tenant, domain, run)). Read-only **registry** and **artifact** cards on the landing page; durable via `--registry <path>`. |
 | **Bills workflow on the page** | The mission loop — intake → human-gated accept → durable registry → verified calendar — is a live card (`/bills/*` routes), durable via `--bills <path>`. Prefix grants (`bill-*`) allow ids under a namespace while failing closed outside it. |
 
 ---
@@ -287,4 +288,4 @@ contract are at `src/agent_centric/fbp/{spec,protocol}.md`.
 
 > **Status.** This is the **active** FBP subsystem on `agent-centric-fbp`.
 > `main` remains the default repo and the prior Manager-line stays contained
-> there. Nothing here claims more than the code and **789 passing tests** prove.
+> there. Nothing here claims more than the code and **804 passing tests** prove.

@@ -32,10 +32,13 @@ import urllib.request
 import webbrowser
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .chatstore import ChatHistoryStore
 from .driver import FbpDriver
+
+if TYPE_CHECKING:
+    from .domainrepo import ArtifactRepository, DomainRegistry
 
 # The default loopback bind host and port for the landing-server.
 DEFAULT_HOST = "127.0.0.1"
@@ -75,6 +78,7 @@ class FbpLandingServer:
         history_path: str | os.PathLike[str] | None = None,
         networks_path: str | os.PathLike[str] | None = None,
         bills_path: str | os.PathLike[str] | None = None,
+        registry_path: str | os.PathLike[str] | None = None,
     ) -> None:
         self._host = host
         self._port = port
@@ -87,10 +91,23 @@ class FbpLandingServer:
 
             self._bills_tmp = tempfile.TemporaryDirectory(prefix="agent-centric-fbp-bills-")
             self._bills_state_path = os.path.join(self._bills_tmp.name, "registry.db")
+        # The Domain-of-Experts registry + artifact repository (observability +
+        # provenance layer). In-memory by default; durable via ``registry_path``
+        # (explicit grant). Set up after the driver so we can observe its tree.
+        self._registry_path = str(registry_path) if registry_path is not None else None
+        self._domain_registry: DomainRegistry | None = None
+        self._artifact_repo: ArtifactRepository | None = None
         # One driver, in-process and reused. We register and run a small
         # deterministic demo tree so the page has something real to show.
         self._providers = _build_openrouter_providers()
         self._driver = self._build_driver()
+        # Build the Domain-of-Experts registry + artifact repository from the
+        # live tree (read-only observations of how each domain is served).
+        self._build_domain_repo()
+        # A granted path (--registry) persists the write-once artifact evidence
+        # across restarts (explicit grant; load any prior evidence now).
+        if self._registry_path and self._artifact_repo is not None:
+            self._load_artifacts()
         # Saved component networks (name -> to_dict payload). In-memory by
         # default; persisted to ``networks_path`` when granted (explicit grant).
         self._networks: dict[str, Any] = {}
@@ -279,6 +296,135 @@ class FbpLandingServer:
         )
         return driver
 
+    # -- Domain-of-Experts registry + artifact repository --------------------
+
+    def _build_domain_repo(self) -> None:
+        """Observe the live tree into the DomainRegistry + ArtifactRepository.
+
+        Each registered capability on a node is observed as a domain (with its
+        expert selection determined deterministically), and a representative
+        verified artifact is recorded per domain. Read-only — this only mirrors
+        what the tree already serves; it never grants authority.
+        """
+        from .domainrepo import Artifact, ArtifactRepository, DomainRegistry
+        from .experts import Domain
+
+        tenant = "local"
+        registry = DomainRegistry()
+        repo = ArtifactRepository()
+        tree = self._driver.tree()
+        verifiers: set[str] = set()
+        for node in tree:
+            verifiers.update(node.get("verifiers") or [])
+        for node in tree:
+            identity = node.get("identity", "")
+            for cap in sorted(node.get("capabilities") or []):
+                verifiable = cap in verifiers
+                domain = Domain(
+                    id=f"{identity}::{cap}",
+                    name=f"{identity} domain ({cap})",
+                    output_fields=("value",) if verifiable else (),
+                    determinism=0.8 if verifiable else 0.2,
+                    residue=0.1 if verifiable else 0.9,
+                )
+                rec = registry.observe(domain, tenant=tenant, provenance=f"node:{identity}")
+                repo.record(Artifact(
+                    tenant=tenant, domain=domain.id, run="seed",
+                    value={"served_by": rec.selection.kind},
+                    kind=rec.selection.kind,
+                    residue=domain.residue or 0.0, cost=1,
+                ))
+        self._domain_registry = registry
+        self._artifact_repo = repo
+
+    def _domain_readout(self) -> dict[str, Any]:
+        """A read-only view of the Domain-of-Experts registry."""
+        if self._domain_registry is None:
+            return {"ok": False, "domains": []}
+        return {
+            "ok": True,
+            "domains": [r.to_dict() for r in self._domain_registry.all()],
+            "count": self._domain_registry.count(),
+            "durable": self._registry_path is not None,
+        }
+
+    def _artifact_readout(self) -> dict[str, Any]:
+        """A read-only view of the artifact repository (write-once evidence)."""
+        if self._artifact_repo is None:
+            return {"ok": False, "artifacts": []}
+        return {
+            "ok": True,
+            "artifacts": [a.to_dict() for a in self._artifact_repo.all()],
+            "count": self._artifact_repo.count(),
+            "total_cost": self._artifact_repo.total_cost(),
+            "durable": self._registry_path is not None,
+        }
+
+    # -- persistence of the write-once artifact evidence (explicit grant) ----
+
+    def _load_artifacts(self) -> None:
+        """Load prior recorded artifacts from the granted path (fail-closed).
+
+        The artifact repository is the append-only, write-once evidence that
+        genuinely accumulates across runs (unlike the registry catalog, which is
+        re-derived from the live tree). When ``--registry <path>`` is granted, we
+        reload any previously-recorded evidence so it survives a restart.
+        """
+        import os as _os
+
+        if not self._registry_path or self._artifact_repo is None:
+            return
+        if not _os.path.exists(self._registry_path):
+            return
+        try:
+            with open(self._registry_path, encoding="utf-8") as fh:
+                data = json.load(fh)
+            artifacts = data.get("artifacts") if isinstance(data, dict) else None
+            if isinstance(artifacts, list):
+                from .domainrepo import Artifact as _A
+
+                for a in artifacts:
+                    if not isinstance(a, dict):
+                        continue
+                    try:
+                        self._artifact_repo.record(_A(
+                            tenant=str(a.get("tenant", "")),
+                            domain=str(a.get("domain", "")),
+                            run=str(a.get("run", "")),
+                            value=a.get("value"),
+                            kind=a.get("kind", "human"),
+                            residue=float(a.get("residue", 0.0)),
+                            cost=int(a.get("cost", 0)),
+                        ))
+                    except Exception:  # noqa: BLE001 - skip a corrupt entry
+                        continue
+        except (OSError, ValueError) as exc:
+            print(f"fbp-web: could not load domain artifacts: {exc}")
+
+    def _save_artifacts(self) -> None:
+        """Atomically persist the artifact evidence to the granted path."""
+        if not self._registry_path or self._artifact_repo is None:
+            return
+        import os
+        import tempfile
+
+        directory = os.path.dirname(os.path.abspath(self._registry_path)) or "."
+        os.makedirs(directory, exist_ok=True)
+        payload = {
+            "artifacts": [a.to_dict() for a in self._artifact_repo.all()]
+        }
+        (fd, tmp_path) = tempfile.mkstemp(dir=directory, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, sort_keys=True, default=str)
+            os.replace(tmp_path, self._registry_path)
+        except BaseException:
+            from contextlib import suppress
+
+            with suppress(OSError):
+                os.unlink(tmp_path)
+            raise
+
     # -- page state --------------------------------------------------------
 
     def _model_choices(self) -> tuple[str, ...]:
@@ -326,6 +472,8 @@ class FbpLandingServer:
             pass
         finally:
             httpd.server_close()
+            # Persist the write-once artifact evidence if a path was granted.
+            self._save_artifacts()
             self._driver.close()
 
     def _make_handler(self) -> type[BaseHTTPRequestHandler]:
@@ -409,6 +557,12 @@ class FbpLandingServer:
                     # Read-only expert-selection + cost readout for the domains
                     # in the live tree (Network of Experts AI). Deterministic.
                     self._send_json(server._experts_readout())
+                elif self.path == "/domains":
+                    # Read-only Domain-of-Experts registry (catalog, tenant-aware).
+                    self._send_json(server._domain_readout())
+                elif self.path == "/artifacts":
+                    # Read-only artifact repository (write-once evidence).
+                    self._send_json(server._artifact_readout())
                 elif self.path == "/model":
                     # Run a prompt through the model agent (LLM as an ordinary
                     # agent). Body is either a plain prompt string or a JSON
@@ -1555,6 +1709,60 @@ _EXPERTS_JS = r"""\
 </script>
 """
 
+# The Domain-of-Experts registry readout client script.
+_DOMAINS_JS = r"""\
+<script>
+  async function domainsLoad() {
+    const box = document.getElementById('domains-list');
+    if (!box) return;
+    try {
+      const r = await fetch('/domains');
+      const data = await r.json();
+      box.innerHTML = '';
+      if (!data.ok || !data.domains) { box.textContent = 'no domains observed.'; return; }
+      const kinds = {deterministic: 'deterministic', learned: 'learned (SLM)', human: 'human'};
+      for (const d of data.domains) {
+        const div = document.createElement('div');
+        div.className = 'chat-turn';
+        const achievable = d.achievable ? '' : ' <span class=\'error\'>unverifiable</span>';
+        div.innerHTML = '<b>' + esc(d.id) + '</b> <span class=\'pill\'>' +
+          esc(kinds[d.expert_kind] || d.expert_kind) + '</span>' + achievable +
+          ' · ' + esc(d.tenant);
+        box.appendChild(div);
+      }
+    } catch (e) { box.textContent = 'registry unavailable.'; }
+  }
+  domainsLoad();
+</script>
+"""
+
+# The artifact repository readout script (append-only, write-once evidence).
+_ARTIFACTS_JS = r"""\
+<script>
+  async function artifactsLoad() {
+    const box = document.getElementById('artifacts-list');
+    const total = document.getElementById('artifacts-total');
+    if (!box) return;
+    try {
+      const r = await fetch('/artifacts');
+      const data = await r.json();
+      box.innerHTML = '';
+      if (!data.ok || !data.artifacts) { box.textContent = 'no artifacts recorded.'; return; }
+      for (const a of data.artifacts) {
+        const div = document.createElement('div');
+        div.className = 'chat-turn';
+        div.innerHTML = '<b>' + esc(a.domain) + '</b> run ' + esc(a.run) +
+          ' · <span class=\'pill\'>' + esc(a.kind) + '</span> · ' +
+          esc(a.cost) + ' cost · value ' + esc(JSON.stringify(a.value));
+        box.appendChild(div);
+      }
+      if (total) total.textContent = data.total_cost;
+    } catch (e) { box.textContent = 'repository unavailable.'; }
+  }
+  artifactsLoad();
+</script>
+"""
+
 # The Component Network editor client script (kept out of the f-string so its
 # JS object braces are not mistaken for f-string interpolations).
 _NETWORK_JS = r"""\
@@ -1946,6 +2154,25 @@ the expert; the network is.</p>
 <p class='note'>Total cost: <span id='experts-total'>—</span></p>
 {_EXPERTS_JS}
 </div>
+
+<div class='card'>
+<h2>Domain-of-Experts registry</h2>
+<p class='note'>The read-only <b>catalog</b> of domains (tenant-aware): id, name,
+contract, and the chosen expert kind. It records <i>what</i> and <i>how</i>;
+it never decides — authority stays in the tree topology.</p>
+<div id='domains-list' class='chat-history'></div>
+{_DOMAINS_JS}
+</div>
+
+<div class='card'>
+<h2>Artifact repository</h2>
+<p class='note'>The read-only, <b>write-once evidence</b> of what each domain
+produced — each run's verified output, source refs, residue, and cost. Keyed by
+(tenant, domain, run); never mutable.</p>
+<div id='artifacts-list' class='chat-history'></div>
+<p class='note'>Total cost: <span id='artifacts-total'>—</span></p>
+{_ARTIFACTS_JS}
+</div>
 </div>
 
 <div id='pane-designer' class='mode-pane' style='display:none'>
@@ -2044,6 +2271,7 @@ def serve(
     history_path: str | os.PathLike[str] | None = None,
     networks_path: str | os.PathLike[str] | None = None,
     bills_path: str | os.PathLike[str] | None = None,
+    registry_path: str | os.PathLike[str] | None = None,
 ) -> None:
     """Serve the FBP landing page (blocking). Pass --open to open a browser.
 
@@ -2053,11 +2281,12 @@ def serve(
     saved component networks (an explicit opt-in; without it they are
     in-memory only). ``bills_path`` optionally grants a durable, cross-restart
     bills registry (an explicit opt-in; without it the registry is in-memory
-    only).
+    only). ``registry_path`` optionally grants durable, cross-restart storage
+    for the Domain-of-Experts registry + artifact repository.
     """
     server = FbpLandingServer(
         host=host, port=port, history_path=history_path, networks_path=networks_path,
-        bills_path=bills_path,
+        bills_path=bills_path, registry_path=registry_path,
     )
     if open_browser:
         url = f"http://{host}:{port}"

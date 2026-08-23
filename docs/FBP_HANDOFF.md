@@ -25,19 +25,12 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `a9e4647` (expert selection + cost ledger). **Pushed to origin:** up
-  through `87e7bbe` (the user pushed). **Unpushed (17 commits):** `c4afa94`
-  (chat-context), `46b3948` (handoff), `69df3d8` (Component Networks),
-  `9b8f7e5` (handoff), `4a94c16` (canvas editor), `241d9a3` (handoff),
-  `fac7a16` (dataflow + save/load), `10f343b` (handoff), `d44a582` (card UI +
-  mode switch), `6f2f2a6` (handoff), `dc0b81c` (--kill flag), `f2ee043`
-  (schema-driven orchestration), `d05cb31` (bills workflow on the page),
-  `3b30ab1` (Network of Experts AI axiom), `fef58ba` (appreciating the
-  architecture + README refresh), `a9e4647` (expert selection + cost ledger),
-  plus this handoff update. Run `git log origin/agent-centric-fbp..HEAD` to see
-  the unpushed set.
-  plus this handoff update. Run `git log origin/agent-centric-fbp..HEAD` to see
-  the unpushed set.
+- **HEAD:** `583972f` (handoff). Commits in this session: `a9e4647` (expert
+  selection + cost ledger), this handoff, and — awaiting commit from this turn —
+  the **Domain-of-Experts registry + artifact repository**. **Pushed to origin:**
+  up through `87e7bbe` (the user pushed). **Unpushed (~18-19 commits):** the
+  full `agent-centric-fbp` sequence from `c4afa94` onward. Run
+  `git log origin/agent-centric-fbp..HEAD` to see the exact unpushed set.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule in effect for a long time: **do not push unless the lead
   explicitly says push.** (The lead has since been pushing directly themselves;
@@ -45,12 +38,10 @@ we are.
   relaxed, but confirm each time for a given commit.)
 
 ### Validation (run this session, all live)
-- `uv run pytest` → **789 passed** (was 771; added expert-selection + web experts-route tests)
+- `uv run pytest` → **804 passed** (was 789; added domainrepo + web registry/artifact-route tests)
 - `uv run ruff check .` → clean
-- `uv run mypy src` → clean (**82 source files**)
-- FBP coverage (`uv run pytest --cov=agent_centric.fbp --cov-report=term`) →
-  **~84% total**; key files: registry 97%, bills 94%, store 93%, store_agent
-  90%, web 69%, experts 94%, driver 91%.
+- `uv run mypy src` → clean (**83 source files**)
+- FBP coverage: `experts.py` 94%, `domainrepo.py` **100%**, driver 91%.
 - Cross-transport durable replay: 19/19 on inproc/ipc/tcp. Full production-arc
   demo: crash-safe replay 6/6.
 
@@ -91,6 +82,7 @@ that page:
 | **Schema-driven orchestration** | `fbp/orchestrate.py`, `fbp/web.py` | **Typed, schema-constrained intents** (`SCHEMAS`: `run`/`double`/`sum`): `plan_from_schema` validates + coerces a typed artifact fail-closed before planning; the landing page gains a **schema-driven form** (`/orchestrate/schema` serves the schemas) — same verified spine, typed form instead of free-form JSON. Additive (`plan_from_artifact` unchanged) |
 | **Bills workflow on the landing page** | `fbp/web.py`, `fbp/bills_agent.py`, `fbp/store_agent.py` | The mission-relevant loop is now a **live, runnable card** on the landing page: `/bills/intake` → `/bills/accept` (human-gated, the only registry write) → `/bills/registry` (read-only snapshot) → `/bills/calendar` (verified projection). **Prefix grants** (`bill-*`) let the UI accept arbitrary bill ids under a granted namespace while still failing closed outside it. Durable via `fbp-web --bills <path>`. Store teardown made **thread-safe** (cross-thread close no longer crashes) |
 | **Expert selection + cost ledger** | `fbp/experts.py`, `fbp/web.py`, `fbp/driver.py` | The deterministic core of **"Network of Experts AI"** (the coinded axiom): `select_expert(domain)` picks deterministic / learned (per-domain SLM) / human for each component (domain), and `CostLedger` accounts cost + irreducible residue per run. Read-only **Network of Experts** card on the landing page (`/experts`). Driver surfaces configured verifier names (read-only). Additive |
+| **Domain-of-Experts registry + artifact repository** | `fbp/domainrepo.py`, `fbp/web.py` | The **observability + provenance** layer (catalog → decision → accounting → evidence): `DomainRegistry` (read-only, **tenant-aware** catalog — passive, never an authority) + `ArtifactRepository` (append-only, write-once evidence keyed by (tenant, domain, run), never mutable). Read-only **registry** + **artifact** cards (`/domains`, `/artifacts`); durable via `fbp-web --registry <path>` (explicit grant). Tenant-awareness makes a future paid multi-tenant web service additive, not a rewrite; the service would be a shared observability/provenance layer, never the governance layer. Additive |
 | **Component Networks** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. **True dataflow** (a downstream component consumes the *computed* verified output of its upstreams, not their args). Cycles / unknown refs / unverified steps fail closed. Landing page has a **dependency-free drag-and-drop node-and-wire canvas** editor (palette, draggable nodes, click-to-connect ports, SVG edges, run) + **durable save/load** (`fbp-web --networks <path>`, `/network/save|/list|/load`) |
 | **Card-based UI + mode switch** | `fbp/web.py` | Card-based landing page with a **Chat / Designer** mode switch: Chat = model box + chat history + run-an-artifact (general-purpose); Designer = Component Network editor. Clear functional division |
 
@@ -260,6 +252,14 @@ of decisions and working style that a fresh session must inherit.
    landing page gains a read-only **Network of Experts** card (`/experts`).
    `FbpDriver` surfaces its configured verifier names (read-only). Additive;
    789 tests.
+21. **Domain-of-Experts registry + artifact repository** (current) — the agreed
+   increment realized. `domainrepo.py`: `DomainRegistry` (read-only, tenant-aware
+   catalog — passive, never an authority) + `ArtifactRepository` (append-only,
+   write-once evidence keyed by (tenant, domain, run), never mutable). Read-only
+   **registry** + **artifact** cards (`/domains`, `/artifacts`); write-once
+   evidence durable via `fbp-web --registry <path>` (explicit grant). Tenant-
+   awareness makes a future paid multi-tenant web service additive, not a
+   rewrite. 804 tests.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -320,19 +320,32 @@ of decisions and working style that a fresh session must inherit.
   payment infrastructure itself (X402 or any provider) is an **opt-in external
   adapter**, never auto-charge without an explicit grant. This led directly to
   the built `experts.py` foundation.
-- **Domain-of-Experts registry + artifact repository idea (this session, not
-  yet built):** the user proposed a **Domain of Experts registry and artifact
-  repository.** The lead's take: it is the **observability + provenance layer**
-  that completes the network-of-experts model (catalog → decision → accounting
-  → evidence). Strong because it makes the system self-describing and is the
-  natural home for learned-expert artifacts (weights + provenance). Two hard
-  rules the lead held: (1) the **registry stays a passive catalog, never an
+- **Domain-of-Experts registry + artifact repository (now built):** the user
+  proposed a **Domain of Experts registry and artifact repository.** The lead's
+  take: it is the **observability + provenance layer** that completes the
+  network-of-experts model (catalog → decision → accounting → evidence),
+  self-describing and the natural home for learned-expert artifacts. Two hard
+  rules held throughout: (1) the **registry stays a passive catalog, never an
   authority** (authority stays in the tree topology — no central boss); (2) the
   **artifact repository is write-once evidence** — append-only, keyed by
-  (domain, run), carrying source refs + residue + cost, never mutable. The lead
-  proposed building `DomainRegistry` (read-only catalog) + `ArtifactRepository`
-  (append-only provenance store) + read-only UI cards. The user has not yet
-  said "build it" — this is the agreed next increment.
+  (tenant, domain, run), carrying source refs + residue + cost, never mutable.
+  Built as `domainrepo.py` + `/domains`, `/artifacts` cards (`--registry <path>`
+  durable). This completes catalog → decision → accounting → evidence.
+- **Standalone paid web-service direction (this session):** the user extended
+  the idea — they want this as a **stand-alone web-service that others can pay
+  us for** (a paid "Network of Experts" registry + artifact service). The lead's
+  strategic take: it is coherent and valuable (customers pay for *provenance +
+  verification value*, not storage), and it is consistent with the architecture
+  **as long as the hosted service is a shared observability + provenance layer,
+  NOT the governance layer** (each customer's tree stays the authority). This is
+  the natural home for the earlier **X402/micro-payment** adapter. The core is
+  already **tenant-aware** so the service is additive, not a rewrite. The two
+  build decisions: **loopback surface built now** (read-only cards on `fbp-web`
+  + `--registry` durable); **the multi-tenant cross-process server is a
+  deliberate later phase** — it crosses the transport trust boundary
+  (`docs/transport_trust_boundary.md`) and needs TLS + authn/z + tenant
+  isolation + billing before it is real, so it was **not** stood up
+  unilaterally. The user confirmed this shape implicitly by saying proceed.
 
 ### How to talk to the user / working style
 - Be the **senior, decisive engineer**: propose a course, proceed on the
@@ -424,18 +437,15 @@ These are listed in `STATUS.md`'s "out of scope / future volleys".
   **micro-payment / X402-style settlement adapter** for per-run cost (external,
   opt-in, never auto-charge without an explicit grant). Both slot into the
   contracts `experts.py` already defines.
-- **Domain-of-Experts registry + artifact repository — the agreed next
-  increment (user's idea, not yet built).** The lead proposed: `DomainRegistry`
-  (a read-only, deterministic catalog of domains: id, name, contract, measured
-  determinism/residue, selected expert kind, provenance) + `ArtifactRepository`
-  (an append-only, provenance-carrying store of domain run artifacts: verified
-  output keyed by (domain, run), with source refs + residue + cost) + read-only
-  UI cards (Domains / Artifacts). Two hard rules agreed: the registry is a
-  **passive catalog, never an authority** (authority stays in the tree
-  topology); the artifact repository is **write-once evidence, never mutable**.
-  This is the observability + provenance layer that completes catalog →
-  decision → accounting → evidence. The user has not yet said "build it" —
-  confirm before starting.
+- **Domain-of-Experts registry + artifact repository — now built** as the
+  agreed increment. `DomainRegistry` (read-only, tenant-aware catalog) +
+  `ArtifactRepository` (append-only, write-once evidence keyed by (tenant,
+  domain, run)) + read-only **registry**/**artifact** cards (`/domains`,
+  `/artifacts`); durable via `fbp-web --registry <path>`. The two hard rules
+  held: the registry is a **passive catalog, never an authority**; the artifact
+  repository is **write-once evidence, never mutable**. This is the
+  observability + provenance layer that completes catalog → decision →
+  accounting → evidence.
 
 ---
 
@@ -450,6 +460,7 @@ uv run agent-centric fbp-web --reload   # auto-restart on source edits
 uv run agent-centric fbp-web --history chat.db   # durable transcript across restarts
 uv run agent-centric fbp-web --networks networks.json  # durable saved networks
 uv run agent-centric fbp-web --bills registry.db  # durable bills registry across restarts
+uv run agent-centric fbp-web --registry repo.json # durable domain registry + artifacts across restarts
 uv run agent-centric fbp-web --kill     # stop the server on the port (flag)
 uv run agent-centric fbp-web-kill       # stop the server on the port (legacy subcommand)
 uv run agent-centric fbp-replay sess.db

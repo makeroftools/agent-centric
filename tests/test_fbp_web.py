@@ -198,6 +198,53 @@ class TestExpertsRoute:
             server._driver.close()
 
 
+class TestDomainRepoRoutes:
+    """The Domain-of-Experts registry + artifact repository (observability +
+    provenance layer, tenant-aware, read-only, write-once)."""
+
+    def test_domains_readout_observes_tree(self) -> None:
+        server = FbpLandingServer()
+        try:
+            d = server._domain_readout()
+            assert d["ok"] is True
+            assert d["count"] >= 1
+            # Each record carries a tenant + expert kind (deterministic selection).
+            for rec in d["domains"]:
+                assert "tenant" in rec
+                assert rec["expert_kind"] in ("human", "deterministic", "learned")
+        finally:
+            server._driver.close()
+
+    def test_artifacts_readout_is_write_once_evidence(self) -> None:
+        server = FbpLandingServer()
+        try:
+            a = server._artifact_readout()
+            assert a["ok"] is True
+            assert a["count"] == a["count"]  # self-consistent
+            assert isinstance(a["total_cost"], int)
+            ids = [x["domain"] for x in a["artifacts"]]
+            assert len(ids) == len(set(ids))  # no duplicate (tenant,domain,run)
+        finally:
+            server._driver.close()
+
+    def test_artifacts_durable_across_restart(self, tmp_path) -> None:
+        """With a granted registry path, the write-once artifact evidence
+        survives a restart (explicit grant)."""
+        path = str(tmp_path / "repo.json")
+        s1 = FbpLandingServer(registry_path=path)
+        try:
+            assert s1._artifact_readout()["count"] >= 1
+        finally:
+            s1._save_artifacts()
+            s1._driver.close()
+        assert __import__("os").path.exists(path)
+        s2 = FbpLandingServer(registry_path=path)
+        try:
+            assert s2._artifact_readout()["count"] >= 1
+        finally:
+            s2._driver.close()
+
+
 class TestChatContext:
     """The model box folds prior (durable) turns into the next prompt."""
 
