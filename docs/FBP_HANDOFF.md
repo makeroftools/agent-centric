@@ -36,9 +36,9 @@ we are.
   relaxed, but confirm each time for a given commit.)
 
 ### Validation (run this session, all live)
-- `uv run pytest` → **658 passed** (was 649; added model-box regression tests)
+- `uv run pytest` → **674 passed** (was 649; added envelopes + streaming/history)
 - `uv run ruff check .` → clean
-- `uv run mypy src` → clean (**76 source files**)
+- `uv run mypy src` → clean (**77 source files**)
 - FBP coverage (`uv run pytest --cov=agent_centric.fbp --cov-report=term`) →
   **88% total**; key files: registry 97%, bills 94%, store 93%, store_agent
   89%, web 83%.
@@ -87,9 +87,9 @@ an OpenRouter-backed model text box on that page:
 ### Tooling / commands
 ```sh
 uv sync --extra dev
-uv run pytest                  # 658 passed (as of this handoff)
+uv run pytest                  # 674 passed (as of this handoff)
 uv run ruff check .            # clean
-uv run mypy src                # clean, 76 source files
+uv run mypy src                # clean, 77 source files
 uv run pytest --cov=agent_centric.fbp --cov-report=term   # ~88%
 uv run agent-centric fbp --transport inproc|tcp|ipc
 uv run agent-centric fbp-replay <ledger>   # re-verify a durable session
@@ -154,6 +154,18 @@ of decisions and working style that a fresh session must inherit.
    -flash-0731` the default model, and added `fbp-web --reload` (auto-restart on
    source edits) + `fbp-web-kill`. The model dropdown reads `OPENROUTER_MODEL`
    (comma-separated).
+5. **Resource envelopes in the FBP tree** (`d131d2d`) — new `fbp/envelopes.py`
+   (ResourceEnvelope + EnvelopeGuard: step_limit, size_cap, latency_seconds,
+   child_limit), granted at configure time and enforced fail-closed at the
+   agent's run/spawn boundaries. Unbounded by default (does not break existing
+   call sites). 12 new tests.
+6. **Streaming answers + chat history** (`3bfb824`) — `/model/stream`
+   (SSE-over-POST) streams OpenRouter tokens live; `/history` + `/history/clear`
+   give a bounded in-page transcript. Streaming is an added UX surface that
+   reports honestly as verified=False (the audited path stays `/model`).
+7. **Transport trust-boundary doc** (`docs/transport_trust_boundary.md`) — the
+   honest statement of the FBP transport's authn/z + TLS gaps and the exact
+   hardening needed before cross-host use.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -197,12 +209,16 @@ of decisions and working style that a fresh session must inherit.
 
 ### Production/deploy gaps the user should resolve (explicit, not built)
 These are the honest reasons the project is **not yet "1.0 / production-ready"**
-despite 658 passing tests:
-- **Transport security:** over `tcp`/`ipc` the directive/response protocol is
-  **unauthenticated** — no TLS, no authn/z. Fine for localhost/demo, not across
-  a real trust boundary. (A documented trust boundary is the least we can add.)
-- **No per-directive resource envelopes** in the FBP tree (step/size/latency
-  bounds live only in the Manager line, not in the FBP tree).
+despite 674 passing tests:
+- **Transport security (documented, not built):** over `tcp`/`ipc` the
+directive/response protocol is **unauthenticated** — no TLS, no authn/z. The
+trust boundary is now documented in `docs/transport_trust_boundary.md`
+(§4-6 list the exact hardening needed). Fine for localhost/demo; not across a
+real trust boundary.
+- **Resource envelopes** are now **built and enforced** in the FBP tree
+  (`fbp/envelopes.py`: step/size/latency/child bounds, fail-closed) — but only
+  when a caller grants one; the Manager line still has richer per-stage
+  accounting that the FBP tree does not mirror.
 - **Real LLM provider** is wired as an in-process opt-in hook only; no
   production credential management, no network path hardened for deployment.
 - **No container/OS sandboxing / seccomp / VM isolation** of agent execution.
@@ -222,8 +238,9 @@ These are listed in `STATUS.md`'s "out of scope / future volleys".
 - **The `fbp-web` landing page** is live and runnable for a demo (set
   `OPENROUTER_API_KEY` for a real model; it fails closed to the stub otherwise):
   `uv run agent-centric fbp-web --reload`.
-- Future UX ideas for the model box: **streaming** answers as tokens arrive,
-  and a **chat-history** view (persist + show prior turns).
+- Future UX ideas for the model box: **persisted** (durable, cross-restart)
+  chat history, and a model **chat-context** option. Streaming + in-page
+  history are already built (see the session arc).
 
 ---
 
@@ -249,7 +266,7 @@ uv run python examples/fbp_arc_demo.py
 - Deterministic-first north star; LLM as ordinary agent; grants; fail-closed;
   no auto-pres ids.
 - The AC Router is spun out, gitignored, and **not** our work here.
-- Trust only what 658 tests prove and what is committed; say clearly when
+- Trust only what 674 tests prove and what is committed; say clearly when
   something is unverifiable or unpushed.
 
 ---
