@@ -2359,7 +2359,7 @@ _NETWORK_JS = r"""\
     ev.stopPropagation();
     ev.preventDefault();
     const s = netPortPos(id, 'out');
-    netWire = {sourceNode: id, x: s.x, y: s.y};
+    netWire = {sourceNode: id, sx: s.x, sy: s.y, x: s.x, y: s.y};
     netSelect(id);
     netSetStatus('Drag to an input port to connect.');
     netRenderEdges();
@@ -2512,7 +2512,7 @@ _NETWORK_JS = r"""\
         ' ' + mx + ',' + t.y + ' ' + t.x + ',' + t.y + '" data-ed="' + netEdgeKey(e) + '"/>';
     });
     if (netWire) {
-      const s = netWire;
+      const s = {x: netWire.sx, y: netWire.sy};
       const t = {x: netWire.x, y: netWire.y};
       const mx = (s.x + t.x) / 2;
       paths += '<path class="net-edge-path net-wire-preview" d="M' + s.x + ',' + s.y +
