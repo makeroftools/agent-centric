@@ -300,6 +300,53 @@ class TestStreamingAndHistory:
         assert server._history_state()["history"] == []
         server._driver.close()
 
+    def test_durable_history_opt_in(self, monkeypatch, tmp_path) -> None:
+        """Granting a history path persists turns; a fresh server over the same
+        path restores the transcript (explicit grant, deterministic replay)."""
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        path = str(tmp_path / "hist.db")
+        s1 = FbpLandingServer(history_path=path)
+        try:
+            s1._run_model("hello durable", "")
+            state1 = s1._history_state()
+            assert state1["durable"] is True
+            assert len(state1["history"]) == 2
+        finally:
+            s1._driver.close()
+
+        # A brand-new server over the same file sees the persisted transcript.
+        s2 = FbpLandingServer(history_path=path)
+        try:
+            state2 = s2._history_state()
+            assert state2["durable"] is True
+            # Durable round-trip normalises keys (adds verified/error); the
+            # meaningful transcript (role/content/model) is identical.
+            def _signature(h):
+                return [(t.get("role"), t.get("content"), t.get("model")) for t in h]
+
+            assert _signature(state2["history"]) == _signature(state1["history"])
+            assert state2["history"][1]["role"] == "assistant"
+        finally:
+            s2._driver.close()
+
+    def test_durable_history_clear_clears_durable_too(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        """Clear history also clears the durable log (explicit operator action)."""
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        path = str(tmp_path / "hist.db")
+        s1 = FbpLandingServer(history_path=path)
+        try:
+            s1._run_model("hi", "")
+            s1._clear_history()
+        finally:
+            s1._driver.close()
+        s2 = FbpLandingServer(history_path=path)
+        try:
+            assert s2._history_state()["history"] == []
+        finally:
+            s2._driver.close()
+
     def test_stream_client_parses_sse_lines(self, monkeypatch) -> None:
         """The streaming transport parses OpenRouter SSE lines into chunks and
         handles the [DONE] terminator — offline via a stubbed urlopen."""

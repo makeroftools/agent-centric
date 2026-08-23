@@ -35,6 +35,7 @@ from .bills import (
     project_calendar,
 )
 from .bills_agent import TASK_ACCEPT_DETERMINISTIC, TASK_RULE_ADD, BillsAgent
+from .chatstore import ChatHistoryError, ChatHistoryStore, open_chat_history
 from .config import AgentConfig
 from .context import Context, Verifier
 from .critical_path import CpmAnalysis, CpmError, CpmNode, analyse_cpm, cpm_from_dict
@@ -140,6 +141,10 @@ __all__ = [
     "StoreError",
     "open_state",
     "open_trajectory",
+    # Durable chat-history (model-box transcript; explicit opt-in)
+    "ChatHistoryStore",
+    "ChatHistoryError",
+    "open_chat_history",
     "StoreAgent",
     "STORE_GET",
     "STORE_SET",

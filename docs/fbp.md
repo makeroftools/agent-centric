@@ -433,7 +433,7 @@ directive returns the cached result rather than re-executing).
 `agent-centric fbp [--transport inproc|tcp|ipc]` drives a deterministic demo
 tree that exercises every property above and exits non-zero on any failure.
 `agent-centric fbp-replay <path>` re-verifies a durable ledger; `agent-centric
-`agent-centric fbp-summary <path>` gives an operator-facing summary; `agent-centric
+fbp-summary <path>` gives an operator-facing summary; `agent-centric
 fbp-web` serves a local, actionable landing page (stdlib `http.server`, loopback-only,
 read/verify-only) over an in-process `FbpDriver`, with routes `/`, `/action/run`,
 `/model` (a model box — dropdown + spinner; OpenRouter when `OPENROUTER_API_KEY`
@@ -441,6 +441,13 @@ is set, deterministic stub otherwise, showing `[verified]`/source),
 `/model/stream` (SSE token streaming), `/history` + `/history/clear` (bounded
 in-page chat), `/ledger`, `/state.json`, and `/health`. `fbp-web --reload`
 auto-restarts on source edits; `fbp-web-kill` stops the server on the port.
+
+Pass `--history <path>` to give the model box a **durable** transcript: each turn
+is appended to an on-disk, single-writer, append-only store (SQLite, WAL,
+append-only like `TrajectoryStore`, bounded like the in-memory transcript), so
+the chat history survives server restarts and replays identically. Without the
+flag the transcript stays in-memory only (the default — persistence is an
+explicit grant).
 
 ## Full arc demo
 

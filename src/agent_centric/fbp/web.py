@@ -34,6 +34,7 @@ from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
+from .chatstore import ChatHistoryStore
 from .driver import FbpDriver
 
 # The default loopback bind host and port for the landing-server.
@@ -66,16 +67,36 @@ class FbpLandingServer:
     and read-only w.r.t. durable state.
     """
 
-    def __init__(self, *, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:
+    def __init__(
+        self,
+        *,
+        host: str = DEFAULT_HOST,
+        port: int = DEFAULT_PORT,
+        history_path: str | os.PathLike[str] | None = None,
+    ) -> None:
         self._host = host
         self._port = port
-        # One driver, compositored and reused. We register and run a small
+        # One driver, in-process and reused. We register and run a small
         # deterministic demo tree so the page has something real to show.
         self._providers = _build_openrouter_providers()
         self._driver = self._build_driver()
-        # In-page chat history (per session, bounded, not durable).
+        # In-page chat history (bounded, per-session in-memory). When a durable
+        # path is granted it is ALSO persisted (explicit grant: nothing is
+        # written unless a caller opts in via ``history_path``).
         self._history: list[dict[str, Any]] = []
         self._history_lock = threading.Lock()
+        self._history_store: ChatHistoryStore | None = None
+        if history_path is not None:
+            try:
+                store = ChatHistoryStore(str(history_path))
+                store.open()
+                self._history = list(store.all())
+                self._history_store = store
+            except Exception as exc:  # noqa: BLE001 - fail closed on the UX path
+                # A granted-but-unreadable history must not crash the page;
+                # degrade to the in-memory transcript and say so on the page.
+                self._history_store = None
+                print(f"fbp-web: durable chat history unavailable: {exc}")
 
     # -- chat history (in-page, bounded, per-session) -----------------------
 
@@ -84,20 +105,42 @@ class FbpLandingServer:
 
         Entries are ``{"role": "user"|"assistant", "content", "model"?,
         "verified"?, "error"?}``. The transcript is in-memory only (per server
-        session); it is not durable and never leaves the local page.
+        session) unless a durable history path was granted at construction, in
+        which case each turn is ALSO appended to the on-disk store so the log
+        survives restarts.
         """
         with self._history_lock:
+            role = entry.get("role") or "assistant"
+            content = entry.get("content", "")
+            if self._history_store is not None:
+                try:
+                    self._history_store.append(
+                        role=role,
+                        content=content,
+                        model=(entry.get("model") or None),
+                        verified=(True if entry.get("verified") is True else
+                                  False if entry.get("verified") is False else None),
+                        error=(entry.get("error") or None),
+                    )
+                except Exception as exc:  # noqa: BLE001 - never break the page
+                    print(f"fbp-web: durable chat-history append failed: {exc}")
             self._history.append(entry)
             if len(self._history) > MAX_HISTORY_TURNS:
                 del self._history[: len(self._history) - MAX_HISTORY_TURNS]
 
     def _clear_history(self) -> None:
+        if self._history_store is not None:
+            try:
+                self._history_store.clear()
+            except Exception as exc:  # noqa: BLE001 - never break the page
+                print(f"fbp-web: durable chat-history clear failed: {exc}")
         with self._history_lock:
             self._history.clear()
 
     def _history_state(self) -> dict[str, Any]:
         with self._history_lock:
-            return {"history": [dict(h) for h in self._history]}
+            return {"history": [dict(h) for h in self._history],
+                    "durable": self._history_store is not None}
 
     # -- driver setup (deterministic, offline) -----------------------------
 
@@ -924,10 +967,18 @@ def _render_ledger(state: dict[str, Any]) -> str:
 
 
 def serve(
-    *, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, open_browser: bool = False
+    *,
+    host: str = DEFAULT_HOST,
+    port: int = DEFAULT_PORT,
+    open_browser: bool = False,
+    history_path: str | os.PathLike[str] | None = None,
 ) -> None:
-    """Serve the FBP landing page (blocking). Pass --open to open a browser."""
-    server = FbpLandingServer(host=host, port=port)
+    """Serve the FBP landing page (blocking). Pass --open to open a browser.
+
+    ``history_path`` optionally grants a durable, cross-restart chat-history
+    store (an explicit opt-in; without it the transcript is in-memory only).
+    """
+    server = FbpLandingServer(host=host, port=port, history_path=history_path)
     if open_browser:
         url = f"http://{host}:{port}"
         threading.Thread(target=webbrowser.open, args=(url,), daemon=True).start()
