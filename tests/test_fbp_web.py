@@ -51,6 +51,52 @@ class TestOrchestrateRoute:
             server._driver.close()
 
 
+class TestChatContext:
+    """The model box folds prior (durable) turns into the next prompt."""
+
+    @staticmethod
+    def _push_turns(server, n: int) -> None:
+        # Build history directly (clean content, not the stub's echo) so the
+        # context tests are uncontaminated by earlier prompts.
+        for i in range(n):
+            server._append_history({"role": "user", "content": f"q{i}"})
+            server._append_history(
+                {"role": "assistant", "content": f"a{i}", "model": "m", "verified": True}
+            )
+
+    def test_context_is_built_from_history(self) -> None:
+        server = FbpLandingServer()
+        try:
+            self._push_turns(server, 2)
+            ctx = server._build_chat_context()
+            assert "you: q0" in ctx
+            assert "model: a0" in ctx
+            assert "you: q1" in ctx
+            # Newest last, old-first ordering.
+            assert ctx.index("you: q0") < ctx.index("you: q1")
+        finally:
+            server._driver.close()
+
+    def test_context_is_bounded_to_max_turns(self) -> None:
+        server = FbpLandingServer()
+        try:
+            self._push_turns(server, 10)
+            ctx = server._build_chat_context(max_turns=4)
+            # Only the last 4 entries (2 turns: user+assistant) are included.
+            user_lines = [ln for ln in ctx.splitlines() if ln.startswith("you: ")]
+            assert user_lines == ["you: q8", "you: q9"]
+            assert "you: q7" not in ctx.splitlines()
+        finally:
+            server._driver.close()
+
+    def test_empty_history_produces_empty_context(self) -> None:
+        server = FbpLandingServer()
+        try:
+            assert server._build_chat_context() == ""
+        finally:
+            server._driver.close()
+
+
 class TestModelRoute:
     def test_run_model_uses_stub_without_key(self, monkeypatch) -> None:
         """Without an OpenRouter key the model agent serves the deterministic

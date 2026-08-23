@@ -413,6 +413,25 @@ class FbpLandingServer:
         except Exception as exc:  # noqa: BLE001 - surfaced to the page
             return {"action": "run double(21)", "error": str(exc)}
 
+    def _build_chat_context(self, max_turns: int = 8) -> str:
+        """A deterministic, bounded transcript prefix for the next model prompt.
+
+        Turns are the (possibly durable) in-page history, oldest first. Injecting
+        them as context lets the model answer with continuity (chat-context), but
+        the prefix is ordinary text built from recorded turns — deterministic and
+        auditable. Only ``max_turns`` of the most recent turns are included so the
+        prompt stays bounded.
+        """
+        with self._history_lock:
+            recent = self._history[-max_turns:] if max_turns else []
+        parts: list[str] = []
+        for t in recent:
+            role = "you" if t.get("role") == "user" else "model"
+            content = (t.get("content") or "").strip()
+            if content:
+                parts.append(f"{role}: {content}")
+        return "\n".join(parts)
+
     def _run_model(self, prompt: str, model: str = "") -> dict[str, Any]:
         """Run a prompt through the model agent (an LLM as an ordinary agent).
 
@@ -425,11 +444,20 @@ class FbpLandingServer:
         ``model`` optionally names a configured provider to switch to for this
         call (additive, in-process, never relaxes verification). Unknown or
         empty selections are ignored and the current wiring is used.
+
+        If the in-page transcript has prior turns, they are folded in as
+        deterministic chat context (oldest-first, bounded) so the model answers
+        with continuity.
         """
         try:
             if model and model in self._providers:
                 self._driver.configure_provider("model", self._providers[model], model_id=model)
-            resp = self._driver.run("model", {"prompt": prompt}, child="model")
+            full_prompt = prompt
+            context = self._build_chat_context()
+            if context:
+                # Deterministic transcript prefix -> continuity for the model.
+                full_prompt = f"{context}\n--\n{full_prompt}"
+            resp = self._driver.run("model", {"prompt": full_prompt}, child="model")
             if resp.verified:
                 result = {
                     "ok": True,
@@ -488,14 +516,19 @@ class FbpLandingServer:
         ``{type: chunk, text}`` events, then ``{type: done, text, model,
         verified: False}`` (or ``{type: error, error}`` on failure). The caller
         (SSE handler) serialises them for the browser and, on completion,
-        records the turn in chat history.
+        records the turn in chat history. Prior transcript turns are folded in
+        as deterministic chat context (same as the audited ``/model`` path).
         """
         resolved_model = model or (next(iter(self._providers), None) or "stub-model")
+        working_prompt = prompt
+        context = self._build_chat_context()
+        if context:
+            working_prompt = f"{context}\n--\n{working_prompt}"
 
         api_key = os.environ.get(OPENROUTER_API_KEY_ENV, "").strip()
         if not api_key or resolved_model == "stub-model":
             # Deterministic stub (offline, CI-safe) — emit progressively.
-            text = _stub_model_text(prompt)
+            text = _stub_model_text(working_prompt)
             yield {"type": "meta", "model": "stub-model"}
             for chunk in _stream_chunks(text):
                 yield {"type": "chunk", "text": chunk}
@@ -514,7 +547,7 @@ class FbpLandingServer:
                 full = client(
                     OPENROUTER_ENDPOINT,
                     {"Authorization": "Bearer " + api_key, "Content-Type": "application/json"},
-                    prompt,
+                    working_prompt,
                 )
                 chunks.append(full)
                 out.put(("done", full))
