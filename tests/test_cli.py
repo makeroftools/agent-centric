@@ -134,3 +134,25 @@ class TestCliFbp:
         code, out = _run(tmp_path, "fbp-summary", str(tmp_path / "nope.db"))
         assert code == 1
         assert "no ledger file" in out
+
+class TestCliFbpDomains:
+    """fbp-domains gives an operator-facing readout of a saved Domain Registry
+    + Artifact Vault (read-only)."""
+
+    def test_fbp_domains_reports_vault(self, tmp_path: Path) -> None:
+        from agent_centric.fbp.web import FbpLandingServer
+
+        path = tmp_path / "repo.json"
+        s = FbpLandingServer(registry_path=str(path))
+        s._save_artifacts()
+        s._driver.close()
+        code, out = _run(tmp_path, "fbp-domains", str(path))
+        assert code == 0
+        assert "artifacts=" in out
+        assert "total_cost=" in out
+        assert "kinds=[" in out
+
+    def test_fbp_domains_missing_fails_closed(self, tmp_path: Path) -> None:
+        code, out = _run(tmp_path, "fbp-domains", str(tmp_path / "nope.json"))
+        assert code == 1
+        assert "no registry/vault file" in out

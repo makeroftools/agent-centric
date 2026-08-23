@@ -465,6 +465,7 @@ uv run agent-centric fbp-web --kill     # stop the server on the port (flag)
 uv run agent-centric fbp-web-kill       # stop the server on the port (legacy subcommand)
 uv run agent-centric fbp-replay sess.db
 uv run agent-centric fbp-summary sess.db
+uv run agent-centric fbp-domains repo.json  # operator readout of a saved Domain Registry + Artifact Vault
 uv run python examples/fbp_arc_demo.py
 ```
 

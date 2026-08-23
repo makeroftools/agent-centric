@@ -656,6 +656,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p_fbp_summary.add_argument(
         "ledger_path", type=Path, help="The durable ledger file."
     )
+
+    p_fbp_domains = sub.add_parser(
+        "fbp-domains",
+        help="Summarise a saved Domain Registry + Artifact Vault (operator-facing, read-only).",
+    )
+    p_fbp_domains.add_argument(
+        "registry_path", type=Path, help="The saved registry/vault file (--registry path)."
+    )
     return parser
 
 
@@ -1317,6 +1325,46 @@ def _cmd_fbp_summary(ledger_path: Path) -> int:
     return 0 if s["ok"] else 1
 
 
+def _cmd_fbp_domains(registry_path: Path) -> int:
+    """Summarise a saved Domain Registry + Artifact Vault (read-only)."""
+    import json
+    import os
+
+    if not os.path.exists(registry_path):
+        print(f"domains : no registry/vault file at {registry_path}")
+        return 1
+    try:
+        with open(registry_path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError) as exc:
+        print(f"domains : could not read {registry_path}: {exc}")
+        return 1
+    artifacts = data.get("artifacts") if isinstance(data, dict) else None
+    if not isinstance(artifacts, list):
+        print(f"domains : {registry_path} has no artifact vault records")
+        return 1
+    total_cost = sum(int(a.get("cost", 0)) for a in artifacts if isinstance(a, dict))
+    kinds: dict[str, int] = {}
+    domains: set[str] = set()
+    for a in artifacts:
+        if not isinstance(a, dict):
+            continue
+        k = a.get("kind", "?")
+        kinds[k] = kinds.get(k, 0) + 1
+        d = a.get("domain", "")
+        if d:
+            domains.add(d)
+    kinds_str = " ".join(f"{k}={v}" for k, v in sorted(kinds.items()))
+    print(f"domains : artifacts={len(artifacts)} domains={len(domains)} "
+          f"total_cost={total_cost} kinds=[{kinds_str}]")
+    for a in sorted(artifacts, key=lambda x: (x.get("domain", ""), x.get("run", ""))):
+        if not isinstance(a, dict):
+            continue
+        print(f"  {str(a.get('domain','')):<24} run={a.get('run','')} "
+              f"kind={a.get('kind','')} cost={a.get('cost',0)}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point. Returns the process exit code."""
     args = _build_parser().parse_args(argv)
@@ -1339,6 +1387,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_fbp_replay(args.ledger_path, args.transport)
     if args.command == "fbp-summary":
         return _cmd_fbp_summary(args.ledger_path)
+    if args.command == "fbp-domains":
+        return _cmd_fbp_domains(args.registry_path)
     raise AssertionError(f"unhandled command: {args.command}")
 
 
