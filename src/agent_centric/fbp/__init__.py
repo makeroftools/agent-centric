@@ -35,6 +35,13 @@ from .bills import (
     project_calendar,
 )
 from .bills_agent import TASK_ACCEPT_DETERMINISTIC, TASK_RULE_ADD, BillsAgent
+from .chat_pipeline import (
+    PinCache,
+    canonical_json,
+    canonicalize,
+    request_key,
+    schema_parse,
+)
 from .chatstore import ChatHistoryError, ChatHistoryStore, open_chat_history
 from .config import AgentConfig
 from .context import Context, Verifier
@@ -80,6 +87,12 @@ from .message import (
 from .model_agent import TASK_MODEL, ModelAgent
 from .node import AgentNode, Node
 from .node import Response as NodeResponse
+from .orchestrate import (
+    SUPPORTED_INTENTS,
+    extract_intent,
+    plan_from_artifact,
+    run_artifact_plan,
+)
 from .pdf_intake import draft_from_pdf_text, extract_text
 from .shell import Shell
 from .store import StateStore, StoreError, TrajectoryStore, open_state, open_trajectory
@@ -145,6 +158,16 @@ __all__ = [
     "ChatHistoryStore",
     "ChatHistoryError",
     "open_chat_history",
+    # Post-return determinism + orchestration (chat → FBP seam)
+    "PinCache",
+    "canonical_json",
+    "canonicalize",
+    "schema_parse",
+    "request_key",
+    "SUPPORTED_INTENTS",
+    "extract_intent",
+    "plan_from_artifact",
+    "run_artifact_plan",
     "StoreAgent",
     "STORE_GET",
     "STORE_SET",

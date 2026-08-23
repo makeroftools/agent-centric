@@ -19,6 +19,38 @@ from agent_centric.fbp.web import (
 )
 
 
+class TestOrchestrateRoute:
+    """The chat-window → FBP seam: a JSON artifact runs as a verified plan."""
+
+    def test_run_artifact_single_task(self) -> None:
+        server = FbpLandingServer()
+        try:
+            result = server._run_artifact('{"task": "double", "args": {"value": 21}}')
+            assert result["ok"] is True
+            assert result["results"][0]["verified"] is True
+            assert result["results"][0]["value"] == 42
+        finally:
+            server._driver.close()
+
+    def test_run_artifact_rejects_invalid_json(self) -> None:
+        server = FbpLandingServer()
+        try:
+            result = server._run_artifact("{not json")
+            assert result["ok"] is False
+            assert "artifact rejected" in result["error"]
+        finally:
+            server._driver.close()
+
+    def test_run_artifact_unorchestrable_fails_closed(self) -> None:
+        server = FbpLandingServer()
+        try:
+            result = server._run_artifact('{"intent": "status"}')
+            assert result["ok"] is False
+            assert "error" in result
+        finally:
+            server._driver.close()
+
+
 class TestModelRoute:
     def test_run_model_uses_stub_without_key(self, monkeypatch) -> None:
         """Without an OpenRouter key the model agent serves the deterministic

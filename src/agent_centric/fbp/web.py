@@ -265,6 +265,13 @@ class FbpLandingServer:
                     body = self._read_body()
                     prompt, model = _parse_model_body(body)
                     self._serve_sse_stream(server, prompt, model)
+                elif self.path == "/orchestrate":
+                    # The chat-window → FBP seam: a JSON artifact (task or
+                    # steps) is validated/canonicalized, then run as an FBP plan
+                    # through the driver's verified spine.
+                    body = self._read_body()
+                    result = server._run_artifact(body)
+                    self._send_json(result)
                 elif self.path == "/history":
                     # In-page chat history (per-session, bounded).
                     self._send_json(server._history_state())
@@ -364,6 +371,31 @@ class FbpLandingServer:
                     )
 
         return _Handler
+
+    def _run_artifact(self, body: str) -> dict[str, Any]:
+        """Run a chat artifact through the post-return determinism pipeline t
+   o an FBP plan.
+
+        Body is a JSON artifact (``{"task": ...}`` or ``{"steps": [...]}``).
+        It is schema-validated and canonicalized (fail-closed), then mapped to
+        an ordered ``run`` plan executed through the driver's spine (every step
+        is a normal directive: ledgered, parent re-verified, replayable).
+        """
+        from .chat_pipeline import canonicalize, parse_json_object
+        from .orchestrate import run_artifact_plan
+
+        try:
+            artifact = parse_json_object(body)
+            # Canonical form before it may drive state (deterministic order).
+            artifact = canonicalize(artifact)
+        except ValueError as exc:
+            return {
+                "ok": False,
+                "results": [],
+                "completed": 0,
+                "error": f"artifact rejected: {exc}",
+            }
+        return run_artifact_plan(self._driver, artifact)
 
     def _run_demo(self) -> dict[str, Any]:
         """A deterministic demo action: run the double task through the driver.
@@ -827,6 +859,51 @@ _MODEL_JS = r"""\
 </script>
 """
 
+# The orchestrate box client script (kept out of the f-string so its JS object
+# braces are not mistaken for f-string interpolations).
+_ORCHESTRATE_JS = r"""\
+<script>
+  document.getElementById('orch-run').addEventListener('click', async () => {
+    const ta = document.getElementById('orch-prompt');
+    const out = document.getElementById('orch-result');
+    const spin = document.getElementById('orch-spinner');
+    const btn = document.getElementById('orch-run');
+    out.textContent = ''; out.className = 'note';
+    if (spin) spin.style.display = 'inline-block';
+    if (btn) btn.disabled = true;
+    try {
+      const r = await fetch('/orchestrate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: ta.value
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        out.textContent = 'HTTP ' + r.status + ': ' + JSON.stringify(data);
+        out.className='error'; return;
+      }
+      if (data.ok) {
+        let lines = data.results.map((s) =>
+          (s.verified ? '✔' : '✘') + ' step ' + s.step + ' ' + s.task +
+          (s.value !== undefined ? ' = ' + JSON.stringify(s.value) : '') +
+          (s.error ? ' error=' + s.error : '')
+        ).join('\n');
+        out.textContent = 'FBP plan ok (' + data.completed + ' step(s)):\n' + lines;
+      } else {
+        out.textContent = 'FBP plan FAILED: ' + (data.error || 'unverified step') +
+          ' (completed ' + (data.completed || 0) + ')';
+        out.className = 'error';
+      }
+    } catch (err) {
+      out.textContent = 'request failed: ' + err; out.className='error';
+    } finally {
+      if (spin) spin.style.display = 'none';
+      if (btn) btn.disabled = false;
+    }
+  });
+</script>
+"""
+
 
 def _render_landing(
     state: dict[str, Any], *, error: str | None = None, models: tuple[str, ...] = ()
@@ -910,6 +987,20 @@ Answers stream in as they arrive; the transcript shows each turn's status.</p>
 <div id='chat-history' class='chat-history'></div>
 <button id='history-clear' type='button'>Clear history</button>
 {_MODEL_JS}
+
+<h2>Orchestrate → FBP</h2>
+<p class='note'>Take a validated, canonical JSON artifact and run it as an
+FBP plan through the verified spine. A single task (<code>{{"task": ...}}</code>)
+or an ordered <code>{{"steps": [...]}}</code> list; each step is a normal
+<code>run</code> directive that is parent re-verified, ledgered, and
+replayable. Invalid artifacts fail closed.</p>
+<textarea id='orch-prompt' rows='5' cols='72'
+  placeholder='{{"task": "double", "args": {{"value": 21}}}}'></textarea>
+<br/>
+<button id='orch-run' type='button'>Run as FBP plan</button>
+<span id='orch-spinner' class='spinner' style='display:none'></span>
+<pre id='orch-result' class='note'></pre>
+{_ORCHESTRATE_JS}
 
 <h2>Standing invariants</h2>
 <ul class='invariants'>
