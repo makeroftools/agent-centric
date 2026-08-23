@@ -431,12 +431,16 @@ result = run_network(driver, net)  # double(21) -> even(42); both verified
   edges, double-click to remove, live JSON). No third-party/CDN library — it
   stays stdlib-only and fail-closed.
 - **Agent composition**: the palette exposes the real **demo agents** (`child`,
-  `store`, `model`) as draggable nodes that delegate via the network's `child`
-  field — so a network can compose actual spawned agents (e.g. `child` double →
-  `store` write, `model` → `store` write) through the verified spine. The
-  arithmetic primitives remain as a secondary **Primitives** group for building
-  simple test networks that feed the agents. A **Load agent demo** button builds
-  a canonical agent chain in one click.
+  `store`, `model`, `bills`) as draggable nodes that delegate via the network's
+  `child` field — so a network can compose actual spawned agents (e.g. `child`
+  double → `store` write, `model` → `store` write, or a full `bills`
+  intake → accept → calendar chain) through the verified spine. The arithmetic
+  primitives remain as a secondary **Primitives** group for building simple test
+  networks that feed the agents. A **Load agent demo** button builds a canonical
+  agent chain in one click.
+- **Edge value labels**: after a run, each edge shows the computed value that
+  flowed along it (from the verified source output), so you can see the data
+  moving through the network.
 - **Durable save/load**: with `fbp-web --networks <path>`, named networks can be
   saved and reloaded across restarts (`/network/save|/list|/load`); a network is
   validated before it is persisted (fail-closed).

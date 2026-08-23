@@ -1715,6 +1715,8 @@ _PAGE_CSS = "\n".join([
     "  cursor:pointer; }",
     ".net-wire-preview { stroke:#5b8def; stroke-width:2.5; stroke-dasharray:6 4;",
     "  pointer-events:none; }",
+    ".net-edge-label { fill:#111827; font-size:11px; font-family:monospace;",
+    "  pointer-events:none; }",
     ".net-edge-path.sel { stroke:#111827; stroke-width:3; }",
     ".net-inspector { background:#f8fafc; border:1px solid #e5e7eb; border-radius:12px;",
     "  padding:.9rem; }",
@@ -2262,6 +2264,14 @@ _NETWORK_JS = r"""\
         args: {key: 'k'}},
       {task: 'model', child: 'model', desc: 'model agent: answer a prompt',
         args: {prompt: 'hello'}},
+      {task: 'bills_intake', child: 'bills', desc: 'bills agent: intake a draft',
+        args: {draft: {id: 'b1', vendor: 'GasCo', amount_cents: 1000, due_date: '2026-10-01'}}},
+      {task: 'bills_accept', child: 'bills', desc: 'bills agent: accept a draft',
+        args: {draft: {id: 'b1', vendor: 'GasCo', amount_cents: 1000, due_date: '2026-10-01'}}},
+      {task: 'bills_calendar', child: 'bills', desc: 'bills agent: project calendar',
+        args: {from_date: '2026-10-01', to_date: '2026-10-31'}},
+      {task: 'bills_registry', child: 'bills', desc: 'bills agent: registry snapshot',
+        args: {}},
     ]},
     {group: 'Primitives', items: [
       {task: 'double', desc: 'value * 2', args: {value: 1}},
@@ -2530,8 +2540,18 @@ _NETWORK_JS = r"""\
       const s = netPortPos(e.source, 'out');
       const t = netPortPos(e.target, 'in');
       const mx = (s.x + t.x) / 2;
+      const my = (s.y + t.y) / 2;
       paths += '<path class="net-edge-path" d="M' + s.x + ',' + s.y + ' C' + mx + ',' + s.y +
         ' ' + mx + ',' + t.y + ' ' + t.x + ',' + t.y + '" data-ed="' + netEdgeKey(e) + '"/>';
+      // Show the computed value flowing along the edge after a run.
+      const srcRes = netResult[e.source];
+      if (srcRes && srcRes.verified) {
+        const label = String(srcRes.value === undefined ? '' : srcRes.value);
+        if (label) {
+          paths += '<text class="net-edge-label" x="' + mx + '" y="' + (my - 6) +
+            '">' + esc(label) + '</text>';
+        }
+      }
     });
     if (netWire) {
       const s = {x: netWire.sx, y: netWire.sy};

@@ -1090,3 +1090,54 @@ class TestAgentDesigner:
             assert denied["ok"] is False
         finally:
             server._driver.close()
+
+
+class TestAgentDesignerBills:
+    """The Designer can compose the bills agent (demonstration-only) through
+    the verified spine: intake -> accept -> calendar."""
+
+    def test_bills_agent_in_palette(self) -> None:
+        html = _render_landing({})
+        for task in ("bills_intake", "bills_accept", "bills_calendar", "bills_registry"):
+            assert task in html
+
+    def test_bills_intake_accept_calendar_network(self) -> None:
+        """A bills chain (intake -> accept -> calendar) runs through the spine,
+        delegating to the real bills agent."""
+        import json as _json
+
+        server = FbpLandingServer()
+        try:
+            draft = {
+                "id": "bill-designer-1",
+                "vendor": "GasCo",
+                "amount_cents": 12345,
+                "due_date": "2026-10-01",
+            }
+            draft_json = _json.dumps(draft)
+            payload = (
+                '{"components": ['
+                '{"id": "a", "task": "bills_intake", "args": {"draft": '
+                + draft_json + '}, "child": "bills"},'
+                '{"id": "b", "task": "bills_accept", "args": {"draft": '
+                + draft_json + '}, "child": "bills"},'
+                '{"id": "c", "task": "bills_calendar", "args": '
+                '{"from_date": "2026-10-01", "to_date": "2026-10-31"}, "child": "bills"},'
+                '{"id": "d", "task": "bills_registry", "args": {}, "child": "bills"}'
+                '], "edges": []}'
+            )
+            result = server._run_network(payload)
+            assert result["ok"] is True
+            assert result["completed"] == 4
+            # The registry snapshot shows the accepted bill.
+            d = next(s for s in result["results"] if s["id"] == "d")
+            assert d["verified"] is True
+            reg = d["value"].get("registry", {})
+            assert "bill-designer-1" in reg
+            assert reg["bill-designer-1"]["status"] == "open"
+            # The calendar projects the accepted bill.
+            c = next(s for s in result["results"] if s["id"] == "c")
+            assert c["verified"] is True
+            assert [e["id"] for e in c["value"].get("entries", [])] == ["bill-designer-1"]
+        finally:
+            server._driver.close()
