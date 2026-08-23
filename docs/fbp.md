@@ -375,7 +375,11 @@ for each domain in the live tree it shows the chosen expert kind and running
 cost. `FbpDriver` now also surfaces its configured **verifier names** (read-only)
 so the readout knows which domains are verifiable.
 
-### Domain Registry registry + artifact vault
+### Domain-expert SLM provider contract (the learned tier)
+
+`fbp/slm.py` is the opt-in external seam that turns a domain corpus into a trained per-domain expert — the **learned** tier `select_expert` recommends when a deterministic method can't cover the residue. `SlmProvider` (protocol), `SlmSpec` (recipe), `SlmExpert` (full provenance: base model, corpus, method, dataset size, benchmark, artifact), `StubSlmProvider` (offline, deterministic, CI-safe), and `build_domain_expert` (fail-closed entry point). Training stays external; the core selects and verifies, never bypassing a verifier. The landing page has a read-only **Domain SLM** card (`/slm`) showing which domains warrant a learned expert. `docs/domain_slm.md` is the 2026 engineering reference.
+
+### Domain Registry + artifact vault
 
 `domainrepo.py` is the **observability + provenance** layer that completes the
 network-of-experts model (*catalog → decision → accounting → evidence*):
@@ -389,7 +393,7 @@ network-of-experts model (*catalog → decision → accounting → evidence*):
   and source refs). Re-recording a key fails closed; it is *evidence*, never
   mutable.
 
-The landing page exposes read-only **Domain Registry registry** and **Artifact
+The landing page exposes read-only **Domain Registry** and **Artifact
 repository** cards (`/domains`, `/artifacts`); the write-once artifact evidence
 persists across restarts via `fbp-web --registry <path>` (explicit grant).
 Tenant-awareness from the start is what makes a future paid, multi-tenant web
