@@ -87,3 +87,36 @@ class TestPlanTraining:
         # Estimated cost increases with capability.
         costs = [TIERS[t].est_cost for t in TIER_KINDS]
         assert costs == sorted(costs)
+
+class TestBaseSizeGating:
+    """The tier ladder now accounts for the base model's size-class floor."""
+
+    def test_mid_size_base_gates_from_cpu_to_single_gpu(self) -> None:
+        # A 7B base cannot train on the cpu tier even for a tiny corpus.
+        plan = plan_training(_domain(), corpus_size=100, base_model="llama-3.2-8b")
+        assert plan.tier == TIER_SINGLE_GPU
+
+    def test_large_mid_base_gates_to_multi_gpu(self) -> None:
+        # A 14B base needs a multi-gpu pass regardless of corpus size.
+        plan = plan_training(_domain(), corpus_size=100, base_model="qwen3-14b")
+        assert plan.tier == TIER_MULTI_GPU
+
+    def test_large_70b_base_gates_to_multi_gpu(self) -> None:
+        plan = plan_training(_domain(), corpus_size=100, base_model="llama-3.1-70b")
+        assert plan.tier == TIER_MULTI_GPU
+
+    def test_small_base_can_still_use_cpu(self) -> None:
+        # A small base (default) on a tiny corpus stays on cpu (unchanged).
+        plan = plan_training(_domain(), corpus_size=100, base_model="llama-3.2-3b")
+        assert plan.tier == TIER_CPU
+
+    def test_unknown_base_fails_closed(self) -> None:
+        with pytest.raises(TrainingError, match="unknown base model"):
+            plan_training(_domain(), corpus_size=100, base_model="no-such-model")
+
+    def test_deep_method_still_wins_even_on_tiny_base(self) -> None:
+        # A deep method (dapt) on a small base still escalates to multi-gpu.
+        plan = plan_training(
+            _domain(), corpus_size=100, base_model="llama-3.2-3b", method="dapt"
+        )
+        assert plan.tier == TIER_MULTI_GPU

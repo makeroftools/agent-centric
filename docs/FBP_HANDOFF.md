@@ -41,9 +41,9 @@ we are.
   relaxed, but confirm each time for a given commit.)
 
 ### Validation (run this session, all live)
-- `uv run pytest` → **939 passed** (was 908; added transport security + real credential-wiring tests)
+- `uv run pytest` → **953 passed** (was 908; added transport security + real credential-wiring + base-model catalog tests)
 - `uv run ruff check .` → clean
-- `uv run mypy src` → clean (**84 source files**)
+- `uv run mypy src` → clean (**91 source files**)
 - FBP coverage: `experts.py` 94%, `domainrepo.py` **100%**, driver 91%.
 - Cross-transport durable replay: 19/19 on inproc/ipc/tcp. Full production-arc
   demo: crash-safe replay 6/6.
@@ -90,7 +90,8 @@ that page:
 | **Expert selection + cost ledger** | `fbp/experts.py`, `fbp/web.py`, `fbp/driver.py` | The deterministic core of **"Network of Experts AI"** (the coinded axiom): `select_expert(domain)` picks deterministic / learned (per-domain SLM) / human for each component (domain), and `CostLedger` accounts cost + irreducible residue per run. Read-only **Network of Experts** card on the landing page (`/experts`). Driver surfaces configured verifier names (read-only). Additive |
 | **Domain-expert SLM provider contract** | `fbp/slm.py`, `fbp/web.py`, `docs/domain_slm.md` | The **learned** tier: an opt-in external provider (`SlmProvider`/`SlmSpec`/`SlmExpert`/`StubSlmProvider`/`build_domain_expert`) turns a domain corpus into a trained per-domain expert with full provenance (base model, corpus, method, dataset size, benchmark, artifact). Training stays external; the core selects (`select_expert`) and verifies, never bypassing a verifier. Read-only **Domain SLM** card (`/slm`) shows which domains warrant a learned expert. `docs/domain_slm.md` is the 2026 engineering reference |
 | **Micro-payment / settlement adapter** | `fbp/settlement.py` | The **paid** tier: an opt-in external provider (`SettlementProvider`/`SettlementGrant`/`Settlement`/`StubSettlementProvider`/`settle_run`) settles a `CostAccount`'s cost under an explicit operator grant. **Never auto-charges**: a settlement without a matching grant, a cost over the grant's cap, a domain mismatch, or a negative cost all fail closed. Stub is offline/deterministic (CI-safe). Slots into the `CostLedger` contract |
-| **Deterministic training-plan tier** | `fbp/training_plan.py` | The **strategic hardware-provisioning decision**: `plan_training(domain, corpus_size, method, budget)` picks a hardware tier (`cpu`/`single-gpu`/`multi-gpu`) deterministically from corpus size + method, caps `SlmSpec.max_examples` at the tier's one-pass capacity, and fails closed if the estimated cost exceeds an explicit budget (the natural source is a `SettlementGrant`). Pure/offline; the provider executes, the core decides |
+| **Deterministic training-plan tier** | `fbp/training_plan.py` | The **strategic hardware-provisioning decision**: `plan_training(domain, corpus_size, method, budget, base_model)` picks a hardware tier (`cpu`/`single-gpu`/`multi-gpu`) deterministically from corpus size + method + the base model's **size-class hardware floor** (a 14B base can't train on the same tier as a 0.5B base regardless of corpus size), caps `SlmSpec.max_examples` at the tier's one-pass capacity, and fails closed if the estimated cost exceeds an explicit budget (the natural source is a `SettlementGrant`). Unknown base → fail-closed. Pure/offline; the provider executes, the core decides |
+| **Recommended base-model catalog** | `fbp/model_catalog.py` | The **deterministic 2026 reference** of recommended open-weight bases for domain adaptation, categorical by deployment class (`edge`/`small`/`mid`/`large`): each carries size, minimum hardware tier, licensing, and instruction-variant availability. `resolve_base`/`min_tier_for`/`catalog` are pure and fail-closed on unknown ids. A passive registry — it records *what* bases exist,*where*they sit; it never decides. Feeds the training-plan tier gating; full 2026 lists + domain hubs in `docs/domain_slm.md` |
 | **External training-provider adapters** | `fbp/providers.py` | The **execution** side of the learned tier: an operator-selectable registry (`ProviderRegistry`/`provider_names`/`get_provider`) of `SlmProvider` adapters — **Modal** (GPU-on-demand, the easiest fit; implemented) plus **Runpod** and **Replicate** (documented, opt-in stubs to wire later). Default is the offline stub; a real provider is opt-in and never runs in the offline suite. The core plans and verifies; the provider trains |
 | **End-to-end expert provisioning** | `fbp/provision.py` | Ties select → plan → train → account → settle into one deterministic, workable path: `provision_expert(domain, corpus, provider, grant, ledger)` selects the expert kind, plans the hardware tier, trains via an opt-in provider (default stub, offline/CI-safe), records the `CostAccount` in a `CostLedger`, and settles under an explicit `SettlementGrant`. Fail-closed: unverifiable domain / over-budget plan / provider failure / missing grant all abort. The Modal adapter is **workable** with an injected HTTP client (real transport seam, fail-closed without one) |
 | **Provisioning card on the landing page** | `fbp/web.py` | **Easy-UX surface for the provisioning path**: a runnable **Provision a domain expert** card (`/provision`, `/provision/domains`) that selects the domain from the live tree, plans the tier, trains via the offline stub, accounts cost, and settles under a grant — recording the expert's artifact into the Artifact Vault as write-once evidence. Real providers never run here; unknown domains, over-budget plans, and invalid bodies fail closed. Additive |
@@ -114,9 +115,9 @@ that page:
 ### Tooling / commands
 ```sh
 uv sync --extra dev
-uv run pytest                  # 939 passed (as of this handoff)
+uv run pytest                  # 953 passed (as of this handoff)
 uv run ruff check .            # clean
-uv run mypy src                # clean, 90 source files
+uv run mypy src                # clean, 91 source files
 uv run pytest --cov=agent_centric.fbp --cov-report=term   # ~88%
 uv run agent-centric fbp --transport inproc|tcp|ipc
 uv run agent-centric fbp-replay <ledger>   # re-verify a durable session

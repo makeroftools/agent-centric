@@ -133,13 +133,25 @@ class TrainingPlan:
         }
 
 
-def _choose_tier(corpus_size: int, method: str) -> str:
-    """Pick the hardware tier deterministically from corpus size + method."""
+def _choose_tier(corpus_size: int, method: str, base_min_tier: str | None = None) -> str:
+    """Pick the hardware tier deterministically from corpus + method + base size.
+
+    The base model's ``min_tier`` is a floor: a ``mid``-size base cannot train
+    below ``single-gpu``/``multi-gpu`` regardless of corpus size. The ladder is
+    the max of the corpus/method decision and the base's own floor.
+    """
     if method in _DEEP_METHODS or corpus_size > _SINGLE_GPU_MAX_EXAMPLES:
-        return TIER_MULTI_GPU
-    if corpus_size > _CPU_MAX_EXAMPLES:
-        return TIER_SINGLE_GPU
-    return TIER_CPU
+        tier = TIER_MULTI_GPU
+    elif corpus_size > _CPU_MAX_EXAMPLES:
+        tier = TIER_SINGLE_GPU
+    else:
+        tier = TIER_CPU
+    if base_min_tier is not None:
+        # Respect the base's hardware floor (cpu < single-gpu < multi-gpu).
+        order = (TIER_CPU, TIER_SINGLE_GPU, TIER_MULTI_GPU)
+        if order.index(base_min_tier) > order.index(tier):
+            tier = base_min_tier
+    return tier
 
 
 def plan_training(
@@ -186,7 +198,15 @@ def plan_training(
         )
     if corpus_size < 0:
         raise TrainingError(f"corpus size must be non-negative (got {corpus_size})")
-    tier_id = _choose_tier(corpus_size, method)
+    # Resolve the base model from the catalog (fail-closed on an unknown base),
+    # and gate the hardware tier by the base's size-class floor.
+    from .model_catalog import CatalogError, min_tier_for
+
+    try:
+        base_min_tier = min_tier_for(base_model)
+    except CatalogError as exc:
+        raise TrainingError(str(exc)) from exc
+    tier_id = _choose_tier(corpus_size, method, base_min_tier=base_min_tier)
     tier = TIERS[tier_id]
     capped = min(max_examples, tier.max_examples)
     spec = SlmSpec(

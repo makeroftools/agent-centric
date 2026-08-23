@@ -110,6 +110,19 @@ from .message import (
     validate_response,
 )
 from .model_agent import TASK_MODEL, ModelAgent
+from .model_catalog import (
+    BASE_MODELS,
+    SIZE_CLASSES,
+    SIZE_EDGE,
+    SIZE_LARGE,
+    SIZE_MID,
+    SIZE_SMALL,
+    BaseModel,
+    CatalogError,
+    catalog,
+    min_tier_for,
+    resolve_base,
+)
 from .network import (
     Component,
     ComponentNetwork,
@@ -372,6 +385,18 @@ __all__ = [
     "build_modal_from_env",
     "stdlib_http_client",
     "redact_training_secrets",
+    # Recommended base-model catalog (model_catalog.py)
+    "BaseModel",
+    "CatalogError",
+    "BASE_MODELS",
+    "SIZE_CLASSES",
+    "SIZE_EDGE",
+    "SIZE_SMALL",
+    "SIZE_MID",
+    "SIZE_LARGE",
+    "resolve_base",
+    "min_tier_for",
+    "catalog",
     # End-to-end expert provisioning (select -> plan -> train -> account -> settle)
     "provision_expert",
     "ProvisionResult",
