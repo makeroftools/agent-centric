@@ -443,6 +443,31 @@ despite 751 passing tests:
 - **No distribution/networking/cloud** and **no MCP/A2A** baked in.
 These are listed in `STATUS.md`'s "out of scope / future volleys".
 
+### Roadmap — standalone multi-tenant paid web service (roadmap only, NOT built)
+
+The user asked this be captured **for the roadmap only** — documented as a
+future direction, **not** started. It is the natural extension of the
+**Domain Registry + Artifact Vault**: a **stand-alone web service customers pay
+us for** (a paid "Network of Experts" registry + artifact service). Key design
+constraints already agreed with the user:
+
+- **It must be a shared observability + provenance layer, NEVER the governance
+  layer.** Each customer's tree stays the authority; the hosted service only
+  records *what* and *how* (catalog), and write-once evidence (vault).
+- The core is already **tenant-aware**, so the service would be **additive, not a
+  rewrite**.
+- It is the natural home for the **X402 / micro-payment** settlement adapter
+  (the paid tier, already drafted in `fbp/settlement.py`).
+- **Build gates before it is real (deliberately, from the transport trust
+  boundary):** real mutual-TLS transport over a genuine network path, per-tenant
+  authorization/isolation, and billing. These require live credentials and
+  network access, so they are an explicit, irreversible, money-adjacent step that
+  needs the lead/operator's sign-off before any code is written.
+
+**Status: roadmap entry only.** Nothing is built or committed for the standalone
+service; the existing loopback (`fbp-web --registry`) surface remains the only
+hosted layer.
+
 ### Loose ends / immediate next actions
 - **Unpushed commits (11):** `c4afa94` (chat-context), `46b3948` (handoff),
   `69df3d8` (Component Networks), `9b8f7e5` (handoff), `4a94c16` (canvas
