@@ -2475,7 +2475,7 @@ _NETWORK_JS = r"""\
     }
   });
   document.addEventListener('mouseup', () => {
-    netPan = null; $netCanvas().classList.remove('panning');
+    netPan = null; netDrag = null; $netCanvas().classList.remove('panning');
   });
   document.addEventListener('mousemove', (ev) => {
     if (netDrag) {
