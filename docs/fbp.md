@@ -356,6 +356,10 @@ result = run_network(driver, net)  # double(21) -> even(42); both verified
   saved and reloaded across restarts (`/network/save|/list|/load`); a network is
   validated before it is persisted (fail-closed).
 
+The landing page is **card-based** with a **Chat / Designer** mode switch: Chat
+holds the model box, chat history, and the run-an-artifact box (general-purpose
+chat); Designer holds the Component Network editor. The two are clearly divided.
+
 ### Determinism rating + approved rules (determinize-then-decide)
 
 `determinism.py` is a pure capability that makes the "never rely on a

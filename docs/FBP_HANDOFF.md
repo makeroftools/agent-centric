@@ -214,6 +214,11 @@ of decisions and working style that a fresh session must inherit.
    consume two `double`s). Results carry the component `id` for the editor.
    Networks can be **saved/loaded durably** (`fbp-web --networks <path>`,
    `/network/save|/list|/load`), validated before persist (fail-closed).
+16. **Card-based UI + Chat/Designer mode switch** (`d44a582`) — the landing
+   page is now card-based (clean, friendly) with a **Chat / Designer** mode
+   switch: Chat = the model box + chat history + run-an-artifact; Designer =
+   the Component Network editor. A clear functional division — the chat box is
+   general-purpose, not only for design.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -274,11 +279,12 @@ real trust boundary.
 These are listed in `STATUS.md`'s "out of scope / future volleys".
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (7):** `c4afa94` (chat-context), `46b3948` (handoff),
+- **Unpushed commits (8):** `c4afa94` (chat-context), `46b3948` (handoff),
   `69df3d8` (Component Networks), `9b8f7e5` (handoff), `4a94c16` (canvas
-  editor), `241d9a3` (handoff), `fac7a16` (dataflow + save/load) are local but
-  not yet on GitHub; plus this handoff update. The remote was at `87e7bbe`. The
-  user pushes directly; confirm before pushing anything yourself.
+  editor), `241d9a3` (handoff), `fac7a16` (dataflow + save/load), `d44a582`
+  (card UI + mode switch) are local but not yet on GitHub; plus this handoff
+  update. The remote was at `87e7bbe`. The user pushes directly; confirm before
+  pushing anything yourself.
 - **Terminal glitch (this session):** the session's local terminal began
   rejecting ``cd`` into the project with "not in any of the project's
   worktrees"; the same command had worked minutes earlier. The sub-agent (which
@@ -327,7 +333,7 @@ uv run python examples/fbp_arc_demo.py
 - Deterministic-first north star; LLM as ordinary agent; grants; fail-closed;
   no auto-pres ids.
 - The AC Router is spun out, gitignored, and **not** our work here.
-- Trust only what 749 tests prove and what is committed; say clearly when
+- Trust only what 751 tests prove and what is committed; say clearly when
   something is unverifiable or unpushed.
 
 ---
