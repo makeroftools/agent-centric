@@ -1,5 +1,20 @@
 # FBP — the Agent-Centric Flow-Based Subsystem
 
+> ## Network of Experts AI
+>
+> **The model is not the expert. The network is.**
+>
+> An AI is a **network of domain experts** — components, each an expert in its
+> own narrow domain, wired by data-flow edges into a directed graph. No single
+> model (however large) is the authority; each component is an expert *within*
+> its contract, and its output is only trusted when a **deterministic verifier**
+> confirms it. A general model is just one (fallible) kind of expert — used,
+> never fully trusted, and only where a deterministic method cannot cover the
+> domain. The network is the intelligence; the experts are its parts.
+>
+> **Network of Experts AI** is the name for this: intelligence that lives in a
+> verified network of narrow domain experts, not in any one model.
+
 > **The topology is the governance.** No central Manager. A rooted, recursive
 > tree of agents where work flows **down** as directives and responsibility
 > bubbles **up** — each parent **re-verifying its child's value** before it

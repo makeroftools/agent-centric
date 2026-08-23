@@ -8,6 +8,19 @@ This spec locks in the model refined in session and is the contract the
 foundation code implements. It is deliberately a *draft* — the first concrete
 step of a pivot, not the finished system.
 
+## 0. Network of Experts AI (the axiom)
+
+> **The model is not the expert. The network is.**
+
+An AI is a **network of domain experts** — components, each an expert in its own
+narrow domain, wired by data-flow edges into a directed graph. No single model
+(however large) is the authority; each component is an expert *within* its
+contract, and its output is only trusted when a **deterministic verifier**
+confirms it. A general model is just one (fallible) kind of expert — used, never
+fully trusted, and only where a deterministic method cannot cover the domain.
+The network is the intelligence; the experts are its parts. This is the
+conceptual foundation everything below hangs from.
+
 ## 1. The model
 
 A rooted, recursive **tree of agents**. There is no central `AgentManager`;

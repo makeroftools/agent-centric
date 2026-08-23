@@ -345,7 +345,8 @@ These are listed in `STATUS.md`'s "out of scope / future volleys".
   404s on OpenRouter for this key (invalid slug); remove or correct it.
 - **docs/fbp.md / FBP_HANDOFF.md / README_FBP.md** are living docs — keep them
   current (they now mention the model box, reload, kill, streaming, history,
-  envelopes, and the durable `--history` transcript).
+  envelopes, the durable `--history` transcript, and the **"Network of Experts
+  AI"** axiom enshrined at the top of `README_FBP.md` and `spec.md` §0).
 - **The `fbp-web` landing page** is live and runnable for a demo (set
   `OPENROUTER_API_KEY` for a real model; it fails closed to the stub otherwise):
   `uv run agent-centric fbp-web --reload`. Add `--history <path>` to keep the
@@ -388,8 +389,14 @@ uv run python examples/fbp_arc_demo.py
 - No GitHub CI.
 - Deterministic-first north star; LLM as ordinary agent; grants; fail-closed;
   no auto-pres ids.
+- **The coined axiom (user): "Network of Experts AI"** — *the model is not the
+  expert, the network is.* An AI is a network of narrow domain experts, each
+  verified by a deterministic verifier; a general model is one (fallible) kind
+  of expert. Enshrined at the top of `README_FBP.md` and `spec.md` §0. Treat it
+  as the conceptual north star for any future expert-selection / per-domain-SLM
+  work.
 - The AC Router is spun out, gitignored, and **not** our work here.
-- Trust only what 751 tests prove and what is committed; say clearly when
+- Trust only what the tests prove and what is committed; say clearly when
   something is unverifiable or unpushed.
 
 ---
