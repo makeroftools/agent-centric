@@ -345,8 +345,12 @@ These are listed in `STATUS.md`'s "out of scope / future volleys".
   404s on OpenRouter for this key (invalid slug); remove or correct it.
 - **docs/fbp.md / FBP_HANDOFF.md / README_FBP.md** are living docs — keep them
   current (they now mention the model box, reload, kill, streaming, history,
-  envelopes, the durable `--history` transcript, and the **"Network of Experts
-  AI"** axiom enshrined at the top of `README_FBP.md` and `spec.md` §0).
+  envelopes, the durable `--history` transcript, the **"Network of Experts AI"**
+  axiom enshrined at the top of `README_FBP.md` and `spec.md` §0, and an
+  **"Appreciating the architecture"** section for new readers at the top of
+  `README_FBP.md`). `README_FBP.md` was also brought current (771 tests, missing
+  capability rows added: Component Networks, schema-driven orchestration, bills
+  workflow).
 - **The `fbp-web` landing page** is live and runnable for a demo (set
   `OPENROUTER_API_KEY` for a real model; it fails closed to the stub otherwise):
   `uv run agent-centric fbp-web --reload`. Add `--history <path>` to keep the

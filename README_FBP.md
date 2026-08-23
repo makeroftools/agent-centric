@@ -83,6 +83,48 @@ built around four non-negotiable guarantees:
 
 ---
 
+## Appreciating the architecture (what makes it elegant)
+
+Before the code tour, it's worth pausing on *why* this architecture is shaped the
+way it is — because the subtle parts are the most valuable parts, and they are
+the easiest to miss on a first read.
+
+**1. The topology *is* the governance — there is no boss to hack.**
+Authority isn't held by one privileged component you'd need to protect. It's
+distributed into *who sits above whom*: a parent is responsible for its subtree
+simply by being its parent. To change what a subtree may do, you change the
+relationship. There is no central registry of power to compromise; security comes
+from the shape, not from locking a door.
+
+**2. Verification happens on the way up — so the last word is never a child's.**
+Work flows down, but every value that returns passes through each parent's
+verifier before it counts. A child cannot make its own result true by claiming it.
+This single, recursive rule dissolves a whole class of "trust me" problems into
+one mechanical, auditable check.
+
+**3. Determinism is a *decision*, not a hope.** Identical inputs give identical
+outputs, so **replay is a computation**: you can re-run a session afterward and the
+outcomes must match, or the system tells you what drifted. That's the difference
+between "run it and hope it behaved" and "prove it behaved."
+
+**4. Persistence is a grant, not a right.** Nothing is written unless a parent
+explicitly grants it — single-writer, idempotent, no auto-generated ids. A whole
+class of bugs is impossible: nothing silently persists, nothing secretly mutates,
+and an ungranted key fails closed instead of leaking.
+
+**5. Models are guests, not kings.** A large model is welcome — as one kind of
+expert *within* a component's contract. Its output is re-verified, audited, and
+never conclusive on its own word. The architecture uses models exactly where they
+help and refuses to let them become the sole authority anywhere. That is the
+**Network of Experts AI** axiom made operational.
+
+Each of these looks like a constraint; together they are the source of the
+system's calm. A network you can't quietly corrupt, values you can't silently
+fake, a history you can always ask to reproduce, and durable state you can
+*see* being written. That is the point of all the discipline.
+
+---
+
 ## Meet `FbpDriver` — the easy-UX layer
 
 Raw sockets, frames, and event loops are hidden. `FbpDriver` is a plain,
@@ -143,7 +185,10 @@ uv run agent-centric fbp --transport ipc # local inter-process
 | **Durable, crash-safe replay** | A durable directive ledger (explicit grant) survives the process; `replay_ledger` auto-imports the registry manifest and re-verifies in a fresh process. |
 | **Plans + observation** | `run_plan` runs a deterministic sequence (fail-closed on the first unverified step) with per-step progress; `summary()`/`summarise_ledger` give an operator-facing readout. |
 | **Read-only inspection** | `tree()` returns a deterministic snapshot of the live agent tree (identity, kind, state/trajectory grants, store key allowlist, and configured capabilities/verifier/rules); `store_keys(child)` lists a `StoreAgent`'s granted, existing keys. A capability, not an agent — nothing is mutated. |
-| **Landing-page server** | `agent-centric fbp-web` serves a local, actionable landing page via stdlib `http.server` (loopback-only, read/verify-only): live agent tree, session summary, standing invariants, one-click deterministic demo actions, and a **model box** (dropdown + spinner) that routes a prompt through the `model` agent to OpenRouter when `OPENROUTER_API_KEY` is set (deterministic stub otherwise), showing `[verified]` status and the model source. Answers can **stream** (`/model/stream`, SSE) and a bounded in-page **chat history** (`/history`) is kept. `fbp-web --reload` auto-restarts on source edits; `fbp-web-kill` stops the server. No durable-state mutation. |
+| **Landing-page server** | `agent-centric fbp-web` serves a local, actionable landing page via stdlib `http.server` (loopback-only, read/verify-only): live agent tree, session summary, standing invariants, and a **model box** (dropdown + spinner) that routes a prompt through the `model` agent to OpenRouter when `OPENROUTER_API_KEY` is set (deterministic stub otherwise), showing `[verified]` status and the model source. Answers can **stream** (`/model/stream`, SSE) and a bounded in-page **chat history** (`/history`) is kept, opt-in durable via `--history <path>`. `fbp-web --reload` auto-restarts on source edits; `fbp-web-kill`/`--kill` stops the server. No durable-state mutation. |
+| **Component Networks (visual programming)** | A deterministic graph of components wired by data-flow edges (`network.py`), validated as a DAG and compiled (topological, ties by id) into an ordered FBP plan run through the verified spine — with **true dataflow** (a downstream component consumes the *computed* verified output of its upstreams). Cycles / unknown refs / unverified steps fail closed. The landing page has a dependency-free drag-and-drop node-and-wire canvas + durable save/load (`--networks <path>`). |
+| **Schema-driven orchestration** | A typed, schema-constrained artifact resolves to a concrete FBP plan (`plan_from_schema`; `SCHEMAS` for `run`/`double`/`sum`) and runs through the same verified spine. The landing page has a typed form (`/orchestrate/schema`). |
+| **Bills workflow on the page** | The mission loop — intake → human-gated accept → durable registry → verified calendar — is a live card (`/bills/*` routes), durable via `--bills <path>`. Prefix grants (`bill-*`) allow ids under a namespace while failing closed outside it. |
 
 ---
 
@@ -241,4 +286,4 @@ contract are at `src/agent_centric/fbp/{spec,protocol}.md`.
 
 > **Status.** This is the **active** FBP subsystem on `agent-centric-fbp`.
 > `main` remains the default repo and the prior Manager-line stays contained
-> there. Nothing here claims more than the code and 602 passing tests prove.
+> there. Nothing here claims more than the code and **771 passing tests** prove.
