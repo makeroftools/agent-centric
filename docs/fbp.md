@@ -289,6 +289,35 @@ with FbpDriver() as d:
   `d.configure_provider(child, provider)` at composition time — that never
   relaxes verification.
 
+### Post-return determinism + chat → FBP orchestration
+
+The attaching seam between the LLM chat window and the FBP network, per the
+"model proposes, code accepts" rule:
+
+- **`chat_pipeline.py`** — deterministic repair → schema-parse → canonicalize →
+  request-key → pin. `schema_parse(text, schema)` coerce raw text to a typed
+  dict (fail-closed: required fields, enums, type coercion); `canonicalize`
+  sorts keys / collapses whitespace / drops `None`; `request_key` hashes the
+  inputs (model id, prompt, template version, context, params); `PinCache`
+  serves the first accepted artifact for identical inputs — lexical determinism
+  by caching.
+- **`orchestrate.py`** — `plan_from_artifact(artifact)` maps a canonical JSON
+  artifact (a single `task` or an ordered `steps` list) to an FBP `run` plan;
+  `run_artifact_plan(driver, artifact)` executes it through `driver.run_plan`,
+  so every step is a normal directive (parent re-verified, ledgered,
+  replayable). Unsupported intents / unorchestrable artifacts fail closed.
+
+```python
+from agent_centric.fbp import plan_from_artifact, run_artifact_plan
+steps = plan_from_artifact({"task": "double", "args": {"value": 21}})
+result = run_artifact_plan(driver, {"task": "double", "args": {"value": 21}})
+# result == {"ok": True, "results": [{"step": 0, "task": "double",
+#            "verified": True, "value": 42, "error": None}], "completed": 1}
+```
+
+The landing page exposes this as an **Orchestrate → FBP** box (`/orchestrate`
+route): paste a JSON artifact and it runs as a verified FBP plan.
+
 ### Determinism rating + approved rules (determinize-then-decide)
 
 `determinism.py` is a pure capability that makes the "never rely on a

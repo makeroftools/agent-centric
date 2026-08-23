@@ -37,10 +37,10 @@ we are.
   relaxed, but confirm each time for a given commit.)
 
 ### Validation (run this session, all live)
-- `uv run pytest` → **686 passed** (was 674; added `chatstore` + durable-history
-  web/CLI wiring)
+- `uv run pytest` → **723 passed** (was 686; added post-return determinism +
+  orchestration seam)
 - `uv run ruff check .` → clean
-- `uv run mypy src` → clean (**78 source files**)
+- `uv run mypy src` → clean (**80 source files**)
 - FBP coverage (`uv run pytest --cov=agent_centric.fbp --cov-report=term`) →
   **~88% total**; key files: registry 97%, bills 94%, store 93%, store_agent
   89%, web 83%.
@@ -77,7 +77,9 @@ that page:
 | **Model box (dropdown + spinner)** | `fbp/web.py` | `/model` POST runs a prompt through the `model` agent → OpenRouter when `OPENROUTER_API_KEY` set, else stub; model dropdown (`OPENROUTER_MODEL`), spinner, verified/source status; **Enter submits, Shift+Enter = newline** |
 | **Streaming answers + chat history** | `fbp/web.py` | `/model/stream` (SSE-over-POST) streams OpenRouter tokens live; `/history` + `/history/clear` give a bounded in-page transcript (100 turns). Streaming reports honestly as verified=False (the audited path stays `/model`) |
 | **Resource envelopes** | `fbp/envelopes.py` | `ResourceEnvelope` (step/size/latency/child bounds) granted at configure time, enforced fail-closed at run/spawn; unbounded by default |
-| **Durable chat history** | `fbp/chatstore.py`, `fbp/web.py`, CLI | OPT-IN model-box transcript (`fbp-web --history <path>`): single-writer, append-only, WAL, bounded like the in-memory log; survives restarts, replays identically. In-memory by default (no write without an explicit grant)
+| **Durable chat history** | `fbp/chatstore.py`, `fbp/web.py`, CLI | OPT-IN model-box transcript (`fbp-web --history <path>`): single-writer, append-only, WAL, bounded like the in-memory log; survives restarts, replays identically. In-memory by default (no write without an explicit grant) |
+| **Post-return determinism** | `fbp/chat_pipeline.py` | The "model proposes, code accepts" seam: deterministic repair → schema-parse → canonicalize → request-key → pin. `PinCache` serves the first accepted artifact for identical inputs (lexical determinism by caching). Pure/offline |
+| **Chat → FBP orchestration** | `fbp/orchestrate.py`, `fbp/web.py` `/orchestrate` | A canonical JSON artifact (single `task` or `steps`) maps to an ordered FBP `run` plan executed through the driver's verified spine (parent re-verified, ledgered, replayable). Fail-closed on invalid/unorchestrable artifacts |
 
 ### Easy-UX driver & CLI
 - `FbpDriver` API: `register`, `resolve`, `configure`, `configure_child`,
@@ -185,6 +187,12 @@ of decisions and working style that a fresh session must inherit.
    tab instead of spawning a second one. `_fbp_kill_stale_web(port)` already
    guarantees no second instance runs (`--reload`/`fbp-web-kill` take the port
    over, leaving unrelated processes untouched).
+11. **Post-return determinism + chat→FBP orchestration** (`e57d8f9`) — new
+   `fbp/chat_pipeline.py` (validate → canonicalize → pin; `PinCache` gives
+   lexical determinism by caching) and `fbp/orchestrate.py` (a canonical
+   artifact → an ordered FBP `run` plan through the driver's verified spine).
+   The landing page gains an **Orchestrate → FBP** box (`/orchestrate` route).
+   This is the attaching seam for the LLM chat window driving FBP networks.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -245,10 +253,11 @@ real trust boundary.
 These are listed in `STATUS.md`'s "out of scope / future volleys".
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (3):** `09d1c7a` (Enter/Shift-Enter), `5b53945` (handoff),
-  and `8f6daa2` (durable chat history, added this session) are local but not on
-  GitHub (remote is at `df0fb16`). The user pushes directly; confirm before
-  pushing anything yourself.
+- **Unpushed commits (7):** `09d1c7a` (Enter/Shift-Enter), `5b53945` (handoff),
+  `8f6daa2` (durable chat history), `96da778` (handoff), `3e391c4` (reload
+  one-tab), `212cea7` (handoff), and `e57d8f9` (post-return determinism +
+  orchestration) are local but not on GitHub (remote is at `df0fb16`). The user
+  pushes directly; confirm before pushing anything yourself.
 - **Terminal glitch (this session):** the session's local terminal began
   rejecting ``cd`` into the project with "not in any of the project's
   worktrees"; the same command had worked minutes earlier. The sub-agent (which
@@ -295,7 +304,7 @@ uv run python examples/fbp_arc_demo.py
 - Deterministic-first north star; LLM as ordinary agent; grants; fail-closed;
   no auto-pres ids.
 - The AC Router is spun out, gitignored, and **not** our work here.
-- Trust only what 686 tests prove and what is committed; say clearly when
+- Trust only what 723 tests prove and what is committed; say clearly when
   something is unverifiable or unpushed.
 
 ---
