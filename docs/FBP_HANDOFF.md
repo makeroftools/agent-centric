@@ -25,9 +25,9 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `4de7b09` (capture CLI wiring for acp/mcp + current state for a
-  mission-critical handoff). This session added commits on top of the earlier
-  sequence (all local, none pushed by the agent): `4b19fc0` (operator activity
+- **HEAD:** `21a83bf` (add a Connect/external-surfaces pane + `/surfaces` route and an
+  e2e ACP/MCP demo — this session's external-surface work). This session added commits
+  on top of the earlier sequence (all local, none pushed by the agent): `4b19fc0` (operator activity
   feed), `7c9a546` (wire activity feed into landing page + CLI), `e9c2caf`
   (remove the Bills tab — demonstration only), `7375698` (full-surface HTTP
   route coverage), `d5cb164` (Designer node stick-to-cursor fix), `87e353e`
@@ -39,10 +39,10 @@ we are.
   (add MCP adapter exposing FBP capabilities as tools), `dac830c` (capture the MCP adapter +
   shared driver host), `860d6e6` (capture 'private product, no multi-tenant' decision),
   `d2953af` (expose acp and mcp adapters as agent-centric subcommands),
-  `4de7b09` (capture CLI wiring for acp/mcp + current state).
-- **Pushed to origin:** the user pushes directly. **Unpushed (63 commits):** the
-  full `agent-centric-fbp` sequence from `c4afa94` onward (all of this session's
-  work is unpushed). Run `git log origin/agent-centric-fbp..HEAD` to see the
+  `4de7b09` (capture CLI wiring for acp/mcp + current state),
+  `21a83bf` (external-surfaces Connect pane + `/surfaces` + e2e ACP/MCP demo).
+- **Pushed to origin:** the user pushes directly. **Unpushed (64 commits):** the
+  full `agent-centric-fbp` sequence plus this session's `21a83bf`. Run `git log origin/agent-centric-fbp..HEAD` to see the
   exact unpushed set. No push is made by the agent; the lead pushes when they
   choose.
 - `main` stays the GitHub default and is **fully contained** in this branch.
@@ -136,6 +136,7 @@ that page:
 | **ACP adapter (Zed → FBP)** | `acp.py`, `tests/test_acp.py` | The **Agent Client Protocol** edge transport now routes every prompt through the **FBP `FbpDriver` verified spine** (not the legacy `AgentManager`). `FbpAcpAgent` commands: `double`/`square`/`negate`/`sum` (verified arithmetic), `model` (stub or opt-in OpenRouter), `store set/get` (grant-scoped), `bills intake/accept/calendar` (human-gated demo loop), `status`/`tree` (read-only), `network <json>` (component-network dataflow). Unknown commands fail closed. The driver runs on a **dedicated worker thread** so its private event loop stays isolated from the ACP async loop (fixes `Cannot run the event loop while another loop is running`). `close()` tears down the host + temp stores. Additive; 13 tests. The landing page **Docs** pane gains an ACP tutorial + command reference |
 | **MCP adapter (FBP → any LLM host)** | `mcp.py`, `tests/test_fbp_mcp.py` | The **Model Context Protocol** edge transport — the mirror image of ACP — exposes the FBP platform as **tools** any MCP-capable host (Claude Desktop, agent runtimes) can call. Tools: `double`/`square`/`negate`/`sum` (verified arithmetic), `model` (stub or opt-in OpenRouter), `store_set`/`store_get` (grant-scoped), `bills_intake`/`bills_accept`/`bills_calendar` (human-gated demo loop), `status`/`tree` (read-only), `network` (component-network dataflow). Unknown/ungranted operations fail closed (`is_error=True`). Reuses the shared `FbpDriverHost` worker thread. Additive; 5 tests. The landing page **Docs** pane gains an MCP tutorial + tool reference |
 | **Shared worker-thread driver host** | `fbp/driverhost.py` | `FbpDriverHost` — the **single worker-thread host** both ACP and MCP use to reach the deterministic spine. The driver's private event loop is bound to the worker thread (isolated from the ACP/MCP async loops); commands are submitted and awaited. Parameterizable store-key grant (`acp-*`/`mcp-*`). Additive |
+| **External-surfaces Connect pane** | `fbp/web.py`, `tests/test_fbp_surfaces.py`, `tests/test_fbp_web_routes.py`, `examples/fbp_external_demo.py` | The landing page makes the two edge transports **discoverable**: a **Connect** pane (`#pane-connect`) renders ACP + MCP cards (entry points, one-click copy, live/stub model badge — never the key — store-grant prefix, command/tool reference), fed by a read-only `/surfaces` JSON route. `examples/fbp_external_demo.py` drives BOTH transports through the shared `FbpDriverHost` verified spine, offline and honest (verified vs fail-closed). Additive; unit + HTTP route coverage |
 
 ### Easy-UX driver & CLI
 - `FbpDriver` API: `register`, `resolve`, `configure`, `configure_child`,
@@ -480,6 +481,14 @@ of decisions and working style that a fresh session must inherit.
    `agent-centric mcp` subcommands delegate to the ACP/MCP adapter entry points,
    so the FBP platform's external surfaces are discoverable and launchable from
    the main operator CLI (not just the separate console scripts). Additive.
+50. **External-surfaces Connect pane + e2e ACP/MCP demo** (`21a83bf`) — the
+   flagged landing-page surface card is now built: a new **Connect** pane on the
+   dashboard shows both edge transports (ACP, MCP) with their console entry
+   points, one-click copy, live/stub model badge (never the key), store-grant
+   prefix, and a command/tool reference. Served by a read-only `/surfaces` JSON
+   route. `examples/fbp_external_demo.py` drives BOTH ACP and MCP through the
+   shared `FbpDriverHost` verified spine, offline and honest (verified vs
+   fail-closed). Additive; tested (unit + HTTP route coverage).
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -700,11 +709,11 @@ not a commitment to build a multi-tenant service. Do not build or plan
 multi-tenant anything unless the user explicitly reverses this.
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (63):** the whole `agent-centric-fbp` sequence from
+- **Unpushed commits (64):** the whole `agent-centric-fbp` sequence from
   `c4afa94` onward is local — including all of this session's work
   (`4b19ee0`, `7c9a546`, `e9c2caf`, `7375698`, `d5cb164`, `87e353e`, `d86c203`,
   `24bda00`, `9eedd69`, `c50b85d`, `aa29c27`, `9d5c8c0`, `a1cdb61`, `dac830c`,
-  `860d6e6`, `d2953af`, `4de7b09`) — none on GitHub. The lead pushes directly;
+  `860d6e6`, `d2953af`, `4de7b09`, `21a83bf`) — none on GitHub. The lead pushes directly;
   confirm before pushing anything yourself. Run
   `git log origin/agent-centric-fbp..HEAD` for the exact set.
 - **ACP entry point:** `agent-centric-acp` (or `python -m agent_centric.acp`)
