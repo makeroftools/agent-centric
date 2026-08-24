@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 from typing import Any
 
 from acp._transport import memory_transport_pair
@@ -103,6 +104,10 @@ def _run_scenario(prompt_text: str) -> tuple[list[str], str]:
     """Run one prompt through a fresh agent; return (streamed lines, stop_reason)."""
 
     async def scenario() -> tuple[list[str], str]:
+        # Force the deterministic stub regardless of the ambient environment
+        # (the operator's shell may set OPENROUTER_API_KEY), so the model path
+        # is deterministic — the same convention the web-route and MCP tests use.
+        os.environ.pop("OPENROUTER_API_KEY", None)
         agent = FbpAcpAgent()
         right, listen_task, session_id = await _establish_session(agent)
         try:
@@ -126,6 +131,8 @@ def _run_session_shared(*prompt_texts: str) -> list[tuple[str, str]]:
     """
 
     async def scenario() -> list[tuple[str, str]]:
+        # Force the deterministic stub (see _run_scenario).
+        os.environ.pop("OPENROUTER_API_KEY", None)
         agent = FbpAcpAgent()
         right, listen_task, session_id = await _establish_session(agent)
         try:

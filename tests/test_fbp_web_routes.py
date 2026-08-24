@@ -520,11 +520,17 @@ class TestReadiness:
             # Sabotage the spine: unregister the task the probe runs, so the
             # readiness probe cannot produce a verified result.
             srv._server._driver._root._registry._entries.pop("double", None)
-            status, _, body = srv.get("/ready")
-            assert status == 503
-            data = json.loads(body)
-            assert data["ready"] is False
-            assert data["verified"] is False
+            import urllib.error
+
+            try:
+                srv.get("/ready")
+                raise AssertionError("expected 503")
+            except urllib.error.HTTPError as exc:
+                # A 503 (fail-closed not-ready) surfaces as an HTTPError.
+                assert exc.code == 503
+                data = json.loads(exc.read().decode("utf-8"))
+                assert data["ready"] is False
+                assert data["verified"] is False
         finally:
             srv.close()
 
