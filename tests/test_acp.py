@@ -256,3 +256,25 @@ def test_acp_driver_is_shared_and_closed() -> None:
     assert a1._host is h1
     a1.close()
     assert a1._host._driver is None
+
+
+def test_acp_oversized_prompt_fails_closed() -> None:
+    """A prompt above the bound is refused, never fed through the spine."""
+    from agent_centric.acp import _MAX_PROMPT_CHARS
+
+    big = "double 1 " + ("x" * (_MAX_PROMPT_CHARS + 1))
+    streamed, stop = _run_scenario(big)
+    assert stop == "end_turn"
+    assert any("prompt exceeds" in t and "fail-closed" in t for t in streamed), streamed
+    assert not any("verified output" in t for t in streamed)
+
+
+def test_acp_prompt_at_bound_is_accepted() -> None:
+    """A prompt within the bound still routes through the verified spine."""
+    from agent_centric.acp import _MAX_PROMPT_CHARS
+
+    # ``sum 2 3`` is 8 chars; pad to well under the bound (total < _MAX).
+    pad = " " * (_MAX_PROMPT_CHARS - 32)
+    streamed, stop = _run_scenario(f"sum 2 3{pad}")
+    assert stop == "end_turn"
+    assert any("verified output" in t and "5" in t for t in streamed), streamed

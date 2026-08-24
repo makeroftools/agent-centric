@@ -101,6 +101,12 @@ _PromptBlock = (
     | EmbeddedResourceContentBlock
 )
 
+# Hard upper bound on the total size of a single prompt (across all content
+# blocks). Mirrors the landing server's request-body bound so a client cannot
+# feed an arbitrarily large string through the verified spine / into memory.
+# Exceeding it fails closed with a clear message.
+_MAX_PROMPT_CHARS = 1 << 16
+
 
 def _block_text(block: Any) -> str:
     """Extract plain text from an ACP content block (or a raw dict)."""
@@ -228,13 +234,39 @@ class FbpAcpAgent(Agent):
     ) -> AuthenticateResponse | None:
         return None
 
+    def _prompt_text(self, prompt: list[_PromptBlock]) -> str:
+        """Concatenate the prompt's text blocks, bounded and fail-closed.
+
+        Checks each block's contribution against the hard ``_MAX_PROMPT_CHARS``
+        limit *before* building the joined string, so an oversized prompt is
+        refused rather than allocated. Returns the trimmed, space-joined text.
+        """
+        total = 0
+        parts: list[str] = []
+        for block in prompt:
+            text = _block_text(block)
+            if not text:
+                continue
+            total += len(text)
+            if total > _MAX_PROMPT_CHARS:
+                raise ValueError(
+                    f"prompt exceeds the {_MAX_PROMPT_CHARS}-char bound; "
+                    "refusing (fail-closed)"
+                )
+            parts.append(text)
+        return " ".join(parts).strip()
+
     async def prompt(
         self,
         session_id: str,
         prompt: list[_PromptBlock],
         **kwargs: Any,
     ) -> PromptResponse:
-        text = " ".join(_block_text(block) for block in prompt).strip()
+        try:
+            text = self._prompt_text(prompt)
+        except Exception as exc:  # noqa: BLE001 - surfaced as a clear failure
+            await self._stream(session_id, f"fail-closed: {exc}")
+            return PromptResponse(stop_reason="end_turn")
         if session_id in self._cancelled:
             await self._stream(session_id, "cancelled before start")
             return PromptResponse(stop_reason="cancelled")
