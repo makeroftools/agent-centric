@@ -25,7 +25,7 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `08deaa7` (this capture) — atop `7ac854f`, `c51be25`, `7c76f33`, and `3da8879`. This session added commits
+- **HEAD:** `e261932` (this capture) — atop `08deaa7`, `7ac854f`, `c51be25`, `7c76f33`, and `3da8879`. This session added commits
   on top of the earlier sequence (all local): `4b19fc0` (operator activity feed), `7c9a546` (landing+CLI activity feed), `e9c2eaf`
   (remove Bills tab, demo-only), `7375698` (full-surface HTTP coverage), `d5cb164`
   (Designer sticky-fix), `87e353e` (drag-and-drop), `d86c203` (drag wire-fix),
@@ -35,6 +35,10 @@ we are.
   `d2953af` (acp/mcp subcommands), `4de7b0e` (ACP/MCP CLI wiring), `21a83bf` (Connect pane),
   `09bf6e7` (CLI wiring + Zed ref), `4092cac` (Connect pane MCP-card clipping fix),
   `1b0f6b2` (Zed agent_servers schema fix), `cdb6618` (MCP deterministic stub test),
+  `f22e4fa` (reflect push + MCP test handoff capture), `3da8879` (landing hardening),
+  `7c76f33` (handoff capture), `c51be25` (git-state fix), `7ac854f` (readiness/liveness split),
+  `08deaa7` (ACP bound), `e261932` (this capture).
+- **Pushed to origin:** the lead pushes directly. **Unpushed (6):** `3da8879` + `7c76f33` + `c51be25` + `7ac854f` + `08deaa7` + `e261932` (landing hardening + its capture + git-state fix + the readiness/liveness split + the ACP bound + the MCP bound) are local, not yet pushed. A prior `git fetch` confirmed `eb3a9fc` was pushed. The agent does not push.
   `f22e4fa` (reflect push + MCP test handoff capture), `3da8879` (landing hardening),
   `7c76f33` (handoff capture), `c51be25` (git-state fix), `7ac854f` (readiness/liveness split),
   `08deaa7` (this capture).
@@ -521,6 +525,15 @@ of decisions and working style that a fresh session must inherit.
   message and is never misreported as verified. Additive; the verified spine and standing
   invariants are untouched. Tests added for the operator (over-bound refused, at-bound
   accepted); live-verified via a direct smoke test. **Not yet pushed.**
+56. **MCP bounded tool-call args (fail-closed)** (`e261932`) — the mirror image of the ACP bound
+  on the MCP stdio surface: an LLM host drives this transport, so a single tool call with
+  oversized args (e.g. an outsized ``store_set`` / ``bills_intake`` / ``model`` payload) cannot be
+  fed through the verified spine / into memory. Each tool call's serialized args are checked
+  against a **65,536-byte hard bound** (`_MAX_CALL_BYTES`) before the driver is reached; an
+  unserializable arg-object also fails closed. Exceeding it is never misreported as verified.
+  Mirrors the ACP prompt bound and the landing server's request-body bound. Additive; the
+  verified spine and standing invariants are untouched. Tests added for the operator (over-bound
+  fails closed, verified output absent); live-verified via a direct smoke test. **Not yet pushed.**
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -741,13 +754,15 @@ not a commitment to build a multi-tenant service. Do not build or plan
 multi-tenant anything unless the user explicitly reverses this.
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (5) — open:** `3da8879` (landing hardening) + `7c76f33`
-  (handoff capture) + `c51be25` (git-state fix) + `7ac854f` (readiness/liveness split) + `08deaa7` (ACP bound) are local, not yet pushed. `origin/agent-centric-fbp` is at `eb3a9fc`. The
+- **Unpushed commits (6) — open:** `3da8879` (landing hardening) + `7c76f33`
+  (handoff capture) + `c51be25` (git-state fix) + `7ac854f` (readiness/liveness split) + `08deaa7` (ACP bound) + `e261932` (MCP bound) are local, not yet pushed. `origin/agent-centric-fbp` is at `eb3a9fc`. The
   lead pushes; the agent does not. After a push, `git fetch` to confirm.
 - **Readiness/liveness split (this session) — built, unpushed:** a `/ready` probe exercises
   the verified spine (fail-closed 503) distinct from the pure-liveness `/health`. See arc 54.
 - **ACP bounded prompt (this session) — built, unpushed:** ACP now refuses a single
   `session/prompt` above a 65,536-char bound, fail-closed (never misverified). See arc 55.
+- **MCP bounded tool-call args (this session) — built, unpushed:** MCP now refuses a tool call
+  whose serialized args exceed a 65,536-byte bound, fail-closed. See arc 56.
 - **ACP entry point:** `agent-centric-acp` (or `python -m agent_centric.acp`)
   exposes the FBP platform as an External Agent in Zed over stdio. Point Zed's
   `agent_servers` at it. **Zed's schema is an object map keyed by agent name,
