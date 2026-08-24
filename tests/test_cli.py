@@ -241,6 +241,28 @@ class TestCliFbp:
         assert "8/8 checks passed" in out
         assert "READY" in out
 
+    def test_fbp_check_with_curve(self, tmp_path: Path) -> None:
+        """``fbp-check --curve`` proves the CURVE-encrypted wire end-to-end on
+        the deploy/readiness gate (opt-in)."""
+        code, out = _run(tmp_path, "fbp-check", "--transport", "tcp", "--curve")
+        assert code == 0, out
+        assert "8/8 checks passed" in out
+        assert "READY" in out
+
+    def test_fbp_check_curve_with_inproc_fails_closed(self, tmp_path: Path) -> None:
+        code, out = _run(tmp_path, "fbp-check", "--transport", "inproc", "--curve")
+        assert code == 1
+        assert "not inproc" in out
+
+    def test_parser_builds_fbp_check_curve(self) -> None:
+        from agent_centric.cli import _build_parser
+
+        parser = _build_parser()
+        a = parser.parse_args(["fbp-check", "--curve", "--transport", "tcp"])
+        assert a.curve is True
+        b = parser.parse_args(["fbp-check"])
+        assert b.curve is False
+
     def test_parser_builds_fbp_check(self) -> None:
         from agent_centric.cli import _build_parser
 

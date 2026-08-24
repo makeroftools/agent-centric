@@ -711,6 +711,13 @@ def _build_parser() -> argparse.ArgumentParser:
         default="inproc",
         help="Transport to run the self-test over (default: inproc).",
     )
+    p_fbp_check.add_argument(
+        "--curve",
+        action="store_true",
+        default=False,
+        help="Run the self-test over the CURVE-encrypted wire (requires a "
+        "tcp/ipc transport; fails closed with inproc).",
+    )
 
     sub.add_parser(
         "acp",
@@ -1072,7 +1079,9 @@ def _cmd_fbp(
         return 0 if local.verified and delegated.verified and replay["passed"] else 1
 
 
-def _cmd_fbp_check(transport: str, integrity: str | None = None) -> int:
+def _cmd_fbp_check(
+    transport: str, integrity: str | None = None, curve: bool = False
+) -> int:
     """Run a bounded, deterministic self-test of the verified spine.
 
     This is a deploy/readiness gate: it builds a fresh tree, exercises a battery
@@ -1083,8 +1092,9 @@ def _cmd_fbp_check(transport: str, integrity: str | None = None) -> int:
     It exits non-zero if anything is unverified or fails closed unexpectedly — a
     self-check a CI / deploy pipeline (or an operator) can hang a gate on.
 
-    ``integrity`` optionally turns on §5.5 traffic integrity, so the self-test
-    also proves the signed wire end-to-end.
+    ``integrity`` optionally turns on §5.5 traffic integrity; ``curve`` turns on
+    CURVE wire encryption — so the self-test can prove either the signed wire or
+    the encrypted wire end-to-end (opt-in).
     """
     import agent_centric.fbp as fbp
 
@@ -1094,6 +1104,8 @@ def _cmd_fbp_check(transport: str, integrity: str | None = None) -> int:
     driver_kwargs: dict[str, Any] = {}
     if integrity:
         driver_kwargs["integrity_secret"] = integrity.encode("utf-8")
+    if curve:
+        driver_kwargs["curve"] = True
 
     results: list[tuple[str, bool, str]] = []
 
@@ -1567,7 +1579,9 @@ def main(argv: list[str] | None = None) -> int:
             curve=args.curve,
         )
     if args.command == "fbp-check":
-        return _cmd_fbp_check(args.transport, integrity=args.integrity)
+        return _cmd_fbp_check(
+            args.transport, integrity=args.integrity, curve=args.curve
+        )
     if args.command == "fbp-web":
         return _cmd_fbp_web(
             host=args.host, port=args.port, open_browser=args.open, reload=args.reload,
