@@ -25,7 +25,7 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `b202cb2` (this capture) — atop `c3d65d0`, `9c7f4b0`, `e261932`, `08deaa7`, `7ac854f`, `c51be25`, `7c76f33`, and `3da8879`. This session added commits
+- **HEAD:** `8dc92ff` (this capture) — atop `b202cb2`, `c3d65d0`, `9c7f4b0`, `e261932`, `08deaa7`, `7ac854f`, `c51be25`, `7c76f33`, and `3da8879`. This session added commits
   on top of the earlier sequence (all local): `4b19fc0` (operator activity feed), `7c9a546` (landing+CLI activity feed), `e9c2eaf`
   (remove Bills tab, demo-only), `7375698` (full-surface HTTP coverage), `d5cb164`
   (Designer sticky-fix), `87e353e` (drag-and-drop), `d86c203` (drag wire-fix),
@@ -38,8 +38,8 @@ we are.
   `f22e4fa` (reflect push + MCP test handoff capture), `3da8879` (landing hardening),
   `7c76f33` (handoff capture), `c51be25` (git-state fix), `7ac854f` (readiness/liveness split),
   `08deaa7` (ACP bound), `e261932` (MCP bound), `9c7f4b0` (operator test fixes), `c3d65d0` (413 payload bound),
-  `b202cb2` (this capture).
-- **Pushed to origin:** the lead pushes directly. **Unpushed (9):** `3da8879` + `7c76f33` + `c51be25` + `7ac854f` + `08deaa7` + `e261932` + `9c7f4b0` + `c3d65d0` + `b202cb2` (landing hardening + captures + readiness/liveness split + ACP bound + MCP bound + operator test fixes + the 413 payload bound + the web.py pure-helper coverage) are local, not yet pushed. A prior `git fetch` confirmed `eb3a9fc` was pushed. The agent does not push.
+  `b202cb2` (web.py pure-helper coverage), `8dc92ff` (this capture).
+- **Pushed to origin:** the lead pushes directly. **Unpushed (10):** `3da8879` + `7c76f33` + `c51be25` + `7ac854f` + `08deaa7` + `e261932` + `9c7f4b0` + `c3d65d0` + `b202cb2` + `8dc92ff` (landing hardening + captures + readiness/liveness split + ACP bound + MCP bound + operator test fixes + the 413 payload bound + the web.py pure-helper coverage + the network step-limit) are local, not yet pushed. A prior `git fetch` confirmed `eb3a9fc` was pushed. The agent does not push.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule: **do not push unless the lead explicitly says push.** The lead
 has been pushing directly; confirm per commit.
@@ -540,6 +540,15 @@ of decisions and working style that a fresh session must inherit.
   `/bills/*`. Additive; the verified spine and standing invariants are untouched. Tests added
   for the operator (oversized -> 413, at-bound -> accepted); live-verified over a bound
   loopback server. **Not yet pushed.**
+58. **Component-network step-count bound (fail-closed)** (`8dc92ff`) — ``run_network`` now enforces
+  a hard ceiling on the number of components/steps it will execute (default **512**,
+  ``_DEFAULT_STEP_LIMIT``; a caller may grant a smaller ``step_limit=...``). A network larger
+  than the bound fails closed **before any work** (``completed: 0``), so an edge transport
+  (ACP/MCP) or the Designer UI cannot drive unbounded sequential runs through the verified
+  spine. A non-positive limit also fails closed. Additive: existing networks (well under the
+  ceiling) are unaffected, and both ACP/MCP network tools inherit the bound with no further
+  change. Tests added for the operator (over-bound rejected before work, within-bound accepted,
+  non-positive rejected); live-verified. **Not yet pushed.**
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -760,9 +769,11 @@ not a commitment to build a multi-tenant service. Do not build or plan
 multi-tenant anything unless the user explicitly reverses this.
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (9) — open:** `3da8879` (landing hardening) + `7c76f33`
-  (handoff capture) + `c51be25` (git-state fix) + `7ac854f` (readiness/liveness split) + `08deaa7` (ACP bound) + `e261932` (MCP bound) + `9c7f4b0` (operator test fixes) + `c3d65d0` (413 payload bound) + `b202cb2` (web.py pure-helper coverage) are local, not yet pushed. `origin/agent-centric-fbp` is at `eb3a9fc`. The
+- **Unpushed commits (10) — open:** `3da8879` (landing hardening) + `7c76f33`
+  (handoff capture) + `c51be25` (git-state fix) + `7ac854f` (readiness/liveness split) + `08deaa7` (ACP bound) + `e261932` (MCP bound) + `9c7f4b0` (operator test fixes) + `c3d65d0` (413 payload bound) + `b202cb2` (web.py pure-helper coverage) + `8dc92ff` (network step-limit) are local, not yet pushed. `origin/agent-centric-fbp` is at `eb3a9fc`. The
   lead pushes; the agent does not. After a push, `git fetch` to confirm.
+- **Component-network step-limit (this session) — built, unpushed:** run_network enforces a
+  hard 512-component ceiling (fail-closed before work). See arc 58.
 - **Readiness/liveness split (this session) — built, unpushed:** a `/ready` probe exercises
   the verified spine (fail-closed 503) distinct from the pure-liveness `/health`. See arc 54.
 - **ACP bounded prompt (this session) — built, unpushed:** ACP now refuses a single
