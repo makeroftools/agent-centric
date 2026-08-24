@@ -3184,6 +3184,44 @@ fail-closed: unknown command 'frobnicate'...</code></pre>
   correctness spine, grants, ledger, and replay that govern the web page and
   CLI now govern the editor. A real model is opt-in (env-driven) and never
   relaxes verification — the parent still re-verifies its output.</p>
+
+  <h2>MCP — expose the FBP platform as tools to any LLM host</h2>
+  <p>The <b>Model Context Protocol (MCP)</b> adapter is the mirror image of ACP:
+  it exposes the FBP capabilities as <b>tools</b> an external model (Claude
+  Desktop, agent runtimes, etc.) can call. MCP is an <b>edge transport only</b>:
+  every tool call routes through the <code>FbpDriver</code> verified spine — a
+  normal directive, parent re-verified, ledgered, replayable. No MCP path can
+  produce a verified success that bypasses verification. The driver runs on a
+  dedicated worker thread so its private event loop stays isolated from the MCP
+  async loop.</p>
+
+  <h3>Start it</h3>
+  <p>Point an MCP client at the console entry point over stdio:</p>
+  <pre><code>agent-centric-mcp
+# or: python -m agent_centric.mcp</code></pre>
+
+  <h3>Tools</h3>
+  <ul>
+    <li><code>double</code> / <code>square</code> / <code>negate</code> /
+        <code>sum</code> — verified arithmetic.</li>
+    <li><code>model</code> — the <code>model</code> agent (deterministic stub by
+        default; real OpenRouter when <code>OPENROUTER_API_KEY</code> is set).</li>
+    <li><code>store_set</code> / <code>store_get</code> — mediated single-writer
+        store, grant-scoped.</li>
+    <li><code>bills_intake</code> / <code>bills_accept</code> /
+        <code>bills_calendar</code> — the demonstration bills loop (human-gated
+        accept).</li>
+    <li><code>status</code> / <code>tree</code> — read-only operator
+        inspection.</li>
+    <li><code>network</code> — run a component network as true dataflow.</li>
+  </ul>
+
+  <h3>Why it matters</h3>
+  <p>Any MCP-capable host becomes a thin client over the deterministic
+  platform — the model proposes, the deterministic tool verifies. This is the
+  "Network of Experts AI" seam made reachable from outside: narrow domain
+  experts, each verified by a deterministic verifier, callable as tools. A real
+  model is opt-in (env-driven) and never relaxes verification.</p>
 </div>
 </section>
 
