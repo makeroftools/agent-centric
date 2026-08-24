@@ -25,7 +25,7 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `09bf6e7` (external-surface CLI wiring + e2e demo tests + Zed wiring reference). This session added commits
+- **HEAD:** `1b0f6b2` (external-agent Connect pane + /surfaces + e2e demo + corrected Zed schema). This session added commits
   on top of the earlier sequence (all local, none pushed by the agent): `4b19fc0` (operator activity
   feed), `7c9a546` (wire activity feed into landing page + CLI), `e9c2caf`
   (remove the Bills tab — demonstration only), `7375698` (full-surface HTTP
@@ -40,9 +40,11 @@ we are.
   `d2953af` (expose acp and mcp adapters as agent-centric subcommands),
   `4de7b09` (capture CLI wiring for acp/mcp + current state),
   `21a83bf` (external-surfaces Connect pane + `/surfaces` + e2e ACP/MCP demo),
-  `09bf6e7` (external-surface CLI wiring + e2e demo tests + Zed wiring reference).
-- **Pushed to origin:** the user pushes directly. **Unpushed (65 commits):** the
-  full `agent-centric-fbp` sequence plus this session's `21a83bf`/`09bf6e7`. Run `git log origin/agent-centric-fbp..HEAD` to see the
+  `09bf6e7` (external-surface CLI wiring + e2e demo tests + Zed wiring reference),
+  `4092cac` (fix Connect pane clipping the MCP card),
+  `1b0f6b2` (corrected Zed agent_servers schema + ACP entry-point note).
+- **Pushed to origin:** the user pushes directly. **Unpushed (69 commits):** the
+  full `agent-centric-fbp` sequence plus this session's `21a83bf`/`09bf6e7`/`4092cac`/`1b0f6b2`. Run `git log origin/agent-centric-fbp..HEAD` to see the
   exact unpushed set. No push is made by the agent; the lead pushes when they
   choose.
 - `main` stays the GitHub default and is **fully contained** in this branch.
