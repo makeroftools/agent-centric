@@ -551,6 +551,17 @@ of decisions and working style that a fresh session must inherit.
   (`docs/transport_trust_boundary.md`) and needs TLS + authn/z + tenant
   isolation + billing before it is real, so it was **not** stood up
   unilaterally. The user confirmed this shape implicitly by saying proceed.
+- **PRIVATE PRODUCT — NO MULTI-TENANT ANYTHING (this session, MISSION
+  CRITICAL):** the user stated plainly: *"This is a private product for now —
+  no multi-tenant anything."* This **retires the standalone paid multi-tenant
+  web service from the near-term roadmap**. The product shape is the existing
+  **single-tenant, loopback-first** posture: each operator owns their own tree,
+  `fbp-web --registry` is the only hosted layer, and there is **no multi-tenant
+  server, no billing, no per-tenant isolation work**. Do not build or plan
+  multi-tenant anything unless the user explicitly reverses this. The
+  tenant-aware core (`DomainRegistry`/`ArtifactVault` keyed by tenant) stays as
+  a harmless, additive data-model choice — it is not a commitment to build a
+  multi-tenant service.
 
 - **Domain-expert SLM writeup adopted (this session):** the user shared a
   detailed, technically accurate writeup on building domain-expert SLMs in 2026
@@ -659,42 +670,27 @@ These are listed in `STATUS.md`'s "out of scope / future volleys".
   reachable from Zed. See the capability table + session arc.
 - **MCP adapter — DONE (`a1cdb61`).** The MCP adapter exposes the FBP platform
   as tools any MCP-capable host can call, reusing the shared `FbpDriverHost`
-  worker-thread driver. See the capability table + session arc. The natural
-  next gap is now the **standalone multi-tenant paid web service** (roadmap
-  only, gated on mTLS + per-tenant isolation + billing).
+  worker-thread driver. See the capability table + session arc.
 
-### Production roadmap — standalone multi-tenant paid web service (roadmap only, NOT built)
+### Product direction — PRIVATE, SINGLE-TENANT (this session)
 
-The user asked this be captured **for the roadmap only** — documented as a
-future direction, **not** started. It is the natural extension of the
-**Domain Registry + Artifact Vault**: a **stand-alone web service customers pay
-us for** (a paid "Network of Experts" registry + artifact service). Key design
-constraints already agreed with the user:
-
-- **It must be a shared observability + provenance layer, NEVER the governance
-  layer.** Each customer's tree stays the authority; the hosted service only
-  records *what* and *how* (catalog), and write-once evidence (vault).
-- The core is already **tenant-aware**, so the service would be **additive, not a
-  rewrite**.
-- It is the natural home for the **X402 / micro-payment** settlement adapter
-  (the paid tier, already drafted in `fbp/settlement.py`).
-- **Build gates before it is real (deliberately, from the transport trust
-  boundary):** real mutual-TLS transport over a genuine network path, per-tenant
-  authorization/isolation, and billing. These require live credentials and
-  network access, so they are an explicit, irreversible, money-adjacent step that
-  needs the lead/operator's sign-off before any code is written.
-
-**Status: roadmap entry only.** Nothing is built or committed for the standalone
-service; the existing loopback (`fbp-web --registry`) surface remains the only
-hosted layer.
+The user stated: **"This is a private product for now — no multi-tenant
+anything."** This retires the standalone paid multi-tenant web service from the
+near-term roadmap. The product shape is the existing **single-tenant,
+loopback-first** posture: each operator owns their own tree, `fbp-web --registry`
+remains the only hosted layer, and there is **no multi-tenant server, no billing,
+no per-tenant isolation work**. The tenant-aware core (`DomainRegistry`/
+`ArtifactVault` keyed by tenant) stays as a harmless additive data-model choice,
+not a commitment to build a multi-tenant service. Do not build or plan
+multi-tenant anything unless the user explicitly reverses this.
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (57):** the whole `agent-centric-fbp` sequence from
+- **Unpushed commits (60):** the whole `agent-centric-fbp` sequence from
   `c4afa94` onward is local — including all of this session's work
   (`4b19ee0`, `7c9a546`, `e9c2caf`, `7375698`, `d5cb164`, `87e353e`, `d86c203`,
-  `24bda00`, `9eedd69`, `c50b85d`, `aa29c27`) — none on GitHub. The lead pushes
-  directly; confirm before pushing anything yourself. Run
-  `git log origin/agent-centric-fbp..HEAD` for the exact set.
+  `24bda00`, `9eedd69`, `c50b85d`, `aa29c27`, `9d5c8c0`, `a1cdb61`, `dac830c`)
+  — none on GitHub. The lead pushes directly; confirm before pushing anything
+  yourself. Run `git log origin/agent-centric-fbp..HEAD` for the exact set.
 - **ACP entry point:** `agent-centric-acp` (or `python -m agent_centric.acp`)
   exposes the FBP platform as an External Agent in Zed over stdio. Point Zed's
   `agent_servers` at it. The landing page **Docs** pane has the tutorial.
@@ -841,10 +837,13 @@ uv run python examples/fbp_activity_demo.py
   the hardware tier by the base's size-class floor. It is a **passive registry**
   — records what bases exist, never decides. Full 2026 lists in
   `docs/domain_slm.md`.
-- **Standalone multi-tenant paid web service is roadmap-only** (not built). It
-  would be a shared observability + provenance layer (never the governance
-  layer); gated on real mTLS + per-tenant isolation + billing, which need
-  sign-off.
+- **PRIVATE PRODUCT — NO MULTI-TENANT ANYTHING.** The user stated this plainly.
+  The product is single-tenant and loopback-first; each operator owns their own
+  tree. There is **no multi-tenant server, no billing, no per-tenant isolation**
+  work. The tenant-aware core (`DomainRegistry`/`ArtifactVault` keyed by tenant)
+  is a harmless additive data-model choice, not a commitment to a multi-tenant
+  service. Do not build or plan multi-tenant anything unless the user explicitly
+  reverses this.
 - **Transport hardening exists opt-in** (`fbp/security.py`): per-peer
   authorization, traffic integrity (HMAC), and mutual-TLS credential config — all
   default-off. A real cross-host deployment still supplies live certs + a TLS
