@@ -25,15 +25,17 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (all session work committed).
-- **HEAD:** the latest capture commit — the full local arc, 2 commits ahead of
+- **HEAD:** `f5cc024` — fix(home-paths): use the `$HOME` convention + add a regression
+  guard for the misspelling. The full local arc is 4 commits ahead of
   `origin/agent-centric-fbp` (which is at `7f0d414`).
 - **Session commits (later ones NOT pushed, all local):**
   - `7f0d414` (on origin) — test(fbp): cover web.py fail-closed branches.
-  - `e85e44c` — feat(fbp): make wire-integrity operator-reachable via CLI + landing UX.
   - `fa3c869` — feat(fbp): enforce traffic integrity on the wire (opt-in integrity_secret).
-  - the current checkout commit — feat(fbp): add `fbp-check` deploy/readiness self-test (+ handoff capture).
-- **Pushed to origin:** the lead pushes directly. **Unpushed (3 local):** `e85e44c`,
-  `fa3c869`, and the current checkout — `origin/agent-centric-fbp` is at `7f0d414`. The agent
+  - `e85e44c` — feat(fbp): make wire-integrity operator-reachable via CLI + landing UX.
+  - the previous checkout commit — feat(fbp): add `fbp-check` deploy/readiness self-test (+ handoff capture).
+  - `f5cc024` — fix(home-paths): `$HOME` convention + regression guard for the misspelling (+ handoff capture).
+- **Pushed to the lead:** the lead pushes directly. **Unpushed (4 local):** `fa3c869`,
+  `e85e44c`, the `fbp-check` commit, and `f5cc024` — `origin/agent-centric-fbp` is at `7f0d414`. The agent
   does not push; the lead confirms per commit.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule: **do not push unless the lead explicitly says push.** The lead
@@ -551,6 +553,17 @@ of decisions and working style that a fresh session must inherit.
   via ``plan_from_artifact``, and ``run_artifact_plan`` reports ``ok=False`` with zero work);
   live-verified. **Not yet pushed.**
 
+60. **$HOME-address rule + regression guard (this session)** — the user issued a hard
+   rule: no absolute file/folder addresses and no home-relative addresses; every
+   address must use the `$HOME` env var (a nasty bug keeps writing a misspelled
+   home dir). We swept the tracked tree and fixed the one misspelled absolute home
+   path (HANDOFF.md). Added `tests/test_repo_home_paths.py` (deterministic, offline):
+   it scans every git-tracked file and fails if (1) the misspelled home token ever
+   returns, or (2) a hard-coded absolute home path leaks outside the single
+   allowlisted Zed example (which must keep an absolute `command` path — Zed doesn't
+   expand `$HOME` inside JSON). The guard self-constructs forbidden tokens from
+   pieces so it can't false-match its own source. ruff + mypy clean; commit `f5cc024`.
+
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
   Platform work was **spun out** into separate repo scaffolds under
@@ -845,7 +858,7 @@ multi-tenant anything unless the user explicitly reverses this.
   runs from `agent-centric/` — note the nested project root) had no such issue.
   If a fresh session hits the same wall, use the sub-agent/spawn path or the
   nested `agent-centric/` root.
-- **`OPENROUTER_MODEL` lives in the user's `~/.bashrc`** (out of the repo):
+- **`OPENROUTER_MODEL` lives in the user's `$HOME/.bashrc`** (out of the repo):
   `deepseek/deepseek-v4-flash-0731,openai/gpt-4o-mini,anthropic/claude-3.5-son
   net,meta-llama/llama-3.3-70b-instruct`. The `anthropic/claude-3.5-sonnet` id
   404s on OpenRouter for this key (invalid slug); remove or correct it.
