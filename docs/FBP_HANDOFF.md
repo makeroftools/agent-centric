@@ -25,7 +25,7 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `e261932` (this capture) — atop `08deaa7`, `7ac854f`, `c51be25`, `7c76f33`, and `3da8879`. This session added commits
+- **HEAD:** `9c7f4b0` (this capture) — atop `e261932`, `08deaa7`, `7ac854f`, `c51be25`, `7c76f33`, and `3da8879`. This session added commits
   on top of the earlier sequence (all local): `4b19fc0` (operator activity feed), `7c9a546` (landing+CLI activity feed), `e9c2eaf`
   (remove Bills tab, demo-only), `7375698` (full-surface HTTP coverage), `d5cb164`
   (Designer sticky-fix), `87e353e` (drag-and-drop), `d86c203` (drag wire-fix),
@@ -37,12 +37,8 @@ we are.
   `1b0f6b2` (Zed agent_servers schema fix), `cdb6618` (MCP deterministic stub test),
   `f22e4fa` (reflect push + MCP test handoff capture), `3da8879` (landing hardening),
   `7c76f33` (handoff capture), `c51be25` (git-state fix), `7ac854f` (readiness/liveness split),
-  `08deaa7` (ACP bound), `e261932` (this capture).
-- **Pushed to origin:** the lead pushes directly. **Unpushed (6):** `3da8879` + `7c76f33` + `c51be25` + `7ac854f` + `08deaa7` + `e261932` (landing hardening + its capture + git-state fix + the readiness/liveness split + the ACP bound + the MCP bound) are local, not yet pushed. A prior `git fetch` confirmed `eb3a9fc` was pushed. The agent does not push.
-  `f22e4fa` (reflect push + MCP test handoff capture), `3da8879` (landing hardening),
-  `7c76f33` (handoff capture), `c51be25` (git-state fix), `7ac854f` (readiness/liveness split),
-  `08deaa7` (this capture).
-- **Pushed to origin:** the lead pushes directly. **Unpushed (5):** `3da8879` + `7c76f33` + `c51be25` + `7ac854f` + `08deaa7` (landing hardening + its capture + git-state fix + the readiness/liveness split + the ACP bound) are local, not yet pushed. A prior `git fetch` confirmed `eb3a9fc` was pushed. The agent does not push.
+  `08deaa7` (ACP bound), `e261932` (MCP bound), `9c7f4b0` (this capture).
+- **Pushed to origin:** the lead pushes directly. **Unpushed (7):** `3da8879` + `7c76f33` + `c51be25` + `7ac854f` + `08deaa7` + `e261932` + `9c7f4b0` (landing hardening + captures + readiness/liveness split + ACP bound + MCP bound + the two test fixes) are local, not yet pushed. A prior `git fetch` confirmed `eb3a9fc` was pushed. The agent does not push.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule: **do not push unless the lead explicitly says push.** The lead
 has been pushing directly; confirm per commit.
