@@ -563,6 +563,29 @@ class TestLandingRender:
         html = _render_landing({})
         assert "<select id='model-select'" not in html
 
+    def test_render_shows_last_action_note(self) -> None:
+        """A last_action in the page state renders as a note."""
+        html = _render_landing({"last_action": {"action": "run double(21)", "value": 42}})
+        assert "Last action:" in html
+        assert "run double(21)" in html
+        assert "42" in html
+
+    def test_render_omits_last_action_note_when_absent(self) -> None:
+        """No last_action means no note."""
+        html = _render_landing({})
+        assert "Last action:" not in html
+
+    def test_render_shows_error_note(self) -> None:
+        """An error renders as an error note."""
+        html = _render_landing({}, error="unknown path")
+        assert "class='error'" in html
+        assert "unknown path" in html
+
+    def test_render_omits_error_note_when_none(self) -> None:
+        """No error means no error note."""
+        html = _render_landing({})
+        assert "class='error'" not in html
+
     def test_page_state_reflects_live_tree(self) -> None:
         server = FbpLandingServer()
         state = server._page_state()
