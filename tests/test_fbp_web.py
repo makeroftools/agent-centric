@@ -618,6 +618,22 @@ class TestLandingRender:
         assert "store" in identities
         server._driver.close()
 
+    def test_page_state_reports_integrity_off_by_default(self) -> None:
+        """Traffic integrity is off by default (opt-in), so the page-state
+        ``integrity`` flag is False and no badge shows."""
+        server = FbpLandingServer()
+        assert server._page_state()["integrity"] is False
+        assert "traf-integrity" not in _render_landing(server._page_state())
+        server._driver.close()
+
+    def test_page_state_reports_integrity_when_enabled(self) -> None:
+        """With ``integrity_secret`` set, the page state flags it and the landing
+        page renders the traffic-integrity badge (opt-in visibility)."""
+        server = FbpLandingServer(integrity_secret=b"s3cr3t")
+        assert server._page_state()["integrity"] is True
+        assert "traf-integrity" in _render_landing(server._page_state())
+        server._driver.close()
+
     def test_run_demo_action_uses_driver(self) -> None:
         """The demo action runs a real, verified task through the driver."""
         server = FbpLandingServer()

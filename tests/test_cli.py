@@ -183,6 +183,23 @@ class TestCliFbp:
         assert code == 1
         assert "no ledger file" in out
 
+    def test_fbp_accepts_integrity_flag(self, tmp_path: Path) -> None:
+        """The ``--integrity`` flag runs the demo over the signed wire (so the
+        operator can turn on §5.5 traffic integrity from the CLI)."""
+        code, out = _run(tmp_path, "fbp", "--integrity", "s3cr3t")
+        assert code == 0, out
+        assert "verified=True" in out
+
+    def test_parser_builds_integrity_flags(self) -> None:
+        """Both ``fbp`` and ``fbp-web`` accept ``--integrity``."""
+        from agent_centric.cli import _build_parser
+
+        parser = _build_parser()
+        a = parser.parse_args(["fbp", "--integrity", "s3cr3t", "--transport", "tcp"])
+        assert a.integrity == "s3cr3t"
+        b = parser.parse_args(["fbp-web", "--integrity", "x"])
+        assert b.integrity == "x"
+
 class TestCliFbpDomains:
     """fbp-domains gives an operator-facing readout of a saved Domain Registry
     + Artifact Vault (read-only)."""

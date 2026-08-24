@@ -562,6 +562,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional durable directive-ledger path to record the demo session to.",
     )
+    p_fbp.add_argument(
+        "--integrity",
+        default=None,
+        help="Optional shared traffic-integrity secret. When set, every directive "
+        "on the FBP wire is HMAC-signed and verified on receipt (opt-in).",
+    )
 
     p_fbp_web = sub.add_parser(
         "fbp-web",
@@ -632,6 +638,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "--kill",
         action="store_true",
         help="Stop a running fbp-web server on the port (instead of serving).",
+    )
+    p_fbp_web.add_argument(
+        "--integrity",
+        default=None,
+        help="Optional shared traffic-integrity secret for the in-process tree. "
+        "When set, every directive on the FBP wire is HMAC-signed and verified "
+        "on receipt (opt-in); a badge shows on the page.",
     )
 
     p_fbp_web_kill = sub.add_parser(
@@ -727,7 +740,7 @@ def _fbp_endpoint(transport: str) -> str:
     }[transport]
 
 
-def _cmd_fbp(transport: str, ledger: Path | None = None) -> int:
+def _cmd_fbp(transport: str, ledger: Path | None = None, integrity: str | None = None) -> int:
     """Drive the FBP subsystem demo over the directive/response protocol.
 
     Uses the high-level ``FbpDriver`` (the easy-UX layer) to prove the core
@@ -753,6 +766,8 @@ def _cmd_fbp(transport: str, ledger: Path | None = None) -> int:
     driver_kwargs: dict[str, Any] = {}
     if ledger is not None:
         driver_kwargs["ledger_path"] = str(ledger)
+    if integrity:
+        driver_kwargs["integrity_secret"] = integrity.encode("utf-8")
     with fbp.FbpDriver(transport=transport, endpoint=endpoint, **driver_kwargs) as driver:
         driver.register("double", _fbp_double, source_url="file:///tasks/double")
         driver.register("even", _fbp_even)
@@ -1035,6 +1050,7 @@ def _cmd_fbp_web(
     bills: Path | None = None,
     registry: Path | None = None,
     activity: Path | None = None,
+    integrity: str | None = None,
     kill: bool = False,
 ) -> int:
     """Serve a local, actionable landing page for the FBP subsystem.
@@ -1061,6 +1077,7 @@ def _cmd_fbp_web(
         return _fbp_web_reload(
             host=host, port=port, open_browser=open_browser, history=history,
             networks=networks, bills=bills, registry=registry, activity=activity,
+            integrity=integrity,
         )
 
     from agent_centric.fbp.web import serve
@@ -1068,7 +1085,8 @@ def _cmd_fbp_web(
     try:
         serve(host=host, port=port, open_browser=open_browser, history_path=history,
               networks_path=networks, bills_path=bills, registry_path=registry,
-              activity_path=activity)
+              activity_path=activity,
+              integrity_secret=integrity.encode("utf-8") if integrity else None)
     except OSError as exc:
         print(f"fbp-web: could not bind {host}:{port}: {exc}", file=sys.stderr)
         return 1
@@ -1079,6 +1097,7 @@ def _fbp_web_reload(
     *, host: str, port: int, open_browser: bool, history: Path | None = None,
     networks: Path | None = None, bills: Path | None = None,
     registry: Path | None = None, activity: Path | None = None,
+    integrity: str | None = None,
 ) -> int:
     """Run ``fbp-web`` as a child process, restarting it on source changes.
 
@@ -1126,6 +1145,8 @@ def _fbp_web_reload(
             cmd.extend(["--registry", str(registry)])
         if activity:
             cmd.extend(["--activity", str(activity)])
+        if integrity:
+            cmd.extend(["--integrity", integrity])
         return subprocess.Popen(
             cmd,
             cwd=os.getcwd(),
@@ -1398,11 +1419,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "replay-verify":
         return _cmd_replay_verify(args.store, args.trajectory_id)
     if args.command == "fbp":
-        return _cmd_fbp(args.transport, ledger=args.ledger)
+        return _cmd_fbp(args.transport, ledger=args.ledger, integrity=args.integrity)
     if args.command == "fbp-web":
         return _cmd_fbp_web(
             host=args.host, port=args.port, open_browser=args.open, reload=args.reload,
             history=args.history, networks=args.networks, kill=args.kill,
+            integrity=args.integrity,
         )
     if args.command == "fbp-web-kill":
         return _cmd_fbp_web_kill(port=args.port)

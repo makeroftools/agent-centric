@@ -821,6 +821,15 @@ multi-tenant anything unless the user explicitly reverses this.
   and `_stream_model` provider-error (`test_render_ledger_populated_runs`,
   `test_run_model_provider_error_fails_closed`, `test_stream_model_provider_error_fails_closed`).
   See `tests/test_fbp_web.py`.
+- **Wire-integrity CLI + UX (this session) — built, unpushed:** the opt-in §5.5 wire
+  integrity is now **operator-reachable** (was API-only): `agent-centric fbp --integrity <secret>`
+  runs the demo over the signed wire, and `agent-centric fbp-web --integrity <secret>` protects
+  the in-process tree and shows a `traf-integrity ✓` badge in the sidebar. Threaded through
+  `_cmd_fbp`, `_cmd_fbp_web` → `serve()` → `FbpLandingServer` → its driver. The page-state
+  `integrity` flag drives the badge (off by default). New tests: `TestCliFbp`
+  (`--integrity` runner + parser), `TestLandingRender` (badge on/off). Smoke-verified live via
+  `python -m agent_centric fbp --integrity ...` (exit 0) + in-process badge assertions.
+  ruff clean. Operator runs pytest (Law 12).
 - **ACP entry point:** `agent-centric-acp` (or `python -m agent_centric.acp`)
   exposes the FBP platform as an External Agent in Zed over stdio. Point Zed's
   `agent_servers` at it. **Zed's schema is an object map keyed by agent name,
@@ -894,8 +903,10 @@ multi-tenant anything unless the user explicitly reverses this.
 uv run agent-centric run                # deterministic demo
 uv run agent-centric fbp                # drive FBP demo (inproc)
 uv run agent-centric fbp --transport tcp | ipc
+uv run agent-centric fbp --integrity SECRET   # run demo over the signed wire (§5.5)
 uv run agent-centric fbp-web            # landing page + model box
 uv run agent-centric fbp-web --reload   # auto-restart on source edits
+uv run agent-centric fbp-web --integrity SECRET  # protect the FBP wire (badge on page)
 uv run agent-centric fbp-web --history chat.db   # durable transcript across restarts
 uv run agent-centric fbp-web --networks networks.json  # durable saved networks
 uv run agent-centric fbp-web --bills registry.db  # durable bills registry across restarts

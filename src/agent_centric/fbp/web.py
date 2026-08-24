@@ -81,9 +81,11 @@ class FbpLandingServer:
         bills_path: str | os.PathLike[str] | None = None,
         registry_path: str | os.PathLike[str] | None = None,
         activity_path: str | os.PathLike[str] | None = None,
+        integrity_secret: bytes | None = None,
     ) -> None:
         self._host = host
         self._port = port
+        self._integrity_secret = integrity_secret
         # The bills registry store. In-memory (temp) by default; a caller grants
         # a durable path via ``--bills <path>`` (explicit grant).
         if bills_path is not None:
@@ -266,7 +268,7 @@ class FbpLandingServer:
     # -- driver setup (deterministic, offline) -----------------------------
 
     def _build_driver(self) -> FbpDriver:
-        driver = FbpDriver()
+        driver = FbpDriver(integrity_secret=self._integrity_secret)
         driver.register("double", lambda value: value * 2, source_url="file:///tasks/double")
         driver.register("triple", lambda value: value * 3, source_url="file:///tasks/triple")
         driver.register("square", lambda value: value * value, source_url="file:///tasks/square")
@@ -772,6 +774,7 @@ class FbpLandingServer:
         return {
             "tree": tree,
             "summary": self._driver.summary(),
+            "integrity": self._integrity_secret is not None,
             "checked": {
                 "tree_length": len(tree),
                 "identities": [n["identity"] for n in tree],
@@ -3036,6 +3039,11 @@ def _render_landing(
         f"{summary.get('verified_runs', 0)} verified"
         if summary else ""
     )
+    integrity_on = bool(state.get("integrity"))
+    integrity_badge = (
+        "<span class='pill' title='Traffic integrity on the FBP wire is active'>"
+        "traf-integrity ✓</span>" if integrity_on else ""
+    )
     action_note = (
         f"<p class='note'>Last action: {last.get('action','')} → {last.get('value','')}</p>"
         if last else ""
@@ -3084,7 +3092,8 @@ def _render_landing(
     <button class='side-link' data-page='docs' type='button'>
       <span class='ico'>📚</span>Docs</button>
   </nav>
-  <div class='foot'>Local-first · verified spine · fail-closed</div>
+  <div class='foot'>Local-first · verified spine · fail-closed
+    {integrity_badge}</div>
 </aside>
 
 <main class='main'>
@@ -3528,6 +3537,7 @@ def serve(
     bills_path: str | os.PathLike[str] | None = None,
     registry_path: str | os.PathLike[str] | None = None,
     activity_path: str | os.PathLike[str] | None = None,
+    integrity_secret: bytes | None = None,
 ) -> None:
     """Serve the FBP landing page (blocking). Pass --open to open a browser.
 
@@ -3541,11 +3551,13 @@ def serve(
     for the Domain Registry + artifact vault.
     ``activity_path`` optionally grants a durable, cross-restart operator
     activity feed (an explicit opt-in; without it the feed is in-memory only).
+    ``integrity_secret`` optionally enables §5.5 traffic integrity on the
+    in-process tree (opt-in; the driver signs/verifies every directive).
     """
     server = FbpLandingServer(
         host=host, port=port, history_path=history_path, networks_path=networks_path,
         bills_path=bills_path, registry_path=registry_path,
-        activity_path=activity_path,
+        activity_path=activity_path, integrity_secret=integrity_secret,
     )
     if open_browser:
         url = f"http://{host}:{port}"

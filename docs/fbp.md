@@ -630,6 +630,9 @@ directive returns the cached result rather than re-executing).
 
 `agent-centric fbp [--transport inproc|tcp|ipc]` drives a deterministic demo
 tree that exercises every property above and exits non-zero on any failure.
+Pass `--integrity <secret>` to run the demo over the **signed wire** (§5.5
+traffic integrity): every directive is HMAC-signed and verified on receipt
+(opt-in; the ledger still records the clean payload).
 `agent-centric fbp-replay <path>` re-verifies a durable ledger; `agent-centric
 fbp-summary <path>` gives an operator-facing summary; `agent-centric fbp-domains <path>` gives a saved Domain Registry + Artifact Vault readout; `agent-centric
 fbp-web` serves a local, actionable landing page (stdlib `http.server`, loopback-only,
@@ -662,6 +665,13 @@ Pass `--activity <path>` to give the operator **activity feed** a durable home:
 every action you take through the page (model prompts, orchestrated/network
 runs, bills intake/accept, provisioning, the demo action) is recorded with its
 verification status and survives server restarts (explicit grant; in-memory by default).
+
+Pass `--integrity <secret>` to `fbp-web` (or `fbp`) to turn on **§5.5 traffic
+integrity** for the in-process tree: every directive on the FBP wire is HMAC-
+signed and verified on receipt (opt-in). When enabled the landing page shows a
+small `traf-integrity ✓` badge in the sidebar; when omitted the wire stays
+plain (default, backward-compatible). The secret is a plain literal (operator-
+supplied, never logged).
 
 ## Full arc demo
 
