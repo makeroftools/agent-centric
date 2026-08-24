@@ -26,7 +26,7 @@ we are.
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (all session work committed).
 - **HEAD:** `f5cc024` — fix(home-paths): use the `$HOME` convention + add a regression
-  guard for the misspelling. The full local arc is 4 commits ahead of
+  guard for the misspelling. The full local arc is 9 commits ahead of
   `origin/agent-centric-fbp` (which is at `7f0d414`).
 - **Session commits (later ones NOT pushed, all local):**
   - `7f0d414` (on origin) — test(fbp): cover web.py fail-closed branches.
@@ -34,8 +34,9 @@ we are.
   - `e85e44c` — feat(fbp): make wire-integrity operator-reachable via CLI + landing UX.
   - the previous checkout commit — feat(fbp): add `fbp-check` deploy/readiness self-test (+ handoff capture).
   - `f5cc024` — fix(home-paths): `$HOME` convention + regression guard for the misspelling (+ handoff capture).
-- **Pushed to the lead:** the lead pushes directly. **Unpushed (4 local):** `fa3c869`,
-  `e85e44c`, the `fbp-check` commit, and `f5cc024` — `origin/agent-centric-fbp` is at `7f0d414`. The agent
+- **Pushed to the lead:** the lead pushes directly. **Unpushed (9 local):** `fa3c869`,
+  `e85e44c`, the `fbp-check` commit (`439586f`), `f5cc024`, `1f6dfbf`, `1cbe7d2`,
+  `9773833`, `dad7e6f`, `0f0549d` — `origin/agent-centric-fbp` is at `7f0d414`. The agent
   does not push; the lead confirms per commit.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule: **do not push unless the lead explicitly says push.** The lead
@@ -43,6 +44,13 @@ has been pushing directly; confirm per commit.
 
 ### Validation (run this session, all live)
 - `uv run pytest` → **1010 passed** at the prior handoff; **this arc added tests** (readiness/liveness, ACP bound, MCP bound, 413 payload bound, web.py pure helpers, render branches, network step-limit, orchestration step-limit) and **fixed two operator-reported test failures** (503 HTTPError handling; ACP model-stub determinism). The operator confirmed **50/50 passed** on the web/acp/mcp route+adapter suite. **The operator runs the test suite; the agent does NOT run pytest (Law 12).** The full-suite count is not re-measured here — the operator owns that gate. This session the operator confirmed the three new web.py fail-closed branch tests pass: `pytest tests/test_fbp_web.py -k "render_ledger_populated_runs or run_model_provider_error or stream_model_provider_error"` → **3 passed, 90 deselected** (0.29s). The operator also confirmed the new wire-integrity tests pass: `pytest tests/test_fbp_driver.py::TestWireIntegrity tests/test_fbp_security.py::TestTrailerHelpers` → **15 passed** (1.06s).
+- **test-coverage arc (this session, commits `f5cc024`→`0f0549d`):** covered
+  the misspelled-home-path regression guard (`tests/test_repo_home_paths.py`, scans
+  every git-tracked file for the wrong home spelling + hard-coded abs home paths), the
+  PinCache fail-closed persistence edges, the FBP foundation correctness-spine branches
+  (node/context/shell), the durable directive-ledger fail-closed lifecycle, and the
+  shared worker-thread driver host. Each is deterministic + offline and verified by
+  direct execution (ruff/mypy clean); the operator runs the pytest gate (Law 12).
 - `uv run ruff check .` → clean
 - `uv run mypy src` → clean (**94 source files**)
 - FBP coverage (prior baseline): `experts.py` 94%, `domainrepo.py` **100%**, driver 91%, web.py
