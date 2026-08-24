@@ -482,11 +482,18 @@ of decisions and working style that a fresh session must inherit.
    shared `FbpDriverHost` verified spine, offline and honest (verified vs
    fail-closed). Additive; tested (unit + HTTP route coverage).
 51. **External-surface CLI wiring + demo tests + Zed wiring reference** (`09bf6e7`) —
-   the acp/mcp subcommands are proven wired at the parser/dispatch level
-   (`tests/test_cli.py`); `tests/test_fbp_external_demo.py` proves the e2e demo runs
-   both transports and reports honest outcomes; `examples/zed_agent_servers.json.example`
-   is the reference for wiring the FBP platform as an External Agent (ACP) in a live
-   Zed session via `agent_servers`. Additive.
+  the acp/mcp subcommands are proven wired at the parser/dispatch level
+  (`tests/test_cli.py`); `tests/test_fbp_external_demo.py` proves the e2e demo runs
+  both transports and reports honest outcomes; `examples/zed_agent_servers.json.example`
+  is the reference for wiring the FBP platform as an **External Agent (ACP)** in a live
+  Zed session via `agent_servers`. Additive.
+52. **Corrected Zed `agent_servers`/`mcp` schema + validated example** (`1b0f6b2`) —
+  the Connect pane now back-links to `examples/zed_agent_servers.json.example`; Zed's
+  `agent_servers` is an **object map keyed by agent name** (each `type: custom` + `command`, not
+  an array of executable paths). The MCP test `test_mcp_model_stub` now forces the stub
+  (`monkeypatch.delenv`), matching the web-route convention; validated in an env with
+  `OPENROUTER_API_KEY` **set**. A `tools/_zed_settings.valid.json` scratch reference (kept out of
+  history) holds the exact, parse-valid block. Additive.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -720,6 +727,11 @@ multi-tenant anything unless the user explicitly reverses this.
   the `agent_servers` block (the real `.zed/settings.json` stays local/gitignored).
   The adapter was verified to answer the ACP `initialize` handshake over stdio,
   advertising itself as "Agent-centric (FBP deterministic verified chain)".
+- **Live Zed wiring (this session):** the agent is registered under External Agents, spawns
+  in a real window, and routes prompts through the verified spine. ACP sessions
+  are fresh-only (load/resume unsupported) — expected, honest fail-closed. The MCP card's
+  listing in the Connect pane matches the actual tool list; Zed-side MCP servers are configured
+  under Zed `mcp` (Settings → MCP servers), independent of this project.
 - **Terminal glitch (this session):** the session's local terminal began
   rejecting ``cd`` into the project with "not in any of the project's
   worktrees"; the same command had worked minutes earlier. The sub-agent (which
