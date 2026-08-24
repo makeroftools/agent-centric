@@ -429,6 +429,37 @@ class TestBillsDemoBackend:
             srv.close()
 
 
+class TestExternalSurfaces:
+    """The Connect pane's /surfaces route serves ACP/MCP over HTTP.
+
+    Proves the external edge transports are discoverable from the landing page
+    as a read-only catalog, with the sidebar Connect pane rendered.
+    """
+
+    def test_surfaces_route_serves(self, monkeypatch) -> None:
+        srv = _BoundServer(monkeypatch)
+        try:
+            status, ctype, body = srv.get("/surfaces")
+            assert status == 200
+            assert "application/json" in ctype
+            data = json.loads(body)
+            assert data["ok"] is True
+            assert {s["kind"] for s in data["surfaces"]} == {"acp", "mcp"}
+            assert data["surfaces"][0]["entry"][0] == "agent-centric acp"
+        finally:
+            srv.close()
+
+    def test_connect_pane_on_landing(self, monkeypatch) -> None:
+        srv = _BoundServer(monkeypatch)
+        try:
+            status, _, html = srv.get("/")
+            assert status == 200
+            assert "data-page='connect'" in html
+            assert "pane-connect" in html
+        finally:
+            srv.close()
+
+
 class TestFailClosed:
     def test_unknown_path_returns_404(self, monkeypatch) -> None:
         srv = _BoundServer(monkeypatch)

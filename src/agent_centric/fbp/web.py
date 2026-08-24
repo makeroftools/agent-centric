@@ -669,6 +669,77 @@ class FbpLandingServer:
         """The configured model choices for the dropdown (may be empty)."""
         return tuple(self._providers.keys())
 
+    def _surfaces_readout(self) -> dict[str, Any]:
+        """Read-only catalog of the external edge transports (ACP/MCP).
+
+        Returns the launch commands, the live model mode (a real provider when
+        ``OPENROUTER_API_KEY`` is set, else the deterministic stub — never the
+        key itself), and the command/tool reference for each surface. This is a
+        passive catalog: it launches nothing and changes no state. Additive.
+        """
+        model_mode = (
+            "openrouter"
+            if os.environ.get(OPENROUTER_API_KEY_ENV, "").strip()
+            else "stub"
+        )
+        surfaces = [
+            {
+                "kind": "acp",
+                "name": "ACP \u2014 drive FBP from Zed",
+                "blurb": (
+                    "The Agent Client Protocol edge transport exposes the whole FBP "
+                    "platform as an External Agent in Zed. Point Zed's "
+                    "agent_servers at this console entry point; every prompt routes "
+                    "through the verified spine (ledgered, replayable, fail-closed)."
+                ),
+                "entry": [
+                    "agent-centric acp",
+                    "agent-centric-acp",
+                    "python -m agent_centric.acp",
+                ],
+                "store_prefix": "acp-*",
+                "model_mode": model_mode,
+                "catalog": [
+                    ("double / square / negate / sum <n>", "verified arithmetic"),
+                    ("model <text>", "model agent (stub or opt-in OpenRouter)"),
+                    ("store set|get <key>", "mediated store, grant-scoped"),
+                    ("bills intake|accept|calendar", "demo loop (human-gated accept)"),
+                    ("status / tree", "read-only operator inspection"),
+                    ("network <json>", "component network as true dataflow"),
+                    ("anything unknown", "fail-closed, never a guessed success"),
+                ],
+            },
+            {
+                "kind": "mcp",
+                "name": "MCP \u2014 expose FBP as tools",
+                "blurb": (
+                    "The Model Context Protocol edge transport is the mirror image: "
+                    "it exposes the FBP platform as tools any MCP-capable host can "
+                    "call. The model proposes; the deterministic tool verifies."
+                ),
+                "entry": [
+                    "agent-centric mcp",
+                    "agent-centric-mcp",
+                    "python -m agent_centric.mcp",
+                ],
+                "store_prefix": "mcp-*",
+                "model_mode": model_mode,
+                "catalog": [
+                    ("double / square / negate / sum", "verified arithmetic"),
+                    ("model", "model agent (stub or opt-in OpenRouter)"),
+                    ("store_set / store_get", "mediated store, grant-scoped"),
+                    (
+                        "bills_intake / bills_accept / bills_calendar",
+                        "demo loop (human-gated accept)",
+                    ),
+                    ("status / tree", "read-only operator inspection"),
+                    ("network", "component network as true dataflow"),
+                    ("anything unknown", "fail-closed (is_error=True)"),
+                ],
+            },
+        ]
+        return {"ok": True, "surfaces": surfaces}
+
     def _activity_readout(self) -> dict[str, Any]:
         """A deterministic, read-only view of the operator activity feed.
 
@@ -889,6 +960,9 @@ class FbpLandingServer:
                 elif self.path == "/activity":
                     # Read-only operator activity feed (bounded audit).
                     self._send_json(server._activity_readout())
+                elif self.path == "/surfaces":
+                    # Read-only catalog of the external edge transports (ACP/MCP).
+                    self._send_json(server._surfaces_readout())
                 elif self.path == "/health":
                     self._send_json({"ok": True, "server": f"{host}:{port}"})
                 else:
@@ -1602,9 +1676,10 @@ _PAGE_CSS = "\n".join([
     ".stat .v.green { color:#16a34a; } .stat .v.blue { color:#2563eb; }",
     # ---- dashboard pane visibility (sidebar-driven) ----
     "#pane-dashboard, #pane-chat, #pane-provision, #pane-registry,",
-    "#pane-designer, #pane-docs { display:none; }",
+    "#pane-designer, #pane-docs, #pane-connect { display:none; }",
     "#pane-dashboard.active, #pane-chat.active, #pane-provision.active,",
-    "#pane-registry.active, #pane-designer.active, #pane-docs.active",
+    "#pane-registry.active, #pane-designer.active, #pane-docs.active,",
+    "#pane-connect.active",
     "{ display:block; }",
     ".docs { line-height:1.65; }",
     ".docs h2 { margin-top:1.4rem; }",
@@ -1732,6 +1807,24 @@ _PAGE_CSS = "\n".join([
     ".insp-sec { border-top:1px solid #e5e7eb; margin-top:.7rem; padding-top:.6rem; }",
     ".net-status { font-family:monospace; font-size:.78rem; color:#6b7280; margin-top:.6rem;",
     "  white-space:pre-wrap; }",
+    # ---- external surfaces (Connect) ----
+    ".surf-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }",
+    "@media (max-width:900px){ .surf-grid { grid-template-columns:1fr; } }",
+    ".surf-card { border:1px solid #e5e7eb; border-radius:12px; padding:.9rem 1rem; }",
+    ".surf-card h3 { margin:.1rem 0 .5rem; font-size:1rem;",
+    "  display:flex; align-items:center; gap:.5rem; }",
+    ".surf-status { font-size:.72rem; font-weight:600;",
+    "  padding:.15rem .5rem; border-radius:999px; }",
+    ".surf-status.live { background:#dcfce7; color:#166534; }",
+    ".surf-status.stub { background:#fef9c3; color:#854d0e; }",
+    ".surf-cmd { display:flex; align-items:center; gap:.5rem; margin:.3rem 0; }",
+    ".surf-cmd code { flex:1; background:#f3f4f6; padding:.25rem .5rem;",
+    "  border-radius:6px; font-size:.82em; }",
+    ".surf-copy { background:#fff; border:1px solid #d1d5db;",
+    "  border-radius:6px; padding:.2rem .5rem; font-size:.72rem; cursor:pointer; }",
+    ".surf-copy:hover { background:#eef4ff; border-color:#5b8def; }",
+    ".surf-ref { font-family:monospace; font-size:.78rem; color:#6b7280; margin:.15rem 0; }",
+    ".surf-ref b { color:#111827; }",
 ])
 
 # The model text-box client script (kept out of the f-string so its JS object
@@ -2769,10 +2862,63 @@ _ACTIVITY_JS = r"""\
 </script>
 """
 
+_SURFACES_JS = r"""\
+<script>
+  (async () => {
+    const box = document.getElementById('surfaces-list');
+    if (!box) return;
+    function esc(s) {
+      const d = document.createElement('div');
+      d.textContent = s == null ? '' : String(s);
+      return d.innerHTML;
+    }
+    try {
+      const r = await fetch('/surfaces');
+      const data = await r.json();
+      if (!data.ok) { box.textContent = 'surfaces unavailable.'; return; }
+      box.innerHTML = '';
+      for (const s of data.surfaces) {
+        const card = document.createElement('div');
+        card.className = 'surf-card';
+        const badge = s.model_mode === 'openrouter'
+          ? '<span class=\'surf-status live\'>live model (OpenRouter)</span>'
+          : '<span class=\'surf-status stub\'>deterministic stub</span>';
+        let cmds = '';
+        for (const c of s.entry) {
+          const quoted = esc(c).replace(/"/g, '&quot;');
+          cmds += '<div class=\'surf-cmd\'><code>' + esc(c) + '</code>' +
+            '<button type=\'button\' class=\'surf-copy\' ' +
+            'data-cmd="' + quoted + '">copy</button></div>';
+        }
+        let refs = '';
+        for (const ref of s.catalog) {
+          refs += '<div class=\'surf-ref\'><b>' + esc(ref[0]) + '</b> ' +
+            '\u2014 ' + esc(ref[1]) + '</div>';
+        }
+        card.innerHTML = '<h3>' + esc(s.name) + ' ' + badge + '</h3>' +
+          '<p class=\'note\'>' + esc(s.blurb) + '</p>' +
+          '<h4 style=\'margin:.6rem 0 .3rem\'>Launch (edge transport)</h4>' + cmds +
+          '<h4 style=\'margin:.6rem 0 .3rem\'>Reference</h4>' + refs;
+        box.appendChild(card);
+      }
+      box.querySelectorAll('.surf-copy').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const cmd = btn.getAttribute('data-cmd');
+          if (navigator.clipboard) { navigator.clipboard.writeText(cmd); }
+          const old = btn.textContent; btn.textContent = 'copied';
+          setTimeout(function(){ btn.textContent = old; }, 1200);
+        });
+      });
+    } catch (err) { box.textContent = 'surfaces unavailable.'; }
+  })();
+</script>
+"""
+
+# The sidebar navigation script: one page = one visible pane.
 # The sidebar navigation script: one page = one visible pane.
 _NAV_JS = r"""\
 <script>
-  const PANES = ['dashboard', 'chat', 'provision', 'registry', 'designer', 'docs'];
+  const PANES = ['dashboard', 'chat', 'provision', 'registry', 'designer', 'docs', 'connect'];
   function navShow(page) {
     for (const p of PANES) {
       const pane = document.getElementById('pane-' + p);
@@ -2854,6 +3000,9 @@ def _render_landing(
     <div class='side-section'>Design</div>
     <button class='side-link' data-page='designer' type='button'>
       <span class='ico'>🕸️</span>Designer</button>
+    <div class='side-section'>Connect</div>
+    <button class='side-link' data-page='connect' type='button'>
+      <span class='ico'>🔌</span>Connect</button>
     <div class='side-section'>Learn</div>
     <button class='side-link' data-page='docs' type='button'>
       <span class='ico'>📚</span>Docs</button>
@@ -3084,6 +3233,22 @@ and unknown references fail closed.</p>
 </div>
 {_NETWORK_JS}
 </div>
+</section>
+
+<section id='pane-connect'>
+
+<div class='card'>
+<h2>External surfaces</h2>
+<p class='note'>The FBP platform is reachable from outside through two edge
+transports &mdash; <b>ACP</b> (an External Agent inside Zed) and <b>MCP</b>
+tools (any MCP-capable host). Both route every call through the same
+deterministic <b>verified spine</b>: a normal directive, parent re-verified,
+ledgered, replayable, fail-closed. Neither can produce a verified success
+that bypasses verification, and neither ever relaxes it.</p>
+<div id='surfaces-list' class='chat-history'></div>
+{_SURFACES_JS}
+</div>
+
 </section>
 
 <section id='pane-docs'>
