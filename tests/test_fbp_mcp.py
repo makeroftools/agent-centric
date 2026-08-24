@@ -91,8 +91,14 @@ def test_mcp_store_set_get_roundtrip() -> None:
         server._driver_host.close()
 
 
-def test_mcp_model_stub() -> None:
-    """model uses the deterministic stub."""
+def test_mcp_model_stub(monkeypatch) -> None:
+    """model uses the deterministic stub.
+
+    Force the stub by clearing OpenRouter env (the shell may set a key), so the
+    test is deterministic in any environment — the same convention the web-route
+    tests use.
+    """
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     server = _build_server()
     try:
         texts, is_error = _scenario(server, "model", {"prompt": "hi"})
