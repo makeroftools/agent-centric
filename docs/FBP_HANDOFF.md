@@ -25,18 +25,18 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `f22e4fa` (handoff capture; pushed to origin/agent-centric-fbp). This session added commits
+- **HEAD:** `3da8879` (loopback landing-server production hardening; local, unpushed). This session added commits
   on top of the earlier sequence (all local): `4b19fc0` (operator activity feed), `7c9a546` (landing+CLI activity feed), `e9c2caf`
   (remove Bills tab, demo-only), `7375698` (full-surface HTTP coverage), `d5cb164`
   (Designer sticky-fix), `87e353e` (drag-and-drop), `d86c203` (drag wire-fix),
   `24bda00` (Designer agent demo), `9eedd69` (Designer bills agent + edge-labels),
-  `c50b85d` (mission-critical handoff), `aa29c27` (ACP verified), `9d5c8c0` (ACP->FBP, Law-12), `a1cdb61`
+  `c50b85d` (mission-critical handoff), `aa29c27` (ACP verified), `9d5c8b0` (ACP->FBP, Law-12), `a1cdb61`
   (MCP adapter), `dac830c` (MCP adapter + driver-host), `860d6e6` (private product),
-  `d2953af` (acp/mcp subcommands), `4de7b09` (ACP/MCP CLI wiring), `21a83bf` (Connect pane),
+  `d2953af` (acp/mcp subcommands), `4de7b0e` (ACP/MCP CLI wiring), `21a83bf` (Connect pane),
   `09bf6e7` (CLI wiring + Zed ref), `4092cac` (Connect pane MCP-card clipping fix),
   `1b0f6b2` (Zed agent_servers schema fix), `cdb6618` (MCP deterministic stub test),
   `f22e4fa` (reflect push + MCP test handoff capture).
-- **Pushed to origin:** the lead pushes directly. **Unpushed (0):** a `git fetch` confirmed the full local arc is on `origin/agent-centric-fbp` (HEAD `cdb6618` == remote). The lead pushed; the agent does not push.
+- **Pushed to origin:** the lead pushes directly. **Unpushed (1):** the latest `3da8879` (landing-server hardening) is local, not yet pushed. A prior `git fetch` confirmed `f22e4fa` was pushed. The agent does not push.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule: **do not push unless the lead explicitly says push.** The lead
 has been pushing directly; confirm per commit.
@@ -494,6 +494,14 @@ of decisions and working style that a fresh session must inherit.
   (`monkeypatch.delenv`), matching the web-route convention; validated in an env with
   `OPENROUTER_API_KEY` **set**. A `tools/_zed_settings.valid.json` scratch reference (kept out of
   history) holds the exact, parse-valid block. Additive.
+53. **Loopback landing-server production hardening** (`3da8879`) — the single-threaded
+  stdlib `http.server` now ships a **30s per-connection read timeout** (a hung/stalled client
+  can no longer wedge every subsequent request), **conservative security response headers**
+  (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`),
+  and an **opaque `Server` banner** (`Agent-Centric-FBP/0.1`, no http.server/Python version
+  disclosure). Additive; the verified spine and standing invariants are untouched. Tests added
+  for the operator (headers, no version disclosure, read timeout); live-verified over a bound
+  loopback server. **Not yet pushed.**
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
