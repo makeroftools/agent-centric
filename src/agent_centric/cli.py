@@ -672,6 +672,16 @@ def _build_parser() -> argparse.ArgumentParser:
     p_fbp_domains.add_argument(
         "registry_path", type=Path, help="The saved registry/vault file (--registry path)."
     )
+
+    sub.add_parser(
+        "acp",
+        help="Run the ACP adapter over stdio (expose the FBP platform as an "
+        "External Agent in Zed).",
+    )
+    sub.add_parser(
+        "mcp",
+        help="Run the MCP adapter over stdio (expose the FBP platform as tools to any LLM host).",
+    )
     return parser
 
 
@@ -1402,6 +1412,14 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_fbp_summary(args.ledger_path)
     if args.command == "fbp-domains":
         return _cmd_fbp_domains(args.registry_path)
+    if args.command == "acp":
+        from agent_centric.acp import main as acp_main
+
+        return acp_main()
+    if args.command == "mcp":
+        from agent_centric.mcp import main as mcp_main
+
+        return mcp_main()
     raise AssertionError(f"unhandled command: {args.command}")
 
 
