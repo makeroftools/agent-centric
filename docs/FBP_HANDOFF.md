@@ -46,7 +46,7 @@ we are.
 has been pushing directly; confirm per commit.
 
 ### Validation (run this session, all live)
-- `uv run pytest` → **1010 passed** at the prior handoff; **this arc added tests** (readiness/liveness, ACP bound, MCP bound, 413 payload bound, web.py pure helpers, render branches, network step-limit, orchestration step-limit) and **fixed two operator-reported test failures** (503 HTTPError handling; ACP model-stub determinism). The operator confirmed **50/50 passed** on the web/acp/mcp route+adapter suite. **The operator runs the test suite; the agent does NOT run pytest (Law 12).** The full-suite count is not re-measured here — the operator owns that gate. This session the operator confirmed the three new web.py fail-closed branch tests pass: `pytest tests/test_fbp_web.py -k "render_ledger_populated_runs or run_model_provider_error or stream_model_provider_error"` → **3 passed, 90 deselected** (0.29s).
+- `uv run pytest` → **1010 passed** at the prior handoff; **this arc added tests** (readiness/liveness, ACP bound, MCP bound, 413 payload bound, web.py pure helpers, render branches, network step-limit, orchestration step-limit) and **fixed two operator-reported test failures** (503 HTTPError handling; ACP model-stub determinism). The operator confirmed **50/50 passed** on the web/acp/mcp route+adapter suite. **The operator runs the test suite; the agent does NOT run pytest (Law 12).** The full-suite count is not re-measured here — the operator owns that gate. This session the operator confirmed the three new web.py fail-closed branch tests pass: `pytest tests/test_fbp_web.py -k "render_ledger_populated_runs or run_model_provider_error or stream_model_provider_error"` → **3 passed, 90 deselected** (0.29s). The operator also confirmed the new wire-integrity tests pass: `pytest tests/test_fbp_driver.py::TestWireIntegrity tests/test_fbp_security.py::TestTrailerHelpers` → **15 passed** (1.06s).
 - `uv run ruff check .` → clean
 - `uv run mypy src` → clean (**94 source files**)
 - FBP coverage (prior baseline): `experts.py` 94%, `domainrepo.py` **100%**, driver 91%, web.py
@@ -79,7 +79,7 @@ that page:
 |------|-------|-----------|
 | Protocol + transport parity | `fbp/message.py`, `fbp/agent.py` | versioned directive/response over `inproc`/`tcp`/`ipc`; fail-closed on malformed input |
 | **Transport trust-boundary** | `fbp/transport.py`, `fbp/driver.py`, `fbp/agent.py` | §5.1 trust-boundary switch: non-loopback `tcp://` bind fails closed unless the caller opts in (`security="local"`/`"tls"`; default `loopback`); §5.3 owner-only `0o600` IPC sockets. Wired into root + child binds. See `docs/transport_trust_boundary.md` |
-| **Transport security (§5.2/§5.4/§5.5)** | `fbp/security.py`, `fbp/driver.py` | **Per-peer authorization** (`PeerAuthz`/`PeerPolicy`, opt-in `FbpDriver(peer_autz=...)`) + **traffic integrity** (`sign_payload`/`verify_payload`/`integrity_headers`, HMAC-SHA256) + **mutual-TLS credential config** (`TlsCreds`/`configure_tls`, fail-closed on incomplete material for `security="tls"`). All pure/offline-tested; opt-in and default-off so existing binds are untouched |
+| **Transport security (§5.2/§5.4/§5.5)** | `fbp/security.py`, `fbp/driver.py`, `fbp/agent.py` | **Per-peer authorization** (`PeerAuthz`/`PeerPolicy`, opt-in `FbpDriver(peer_autz=...)`) + **traffic integrity** (`sign_payload`/`verify_payload`/`integrity_headers`, HMAC-SHA256; **wired end-to-end** via opt-in `FbpDriver(integrity_secret=...)`: signed directives, whole-tree secret inheritance, verified-on-receipt + signed-source, fail-closed on missing/tampered/wrong-secret) + **mutual-TLS credential config** (`TlsCreds`/`configure_tls`, fail-closed on incomplete material for `security="tls"`). Opt-in and default-off so existing binds are untouched |
 | **Real training-provider credential wiring** | `fbp/providers.py` | **Env-driven** (`TRAIN_ENDPOINT`/`TRAIN_TOKEN`/`TRAIN_AUTH_SCHEME`) + a dependency-free `stdlib_http_client` with **secret redaction** (`redact_secrets`); `build_modal_from_env`/`build_credential_client` make the Modal adapter **genuinely workable** against a real endpoint while failing closed with no credentials. Verified live over a bound HTTP server, secret never leaks |
 | Correctness spine | `fbp/agent.py` | parent re-verifies a child's value on the way up; a self-claimed `verified` is not conclusive |
 | Durable single-writer state | `fbp/store.py` | `StateStore` (fingerprint-idempotent) + `TrajectoryStore` (append-only); explicit grants only |
@@ -770,12 +770,21 @@ These are listed in `STATUS.md`'s "out of scope / future volleys".
   on the wire, OS/container isolation) — not additive code.
 - **Next seams (lead's queue):** (1) `_render_ledger` populated-runs branch and the
   model-box fail-closed branches (`_stream_model`/`_run_model` provider-error path) to
-  finish web.py coverage — **DONE (this session)**: `test_render_ledger_populated_runs`,
-  `test_run_model_provider_error_fails_closed`, and `test_stream_model_provider_error_fails_closed`
-  added to `tests/test_fbp_web.py` (each verified offline via plain-python smoke + ruff/mypy;
-  the operator owns the pytest gate, Law 12). (2) regenerate the stale `.coverage` baseline
+  finish web.py coverage — **DONE (this session)**; (2) regenerate the stale `.coverage` baseline
   (operator action, Law 12) so the aggregate number is trustworthy again; (3) keep `docs/`
   current.
+- **Wire traffic integrity into the wire path — DONE (this session).** The §5.5
+  primitives were built/tested but stored on the driver and **never enforced on the wire** —
+  the widest *additive* security gap. Now wired end-to-end: `FbpDriver(integrity_secret=...)`
+  (opt-in, default off) signs every directive before it leaves the driver, is inherited by every
+  spawned child (whole tree shares the secret), and every recipient (`Agent._recv`,
+  `Agent._handle_child`) verifies the HMAC trailer and strips it, fail-closing on a missing/tampered/
+  wrong-secret message (never a verified success). Responses are signed upward and verified on
+  relay. The ledger records the **clean** payload, so replay/audit semantics are untouched.
+  New pure tests in `tests/test_fbp_security.py` (trailer helpers) + wire-level tests in
+  `tests/test_fbp_driver.py` (off/on/delegation/unsigned/wrong-secret/tcp+ipc/clean-ledger).
+  Verified live via plain-python smoke on inproc + tcp (off backward-compatible, on verified,
+  tampered + wrong-secret refused). ruff + mypy clean. Operator runs pytest (Law 12).
 
 ### Product direction — PRIVATE, SINGLE-TENANT (this session)
 

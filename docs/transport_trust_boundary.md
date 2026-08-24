@@ -101,10 +101,17 @@ To move to a real trust boundary (recommended TOTI, in order of value):
    `fbp/security.py` map an authenticated peer to allowed directive kinds /
    subtree, enforced at the driver boundary via `FbpDriver(peer_autz=...)`
    (fail-closed for an unknown/unpermitted peer).
-5. **Traffic integrity.** ✅ **BUILT.** `sign_payload`/`verify_payload`/
-   `integrity_headers` in `fbp/security.py` produce and check an HMAC-SHA256
-   over the canonical message so a frame cannot be replayed/ altered without the
-   shared secret. Layered under real TLS this is handled by TLS itself.
+5. **Traffic integrity.** ✅ **BUILT AND WIRED INTO THE WIRE PATH.**
+   `sign_payload`/`verify_payload`/`integrity_headers` in `fbp/security.py`
+   produce and check an HMAC-SHA256 over the canonical message so a frame
+   cannot be replayed/altered without the shared secret. Wired end-to-end:
+   when `FbpDriver(integrity_secret=...)` is set (opt-in, default off), every
+   directive is signed before it leaves the driver, inherited by every spawned
+   child (whole-tree shares the secret), and verified on receipt — a missing,
+   tampered, or wrong-secret directive fails closed (never a verified success).
+   Responses are signed upward and verified on relay, so no hop can inject or
+   alter work without the shared secret. Layered under real TLS this is handled
+   by TLS itself.
 
 All of §5.2/§5.4/§5.5 are implemented as **pure, offline-tested, opt-in**
 primitives plus driver hooks. What crosses a real trust boundary still requires

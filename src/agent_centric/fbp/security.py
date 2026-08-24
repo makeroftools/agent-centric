@@ -35,6 +35,12 @@ from typing import Any, Final
 #: The message-integrity scheme tag (v1).
 INTEGRITY_TAG: Final = "fbp-integrity-v1"
 
+#: Reserved payload keys carrying the integrity trailer. These are embedded
+#: inside the JSON payload (so the frame count is unchanged) and stripped/verify
+#: before a receiving agent honours the message.
+INTEGRITY_KEY: Final = "_integrity"
+INTEGRITY_DIGEST_KEY: Final = "_digest"
+
 
 class TransportSecurityError(ValueError):
     """A transport-security policy was violated (fail-closed)."""
@@ -154,6 +160,68 @@ def integrity_headers(
         payload=payload,
     )
     return {"_integrity": INTEGRITY_TAG, "_digest": digest}
+
+
+def attach_integrity(
+    secret: bytes | None,
+    *,
+    correlation_id: str,
+    directive_kind: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Return ``payload`` with the integrity trailer embedded (when enabled).
+
+    When ``secret`` is ``None`` (integrity off) the payload is returned
+    unchanged — the caller's payload is never mutated. When set, the trailer
+    (``_integrity``/``_digest``) is embedded inside the payload dict so the wire
+    frame count is unchanged and a non-integrity peer (or a peer without the
+    secret) is unaffected.
+    """
+    if secret is None:
+        return payload
+    headers = integrity_headers(
+        secret,
+        correlation_id=correlation_id,
+        directive_kind=directive_kind,
+        payload=payload,
+    )
+    signed = dict(payload)
+    signed.update(headers)
+    return signed
+
+
+def verify_and_strip_integrity(
+    secret: bytes | None,
+    *,
+    correlation_id: str,
+    directive_kind: str,
+    payload: dict[str, Any],
+) -> tuple[dict[str, Any], bool]:
+    """Verify a payload's integrity trailer and strip it, returning the clean
+    payload and whether it verified.
+
+    When ``secret`` is ``None`` (integrity off) the payload is returned
+    unchanged with ``True`` — nothing to verify. When set, the trailer must be
+    present and verify against the clean payload (the digest is computed over
+    the payload *without* the trailer); a missing or mismatched trailer fails
+    closed (returns ``False``). The stripped payload (without the trailer keys)
+    is always returned so the receiver never sees reserved keys.
+    """
+    if secret is None:
+        return payload, True
+    trailer_tag = payload.get(INTEGRITY_KEY)
+    digest = payload.get(INTEGRITY_DIGEST_KEY)
+    clean = {k: v for k, v in payload.items() if k not in (INTEGRITY_KEY, INTEGRITY_DIGEST_KEY)}
+    if trailer_tag != INTEGRITY_TAG or not isinstance(digest, str) or not digest:
+        return clean, False
+    verified = verify_payload(
+        secret,
+        expected=digest,
+        correlation_id=correlation_id,
+        directive_kind=directive_kind,
+        payload=clean,
+    )
+    return clean, verified
 
 
 def _json_hex(secret: bytes, message: bytes) -> str:

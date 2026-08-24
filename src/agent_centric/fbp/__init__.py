@@ -177,9 +177,11 @@ from .security import (
     PeerAuthz,
     PeerPolicy,
     TlsCreds,
+    attach_integrity,
     configure_tls,
     integrity_headers,
     sign_payload,
+    verify_and_strip_integrity,
     verify_payload,
 )
 from .security import (
@@ -334,6 +336,8 @@ __all__ = [
     "sign_payload",
     "verify_payload",
     "integrity_headers",
+    "attach_integrity",
+    "verify_and_strip_integrity",
     "security_canonical_json",
     "INTEGRITY_TAG",
     # CPM: a read-only, deterministic capability (not an agent)

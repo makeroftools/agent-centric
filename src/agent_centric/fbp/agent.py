@@ -245,12 +245,22 @@ class Agent:
         if self._parent is None:
             raise RuntimeError(f"Agent {self.identity!r} is not initialised.")
         validate_response(msg)
+        payload = self._payload(msg)
+        if self._config.integrity_secret is not None:
+            from . import security as _security
+
+            payload = _security.attach_integrity(
+                self._config.integrity_secret,
+                correlation_id=msg.correlation_id,
+                directive_kind=msg.kind,
+                payload=payload,
+            )
         await self._parent.send_multipart(
             [
                 msg.correlation_id.encode(),
                 MESSAGE_RESPONSE.encode(),
                 msg.kind.encode(),
-                json.dumps(self._payload(msg)).encode(),
+                json.dumps(payload).encode(),
             ]
         )
 
@@ -294,6 +304,19 @@ class Agent:
         payload = json.loads(frames[3].decode())
         if message_kind != MESSAGE_DIRECTIVE:
             raise ProtocolError(f"expected a directive, got message kind {message_kind!r}")
+        if self._config.integrity_secret is not None:
+            from . import security as _security
+
+            payload, ok = _security.verify_and_strip_integrity(
+                self._config.integrity_secret,
+                correlation_id=correlation_id,
+                directive_kind=directive_kind,
+                payload=payload,
+            )
+            if not ok:
+                raise ProtocolError(
+                    f"directive {correlation_id!r} failed traffic-integrity verification"
+                )
         msg = Directive(correlation_id=correlation_id, kind=directive_kind, payload=payload)
         validate_directive(msg)
         return msg
@@ -912,12 +935,16 @@ class Agent:
                 child_socket.close(0)
                 return self._error(directive, reason)
         child_cls = self._child_class_for(payload.get("kind"))
+        # Children inherit the parent's traffic-integrity secret (when set) so
+        # the whole tree speaks the same protected wire contract (§5.5).
         child = child_cls(
             AgentConfig(
                 identity=child_identity,
                 parent_endpoint=child_endpoint,
                 transport=self._config.transport,
                 context=self._context,
+                transport_security=self._config.transport_security,
+                integrity_secret=self._config.integrity_secret,
             )
         )
         child.init()
@@ -1028,6 +1055,15 @@ class Agent:
         # delegation hint and must not reach the child (which would otherwise
         # try to re-delegate to itself). The parent mediates the route.
         payload = {k: v for k, v in directive.payload.items() if k != "child"}
+        if self._config.integrity_secret is not None:
+            from . import security as _security
+
+            payload = _security.attach_integrity(
+                self._config.integrity_secret,
+                correlation_id=directive.correlation_id,
+                directive_kind=directive.kind,
+                payload=payload,
+            )
         await child.send_multipart(
             [
                 child_identity.encode(),
@@ -1079,6 +1115,24 @@ class Agent:
                 node=self.identity,
                 error=f"child {identity!r} sent message kind {message_kind!r}, expected response",
             )
+        if self._config.integrity_secret is not None:
+            from . import security as _security
+
+            clean, ok = _security.verify_and_strip_integrity(
+                self._config.integrity_secret,
+                correlation_id=correlation_id,
+                directive_kind=response_kind,
+                payload=payload,
+            )
+            if not ok:
+                return Response(
+                    correlation_id=correlation_id,
+                    kind=RESPONSE_ERROR,
+                    verified=False,
+                    node=self.identity,
+                    error=f"child {identity!r} failed traffic-integrity verification",
+                )
+            payload = clean
         msg = Response(
             correlation_id=correlation_id,
             kind=response_kind,

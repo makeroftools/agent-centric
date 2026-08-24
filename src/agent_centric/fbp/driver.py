@@ -154,6 +154,7 @@ class FbpDriver:
                 transport=transport,
                 context=self._context,
                 transport_security=security,
+                integrity_secret=integrity_secret,
             )
         )
         self._root.init()
@@ -202,6 +203,29 @@ class FbpDriver:
         self._seq += 1
         return f"{prefix}-{self._seq}"
 
+    def _sign_payload(
+        self, correlation_id: str, kind: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Embed the §5.5 traffic-integrity trailer into a directive payload.
+
+        When ``integrity_secret`` is set (opt-in) the payload carries an HMAC
+        digest over the canonical message; the receiving agent verifies it
+        before honouring the directive (fail-closed). When the secret is None
+        the payload is returned unchanged (integrity off, backward compatible).
+        The ledger records the *clean* payload, so replay never stores or
+        re-verifies the trailer.
+        """
+        if self._integrity_secret is None:
+            return payload
+        from . import security as _security
+
+        return _security.attach_integrity(
+            self._integrity_secret,
+            correlation_id=correlation_id,
+            directive_kind=kind,
+            payload=payload,
+        )
+
     def _roundtrip(self, kind: str, payload: dict[str, Any], prefix: str) -> Response:
         """Send a directive to the root and step the poll loop until its response.
 
@@ -239,6 +263,7 @@ class FbpDriver:
             self._ledger_store.append(
                 correlation_id=correlation_id, kind=kind, payload=payload
             )
+        payload = self._sign_payload(correlation_id, kind, payload)
         directive_frames = [
             self._root.identity.encode(),
             correlation_id.encode(),

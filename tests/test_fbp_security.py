@@ -22,10 +22,12 @@ from agent_centric.fbp.security import (
     PeerAuthz,
     PeerPolicy,
     TlsCreds,
+    attach_integrity,
     canonical_json,
     configure_tls,
     integrity_headers,
     sign_payload,
+    verify_and_strip_integrity,
     verify_payload,
 )
 
@@ -97,6 +99,81 @@ class TestTrafficIntegrity:
             secret, expected=headers["_digest"], correlation_id="c1",
             directive_kind="run", payload={"value": 7},
         ) is True
+
+
+class TestTrailerHelpers:
+    """The payload trailer attach/verify helpers used by the wire wiring."""
+
+    def test_attach_integrity_embeds_and_verifies(self) -> None:
+        secret = b"s"
+        signed = attach_integrity(
+            secret, correlation_id="c1", directive_kind="run", payload={"value": 7}
+        )
+        # The trailer lives inside the payload (frame count unchanged).
+        assert signed["_integrity"] == INTEGRITY_TAG
+        assert signed["_digest"]
+        assert signed["value"] == 7
+        clean, ok = verify_and_strip_integrity(
+            secret, correlation_id="c1", directive_kind="run", payload=signed
+        )
+        assert ok is True
+        assert clean == {"value": 7}
+        assert "_integrity" not in clean and "_digest" not in clean
+
+    def test_attach_integrity_off_is_identity(self) -> None:
+        # With no secret (integrity off) the payload is returned unchanged.
+        payload = {"value": 7}
+        signed = attach_integrity(
+            None, correlation_id="c1", directive_kind="run", payload=payload
+        )
+        assert signed is payload
+
+    def test_verify_strip_integrity_off_is_identity(self) -> None:
+        payload = {"value": 7}
+        clean, ok = verify_and_strip_integrity(
+            None, correlation_id="c1", directive_kind="run", payload=payload
+        )
+        assert ok is True
+        assert clean is payload
+
+    def test_verify_rejects_missing_trailer(self) -> None:
+        clean, ok = verify_and_strip_integrity(
+            b"s", correlation_id="c1", directive_kind="run", payload={"value": 7}
+        )
+        assert ok is False
+        assert "_integrity" not in clean and "_digest" not in clean
+        assert clean == {"value": 7}
+
+    def test_verify_rejects_tampered_payload(self) -> None:
+        signed = attach_integrity(
+            b"s", correlation_id="c1", directive_kind="run", payload={"value": 7}
+        )
+        tampered = dict(signed)
+        tampered["value"] = 8  # single-byte alteration
+        clean, ok = verify_and_strip_integrity(
+            b"s", correlation_id="c1", directive_kind="run", payload=tampered
+        )
+        assert ok is False
+        assert clean["value"] == 8
+
+    def test_verify_rejects_wrong_secret(self) -> None:
+        signed = attach_integrity(
+            b"correct", correlation_id="c1", directive_kind="run", payload={"value": 7}
+        )
+        clean, ok = verify_and_strip_integrity(
+            b"wrong", correlation_id="c1", directive_kind="run", payload=signed
+        )
+        assert ok is False
+
+    def test_verify_requires_digest_string(self) -> None:
+        clean, ok = verify_and_strip_integrity(
+            b"s",
+            correlation_id="c1",
+            directive_kind="run",
+            payload={"_integrity": INTEGRITY_TAG, "_digest": 123, "value": 7},
+        )
+        assert ok is False
+        assert "_integrity" not in clean and "_digest" not in clean
 
 
 class TestPeerAuthz:

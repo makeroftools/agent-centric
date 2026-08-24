@@ -32,6 +32,10 @@ class AgentConfig:
         transport_security: The trust-boundary security profile. The default
             ``loopback`` permits loopback binds only (fail-closed); ``local``
             and ``tls`` are explicit opt-ins for non-loopback binds.
+        integrity_secret: An optional shared HMAC secret (bytes). When set, the
+            agent signs directives it sends and verifies directives it receives
+            (§5.5 traffic integrity). ``None`` (the default) keeps the transport
+            plain — opt-in, never on by default.
     """
 
     identity: str
@@ -40,3 +44,4 @@ class AgentConfig:
     protocol: str = PROTOCOL_VERSION
     context: Any | None = None
     transport_security: str = "local"
+    integrity_secret: bytes | None = None

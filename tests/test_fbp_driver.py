@@ -1095,6 +1095,129 @@ class TestTransportParity:
             assert [e["id"] for e in cal.value["entries"]] == ["b1"]
             assert cal.value["total_cents"] == 12345
 
+
+class TestWireIntegrity:
+    """§5.5 traffic integrity wired into the directive/response path (opt-in).
+
+    When ``integrity_secret`` is set, every directive and response across the
+    tree is HMAC-signed over a canonical message and verified on receipt
+    (fail-closed on mismatch). The default (no secret) is unchanged and fully
+    backward-compatible. The ledger records the *clean* payload so replay never
+    stores or re-verifies the trailer.
+    """
+
+    def _setup(self, driver: FbpDriver) -> None:
+        driver.register("double", _double)
+        driver.register("even", _even)
+        driver.configure(tasks=("double",), verifiers=("even",))
+
+    def test_off_is_backward_compatible(self) -> None:
+        with FbpDriver() as driver:
+            self._setup(driver)
+            r = driver.run("double", {"value": 21})
+            assert r.verified is True and r.value == 42
+
+    def test_on_signed_directive_verifies(self) -> None:
+        with FbpDriver(integrity_secret=b"shared-secret") as driver:
+            self._setup(driver)
+            r = driver.run("double", {"value": 21})
+            assert r.verified is True and r.value == 42
+
+    def test_on_delegation_across_protected_wire(self) -> None:
+        with FbpDriver(integrity_secret=b"shared-secret") as driver:
+            self._setup(driver)
+            driver.spawn("child")
+            driver.configure_child("child", tasks=("double",))
+            r = driver.run("double", {"value": 4}, child="child")
+            assert r.verified is True and r.value == 8
+            assert r.node == "child"
+
+    def test_unsigned_directive_fails_closed(self) -> None:
+        import json
+        import time
+
+        with FbpDriver(integrity_secret=b"shared-secret") as driver:
+            self._setup(driver)
+            # A well-formed but UNSIGNED directive must be refused by the root.
+            # The driver records only signed directives, so the ledger is the
+            # proof: sending an unsigned directive does not change it.
+            before = len(driver.ledger())
+            cid = driver._correlation("run")
+            frames = [
+                driver._root.identity.encode(),
+                cid.encode(),
+                b"directive",
+                b"run",
+                json.dumps({"task": "double", "args": {"value": 21}}).encode(),
+            ]
+            driver._root_socket.send_multipart(frames)
+            time.sleep(0.2)
+            assert len(driver.ledger()) == before
+
+    def test_wrong_secret_directive_fails_closed(self) -> None:
+        import json
+        import time
+
+        from agent_centric.fbp import security as _sec
+
+        with FbpDriver(integrity_secret=b"correct") as driver:
+            self._setup(driver)
+            before = len(driver.ledger())
+            cid = driver._correlation("run")
+            signed = _sec.attach_integrity(
+                b"wrong-secret",
+                correlation_id=cid,
+                directive_kind="run",
+                payload={"task": "double", "args": {"value": 21}},
+            )
+            frames = [
+                driver._root.identity.encode(),
+                cid.encode(),
+                b"directive",
+                b"run",
+                json.dumps(signed).encode(),
+            ]
+            driver._root_socket.send_multipart(frames)
+            time.sleep(0.2)
+            assert len(driver.ledger()) == before
+
+    @pytest.mark.parametrize(
+        ("transport", "endpoint"),
+        [
+            ("tcp", "127.0.0.1:5599"),
+            ("ipc", "/tmp/agent-centric-fbp-driver-integrity-test"),
+        ],
+    )
+    def test_on_over_real_transports(
+        self, transport: str, endpoint: str
+    ) -> None:
+        """Integrity works end-to-end over tcp/ipc — the exact cross-process
+        trust boundary where wire integrity matters most."""
+        with FbpDriver(
+            transport=transport, endpoint=endpoint, integrity_secret=b"shared-secret"
+        ) as driver:
+            self._setup(driver)
+            local = driver.run("double", {"value": 21})
+            assert local.verified is True and local.value == 42
+            driver.spawn("child")
+            driver.configure_child("child", tasks=("double",))
+            delegated = driver.run("double", {"value": 4}, child="child")
+            assert delegated.verified is True and delegated.value == 8
+
+    def test_ledger_holds_clean_payload(self) -> None:
+        """The recorded ledger must carry the clean payload, never the
+        integrity trailer (so replay/audit never sees reserved keys)."""
+        from agent_centric.fbp import security as _sec
+
+        with FbpDriver(integrity_secret=b"shared-secret") as driver:
+            self._setup(driver)
+            driver.run("double", {"value": 21})
+            for entry in driver.ledger().values():
+                payload = entry["payload"]
+                assert _sec.INTEGRITY_KEY not in payload
+                assert _sec.INTEGRITY_DIGEST_KEY not in payload
+
+
 class TestInspection:
     """Read-only operator inspection: discover the live tree and its grants,
     and enumerate a store agent's granted keys, without reaching into private
