@@ -25,17 +25,19 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `aa29c27` (wire ACP adapter to the FBP verified spine + website
-  tutorial). This session added commits on top of the earlier sequence (all
-  local, none pushed by the agent): `4b19ee0` (operator activity feed),
-  `7c9a546` (wire activity feed into landing page + CLI), `e9c2caf` (remove the
-  Bills tab — demonstration only), `7375698` (full-surface HTTP route coverage),
-  `d5cb164` (Designer node stick-to-cursor fix), `87e353e` (drag-and-drop
-  connectors), `d86c203` (drag-preview wire fix), `24bda00` (agent-composition
-  demo in the Designer), `9eedd69` (bills agent in the Designer + edge value
-  labels), `c50b85d` (capture this session for a mission-critical handoff),
-  `aa29c27` (wire ACP adapter to the FBP verified spine + website tutorial).
-- **Pushed to origin:** the user pushes directly. **Unpushed (57 commits):** the
+- **HEAD:** `a1cdb61` (add MCP adapter exposing FBP capabilities as tools). This
+  session added commits on top of the earlier sequence (all local, none pushed
+  by the agent): `4b19fc0` (operator activity feed), `7c9a546` (wire activity
+  feed into landing page + CLI), `e9c2caf` (remove the Bills tab — demonstration
+  only), `7375698` (full-surface HTTP route coverage), `d5cb164` (Designer node
+  stick-to-cursor fix), `87e353e` (drag-and-drop connectors), `d86c203`
+  (drag-preview wire fix), `24bda00` (agent-composition demo in the Designer),
+  `9eedd69` (bills agent in the Designer + edge value labels), `c50b85d`
+  (capture this session for a mission-critical handoff), `aa29c27` (wire ACP
+  adapter to the FBP verified spine + website tutorial), `9d5c8c0` (capture
+  ACP->FBP work, Law 12, and the open MCP question), `a1cdb61` (add MCP adapter
+  exposing FBP capabilities as tools).
+- **Pushed to origin:** the user pushes directly. **Unpushed (59 commits):** the
   full `agent-centric-fbp` sequence from `c4afa94` onward (all of this session's
   work is unpushed). Run `git log origin/agent-centric-fbp..HEAD` to see the
   exact unpushed set. No push is made by the agent; the lead pushes when they
@@ -50,7 +52,7 @@ has been pushing directly; confirm per commit.
   The ACP tests (`tests/test_acp.py`, **13 tests**) pass — **the operator runs
   the test suite; the agent does NOT run pytest (Law 12).**
 - `uv run ruff check .` → clean
-- `uv run mypy src` → clean (**92 source files**)
+- `uv run mypy src` → clean (**94 source files**)
 - FBP coverage: `experts.py` 94%, `domainrepo.py` **100%**, driver 91%, web.py
   **79%** (was 72%) after the full-surface HTTP route suite.
 - Cross-transport durable replay: 19/19 on inproc/ipc/tcp. Full production-arc
@@ -60,6 +62,12 @@ has been pushing directly; confirm per commit.
   round-trip; `bills intake/accept/calendar` (total 12345); `network` dataflow
   (sum=16); `status`/`tree`; unknown command + ungranted store key fail closed.
   The landing page renders the ACP tutorial (JSON braces literal).
+- **MCP adapter validated live** (plain `python -c` over the SDK in-memory
+  transport, not pytest): tools list (13 tools), `double`/`sum`/`square`
+  verified; `model` stub; `store_set`/`store_get` round-trip; `bills_intake`/
+  `bills_accept`/`bills_calendar` (total 500); `network` dataflow (sum=16);
+  `status`/`tree` read-only; unknown tool absent + ungranted store key fail
+  closed. The landing page renders the MCP tutorial.
 
 ### What's built and tested (the full agent-centric FBP capability surface)
 Everything in the capability table below is real code, committed, and exercised
@@ -120,6 +128,8 @@ that page:
 | **Card-based UI + mode switch** | `fbp/web.py` | Card-based landing page with a **Chat / Designer** mode switch: Chat = model box + chat history + run-an-artifact (general-purpose); Designer = Component Network editor. Clear functional division |
 | **Operator activity feed** | `fbp/activity.py`, `fbp/web.py` | The **audit of what an operator did**: a bounded, append-only, optionally-durable feed of operator actions, each with a kind (`model`/`orchestrate`/`network`/`bills`/`provision`/`action`) and its **verification status**. Deterministic ordering by sequence number; fail-closed on malformed/corrupt input; durable via `fbp-web --activity <path>` (explicit grant). The landing page gains a **dashboard Activity card** + a read-only `/activity` route; real actions (demo, bills intake/accept, network runs, orchestration, provisioning) record automatically through the verified spine. Additive |
 | **ACP adapter (Zed → FBP)** | `acp.py`, `tests/test_acp.py` | The **Agent Client Protocol** edge transport now routes every prompt through the **FBP `FbpDriver` verified spine** (not the legacy `AgentManager`). `FbpAcpAgent` commands: `double`/`square`/`negate`/`sum` (verified arithmetic), `model` (stub or opt-in OpenRouter), `store set/get` (grant-scoped), `bills intake/accept/calendar` (human-gated demo loop), `status`/`tree` (read-only), `network <json>` (component-network dataflow). Unknown commands fail closed. The driver runs on a **dedicated worker thread** so its private event loop stays isolated from the ACP async loop (fixes `Cannot run the event loop while another loop is running`). `close()` tears down the host + temp stores. Additive; 13 tests. The landing page **Docs** pane gains an ACP tutorial + command reference |
+| **MCP adapter (FBP → any LLM host)** | `mcp.py`, `tests/test_fbp_mcp.py` | The **Model Context Protocol** edge transport — the mirror image of ACP — exposes the FBP platform as **tools** any MCP-capable host (Claude Desktop, agent runtimes) can call. Tools: `double`/`square`/`negate`/`sum` (verified arithmetic), `model` (stub or opt-in OpenRouter), `store_set`/`store_get` (grant-scoped), `bills_intake`/`bills_accept`/`bills_calendar` (human-gated demo loop), `status`/`tree` (read-only), `network` (component-network dataflow). Unknown/ungranted operations fail closed (`is_error=True`). Reuses the shared `FbpDriverHost` worker thread. Additive; 5 tests. The landing page **Docs** pane gains an MCP tutorial + tool reference |
+| **Shared worker-thread driver host** | `fbp/driverhost.py` | `FbpDriverHost` — the **single worker-thread host** both ACP and MCP use to reach the deterministic spine. The driver's private event loop is bound to the worker thread (isolated from the ACP/MCP async loops); commands are submitted and awaited. Parameterizable store-key grant (`acp-*`/`mcp-*`). Additive |
 
 ### Easy-UX driver & CLI
 - `FbpDriver` API: `register`, `resolve`, `configure`, `configure_child`,
@@ -440,12 +450,21 @@ of decisions and working style that a fresh session must inherit.
    loop is running` that the first test run hit. `close()` tears down the host +
    temp stores. `tests/test_acp.py` rewritten for the FBP-backed surface (13
    tests; shared-session flows for store/bills persistence).
-46. **ACP tutorial on the website** (`aa29c27`) — the landing page **Docs** pane
-   gains an **ACP — drive the FBP platform from Zed** section: how to start it
+46. **ACP tutorial on the web** (`aa29c27`) — the landing page **Docs** pane
+   gains the **ACP — drive the FBP platform from Zed** section: how to start it
    (`agent-centric-acp`), the full command reference, an example session, and
    why it matters. Added `pre` styling for code blocks. The f-string HTML needed
    escaped braces (`{{`/`}}`) for the JSON examples — a gotcha to remember when
    editing `_render_landing`.
+47. **MCP adapter built** (`a1cdb61`) — the open MCP question is now answered:
+   the **Model Context Protocol** adapter (`agent_centric/mcp.py`) exposes the
+   FBP platform as tools any MCP-capable host can call. The worker-thread driver
+   host was extracted into `fbp/driverhost.py` (`FbpDriverHost`), shared by both
+   ACP and MCP. Tools: double/square/negate/sum, model, store_set/store_get,
+   bills_intake/accept/calendar, status/tree, network. Unknown/ungranted
+   operations fail closed. `mcp` dependency + `agent-centric-mcp` entry point
+   added. `tests/test_fbp_mcp.py` (in-memory transport, 5 tests). MCP tutorial
+   added to the landing page Docs pane.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -577,19 +596,16 @@ of decisions and working style that a fresh session must inherit.
   `PRINCIPLES.md`. The agent validates with the permitted static tools
   (ruff/mypy) and writes tests, but never invokes a test runner, and never
   claims a test passed unless the operator reports it.
-- **MCP question (this session, OPEN):** the user asked *"Do we want MCP too?"*
-  The lead's architectural read: **yes, MCP is coherent and valuable** — it is
-  the mirror image of ACP (ACP = editor → us as agent; MCP = LLM host → us as
-  tool server). It would expose our FBP domain experts as **tools** any
-  MCP-capable host can call, matching the "Network of Experts AI" north star
-  (the model proposes, the deterministic tool verifies). It needs one new
-  dependency (`mcp` SDK, same category as `agent-client-protocol`) and a new
-  `agent_centric/mcp.py` adapter. **Not yet built** — it introduces a new
-  third-party dependency + public surface, so it awaits the lead's explicit
-  go-ahead. Design constraints to hold (mirroring ACP): edge transport only;
-  tools map to registered FBP tasks; unknown/ungranted tools fail closed;
-  verified/unverified reported honestly; grants respected; opt-in + offline-
-  testable + additive.
+- **MCP question (this session, now BUILT):** the user asked *"Do we want MCP
+  too?"* The lead's architectural read was **yes** — MCP is the mirror image of
+  ACP (ACP = editor → us as agent; MCP = LLM host → us as tool server). It
+  exposes our FBP domain experts as **tools** any MCP-capable host can call,
+  matching the "Network of Experts AI" north star (the model proposes, the
+  deterministic tool verifies). Built as `agent_centric/mcp.py` + the shared
+  `fbp/driverhost.py` worker-thread host (`a1cdb61`). Design constraints held
+  (mirroring ACP): edge transport only; tools map to registered FBP tasks;
+  unknown/ungranted tools fail closed; verified/unverified reported honestly;
+  grants respected; opt-in + offline-testable + additive.
 
 ### How to talk to the user / working style
 - Be the **senior, decisive engineer**: propose a course, proceed on the
@@ -641,14 +657,11 @@ These are listed in `STATUS.md`'s "out of scope / future volleys".
   adapter now routes through `FbpDriver` (component networks, schema-driven
   orchestration, the verified spine), so the whole deterministic platform is
   reachable from Zed. See the capability table + session arc.
-- **MCP adapter (the natural complement, OPEN — build only on explicit
-  go-ahead).** The user asked *"Do we want MCP too?"*; the lead's read is yes.
-  MCP is the mirror image of ACP: it exposes our FBP domain experts as **tools**
-  any MCP-capable host (Claude Desktop, agent runtimes) can call, matching the
-  "Network of Experts AI" north star. Needs one new dependency (`mcp` SDK) + a
-  new `agent_centric/mcp.py` adapter, offline-testable and fail-closed. See the
-  decision entry for the design constraints. Build only on the lead's explicit
-  go-ahead (new third-party dependency + public surface).
+- **MCP adapter — DONE (`a1cdb61`).** The MCP adapter exposes the FBP platform
+  as tools any MCP-capable host can call, reusing the shared `FbpDriverHost`
+  worker-thread driver. See the capability table + session arc. The natural
+  next gap is now the **standalone multi-tenant paid web service** (roadmap
+  only, gated on mTLS + per-tenant isolation + billing).
 
 ### Production roadmap — standalone multi-tenant paid web service (roadmap only, NOT built)
 
@@ -757,6 +770,8 @@ uv run agent-centric fbp-summary sess.db
 uv run agent-centric fbp-domains repo.json  # operator readout of a saved Domain Registry + Artifact Vault
 uv run agent-centric-acp                  # ACP agent over stdio (Zed External Agent)
 uv run python -m agent_centric.acp        # same, via module
+uv run agent-centric-mcp                  # MCP server over stdio (tools for LLM hosts)
+uv run python -m agent_centric.mcp        # same, via module
 uv run python examples/fbp_arc_demo.py
 uv run python examples/fbp_activity_demo.py
 ```
@@ -793,9 +808,14 @@ uv run python examples/fbp_activity_demo.py
   store set/get, bills intake/accept/calendar, status/tree, network <json>;
   unknown commands fail closed. Real model is opt-in (env-driven) and never
   relaxes verification.
-- **MCP is proposed but NOT built.** The lead's read is that MCP is the natural
-  complement to ACP (expose FBP experts as tools to any MCP host), but it needs
-  a new dependency + public surface, so it awaits the lead's explicit go-ahead.
+- **MCP is an edge transport over the FBP spine (built).** `mcp.py` exposes the
+  FBP platform as tools any MCP-capable host can call; every tool call routes
+  through `FbpDriver` (verified, ledgered, replayable); no MCP path bypasses
+  verification. Reuses the shared `FbpDriverHost` worker thread. Tools:
+  double/square/negate/sum, model, store_set/store_get, bills_intake/accept/
+  calendar, status/tree, network. Unknown/ungranted operations fail closed
+  (`is_error=True`). Real model is opt-in (env-driven) and never relaxes
+  verification.
 - **The coined axiom (user): "Network of Experts AI"** — *the model is not the
   expert, the network is.* An AI is a network of narrow domain experts, each
   verified by a deterministic verifier; a general model is one (fallible) kind
