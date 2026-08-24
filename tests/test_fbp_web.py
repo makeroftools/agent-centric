@@ -497,6 +497,29 @@ class TestModelRoute:
     def test_parse_model_body_rejects_garbage(self) -> None:
         assert _parse_model_body("{not json") == ("", "")
 
+    def test_run_model_provider_error_fails_closed(self) -> None:
+        """A real provider that raises yields an explicit, unverified failure.
+
+        The audited ``/model`` path must never surface a provider exception as
+        a success: ``_run_model`` catches it and returns ``ok=False`` with the
+        error surfaced and ``verified=False`` (fail-closed, never misverified).
+        """
+        from agent_centric.contracts.model import ModelProviderError
+
+        server = FbpLandingServer()
+        model_agent = server._driver._root.children["model"]
+
+        class _FailingProvider:
+            def __call__(self, prompt: str) -> str:
+                raise ModelProviderError("simulated provider failure")
+
+        model_agent.set_provider(_FailingProvider(), model_id="openai/gpt-5")
+        result = server._run_model("hello")
+        assert result.get("ok") is False
+        assert result.get("verified") is False
+        assert "simulated provider failure" in result.get("error", "")
+        server._driver.close()
+
 
 class TestGrantRender:
     def test_grants_includes_state_trajectory_and_keys(self) -> None:
@@ -627,6 +650,29 @@ class TestLandingRender:
         assert "Session Ledger" in html
         assert "no runs recorded" in html
 
+    def test_render_ledger_populated_runs(self) -> None:
+        """The ledger HTML renders each recorded run's fields when runs exist.
+
+        This is the populated-runs branch: every run's correlation id, task,
+        terminal, and value must appear in the table (and the empty note must
+        not). The ledger view stays a read-only, deterministic snapshot.
+        """
+        html = _render_ledger({
+            "summary": {
+                "runs": [
+                    {"correlation_id": "run-1", "task": "double",
+                     "terminal": "result", "value": 4},
+                    {"correlation_id": "run-2", "task": "sum",
+                     "terminal": "error", "value": None},
+                ]
+            },
+            "count": 2,
+        })
+        assert "run-1" in html and "double" in html and "result" in html
+        assert "4" in html
+        assert "run-2" in html and "sum" in html
+        assert "no runs recorded" not in html
+
     def test_page_state_exposes_jsonable_fields(self) -> None:
         """The page-state snapshot is JSON-serialisable (for /state.json)."""
         import json
@@ -705,6 +751,33 @@ class TestStreamingAndHistory:
         assert done["verified"] is False
         assert "stub response" in done["text"]
         assert done["model"] == "stub-model"
+        server._driver.close()
+
+    def test_stream_model_provider_error_fails_closed(self, monkeypatch) -> None:
+        """A streaming provider failure surfaces as an explicit SSE error event.
+
+        The streaming preview must never emit a silent gap or a false done:
+        when the worker's transport raises, the generator yields a terminal
+        ``{type: error}`` event carrying the message (fail-closed).
+        """
+        import agent_centric.fbp.web as _web
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+        monkeypatch.setenv("OPENROUTER_MODEL", "openai/gpt-5")
+
+        def _boom_client(model: str, on_chunk: object):
+            def client(endpoint: str, headers: dict, prompt: str) -> str:
+                raise RuntimeError("simulated stream failure")
+
+            return client
+
+        monkeypatch.setattr(_web, "_openrouter_http_client_stream", _boom_client)
+        server = FbpLandingServer()
+        events = list(server._stream_model("hello", "openai/gpt-5"))
+        types = [e["type"] for e in events]
+        assert types[0] == "meta"
+        assert types[-1] == "error"
+        assert "simulated stream failure" in events[-1]["error"]
         server._driver.close()
 
     def test_history_append_and_get(self, monkeypatch) -> None:

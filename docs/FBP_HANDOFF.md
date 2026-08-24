@@ -46,7 +46,7 @@ we are.
 has been pushing directly; confirm per commit.
 
 ### Validation (run this session, all live)
-- `uv run pytest` → **1010 passed** at the prior handoff; **this arc added tests** (readiness/liveness, ACP bound, MCP bound, 413 payload bound, web.py pure helpers, render branches, network step-limit, orchestration step-limit) and **fixed two operator-reported test failures** (503 HTTPError handling; ACP model-stub determinism). The operator confirmed **50/50 passed** on the web/acp/mcp route+adapter suite. **The operator runs the test suite; the agent does NOT run pytest (Law 12).** The full-suite count is not re-measured here — the operator owns that gate.
+- `uv run pytest` → **1010 passed** at the prior handoff; **this arc added tests** (readiness/liveness, ACP bound, MCP bound, 413 payload bound, web.py pure helpers, render branches, network step-limit, orchestration step-limit) and **fixed two operator-reported test failures** (503 HTTPError handling; ACP model-stub determinism). The operator confirmed **50/50 passed** on the web/acp/mcp route+adapter suite. **The operator runs the test suite; the agent does NOT run pytest (Law 12).** The full-suite count is not re-measured here — the operator owns that gate. This session the operator confirmed the three new web.py fail-closed branch tests pass: `pytest tests/test_fbp_web.py -k "render_ledger_populated_runs or run_model_provider_error or stream_model_provider_error"` → **3 passed, 90 deselected** (0.29s).
 - `uv run ruff check .` → clean
 - `uv run mypy src` → clean (**94 source files**)
 - FBP coverage (prior baseline): `experts.py` 94%, `domainrepo.py` **100%**, driver 91%, web.py
@@ -770,8 +770,12 @@ These are listed in `STATUS.md`'s "out of scope / future volleys".
   on the wire, OS/container isolation) — not additive code.
 - **Next seams (lead's queue):** (1) `_render_ledger` populated-runs branch and the
   model-box fail-closed branches (`_stream_model`/`_run_model` provider-error path) to
-  finish web.py coverage; (2) regenerate the stale `.coverage` baseline (operator action,
-  Law 12) so the aggregate number is trustworthy again; (3) keep `docs/` current.
+  finish web.py coverage — **DONE (this session)**: `test_render_ledger_populated_runs`,
+  `test_run_model_provider_error_fails_closed`, and `test_stream_model_provider_error_fails_closed`
+  added to `tests/test_fbp_web.py` (each verified offline via plain-python smoke + ruff/mypy;
+  the operator owns the pytest gate, Law 12). (2) regenerate the stale `.coverage` baseline
+  (operator action, Law 12) so the aggregate number is trustworthy again; (3) keep `docs/`
+  current.
 
 ### Product direction — PRIVATE, SINGLE-TENANT (this session)
 
@@ -803,6 +807,11 @@ multi-tenant anything unless the user explicitly reverses this.
 - **web.py pure-helper coverage (this session) — built, unpushed:** TestPureHelpers covers the
   deterministic helpers (`_stub_model_text`, `_stream_chunks`, `_caps`, `_openrouter_http_client`).
   See the test class in `tests/test_fbp_web.py`.
+- **web.py fail-closed branch coverage (this session) — built, unpushed:** the three remaining
+  web.py seams are now covered: `_render_ledger` populated-runs, `_run_model` provider-error,
+  and `_stream_model` provider-error (`test_render_ledger_populated_runs`,
+  `test_run_model_provider_error_fails_closed`, `test_stream_model_provider_error_fails_closed`).
+  See `tests/test_fbp_web.py`.
 - **ACP entry point:** `agent-centric-acp` (or `python -m agent_centric.acp`)
   exposes the FBP platform as an External Agent in Zed over stdio. Point Zed's
   `agent_servers` at it. **Zed's schema is an object map keyed by agent name,
