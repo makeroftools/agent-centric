@@ -498,6 +498,49 @@ class TestProductionHardening:
             srv.close()
 
 
+class TestReadiness:
+    """The /ready probe exercises the verified spine (fail-closed), unlike /health."""
+
+    def test_ready_reports_verified_when_spine_works(self, monkeypatch) -> None:
+        srv = _BoundServer(monkeypatch)
+        try:
+            status, ctype, body = srv.get("/ready")
+            assert status == 200
+            assert "application/json" in ctype
+            data = json.loads(body)
+            assert data["ready"] is True
+            assert data["verified"] is True
+            assert data["probe"] == "double(21)=42"
+        finally:
+            srv.close()
+
+    def test_ready_fails_closed_when_spine_cannot_verify(self, monkeypatch) -> None:
+        srv = _BoundServer(monkeypatch)
+        try:
+            # Sabotage the spine: unregister the task the probe runs, so the
+            # readiness probe cannot produce a verified result.
+            srv._server._driver._root._registry._entries.pop("double", None)
+            status, _, body = srv.get("/ready")
+            assert status == 503
+            data = json.loads(body)
+            assert data["ready"] is False
+            assert data["verified"] is False
+        finally:
+            srv.close()
+
+    def test_health_remains_pure_liveness(self, monkeypatch) -> None:
+        """/health stays a liveness check and does not exercise the spine."""
+        srv = _BoundServer(monkeypatch)
+        try:
+            status, ctype, body = srv.get("/health")
+            assert status == 200
+            data = json.loads(body)
+            assert data["ok"] is True
+            assert "ready" not in data
+        finally:
+            srv.close()
+
+
 class TestFailClosed:
     def test_unknown_path_returns_404(self, monkeypatch) -> None:
         srv = _BoundServer(monkeypatch)

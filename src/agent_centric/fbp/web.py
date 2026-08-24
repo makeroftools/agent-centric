@@ -974,6 +974,11 @@ class FbpLandingServer:
                     self._send_json(server._surfaces_readout())
                 elif self.path == "/health":
                     self._send_json({"ok": True, "server": f"{host}:{port}"})
+                elif self.path == "/ready":
+                    # Readiness probe: exercise the verified spine (fail-closed).
+                    # 200 when the platform can do verified work, 503 otherwise.
+                    ready = server._readiness()
+                    self._send_json(ready, code=200 if ready.get("ready") else 503)
                 else:
                     self._send_html(
                         _render_landing(server._page_state(), error="unknown path"),
@@ -1319,6 +1324,34 @@ class FbpLandingServer:
             return {"action": "run double(21)", "error": resp.error}
         except Exception as exc:  # noqa: BLE001 - surfaced to the page
             return {"action": "run double(21)", "error": str(exc)}
+
+    def _readiness(self) -> dict[str, Any]:
+        """A deterministic readiness probe: exercise the verified spine.
+
+        Unlike the pure-liveness ``/health`` (the process is up), this proves the
+        platform can actually do work: it runs a real, verified task through the
+        driver's correctness spine (parent re-verified, ledgered). Fail-closed:
+        an unverified result or a raised error reports ``ready: False`` so a
+        load balancer / operator probe never mistakes a wedged spine for a
+        healthy one.
+        """
+        try:
+            resp = self._driver.run("double", {"value": 21}, verifier="even")
+            if resp.verified and resp.value == 42:
+                return {
+                    "ready": True,
+                    "verified": True,
+                    "probe": "double(21)=42",
+                    "node": resp.node or "",
+                }
+            return {
+                "ready": False,
+                "verified": False,
+                "probe": "double(21)",
+                "error": resp.error or "spine did not verify the probe",
+            }
+        except Exception as exc:  # noqa: BLE001 - fail closed to not-ready
+            return {"ready": False, "verified": False, "probe": "double(21)", "error": str(exc)}
 
     def _build_chat_context(self, max_turns: int = 8) -> str:
         """A deterministic, bounded transcript prefix for the next model prompt.
