@@ -25,7 +25,7 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `9c7f4b0` (this capture) — atop `e261932`, `08deaa7`, `7ac854f`, `c51be25`, `7c76f33`, and `3da8879`. This session added commits
+- **HEAD:** `c3d65d0` (this capture) — atop `9c7f4b0`, `e261932`, `08deaa7`, `7ac854f`, `c51be25`, `7c76f33`, and `3da8879`. This session added commits
   on top of the earlier sequence (all local): `4b19fc0` (operator activity feed), `7c9a546` (landing+CLI activity feed), `e9c2eaf`
   (remove Bills tab, demo-only), `7375698` (full-surface HTTP coverage), `d5cb164`
   (Designer sticky-fix), `87e353e` (drag-and-drop), `d86c203` (drag wire-fix),
@@ -37,8 +37,8 @@ we are.
   `1b0f6b2` (Zed agent_servers schema fix), `cdb6618` (MCP deterministic stub test),
   `f22e4fa` (reflect push + MCP test handoff capture), `3da8879` (landing hardening),
   `7c76f33` (handoff capture), `c51be25` (git-state fix), `7ac854f` (readiness/liveness split),
-  `08deaa7` (ACP bound), `e261932` (MCP bound), `9c7f4b0` (this capture).
-- **Pushed to origin:** the lead pushes directly. **Unpushed (7):** `3da8879` + `7c76f33` + `c51be25` + `7ac854f` + `08deaa7` + `e261932` + `9c7f4b0` (landing hardening + captures + readiness/liveness split + ACP bound + MCP bound + the two test fixes) are local, not yet pushed. A prior `git fetch` confirmed `eb3a9fc` was pushed. The agent does not push.
+  `08deaa7` (ACP bound), `e261932` (MCP bound), `9c7f4b0` (operator test fixes), `c3d65d0` (this capture).
+- **Pushed to origin:** the lead pushes directly. **Unpushed (8):** `3da8879` + `7c76f33` + `c51be25` + `7ac854f` + `08deaa7` + `e261932` + `9c7f4b0` + `c3d65d0` (landing hardening + captures + readiness/liveness split + ACP bound + MCP bound + operator test fixes + the 413 payload bound) are local, not yet pushed. A prior `git fetch` confirmed `eb3a9fc` was pushed. The agent does not push.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule: **do not push unless the lead explicitly says push.** The lead
 has been pushing directly; confirm per commit.
@@ -530,6 +530,15 @@ of decisions and working style that a fresh session must inherit.
   Mirrors the ACP prompt bound and the landing server's request-body bound. Additive; the
   verified spine and standing invariants are untouched. Tests added for the operator (over-bound
   fails closed, verified output absent); live-verified via a direct smoke test. **Not yet pushed.**
+57. **Landing server 413 payload bound (fail-closed)** (`c3d65d0`) — every POST route that reads a
+  request body now rejects an oversized body with a protocol-correct **413 (Payload Too Large)**
+  and a connection close **before reading it**, instead of silently truncating the stream into an
+  empty string. An oversized payload is never inflated into memory, and closing the connection
+  keeps the single-threaded server's request framing clean (no undrained bytes mistaken for a
+  subsequent request). Bounds `/model`, `/model/stream`, `/orchestrate`, `/provision`, `/network`,
+  `/bills/*`. Additive; the verified spine and standing invariants are untouched. Tests added
+  for the operator (oversized -> 413, at-bound -> accepted); live-verified over a bound
+  loopback server. **Not yet pushed.**
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -750,8 +759,8 @@ not a commitment to build a multi-tenant service. Do not build or plan
 multi-tenant anything unless the user explicitly reverses this.
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (6) — open:** `3da8879` (landing hardening) + `7c76f33`
-  (handoff capture) + `c51be25` (git-state fix) + `7ac854f` (readiness/liveness split) + `08deaa7` (ACP bound) + `e261932` (MCP bound) are local, not yet pushed. `origin/agent-centric-fbp` is at `eb3a9fc`. The
+- **Unpushed commits (8) — open:** `3da8879` (landing hardening) + `7c76f33`
+  (handoff capture) + `c51be25` (git-state fix) + `7ac854f` (readiness/liveness split) + `08deaa7` (ACP bound) + `e261932` (MCP bound) + `9c7f4b0` (operator test fixes) + `c3d65d0` (413 payload bound) are local, not yet pushed. `origin/agent-centric-fbp` is at `eb3a9fc`. The
   lead pushes; the agent does not. After a push, `git fetch` to confirm.
 - **Readiness/liveness split (this session) — built, unpushed:** a `/ready` probe exercises
   the verified spine (fail-closed 503) distinct from the pure-liveness `/health`. See arc 54.
@@ -759,6 +768,8 @@ multi-tenant anything unless the user explicitly reverses this.
   `session/prompt` above a 65,536-char bound, fail-closed (never misverified). See arc 55.
 - **MCP bounded tool-call args (this session) — built, unpushed:** MCP now refuses a tool call
   whose serialized args exceed a 65,536-byte bound, fail-closed. See arc 56.
+- **Landing 413 payload bound (this session) — built, unpushed:** oversized POST bodies are
+  rejected with 413 + connection close before read. See arc 57.
 - **ACP entry point:** `agent-centric-acp` (or `python -m agent_centric.acp`)
   exposes the FBP platform as an External Agent in Zed over stdio. Point Zed's
   `agent_servers` at it. **Zed's schema is an object map keyed by agent name,
