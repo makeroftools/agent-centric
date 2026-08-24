@@ -120,3 +120,20 @@ def test_mcp_fail_closed_unknown_tool() -> None:
         assert all("verified" not in t for t in texts), texts
     finally:
         server._driver_host.close()
+
+
+def test_mcp_oversized_args_fail_closed() -> None:
+    """A tool call with oversized args is refused, never fed through the spine."""
+    from agent_centric.mcp import _MAX_CALL_BYTES
+
+    server = _build_server()
+    try:
+        big = "x" * (_MAX_CALL_BYTES + 1)
+        texts, is_error = _scenario(
+            server, "store_set", {"key": "mcp-big", "value": {"data": big}}
+        )
+        assert is_error, texts
+        assert any("exceed" in t and "fail-closed" in t for t in texts), texts
+        assert all("verified:" not in t for t in texts), texts
+    finally:
+        server._driver_host.close()

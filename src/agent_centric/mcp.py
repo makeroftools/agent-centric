@@ -49,6 +49,23 @@ def _as_text(value: Any) -> str:
     return json.dumps(value, default=str, sort_keys=True)
 
 
+# Hard upper bound on the serialized size of a single tool-call argument object.
+# An LLM host drives this surface, so it must not be able to feed an
+# arbitrarily large payload (e.g. an outsized ``store_set`` / ``bills_intake`` /
+# ``model`` prompt) through the verified spine or into memory. Mirrors the ACP
+# prompt bound and the landing server's request-body bound. Fail-closed.
+_MAX_CALL_BYTES = 1 << 16
+
+
+def _call_oversized(args: dict[str, Any]) -> bool:
+    """True if the serialized tool args exceed the hard size bound (fail-closed)."""
+    try:
+        return len(json.dumps(args, default=str, sort_keys=True)) > _MAX_CALL_BYTES
+    except (TypeError, ValueError):
+        # Unserializable args are inherently untrustworthy; fail closed.
+        return True
+
+
 def _call_unless_result(
     host: FbpDriverHost,
     task: str,
@@ -57,6 +74,20 @@ def _call_unless_result(
     child: str | None = None,
 ) -> CallToolResult:
     """Run one FBP task through the verified spine; return a CallToolResult."""
+
+    if _call_oversized(args):
+        return CallToolResult(
+            content=[
+                TextContent(
+                    type="text",
+                    text=(
+                        "fail-closed: tool args exceed the "
+                        f"{_MAX_CALL_BYTES}-byte bound; refusing"
+                    ),
+                )
+            ],
+            is_error=True,
+        )
 
     def _fn(driver: FbpDriver) -> Any:
         return driver.run(task, args, child=child)
