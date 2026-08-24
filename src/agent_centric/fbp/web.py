@@ -3303,7 +3303,10 @@ that bypasses verification, and neither ever relaxes it.</p>
 
   <h3>Start it</h3>
   <p>Point an ACP client (Zed's <code>agent_servers</code>) at the console entry
-  point:</p>
+  point. Zed's schema is an <b>object map</b> keyed by agent name, each with
+  <code>type: "custom"</code>, <code>command</code>, and optional <code>args</code>
+  (not an array of <code>executable</code> entries). See
+  <code>examples/zed_agent_servers.json.example</code> for a ready-to-copy block.</p>
   <pre><code>agent-centric-acp
 # or: python -m agent_centric.acp</code></pre>
 

@@ -724,9 +724,14 @@ multi-tenant anything unless the user explicitly reverses this.
   `git log origin/agent-centric-fbp..HEAD` for the exact set.
 - **ACP entry point:** `agent-centric-acp` (or `python -m agent_centric.acp`)
   exposes the FBP platform as an External Agent in Zed over stdio. Point Zed's
-  `agent_servers` at it. The landing page **Docs** pane has the tutorial, and
+  `agent_servers` at it. **Zed's schema is an object map keyed by agent name,
+  each with `type: "custom"`, `command`, and optional `args`** (NOT an array of
+  `executable` entries) — see https://zed.dev/docs/ai/external-agents.
+  The landing page **Docs** pane has the tutorial, and
   `examples/zed_agent_servers.json.example` is the ready-to-copy reference for
   the `agent_servers` block (the real `.zed/settings.json` stays local/gitignored).
+  The adapter was verified to answer the ACP `initialize` handshake over stdio,
+  advertising itself as "Agent-centric (FBP deterministic verified chain)".
 - **Terminal glitch (this session):** the session's local terminal began
   rejecting ``cd`` into the project with "not in any of the project's
   worktrees"; the same command had worked minutes earlier. The sub-agent (which

@@ -5,11 +5,18 @@
   // This is a REFERENCE, not a committed config: the real `.zed/settings.json`
   // is gitignored (local-only). To enable the deterministic FBP agent in Zed:
   //
-  //   1. Install the project once (so the `agent-centric-acp` console script is
-  //      on PATH), or use the absolute path to the venv binary below.
+  //   1. Ensure the project's venv console script is ready. Use the absolute
+  //      path to the venv binary below, OR add it to PATH and use just
+  //      "agent-centric-acp".
   //   2. Copy the `agent_servers` block into `.zed/settings.json`.
-  //   3. Restart Zed. The "Agent-centric (FBP deterministic verified chain)"
-  //      agent becomes selectable as an External Agent.
+  //   3. Restart Zed (or reload the window). The agent appears under
+  //      "External Agents" (Agent Settings → External Agents → Add Custom Agent),
+  //      selectable in the Agent Panel new-thread menu as
+  //      "Agent-centric (FBP deterministic verified chain)".
+  //
+  // Zed's external-agent schema is an OBJECT map keyed by agent name, each with
+  // `type: "custom"`, `command`, and optional `args` — NOT an array of
+  // `{executable: {path}}`. See https://zed.dev/docs/ai/external-agents.
   //
   // Every prompt routes through the FbpDriver verified spine — a normal
   // directive, parent re-verified, ledgered, replayable, fail-closed. No ACP
@@ -19,14 +26,11 @@
   // to give the `model` command a real provider; without it, the model agent
   // serves its deterministic stub (offline, CI-safe).
 
-  "agent_servers": [
-    {
-      "name": "agent-centric-fbp",
-      "executable": {
-        "path": "agent-centric-acp"
-        // Or, with an absolute path to the project venv:
-        // "path": "/home/makeroftools/github/agent-centric/.venv/bin/agent-centric-acp"
-      }
+  "agent_servers": {
+    "agent-centric-fbp": {
+      "type": "custom",
+      "command": "/home/makeroftools/github/agent-centric/.venv/bin/agent-centric-acp",
+      "args": []
     }
-  ]
+  }
 }
