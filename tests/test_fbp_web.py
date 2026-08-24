@@ -14,10 +14,14 @@ import json
 from agent_centric.fbp.web import (
     FbpLandingServer,
     _build_openrouter_providers,
+    _caps,
     _grants,
+    _openrouter_http_client,
     _parse_model_body,
     _render_landing,
     _render_ledger,
+    _stream_chunks,
+    _stub_model_text,
 )
 
 
@@ -1141,3 +1145,80 @@ class TestAgentDesignerBills:
             assert [e["id"] for e in c["value"].get("entries", [])] == ["bill-designer-1"]
         finally:
             server._driver.close()
+
+
+class TestPureHelpers:
+    """Coverage for the small pure helpers in web.py (offline, deterministic)."""
+
+    def test_stub_model_text(self) -> None:
+        assert _stub_model_text("hello") == "stub response to: hello"
+        # Long prompts are truncated to 80 chars.
+        long_prompt = "x" * 200
+        assert len(_stub_model_text(long_prompt)) == len("stub response to: ") + 80
+
+    def test_stream_chunks_empty(self) -> None:
+        assert _stream_chunks("") == []
+
+    def test_stream_chunks_splits_words(self) -> None:
+        chunks = _stream_chunks("one two three four", size=8)
+        # The text is split into progressive word/prefix-sized chunks.
+        assert "".join(chunks).replace(" ", "") == "onetwothreefour"
+        assert all(len(c) >= 1 for c in chunks)
+
+    def test_stream_chunks_single_word(self) -> None:
+        assert _stream_chunks("hello") == ["hello"]
+
+    def test_caps_renders_pills(self) -> None:
+        html = _caps({"capabilities": ["double", "sum"]})
+        assert "double" in html and "sum" in html
+        assert "class='pill'" in html
+
+    def test_caps_em_dash_when_none(self) -> None:
+        assert _caps({}) == "&mdash;"
+        assert _caps({"capabilities": []}) == "&mdash;"
+
+    def test_openrouter_client_parses_choices(self, monkeypatch) -> None:
+        """The non-streaming client parses the choices/message shape."""
+        import urllib.request as _ur
+
+        class _FakeResp:
+            def __enter__(self) -> _FakeResp:
+                return self
+
+            def __exit__(self, *a: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return b'{"choices":[{"message":{"content":"hi there"}}]}'
+
+        def _fake_urlopen(req: object, timeout: int = 0) -> _FakeResp:
+            return _FakeResp()
+
+        monkeypatch.setattr(_ur, "urlopen", _fake_urlopen)
+        client = _openrouter_http_client("m")
+        assert client("https://example.test", {}, "hi") == "hi there"
+
+    def test_openrouter_client_raises_on_bad_shape(self, monkeypatch) -> None:
+        """A malformed response fails closed with a clear RuntimeError."""
+        import urllib.request as _ur
+
+        class _FakeResp:
+            def __enter__(self) -> _FakeResp:
+                return self
+
+            def __exit__(self, *a: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return b'{"choices":[]}'
+
+        def _fake_urlopen(req: object, timeout: int = 0) -> _FakeResp:
+            return _FakeResp()
+
+        monkeypatch.setattr(_ur, "urlopen", _fake_urlopen)
+        client = _openrouter_http_client("m")
+        try:
+            client("https://example.test", {}, "hi")
+            raise AssertionError("expected RuntimeError")
+        except RuntimeError as exc:
+            assert "unexpected OpenRouter response" in str(exc)
