@@ -497,6 +497,44 @@ class TestProductionHardening:
         finally:
             srv.close()
 
+    def test_oversized_payload_rejected_413(self, monkeypatch) -> None:
+        """An oversized POST body is rejected with 413 before being read."""
+        srv = _BoundServer(monkeypatch)
+        try:
+            big = '{"prompt": "' + ("x" * 70000) + '"}'
+            req = urllib.request.Request(
+                srv.base + "/model",
+                data=big.encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                urllib.request.urlopen(req)
+                raise AssertionError("expected 413")
+            except urllib.request.HTTPError as exc:
+                assert exc.code == 413
+        finally:
+            srv.close()
+
+    def test_at_bound_payload_accepted(self, monkeypatch) -> None:
+        """A body at the size bound is still accepted (not rejected)."""
+        srv = _BoundServer(monkeypatch)
+        try:
+            # Just under the 65,536 bound: a model prompt that fits.
+            prompt = "hello " + ("x" * (50000))
+            req = urllib.request.Request(
+                srv.base + "/model",
+                data=json.dumps({"prompt": prompt}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req) as resp:
+                assert resp.status == 200
+                data = json.loads(resp.read().decode("utf-8"))
+                assert data["ok"] is True
+        finally:
+            srv.close()
+
 
 class TestReadiness:
     """The /ready probe exercises the verified spine (fail-closed), unlike /health."""

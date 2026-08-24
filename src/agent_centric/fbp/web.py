@@ -825,6 +825,9 @@ class FbpLandingServer:
             timeout = 30
             server_version = "Agent-Centric-FBP/0.1"
             sys_version = ""
+            # Payloads larger than this are rejected with 413 before reading
+            # (protocol-correct, fail-closed) rather than silently truncated.
+            _MAX_BODY_BYTES = 1 << 16
 
             def log_message(self, fmt: str, *args: object) -> None:
                 # Quiet the default stderr logging; intentional.
@@ -834,6 +837,24 @@ class FbpLandingServer:
                 self._serve()
 
             def do_POST(self) -> None:
+                # Reject oversized payloads with a protocol-correct 413 and a
+                # connection close BEFORE reading the body. This is fail-closed:
+                # the body is never inflated into memory, and closing the
+                # connection (rather than silently truncating the stream) keeps
+                # the single-threaded server's request framing clean.
+                try:
+                    length = int(self.headers.get("Content-Length", 0) or 0)
+                except ValueError:
+                    length = 0
+                if length > self._MAX_BODY_BYTES:
+                    self.send_error(
+                        413, "Request Entity Too Large",
+                        f"body exceeds the {self._MAX_BODY_BYTES}-byte bound",
+                    )
+                    # Guarantee the oversized stream is never mistaken for a
+                    # subsequent request on the same connection.
+                    self.close_connection = True
+                    return
                 self._serve()
 
             def _serve(self) -> None:
