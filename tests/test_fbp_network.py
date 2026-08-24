@@ -185,3 +185,53 @@ class TestRunNetwork:
             assert result["completed"] == 0
         finally:
             driver.close()
+
+    def test_step_limit_rejects_oversized_network_before_work(self) -> None:
+        """A network above the step limit fails closed with zero work done."""
+        from agent_centric.fbp.driver import FbpDriver
+
+        driver = FbpDriver()
+        driver.register("double", lambda value: value * 2, source_url="file:///tasks/double")
+        driver.configure(tasks=("double",))
+        try:
+            net = ComponentNetwork()
+            for i in range(10):
+                net.add_component(Component(id=f"c{i}", task="double", args={"value": 1}))
+            result = run_network(driver, net, step_limit=3)
+            assert result["ok"] is False
+            assert result["completed"] == 0
+            assert "step limit" in result["error"]
+        finally:
+            driver.close()
+
+    def test_step_limit_allows_within_bound(self) -> None:
+        """A network within the step limit runs normally."""
+        from agent_centric.fbp.driver import FbpDriver
+
+        driver = FbpDriver()
+        driver.register("double", lambda value: value * 2, source_url="file:///tasks/double")
+        driver.configure(tasks=("double",))
+        try:
+            net = ComponentNetwork()
+            net.add_component(Component(id="a", task="double", args={"value": 21}))
+            result = run_network(driver, net, step_limit=3)
+            assert result["ok"] is True
+            assert result["results"][0]["value"] == 42
+        finally:
+            driver.close()
+
+    def test_nonpositive_step_limit_fails_closed(self) -> None:
+        """A non-positive step limit is rejected."""
+        from agent_centric.fbp.driver import FbpDriver
+
+        driver = FbpDriver()
+        driver.register("double", lambda value: value * 2, source_url="file:///tasks/double")
+        driver.configure(tasks=("double",))
+        try:
+            net = ComponentNetwork()
+            net.add_component(Component(id="a", task="double", args={"value": 1}))
+            result = run_network(driver, net, step_limit=0)
+            assert result["ok"] is False
+            assert "positive" in result["error"]
+        finally:
+            driver.close()

@@ -27,6 +27,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+# Hard default ceiling on the number of components a component network may
+# execute. A network larger than this fails closed before any work, so an edge
+# transport (ACP/MCP) or a UI cannot drive unbounded sequential runs through
+# the verified spine. Callers may lower it (``step_limit=...``) but the module
+# default is the hard ceiling when none is granted.
+_DEFAULT_STEP_LIMIT = 512
+
 
 class NetworkError(ValueError):
     """A component network is invalid (fail-closed)."""
@@ -272,7 +279,9 @@ def network_from_dict(data: dict[str, Any]) -> ComponentNetwork:
     return net
 
 
-def run_network(driver: Any, network: ComponentNetwork) -> dict[str, Any]:
+def run_network(
+    driver: Any, network: ComponentNetwork, *, step_limit: int | None = None
+) -> dict[str, Any]:
     """Execute a component network as true dataflow through the verified spine.
 
     Components run in deterministic topological order. Each component's args are
@@ -281,6 +290,12 @@ def run_network(driver: Any, network: ComponentNetwork) -> dict[str, Any]:
     input args. Each step is a normal ``driver.run`` directive — parent
     re-verified, ledgered, replayable. Fail-closed: an invalid network, an
     unknown output field, or an unverified step returns ``ok=False``.
+
+    ``step_limit`` bounds the number of components executed (an operator or edge
+    transport grants one); a network larger than the bound fails closed **before**
+    any work, so a caller cannot drive unbounded sequential work through the
+    spine. ``None`` means the caller wants no cap at the call site; the module
+    default still applies as the hard ceiling.
 
     Returns ``{"ok", "results", "completed", "error"?}`` where each result is
     ``{"step", "task", "verified", "value", "error", "id"}`` (``id`` is the
@@ -291,6 +306,24 @@ def run_network(driver: Any, network: ComponentNetwork) -> dict[str, Any]:
         order = network._topological_order()
     except NetworkError as exc:
         return {"ok": False, "results": [], "completed": 0, "error": str(exc)}
+
+    # A hard default ceiling on the number of components/steps, so a network
+    # submitted through an edge transport cannot drive unbounded sequential
+    # work. Fail-closed before any component runs.
+    limit = step_limit if step_limit is not None else _DEFAULT_STEP_LIMIT
+    if limit <= 0:
+        return {
+            "ok": False, "results": [], "completed": 0,
+            "error": f"step_limit must be positive, got {limit}",
+        }
+    if len(order) > limit:
+        return {
+            "ok": False, "results": [], "completed": 0,
+            "error": (
+                f"network has {len(order)} components, exceeding the "
+                f"{limit}-component step limit (fail-closed)"
+            ),
+        }
 
     outputs: dict[str, Any] = {}
     results: list[dict[str, Any]] = []
