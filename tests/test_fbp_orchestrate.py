@@ -278,3 +278,33 @@ class TestBillsIntentsExtended:
             assert intent in SCHEMAS
             assert SCHEMAS[intent]["child"] == "bills"
             assert SCHEMAS[intent]["task"] == intent
+
+
+class TestPlanStepLimit:
+    """Orchestration plans are bounded (fail-closed) like component networks."""
+
+    def test_small_plan_accepted(self) -> None:
+        plan = plan_from_artifact({"steps": [{"task": "double", "args": {"value": 21}}]})
+        assert len(plan) == 1
+
+    def test_oversized_plan_fails_closed(self) -> None:
+        from agent_centric.fbp.orchestrate import _DEFAULT_STEP_LIMIT
+
+        steps = [{"task": "double", "args": {"value": 1}}] * (_DEFAULT_STEP_LIMIT + 1)
+        with pytest.raises(ValueError, match="fail-closed"):
+            plan_from_artifact({"steps": steps})
+
+    def test_run_artifact_plan_oversized_fails_closed(self) -> None:
+        from agent_centric.fbp.driver import FbpDriver
+        from agent_centric.fbp.orchestrate import _DEFAULT_STEP_LIMIT
+
+        driver = FbpDriver()
+        driver.register("double", lambda value: value * 2, source_url="file:///tasks/double")
+        driver.configure(tasks=("double",))
+        try:
+            steps = [{"task": "double", "args": {"value": 1}}] * (_DEFAULT_STEP_LIMIT + 1)
+            result = run_artifact_plan(driver, {"steps": steps})
+            assert result["ok"] is False
+            assert result["completed"] == 0
+        finally:
+            driver.close()

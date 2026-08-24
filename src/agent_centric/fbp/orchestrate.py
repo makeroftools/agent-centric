@@ -24,6 +24,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+# Hard default ceiling on the number of steps an orchestration plan may contain.
+# An artifact submitted through an edge transport (ACP/MCP) or the chat UI must
+# not be able to drive unbounded sequential runs through the verified spine.
+# Violations fail closed before any step runs. Lower with ``step_limit=...``;
+# this default is the hard ceiling.
+_DEFAULT_STEP_LIMIT = 512
+
 # Operations this orchestrator knows how to emit (as FBP ``run`` steps).
 # Chat artifacts request one of these intents; anything else is rejected.
 SUPPORTED_INTENTS = (
@@ -193,6 +200,14 @@ def plan_from_artifact(
 def _steps_from_list(
     steps: list[dict[str, Any]], *, default_verifier: str | None
 ) -> list[dict[str, Any]]:
+    # A hard ceiling on plan size: refuse an oversized artifact before building
+    # any step (fail-closed), so an edge transport / UI cannot drive unbounded
+    # sequential runs through the verified spine.
+    if len(steps) > _DEFAULT_STEP_LIMIT:
+        raise ValueError(
+            f"plan has {len(steps)} steps, exceeding the "
+            f"{_DEFAULT_STEP_LIMIT}-step limit (fail-closed)"
+        )
     out: list[dict[str, Any]] = []
     for idx, step in enumerate(steps):
         step = step if isinstance(step, dict) else {}
