@@ -1610,6 +1610,9 @@ _PAGE_CSS = "\n".join([
     ".docs h2 { margin-top:1.4rem; }",
     ".docs code { background:#f3f4f6; padding:.15rem .35rem; border-radius:4px;",
     "  font-size:.88em; }",
+    ".docs pre { background:#111827; color:#e5e7eb; padding:.8rem 1rem;",
+    "  border-radius:8px; overflow-x:auto; font-size:.85em; line-height:1.5; }",
+    ".docs pre code { background:transparent; color:inherit; padding:0; }",
     ".docs ul { padding-left:1.2rem; }",
     "# ---- shared existing styles (kept) ----",
     "h1 { font-size: 1.6rem; } h2 { font-size: 1.15rem; margin-top: 1.5rem; }",
@@ -3123,6 +3126,64 @@ and unknown references fail closed.</p>
   <code>select → plan → train → account → settle</code>; every stage is
   deterministic and fail-closed. The plan picks the hardware tier from corpus
   size, method, <b>and the base model's size-class floor</b>.</p>
+
+  <h2>ACP — drive the FBP platform from Zed</h2>
+  <p>The <b>Agent Client Protocol (ACP)</b> adapter exposes the whole FBP
+  platform as an External Agent in Zed. ACP is an <b>edge transport only</b>:
+  every prompt routes through the <code>FbpDriver</code> verified spine — a
+  normal directive, parent re-verified, ledgered, replayable. No ACP path can
+  produce a verified success that bypasses verification. The driver runs on a
+  dedicated worker thread so its private event loop stays isolated from the ACP
+  async loop.</p>
+
+  <h3>Start it</h3>
+  <p>Point an ACP client (Zed's <code>agent_servers</code>) at the console entry
+  point:</p>
+  <pre><code>agent-centric-acp
+# or: python -m agent_centric.acp</code></pre>
+
+  <h3>Commands</h3>
+  <p>The first whitespace-delimited token selects the path; anything else fails
+  closed with a clear message (never a guessed success).</p>
+  <ul>
+    <li><code>double &lt;n&gt;</code> / <code>square &lt;n&gt;</code> /
+        <code>negate &lt;n&gt;</code> — verified arithmetic.</li>
+    <li><code>sum &lt;a&gt; &lt;b&gt;</code> — verified addition.</li>
+    <li><code>model &lt;text&gt;</code> — the <code>model</code> agent
+        (deterministic stub by default; a real OpenRouter provider when
+        <code>OPENROUTER_API_KEY</code> is set).</li>
+    <li><code>store set &lt;key&gt; &lt;json&gt;</code> /
+        <code>store get &lt;key&gt;</code> — mediated single-writer store,
+        grant-scoped.</li>
+    <li><code>bills intake &lt;json&gt;</code> /
+        <code>bills accept &lt;json&gt;</code> /
+        <code>bills calendar &lt;from&gt; &lt;to&gt;</code> — the demonstration
+        bills loop (human-gated accept).</li>
+    <li><code>status</code> / <code>tree</code> — read-only operator
+        inspection.</li>
+    <li><code>network &lt;json&gt;</code> — run a component network as true
+        dataflow.</li>
+  </ul>
+
+  <h3>Example session</h3>
+  <pre><code>&gt; double 21
+verified output: 42
+&gt; sum 2 3
+verified output: 5
+&gt; store set acp-k1 {{"due": "2026-10-01"}}
+verified output: null
+&gt; store get acp-k1
+verified output: {{"due": "2026-10-01"}}
+&gt; status
+{{...tree + summary...}}
+&gt; frobnicate 1
+fail-closed: unknown command 'frobnicate'...</code></pre>
+
+  <h3>Why it matters</h3>
+  <p>Zed becomes a thin client over the deterministic platform: the same
+  correctness spine, grants, ledger, and replay that govern the web page and
+  CLI now govern the editor. A real model is opt-in (env-driven) and never
+  relaxes verification — the parent still re-verifies its output.</p>
 </div>
 </section>
 

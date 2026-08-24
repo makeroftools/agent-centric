@@ -1,16 +1,18 @@
-"""Tests for the thin ACP adapter (Volley 021).
+"""Tests for the ACP adapter (FBP-backed, Volley 021).
 
 These tests prove the adapter is a client-facing transport only: every prompt is
-routed through a governed ``AgentManager``, and no ACP path can produce a
-verified success that bypasses the Manager. They drive the adapter over the
-SDK's in-memory transport (``memory_transport_pair``) with raw JSON-RPC — no Zed,
-no subprocess, no network is required in CI.
+routed through the FBP ``FbpDriver`` verified spine, and no ACP path can produce
+a verified success that bypasses it. They drive the adapter over the SDK's
+in-memory transport (``memory_transport_pair``) with raw JSON-RPC — no Zed, no
+subprocess, no network is required in CI.
 
 Covered:
-- a prompt maps to a Manager run and the verified result is streamed back;
+- a prompt maps to a governed FBP run and the verified result is streamed back;
+- arithmetic (double/square/negate/sum), model, store, bills, status/tree, and
+  component-network commands all route through the driver;
 - a fail-closed outcome is reported explicitly, never as a verified success;
 - cancellation marks the session so a subsequent prompt is refused;
-- the Manager and demo agents are built once and reused across sessions.
+- the driver is built once and reused across sessions, and torn down on close.
 """
 
 from __future__ import annotations
@@ -22,29 +24,10 @@ from typing import Any
 from acp._transport import memory_transport_pair
 from acp.agent import AgentSideConnection
 
-from agent_centric.acp import MetaHarnessAcpAgent
-from agent_centric.contracts.result import Failure, FailureReason
-from agent_centric.contracts.trajectory import Trajectory, TrajectoryVersion
-from agent_centric.control_plane.manager import Outcome
+from agent_centric.acp import FbpAcpAgent
 
 
-class _FailingManager:
-    """A minimal manager double that always returns a fail-closed Outcome."""
-
-    def run(self, task: Any) -> Outcome:
-        return Outcome(
-            result=None,
-            failure=Failure(
-                task_id=task.task_id,
-                reason=FailureReason.VERIFICATION_FAILED,
-                message="simulated verification failure",
-                trajectory=Trajectory(TrajectoryVersion.V1, task.task_id, task.agent_name or "x"),
-            ),
-            trajectory_id="t0",
-        )
-
-
-async def _drive(agent: MetaHarnessAcpAgent) -> tuple[Any, Any]:
+async def _drive(agent: FbpAcpAgent) -> tuple[Any, Any]:
     """Wire the agent to one end of an in-memory transport and start listening."""
     left, right = memory_transport_pair()
     conn = AgentSideConnection(agent, left, listening=False)
@@ -92,20 +75,7 @@ async def _close(right: Any, listen_task: asyncio.Task) -> None:
         await listen_task
 
 
-async def _run_prompt_for_session(
-    right: Any,
-    listen_task: asyncio.Task,
-    session_id: str,
-    text: str,
-) -> tuple[dict[str, Any] | None, list[str]]:
-    await _req(
-        right, 3, "session/prompt",
-        {"sessionId": session_id, "prompt": [{"type": "text", "text": text}]},
-    )
-    return await _await_response_with_updates(right, 3)
-
-
-async def _establish_session(agent: MetaHarnessAcpAgent) -> tuple[Any, asyncio.Task, str]:
+async def _establish_session(agent: FbpAcpAgent) -> tuple[Any, asyncio.Task, str]:
     """initialize + session/new, returning the transport, listen task, and session id."""
     right, listen_task = await _drive(agent)
     await _req(right, 1, "initialize", {"protocolVersion": 1})
@@ -119,113 +89,170 @@ async def _establish_session(agent: MetaHarnessAcpAgent) -> tuple[Any, asyncio.T
     return right, listen_task, session_id
 
 
-def test_acp_prompt_returns_verified_output() -> None:
-    """A prompt maps to a governed run and returns a verified result."""
+async def _run_prompt(
+    right: Any, listen_task: asyncio.Task, session_id: str, text: str
+) -> tuple[dict[str, Any] | None, list[str]]:
+    await _req(
+        right, 3, "session/prompt",
+        {"sessionId": session_id, "prompt": [{"type": "text", "text": text}]},
+    )
+    return await _await_response_with_updates(right, 3)
 
-    async def scenario() -> None:
-        agent = MetaHarnessAcpAgent()
+
+def _run_scenario(prompt_text: str) -> tuple[list[str], str]:
+    """Run one prompt through a fresh agent; return (streamed lines, stop_reason)."""
+
+    async def scenario() -> tuple[list[str], str]:
+        agent = FbpAcpAgent()
         right, listen_task, session_id = await _establish_session(agent)
         try:
-            resp, streamed = await _run_prompt_for_session(
-                right, listen_task, session_id, "reverse hello"
-            )
+            resp, streamed = await _run_prompt(right, listen_task, session_id, prompt_text)
             assert resp is not None
-            assert resp["result"]["stopReason"] == "end_turn"
-            # The reverse agent is verified; its output is streamed as text.
-            assert any("verified output" in t for t in streamed), streamed
+            return streamed, resp["result"]["stopReason"]
         finally:
             await _close(right, listen_task)
+            agent.close()
 
-    asyncio.run(scenario())
+    return asyncio.run(scenario())
 
 
-def test_acp_prompt_uppercase_via_tool() -> None:
-    """The ``upper`` path uses a mediated tool and returns a verified result."""
+def _run_session_shared(*prompt_texts: str) -> list[tuple[str, str]]:
+    """Run several prompts through one shared agent; return (streamed, stop) each.
 
-    async def scenario() -> None:
-        agent = MetaHarnessAcpAgent()
+    One ACP process owns one agent (and one driver/store), so multi-step flows
+    (store set -> get, bills intake -> accept -> calendar) must reuse the same
+    agent to observe persisted state across prompts. Each prompt still routes
+    through the FBP verified spine.
+    """
+
+    async def scenario() -> list[tuple[str, str]]:
+        agent = FbpAcpAgent()
         right, listen_task, session_id = await _establish_session(agent)
         try:
-            resp, streamed = await _run_prompt_for_session(
-                right, listen_task, session_id, "upper hi"
-            )
-            assert resp is not None
-            assert resp["result"]["stopReason"] == "end_turn"
-            assert any("verified output" in t and "HI" in t for t in streamed), streamed
+            results: list[tuple[str, str]] = []
+            for text in prompt_texts:
+                resp, streamed = await _run_prompt(right, listen_task, session_id, text)
+                assert resp is not None
+                results.append((streamed, resp["result"]["stopReason"]))
+            return results
         finally:
             await _close(right, listen_task)
+            agent.close()
 
-    asyncio.run(scenario())
+    return asyncio.run(scenario())
+    """The ``double`` command routes through the verified spine."""
+    streamed, stop = _run_scenario("double 21")
+    assert stop == "end_turn"
+    assert any("verified output" in t and "42" in t for t in streamed), streamed
 
 
-def test_acp_prompt_fail_closed_outcome_reported_explicitly() -> None:
-    """A governed failure is reported explicitly, never as a verified success."""
+def test_acp_sum_verified() -> None:
+    """The ``sum`` command routes through the verified spine."""
+    streamed, stop = _run_scenario("sum 2 3")
+    assert stop == "end_turn"
+    assert any("verified output" in t and "5" in t for t in streamed), streamed
 
-    async def scenario() -> None:
-        agent = MetaHarnessAcpAgent()
-        # Inject a manager that fails closed; the adapter must report the failure
-        # explicitly and never present it as a verified success.
-        agent._manager = _FailingManager()  # type: ignore[assignment, attr-defined]
-        right, listen_task, session_id = await _establish_session(agent)
-        try:
-            resp, streamed = await _run_prompt_for_session(
-                right, listen_task, session_id, "reverse hello"
-            )
-            assert resp is not None
-            assert resp["result"]["stopReason"] == "end_turn"
-            assert any(t.startswith("fail-closed") for t in streamed), streamed
-            # Never a verified success.
-            assert not any("verified output" in t for t in streamed)
-        finally:
-            await _close(right, listen_task)
 
-    asyncio.run(scenario())
+def test_acp_square_negate_verified() -> None:
+    """``square`` and ``negate`` route through the verified spine."""
+    s1, _ = _run_scenario("square 4")
+    assert any("verified output" in t and "16" in t for t in s1), s1
+    s2, _ = _run_scenario("negate 7")
+    assert any("verified output" in t and "-7" in t for t in s2), s2
+
+
+def test_acp_model_stub_verified() -> None:
+    """The ``model`` command uses the deterministic stub by default."""
+    streamed, stop = _run_scenario("model hello")
+    assert stop == "end_turn"
+    assert any("verified output" in t and "stub response" in t for t in streamed), streamed
+
+
+def test_acp_store_set_get() -> None:
+    """``store set`` then ``store get`` round-trips through one store agent."""
+    (s1, _), (s2, _) = _run_session_shared(
+        'store set acp-k1 {"due": "2026-10-01"}', "store get acp-k1"
+    )
+    assert any("verified output" in t for t in s1), s1
+    assert any("verified output" in t and "2026-10-01" in t for t in s2), s2
+
+
+def test_acp_store_ungranted_fails_closed() -> None:
+    """A key outside the store grant fails closed, never a verified success."""
+    streamed, _ = _run_scenario("store get acp-zz")
+    assert any(t.startswith("fail-closed") for t in streamed), streamed
+    assert not any("verified output" in t for t in streamed)
+
+
+def test_acp_bills_loop() -> None:
+    """The bills loop persists through one agent (intake/accept/calendar)."""
+    draft = '{"id": "bill-a1", "vendor": "GasCo", "amount_cents": 12345, "due_date": "2026-10-01"}'
+    (s1, _), (s2, _), (s3, _) = _run_session_shared(
+        f"bills intake {draft}",
+        f"bills accept {draft}",
+        "bills calendar 2026-10-01 2026-10-31",
+    )
+    assert any("verified output" in t for t in s1), s1
+    assert any("verified output" in t for t in s2), s2
+    assert any("verified output" in t and "12345" in t for t in s3), s3
+
+
+def test_acp_status_and_tree() -> None:
+    """``status`` and ``tree`` return read-only operator snapshots."""
+    s1, _ = _run_scenario("status")
+    assert any("store" in t and "model" in t for t in s1), s1
+    s2, _ = _run_scenario("tree")
+    assert any("store" in t and "model" in t for t in s2), s2
+
+
+def test_acp_network_dataflow() -> None:
+    """A component network runs as true dataflow through the spine."""
+    net = (
+        '{"components": ['
+        '{"id": "a", "task": "double", "args": {"value": 3}},'
+        '{"id": "b", "task": "double", "args": {"value": 5}},'
+        '{"id": "c", "task": "sum", "args": {}}],'
+        '"edges": ['
+        '{"source": "a", "source_field": "value", "target": "c", "target_arg": "a"},'
+        '{"source": "b", "source_field": "value", "target": "c", "target_arg": "b"}]}'
+    )
+    streamed, _ = _run_scenario(f"network {net}")
+    assert any("network ok (3 step(s))" in t for t in streamed), streamed
+    assert any("c (sum)" in t and "16" in t for t in streamed), streamed
+
+
+def test_acp_unknown_command_fails_closed() -> None:
+    """An unknown command is reported explicitly, never as a verified success."""
+    streamed, _ = _run_scenario("frobnicate 1")
+    assert any(t.startswith("fail-closed") for t in streamed), streamed
+    assert not any("verified output" in t for t in streamed)
 
 
 def test_acp_cancelled_session_refuses_prompt() -> None:
     """A cancelled session refuses a prompt with stop_reason cancelled."""
 
     async def scenario() -> None:
-        agent = MetaHarnessAcpAgent()
+        agent = FbpAcpAgent()
         right, listen_task = await _drive(agent)
         try:
             await _req(right, 1, "initialize", {"protocolVersion": 1})
             await _await_response(right, 1)
-            # Simulate a prior session/cancel for this session id.
             agent._cancelled.add("sess-x")
-            resp, streamed = await _run_prompt_for_session(right, listen_task, "sess-x", "hello")
+            resp, streamed = await _run_prompt(right, listen_task, "sess-x", "double 2")
             assert resp is not None
             assert resp["result"]["stopReason"] == "cancelled"
             assert any("cancelled before start" in t for t in streamed), streamed
         finally:
             await _close(right, listen_task)
+            agent.close()
 
     asyncio.run(scenario())
 
 
-def test_acp_manager_is_shared_across_sessions() -> None:
-    """The Manager and demo agents are built once (lazy) and reused."""
-    a1 = MetaHarnessAcpAgent()
-    m1 = a1._ensure_manager()
-    assert a1._ensure_manager() is m1
-    # The demo agents are registered and a deterministic run succeeds.
-    import asyncio as _asyncio
-
-    async def run() -> bool:
-        from agent_centric.contracts.task import (
-            ResourceEnvelope,
-            TaskSpecification,
-            TaskSpecVersion,
-        )
-
-        task = TaskSpecification(
-            version=TaskSpecVersion.V3,
-            task_id="acp-mgr-check",
-            agent_name="reverse",
-            payload={"text": "abc"},
-            envelope=ResourceEnvelope(timeout_seconds=10.0, max_steps=100),
-        )
-        outcome = m1.run(task)
-        return outcome.result is not None and outcome.result.output == "cba"
-
-    assert _asyncio.run(run())
+def test_acp_driver_is_shared_and_closed() -> None:
+    """The driver host is built once (lazy) and torn down on close."""
+    a1 = FbpAcpAgent()
+    h1 = a1._host
+    assert a1._host is h1
+    a1.close()
+    assert a1._host._driver is None

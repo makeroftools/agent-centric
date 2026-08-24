@@ -124,3 +124,24 @@ auditable, deterministic unit.
 **Do not rationalize around this law.** There is no "small edit." There is no "it
 is just a comment." There is only whole-file replacement, done as above, or the
 change is refused.
+
+## 12. THE OPERATOR RUNS THE TEST SUITE — THE AGENT DOES NOT
+
+> **The agent NEVER runs `pytest` (or any test runner). EVER. Zero exceptions.**
+> The human operator runs the test suite themselves and reports the result. The
+> agent does not invoke `pytest`, does not start a test runner, and does not
+> interpret a test run as its own validation.
+
+**Why.** The operator owns the validation gate for this mission-critical system.
+Test runs are the operator's authority, not the agent's. The agent may validate
+its work with the static tools the operator permits (e.g. `ruff`, `mypy`), but
+the test suite is run only by the operator.
+
+**The agent's obligations under this law:**
+
+1. **Never** run `pytest` or any test runner, in any form, for any reason.
+2. Write and maintain tests so the operator can run them.
+3. Use the permitted static checks (ruff/mypy) to catch errors before handing
+   work to the operator.
+4. Report clearly what the operator should run and what the expected result is.
+5. Never claim a test passed unless the operator has reported it passed.
