@@ -25,26 +25,18 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `cdb6618` (MCP model stub deterministic across environments — pushed to origin/agent-centric-fbp). This session added commits
-  on top of the earlier sequence (all local, none pushed by the agent): `4b19fc0` (operator activity
-  feed), `7c9a546` (wire activity feed into landing page + CLI), `e9c2caf`
-  (remove the Bills tab — demonstration only), `7375698` (full-surface HTTP
-  route coverage), `d5cb164` (Designer node stick-to-cursor fix), `87e353e`
-  (drag-and-drop connectors), `d86c203` (drag-preview wire fix), `24bda00`
-  (agent-composition demo in the Designer), `9eedd69` (bills agent in the Designer
-  + edge value labels), `c50b85d` (capture this session for a mission-critical
-  handoff), `aa29c27` (wire ACP adapter to the FBP verified spine + website
-  tutorial), `9d5c8c0` (capture ACP->FBP work, Law 12, and the open MCP question), `a1cdb61`
-  (add MCP adapter exposing FBP capabilities as tools), `dac830c` (capture the MCP adapter +
-  shared driver host), `860d6e6` (capture 'private product, no multi-tenant' decision),
-  `d2953af` (expose acp and mcp adapters as agent-centric subcommands),
-  `4de7b09` (capture CLI wiring for acp/mcp + current state),
-  `21a83bf` (external-surfaces Connect pane + `/surfaces` + e2e ACP/MCP demo),
-  `09bf6e7` (external-surface CLI wiring + e2e demo tests + Zed wiring reference),
-  `4092cac` (fix Connect pane clipping the MCP card),
-  `1b0f6b2` (corrected Zed agent_servers schema + ACP entry-point note),
-  `cdb6618` (MCP model-stub test deterministic across environments).
-- **Pushed to origin:** the user pushes directly. **Unpushed (0):** a `git fetch` confirmed the full local arc is now on `origin/agent-centric-fbp` (lead pushed; the agent does not push).
+- **HEAD:** `f22e4fa` (handoff capture; pushed to origin/agent-centric-fbp). This session added commits
+  on top of the earlier sequence (all local): `4b19fc0` (operator activity feed), `7c9a546` (landing+CLI activity feed), `e9c2caf`
+  (remove Bills tab, demo-only), `7375698` (full-surface HTTP coverage), `d5cb164`
+  (Designer sticky-fix), `87e353e` (drag-and-drop), `d86c203` (drag wire-fix),
+  `24bda00` (Designer agent demo), `9eedd69` (Designer bills agent + edge-labels),
+  `c50b85d` (mission-critical handoff), `aa29c27` (ACP verified), `9d5c8c0` (ACP->FBP, Law-12), `a1cdb61`
+  (MCP adapter), `dac830c` (MCP adapter + driver-host), `860d6e6` (private product),
+  `d2953af` (acp/mcp subcommands), `4de7b09` (ACP/MCP CLI wiring), `21a83bf` (Connect pane),
+  `09bf6e7` (CLI wiring + Zed ref), `4092cac` (Connect pane MCP-card clipping fix),
+  `1b0f6b2` (Zed agent_servers schema fix), `cdb6618` (MCP deterministic stub test),
+  `f22e4fa` (reflect push + MCP test handoff capture).
+- **Pushed to origin:** the lead pushes directly. **Unpushed (0):** a `git fetch` confirmed the full local arc is on `origin/agent-centric-fbp` (HEAD `cdb6618` == remote). The lead pushed; the agent does not push.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule: **do not push unless the lead explicitly says push.** The lead
 has been pushing directly; confirm per commit.
