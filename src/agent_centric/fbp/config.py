@@ -34,8 +34,11 @@ class AgentConfig:
             and ``tls`` are explicit opt-ins for non-loopback binds.
         integrity_secret: An optional shared HMAC secret (bytes). When set, the
             agent signs directives it sends and verifies directives it receives
-            (§5.5 traffic integrity). ``None`` (the default) keeps the transport
+            (\u00a75.5 traffic integrity). ``None`` (the default) keeps the transport
             plain — opt-in, never on by default.
+        curve: An optional ``CurveConfig``. When set, the agent encrypts its
+            links with ZeroMQ CURVE (server for a bound ROUTER, client for a
+            connecting DEALER). ``None`` (the default) keeps the transport plain.
     """
 
     identity: str
@@ -45,3 +48,4 @@ class AgentConfig:
     context: Any | None = None
     transport_security: str = "local"
     integrity_secret: bytes | None = None
+    curve: Any | None = None

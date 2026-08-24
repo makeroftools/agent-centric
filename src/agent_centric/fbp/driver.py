@@ -92,12 +92,25 @@ class FbpDriver:
         peer_autz: Any = None,
         integrity_secret: bytes | None = None,
         tls_creds: Any = None,
+        curve: bool = False,
     ) -> None:
         self._transport = transport
         self._security = security
         self._peer_autz = peer_autz
         self._integrity_secret = integrity_secret
         self._tls_creds = tls_creds
+        # CURVE wire encryption (opt-in, default off). A single shared curve
+        # session (one server keypair + one client keypair) encrypts every link
+        # in this tree; see ``fbp/curve.py``.
+        self._curve: Any = None
+        if curve:
+            if transport == "inproc":
+                raise _transport.TransportSecurityError(
+                    "CURVE encryption applies to tcp/ipc transports, not inproc"
+                )
+            from . import curve as _curve
+
+            self._curve = _curve.generate_curve_config()
         # fresh temp paths so the replayed tree never reads or writes the
         # original (live) store files. This makes stateful trees (e.g. bills)
         # replay cleanly and keeps replay side-effect-free on real data.
@@ -129,7 +142,20 @@ class FbpDriver:
         asyncio.set_event_loop(self._loop)
         self._context = zmq.asyncio.Context()
         self._root_socket = self._context.socket(zmq.ROUTER)
+        # CURVE encryption (opt-in): the root binds as a CURVE server with the
+        # session's server keypair, and a ZAP authenticator allowlists the
+        # session's single client key so authorized connectors can link.
+        if self._curve is not None:
+            from . import curve as _curve
+
+            _curve.apply_options(self._root_socket, _curve.server_options(self._curve))
         self._root_socket.bind(self._endpoint)
+        self._auth: Any = None
+        if self._curve is not None:
+            from . import curve as _curve
+
+            self._auth = _curve.CurveAuth(self._context)
+            self._auth.start(allowed=[self._curve.client_public])
         # Trust-boundary enforcement (docs/transport_trust_boundary.md §5.3):
         # an ipc socket must be owner-only so other local users cannot connect.
         if transport == "ipc":
@@ -155,6 +181,7 @@ class FbpDriver:
                 context=self._context,
                 transport_security=security,
                 integrity_secret=integrity_secret,
+                curve=self._curve,
             )
         )
         self._root.init()
@@ -182,6 +209,9 @@ class FbpDriver:
         """Teardown the root agent, its sockets, and the event loop."""
         self._root.kill()
         self._root_socket.close(0)
+        if self._auth is not None:
+            self._auth.stop()
+            self._auth = None
         self._context.term()
         self._loop.close()
         if self._ledger_store is not None:

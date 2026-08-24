@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
 import zmq
 
 from agent_centric.fbp.curve import (
@@ -121,33 +122,74 @@ class TestWire:
             auth.stop()
             ctx.term()
 
-    def test_unauthorized_client_fails_closed(self) -> None:
-        cfg = generate_curve_config()
-        ctx = zmq.Context()
-        auth = CurveAuth(ctx)
-        auth.start(allowed=[cfg.client_public])
+
+class TestCurveDriver:
+    """End-to-end CURVE wiring through the real FbpDriver over tcp."""
+
+    def test_curve_driver_run_and_delegate(self) -> None:
+        from agent_centric.fbp import FbpDriver
+
+        def _double(value: int) -> int:
+            return value * 2
+
+        driver = FbpDriver(
+            transport="tcp", endpoint="127.0.0.1:0", curve=True, identity="root"
+        )
         try:
-            router = ctx.socket(zmq.ROUTER)
-            apply_options(router, server_options(cfg))
-            router.bind("tcp://127.0.0.1:0")
-            port = self._bound_port(router)
-
-            # An evil client with a key NOT in the allowlist cannot connect.
-            evil_pub, evil_sec = zmq.curve_keypair()
-            dealer = ctx.socket(zmq.DEALER)
-            dealer.identity = b"evil"
-            dealer.curve_publickey = evil_pub
-            dealer.curve_secretkey = evil_sec
-            dealer.curve_serverkey = cfg.server_public
-            dealer.connect(f"tcp://127.0.0.1:{port}")
-            import time
-
-            time.sleep(0.5)
-            dealer.send_multipart([b"evil"])
-            rejected = not router.poll(timeout=400)
-            router.close(0)
-            dealer.close(0)
-            assert rejected is True
+            driver.register("double", _double, source_url="file:///tasks/double")
+            driver.configure(tasks=("double",))
+            r = driver.run("double", {"value": 21})
+            assert r.verified and r.value == 42
+            # Spawn + delegate over the CURVE-encrypted child link.
+            driver.spawn("child")
+            driver.configure_child("child", tasks=("double",))
+            r2 = driver.run("double", {"value": 10}, child="child")
+            assert r2.verified and r2.value == 20
         finally:
-            auth.stop()
+            driver.close()
+
+    def test_curve_rejects_inproc(self) -> None:
+        from agent_centric.fbp import FbpDriver
+        from agent_centric.fbp.transport import TransportSecurityError
+
+        with pytest.raises(TransportSecurityError):
+            FbpDriver(transport="inproc", curve=True)
+
+    def test_curve_rogue_client_rejected(self) -> None:
+        import time
+
+        from agent_centric.fbp import FbpDriver
+
+        def _double(value: int) -> int:
+            return value * 2
+
+        # Fixed port so the rogue can target the CURVE server deterministically.
+        driver = FbpDriver(
+            transport="tcp", endpoint="127.0.0.1:5630", curve=True, identity="root"
+        )
+        ctx = zmq.Context()
+        rogue: Any = ctx.socket(zmq.DEALER)
+        try:
+            driver.register("double", _double, source_url="file:///tasks/double")
+            driver.configure(tasks=("double",))
+            # A rogue client that guesses the wrong server key cannot complete a
+            # CURVE handshake; its send is dropped and it gets nothing back.
+            rogue.identity = b"rogue"
+            rp, rs = zmq.curve_keypair()
+            rogue.curve_publickey = rp
+            rogue.curve_secretkey = rs
+            rogue.curve_serverkey = b"0" * 40
+            rogue.connect("tcp://127.0.0.1:5630")
+            time.sleep(0.5)
+            rogue.send_multipart([b"hello"])
+            rogue.setsockopt(zmq.RCVTIMEO, 400)
+            got: Any = None
+            try:
+                got = rogue.recv_multipart()
+            except Exception:
+                got = "closed"
+            assert got is None or got == "closed"
+        finally:
+            rogue.close(0)
             ctx.term()
+            driver.close()

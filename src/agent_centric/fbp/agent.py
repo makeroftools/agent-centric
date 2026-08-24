@@ -186,6 +186,12 @@ class Agent:
         self._owns_context = self._config.context is None
         self._parent = self._context.socket(zmq.DEALER)
         self._parent.setsockopt(zmq.IDENTITY, self._config.identity.encode())
+        # CURVE encryption (opt-in): a connector (DEALER) presents the session's
+        # client keypair + the server public key before connect.
+        if self._config.curve is not None:
+            from . import curve as _curve
+
+            _curve.apply_options(self._parent, _curve.client_options(self._config.curve))
         endpoint = self._endpoint(self._config.parent_endpoint)
         self._parent.connect(endpoint)
         self._alive = True
@@ -928,6 +934,12 @@ class Agent:
                 return self._error(directive, reason)
 
         child_socket = self._context.socket(zmq.ROUTER)
+        # CURVE encryption (opt-in): a bound ROUTER inherits the session's
+        # server keypair so the child link is encrypted like the root link.
+        if self._config.curve is not None:
+            from . import curve as _curve
+
+            _curve.apply_options(child_socket, _curve.server_options(self._config.curve))
         child_socket.bind(resolved_child_endpoint)
         if resolved_child_endpoint.startswith("ipc://"):
             reason = _transport.enforce_ipc_socket_mode(resolved_child_endpoint)
@@ -936,7 +948,7 @@ class Agent:
                 return self._error(directive, reason)
         child_cls = self._child_class_for(payload.get("kind"))
         # Children inherit the parent's traffic-integrity secret (when set) so
-        # the whole tree speaks the same protected wire contract (§5.5).
+        # the whole tree speaks the same protected wire contract (\u00a75.5).
         child = child_cls(
             AgentConfig(
                 identity=child_identity,
@@ -945,6 +957,7 @@ class Agent:
                 context=self._context,
                 transport_security=self._config.transport_security,
                 integrity_secret=self._config.integrity_secret,
+                curve=self._config.curve,
             )
         )
         child.init()
