@@ -119,7 +119,7 @@ only — prefer adapters/backends over changing Manager semantics.**
 - **Demo routing is fixed** (`reverse` default, `upper`, `counter`, stub
   `model`); it does not yet route to the bills loop.
 - **Spawn path (absolute):** `uv run agent-centric-acp` from the repo root
-  (`/home/makerooftools/github/agent-centric`), configured in Zed under
+  (`$HOME/github/agent-centric`), configured in Zed under
   `agent_servers` (see `README.md` → "Use from Zed (ACP)").
 
 ## Key invariants to never break
