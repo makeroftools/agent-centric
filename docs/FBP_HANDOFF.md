@@ -25,19 +25,19 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (all session work committed).
-- **HEAD:** `f5cc024` — fix(home-paths): use the `$HOME` convention + add a regression
-  guard for the misspelling. The full local arc is 9 commits ahead of
-  `origin/agent-centric-fbp` (which is at `7f0d414`).
+- **HEAD:** `39a5811` — docs(fbp): capture the test-coverage arc. **Fully pushed and
+  in sync with `origin/agent-centric-fbp`** (both at `39a5811`); nothing unpushed.
 - **Session commits (later ones NOT pushed, all local):**
   - `7f0d414` (on origin) — test(fbp): cover web.py fail-closed branches.
   - `fa3c869` — feat(fbp): enforce traffic integrity on the wire (opt-in integrity_secret).
   - `e85e44c` — feat(fbp): make wire-integrity operator-reachable via CLI + landing UX.
   - the previous checkout commit — feat(fbp): add `fbp-check` deploy/readiness self-test (+ handoff capture).
   - `f5cc024` — fix(home-paths): `$HOME` convention + regression guard for the misspelling (+ handoff capture).
-- **Pushed to the lead:** the lead pushes directly. **Unpushed (9 local):** `fa3c869`,
-  `e85e44c`, the `fbp-check` commit (`439586f`), `f5cc024`, `1f6dfbf`, `1cbe7d2`,
-  `9773833`, `dad7e6f`, `0f0549d` — `origin/agent-centric-fbp` is at `7f0d414`. The agent
-  does not push; the lead confirms per commit.
+- **Pushed:** the lead pushed; `origin/agent-centric-fbp` is at `39a5811`, fully in sync
+  with local. Nothing unpushed. **SSH note:** early this session a `git push` was denied
+  because the host's Bitwarden SSH agent presented a deploy key scoped to a *different*
+  repo (`makeroftools/nautilus_trader`); the lead resolved access and pushed successfully.
+  The origin remote itself (`git@github.com:makeroftools/agent-centric.git`) is correct.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule: **do not push unless the lead explicitly says push.** The lead
 has been pushing directly; confirm per commit.
@@ -1030,6 +1030,13 @@ uv run python examples/fbp_activity_demo.py
 - The AC Router is spun out, gitignored, and **not** our work here.
 - Trust only what the tests prove and what is committed; say clearly when
   something is unverifiable or unpushed.
+- **Correct home-dir spelling (MISSION CRITICAL, revisit every session):** the real
+  home dir is **`/home/makeroftools`** — exactly one "o" in the middle. The
+  recurring bug adds an extra "o" in the middle (the two-o spelling) and silently
+  breaks every address that uses it. Never type the two-o form in tool/terminal calls
+  or docs; always resolve addresses via `$HOME`. The regression guard in
+  `tests/test_repo_home_paths.py` catches it in the repo; be equally careful in live
+  commands. This note is here so no future session forgets it.
 
 ---
 
