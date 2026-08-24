@@ -934,7 +934,9 @@ uv run agent-centric run                # deterministic demo
 uv run agent-centric fbp                # drive FBP demo (inproc)
 uv run agent-centric fbp --transport tcp | ipc
 uv run agent-centric fbp --integrity SECRET   # run demo over the signed wire (§5.5)
+uv run agent-centric fbp --curve --transport tcp   # run demo over the CURVE-encrypted wire
 uv run agent-centric fbp-check [--integrity SECRET]   # deploy/readiness self-test of the verified spine
+uv run agent-centric fbp-check --transport tcp --curve   # deploy gate over the CURVE-encrypted wire
 uv run agent-centric fbp-web            # landing page + model box
 uv run agent-centric fbp-web --reload   # auto-restart on source edits
 uv run agent-centric fbp-web --integrity SECRET  # protect the FBP wire (badge on page)
