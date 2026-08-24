@@ -84,6 +84,7 @@ that page:
 | Protocol + transport parity | `fbp/message.py`, `fbp/agent.py` | versioned directive/response over `inproc`/`tcp`/`ipc`; fail-closed on malformed input |
 | **Transport trust-boundary** | `fbp/transport.py`, `fbp/driver.py`, `fbp/agent.py` | §5.1 trust-boundary switch: non-loopback `tcp://` bind fails closed unless the caller opts in (`security="local"`/`"tls"`; default `loopback`); §5.3 owner-only `0o600` IPC sockets. Wired into root + child binds. See `docs/transport_trust_boundary.md` |
 | **Transport security (§5.2/§5.4/§5.5)** | `fbp/security.py`, `fbp/driver.py`, `fbp/agent.py` | **Per-peer authorization** (`PeerAuthz`/`PeerPolicy`, opt-in `FbpDriver(peer_autz=...)`) + **traffic integrity** (`sign_payload`/`verify_payload`/`integrity_headers`, HMAC-SHA256; **wired end-to-end** via opt-in `FbpDriver(integrity_secret=...)`: signed directives, whole-tree secret inheritance, verified-on-receipt + signed-source, fail-closed on missing/tampered/wrong-secret) + **mutual-TLS credential config** (`TlsCreds`/`configure_tls`, fail-closed on incomplete material for `security="tls"`). Opt-in and default-off so existing binds are untouched |
+| **CURVE wire encryption** | `fbp/curve.py`, `fbp/driver.py`, `fbp/agent.py`, `fbp/config.py`, CLI | **Real wire encryption + server-gated peer auth, dependency-free** via ZeroMQ's native CURVE (opt-in `FbpDriver(curve=True)` or `agent-centric fbp --curve`). Root ROUTER binds as a CURVE server; a ZAP authenticator allowlists the session client key (fail-closed; an unauthorized/wrong-key peer returns nothing); each spawned child inherits the session so the whole tree speaks one encrypted wire. `curve=True` with `inproc` is refused (CURVE is for tcp/ipc). Live-verified: encrypted run + child delegation + rogue rejection over tcp. Honest scope: confidentiality + integrity + server-gated auth (not X.509/PKI). See `docs/transport_trust_boundary.md` §5.6 |
 | **Real training-provider credential wiring** | `fbp/providers.py` | **Env-driven** (`TRAIN_ENDPOINT`/`TRAIN_TOKEN`/`TRAIN_AUTH_SCHEME`) + a dependency-free `stdlib_http_client` with **secret redaction** (`redact_secrets`); `build_modal_from_env`/`build_credential_client` make the Modal adapter **genuinely workable** against a real endpoint while failing closed with no credentials. Verified live over a bound HTTP server, secret never leaks |
 | Correctness spine | `fbp/agent.py` | parent re-verifies a child's value on the way up; a self-claimed `verified` is not conclusive |
 | Durable single-writer state | `fbp/store.py` | `StateStore` (fingerprint-idempotent) + `TrajectoryStore` (append-only); explicit grants only |
@@ -571,6 +572,20 @@ of decisions and working style that a fresh session must inherit.
    allowlisted Zed example (which must keep an absolute `command` path — Zed doesn't
    expand `$HOME` inside JSON). The guard self-constructs forbidden tokens from
    pieces so it can't false-match its own source. ruff + mypy clean; commit `f5cc024`.
+
+61. **CURVE wire encryption (opt-in, fail-closed)** — the documented "#1 production
+   gap" (no encryption on the wire) is closed with ZeroMQ's native **CURVE**, the
+   dependency-free real encapsulation layer for this transport. `fbp/curve.py`
+   (`CurveConfig`/`generate_curve_config`/`server_options`/`client_options`/`CurveAuth`)
+   + driver wiring (`FbpDriver(curve=True)`): the root ROUTER binds as a CURVE server,
+   a ZAP authenticator allowlists the session client key (fail-closed), and every
+   spawned child inherits the session so the whole tree speaks one encrypted wire.
+   Live-verified over tcp: encrypted run + child delegation verified, and a rogue
+   client with a wrong key returns nothing. `curve=True` with inproc is refused.
+   Made operator-reachable via `agent-centric fbp --curve` (`2bee3df`). Honest scope:
+   CURVE is confidentiality + integrity + server-gated auth, not X.509/PKI (a
+   cross-host PKI remains the optional, not-yet-wired TLS path §5.2). Commits
+   `c2e758b`, `a854a0a`, `75f5950`, `2bee3df`.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
