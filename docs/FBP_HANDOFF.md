@@ -25,7 +25,7 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `c3d65d0` (this capture) — atop `9c7f4b0`, `e261932`, `08deaa7`, `7ac854f`, `c51be25`, `7c76f33`, and `3da8879`. This session added commits
+- **HEAD:** `b202cb2` (this capture) — atop `c3d65d0`, `9c7f4b0`, `e261932`, `08deaa7`, `7ac854f`, `c51be25`, `7c76f33`, and `3da8879`. This session added commits
   on top of the earlier sequence (all local): `4b19fc0` (operator activity feed), `7c9a546` (landing+CLI activity feed), `e9c2eaf`
   (remove Bills tab, demo-only), `7375698` (full-surface HTTP coverage), `d5cb164`
   (Designer sticky-fix), `87e353e` (drag-and-drop), `d86c203` (drag wire-fix),
@@ -37,8 +37,9 @@ we are.
   `1b0f6b2` (Zed agent_servers schema fix), `cdb6618` (MCP deterministic stub test),
   `f22e4fa` (reflect push + MCP test handoff capture), `3da8879` (landing hardening),
   `7c76f33` (handoff capture), `c51be25` (git-state fix), `7ac854f` (readiness/liveness split),
-  `08deaa7` (ACP bound), `e261932` (MCP bound), `9c7f4b0` (operator test fixes), `c3d65d0` (this capture).
-- **Pushed to origin:** the lead pushes directly. **Unpushed (8):** `3da8879` + `7c76f33` + `c51be25` + `7ac854f` + `08deaa7` + `e261932` + `9c7f4b0` + `c3d65d0` (landing hardening + captures + readiness/liveness split + ACP bound + MCP bound + operator test fixes + the 413 payload bound) are local, not yet pushed. A prior `git fetch` confirmed `eb3a9fc` was pushed. The agent does not push.
+  `08deaa7` (ACP bound), `e261932` (MCP bound), `9c7f4b0` (operator test fixes), `c3d65d0` (413 payload bound),
+  `b202cb2` (this capture).
+- **Pushed to origin:** the lead pushes directly. **Unpushed (9):** `3da8879` + `7c76f33` + `c51be25` + `7ac854f` + `08deaa7` + `e261932` + `9c7f4b0` + `c3d65d0` + `b202cb2` (landing hardening + captures + readiness/liveness split + ACP bound + MCP bound + operator test fixes + the 413 payload bound + the web.py pure-helper coverage) are local, not yet pushed. A prior `git fetch` confirmed `eb3a9fc` was pushed. The agent does not push.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule: **do not push unless the lead explicitly says push.** The lead
 has been pushing directly; confirm per commit.
@@ -759,8 +760,8 @@ not a commitment to build a multi-tenant service. Do not build or plan
 multi-tenant anything unless the user explicitly reverses this.
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (8) — open:** `3da8879` (landing hardening) + `7c76f33`
-  (handoff capture) + `c51be25` (git-state fix) + `7ac854f` (readiness/liveness split) + `08deaa7` (ACP bound) + `e261932` (MCP bound) + `9c7f4b0` (operator test fixes) + `c3d65d0` (413 payload bound) are local, not yet pushed. `origin/agent-centric-fbp` is at `eb3a9fc`. The
+- **Unpushed commits (9) — open:** `3da8879` (landing hardening) + `7c76f33`
+  (handoff capture) + `c51be25` (git-state fix) + `7ac854f` (readiness/liveness split) + `08deaa7` (ACP bound) + `e261932` (MCP bound) + `9c7f4b0` (operator test fixes) + `c3d65d0` (413 payload bound) + `b202cb2` (web.py pure-helper coverage) are local, not yet pushed. `origin/agent-centric-fbp` is at `eb3a9fc`. The
   lead pushes; the agent does not. After a push, `git fetch` to confirm.
 - **Readiness/liveness split (this session) — built, unpushed:** a `/ready` probe exercises
   the verified spine (fail-closed 503) distinct from the pure-liveness `/health`. See arc 54.
@@ -770,6 +771,9 @@ multi-tenant anything unless the user explicitly reverses this.
   whose serialized args exceed a 65,536-byte bound, fail-closed. See arc 56.
 - **Landing 413 payload bound (this session) — built, unpushed:** oversized POST bodies are
   rejected with 413 + connection close before read. See arc 57.
+- **web.py pure-helper coverage (this session) — built, unpushed:** TestPureHelpers covers the
+  deterministic helpers (`_stub_model_text`, `_stream_chunks`, `_caps`, `_openrouter_http_client`).
+  See the test class in `tests/test_fbp_web.py`.
 - **ACP entry point:** `agent-centric-acp` (or `python -m agent_centric.acp`)
   exposes the FBP platform as an External Agent in Zed over stdio. Point Zed's
   `agent_servers` at it. **Zed's schema is an object map keyed by agent name,
