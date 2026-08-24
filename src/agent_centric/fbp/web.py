@@ -3245,7 +3245,7 @@ tools (any MCP-capable host). Both route every call through the same
 deterministic <b>verified spine</b>: a normal directive, parent re-verified,
 ledgered, replayable, fail-closed. Neither can produce a verified success
 that bypasses verification, and neither ever relaxes it.</p>
-<div id='surfaces-list' class='chat-history'></div>
+<div id='surfaces-list'></div>
 {_SURFACES_JS}
 </div>
 
