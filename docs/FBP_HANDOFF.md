@@ -25,7 +25,7 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `1b0f6b2` (external-agent Connect pane + /surfaces + e2e demo + corrected Zed schema). This session added commits
+- **HEAD:** `cdb6618` (MCP model stub deterministic across environments — pushed to origin/agent-centric-fbp). This session added commits
   on top of the earlier sequence (all local, none pushed by the agent): `4b19fc0` (operator activity
   feed), `7c9a546` (wire activity feed into landing page + CLI), `e9c2caf`
   (remove the Bills tab — demonstration only), `7375698` (full-surface HTTP
@@ -42,11 +42,9 @@ we are.
   `21a83bf` (external-surfaces Connect pane + `/surfaces` + e2e ACP/MCP demo),
   `09bf6e7` (external-surface CLI wiring + e2e demo tests + Zed wiring reference),
   `4092cac` (fix Connect pane clipping the MCP card),
-  `1b0f6b2` (corrected Zed agent_servers schema + ACP entry-point note).
-- **Pushed to origin:** the user pushes directly. **Unpushed (69 commits):** the
-  full `agent-centric-fbp` sequence plus this session's `21a83bf`/`09bf6e7`/`4092cac`/`1b0f6b2`. Run `git log origin/agent-centric-fbp..HEAD` to see the
-  exact unpushed set. No push is made by the agent; the lead pushes when they
-  choose.
+  `1b0f6b2` (corrected Zed agent_servers schema + ACP entry-point note),
+  `cdb6618` (MCP model-stub test deterministic across environments).
+- **Pushed to origin:** the user pushes directly. **Unpushed (0):** a `git fetch` confirmed the full local arc is now on `origin/agent-centric-fbp` (lead pushed; the agent does not push).
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule: **do not push unless the lead explicitly says push.** The lead
 has been pushing directly; confirm per commit.
@@ -717,13 +715,9 @@ not a commitment to build a multi-tenant service. Do not build or plan
 multi-tenant anything unless the user explicitly reverses this.
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (65):** the whole `agent-centric-fbp` sequence from
-  `c4afa94` onward is local — including all of this session's work
-  (`4b19ee0`, `7c9a546`, `e9c2caf`, `7375698`, `d5cb164`, `87e353e`, `d86c203`,
-  `24bda00`, `9eedd69`, `c50b85d`, `aa29c27`, `9d5c8c0`, `a1cdb61`, `dac830c`,
-  `860d6e6`, `d2953af`, `4de7b09`, `21a83bf`, `09bf6e7`) — none on GitHub. The lead pushes directly;
-  confirm before pushing anything yourself. Run
-  `git log origin/agent-centric-fbp..HEAD` for the exact set.
+- **Unpushed commits (0):** the full local arc is now on GitHub — `git fetch`
+  confirmed `origin/agent-centric-fbp` is at the same HEAD. The lead pushed;
+  the agent does not push. This closes the long-standing open loose end.
 - **ACP entry point:** `agent-centric-acp` (or `python -m agent_centric.acp`)
   exposes the FBP platform as an External Agent in Zed over stdio. Point Zed's
   `agent_servers` at it. **Zed's schema is an object map keyed by agent name,
