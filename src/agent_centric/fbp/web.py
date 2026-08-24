@@ -817,6 +817,15 @@ class FbpLandingServer:
         port = self._port
 
         class _Handler(BaseHTTPRequestHandler):
+            # Single-threaded server: a stalled read blocks everything, so
+            # bound each connection's read by a timeout (fail-closed: a
+            # stuck client is dropped rather than allowed to wedge the
+            # loopback landing server). Keep the protocol banner generic
+            # (no http.server/Python version disclosure).
+            timeout = 30
+            server_version = "Agent-Centric-FBP/0.1"
+            sys_version = ""
+
             def log_message(self, fmt: str, *args: object) -> None:
                 # Quiet the default stderr logging; intentional.
                 ...
@@ -981,11 +990,23 @@ class FbpLandingServer:
                     return ""
                 return self.rfile.read(length).decode("utf-8", errors="replace")
 
+            def _security_headers(self) -> list[tuple[str, str]]:
+                # Conservative, additive response hardening for a local
+                # server: never sniff content-type; never embed in a frame;
+                # never leak an external Referer. Safe / additive.
+                return [
+                    ("X-Content-Type-Options", "nosniff"),
+                    ("X-Frame-Options", "DENY"),
+                    ("Referrer-Policy", "no-referrer"),
+                ]
+
             def _send_html(self, body: str, *, code: int = 200) -> None:
                 data = body.encode("utf-8")
                 self.send_response(code)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(data)))
+                for k, v in self._security_headers():
+                    self.send_header(k, v)
                 self.end_headers()
                 self.wfile.write(data)
 
@@ -994,6 +1015,8 @@ class FbpLandingServer:
                 self.send_response(code)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(data)))
+                for k, v in self._security_headers():
+                    self.send_header(k, v)
                 self.end_headers()
                 self.wfile.write(data)
 

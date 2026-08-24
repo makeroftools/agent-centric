@@ -94,6 +94,11 @@ class _BoundServer:
         with urllib.request.urlopen(self.base + path) as resp:
             return resp.status, resp.headers.get("Content-Type", ""), resp.read().decode()
 
+    def headers(self, path: str) -> dict:
+        """GET a path and return its full response headers (for hardening checks)."""
+        with urllib.request.urlopen(self.base + path) as resp:
+            return dict(resp.headers.items())
+
     def post(self, path: str, body: str = "") -> tuple[int, str, str]:
         req = urllib.request.Request(
             self.base + path,
@@ -456,6 +461,39 @@ class TestExternalSurfaces:
             assert status == 200
             assert "data-page='connect'" in html
             assert "pane-connect" in html
+        finally:
+            srv.close()
+
+
+class TestProductionHardening:
+    """Loopback landing server ships conservative, additive HTTP hardening."""
+
+    def test_security_response_headers(self, monkeypatch) -> None:
+        srv = _BoundServer(monkeypatch)
+        try:
+            hdr = srv.headers("/")
+            assert hdr.get("X-Content-Type-Options") == "nosniff"
+            assert hdr.get("X-Frame-Options") == "DENY"
+            assert hdr.get("Referrer-Policy") == "no-referrer"
+        finally:
+            srv.close()
+
+    def test_no_server_version_disclosure(self, monkeypatch) -> None:
+        srv = _BoundServer(monkeypatch)
+        try:
+            hdr = srv.headers("/")
+            server = hdr.get("Server", "")
+            assert "http.server" not in server
+            assert "Python" not in server
+            assert server.startswith("Agent-Centric-FBP/")
+        finally:
+            srv.close()
+
+    def test_handler_has_read_timeout(self, monkeypatch) -> None:
+        srv = _BoundServer(monkeypatch)
+        try:
+            handler_cls = srv._server._make_handler()
+            assert handler_cls.timeout >= 1
         finally:
             srv.close()
 
