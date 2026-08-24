@@ -25,7 +25,7 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `7ac854f` (this capture) — atop `7c76f33` (handoff capture), `3da8879` (loopback landing-server hardening), and `c51be25` (git-state fix). This session added commits
+- **HEAD:** `08deaa7` (this capture) — atop `7ac854f`, `c51be25`, `7c76f33`, and `3da8879`. This session added commits
   on top of the earlier sequence (all local): `4b19fc0` (operator activity feed), `7c9a546` (landing+CLI activity feed), `e9c2eaf`
   (remove Bills tab, demo-only), `7375698` (full-surface HTTP coverage), `d5cb164`
   (Designer sticky-fix), `87e353e` (drag-and-drop), `d86c203` (drag wire-fix),
@@ -36,8 +36,9 @@ we are.
   `09bf6e7` (CLI wiring + Zed ref), `4092cac` (Connect pane MCP-card clipping fix),
   `1b0f6b2` (Zed agent_servers schema fix), `cdb6618` (MCP deterministic stub test),
   `f22e4fa` (reflect push + MCP test handoff capture), `3da8879` (landing hardening),
-  `7c76f33` (handoff capture), `c51be25` (git-state fix), `7ac854f` (this capture).
-- **Pushed to origin:** the lead pushes directly. **Unpushed (4):** `3da8879` + `7c76f33` + `c51be25` + `7ac854f` (landing hardening + its capture + git-state fix + the readiness/liveness split) are local, not yet pushed. A prior `git fetch` confirmed `eb3a9fc` was pushed. The agent does not push.
+  `7c76f33` (handoff capture), `c51be25` (git-state fix), `7ac854f` (readiness/liveness split),
+  `08deaa7` (this capture).
+- **Pushed to origin:** the lead pushes directly. **Unpushed (5):** `3da8879` + `7c76f33` + `c51be25` + `7ac854f` + `08deaa7` (landing hardening + its capture + git-state fix + the readiness/liveness split + the ACP bound) are local, not yet pushed. A prior `git fetch` confirmed `eb3a9fc` was pushed. The agent does not push.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule: **do not push unless the lead explicitly says push.** The lead
 has been pushing directly; confirm per commit.
@@ -512,6 +513,14 @@ of decisions and working style that a fresh session must inherit.
   one. `/health` stays a pure liveness check (unchanged shape). Additive; the verified spine and
   standing invariants are untouched. Tests added for the operator (verified 200, fail-closed 503,
   health stays liveness); live-verified over a bound loopback server. **Not yet pushed.**
+55. **ACP bounded prompt size (fail-closed)** (`08deaa7`) — the ACP stdio surface now rejects a
+  single oversized ``session/prompt``. The total text (across all content blocks) is checked
+  against a **65,536-char hard bound** (`_MAX_PROMPT_CHARS`) before the joined string is built,
+  mirroring the landing server's request-body bound, so a client cannot feed an arbitrarily
+  large string through the verified spine / into memory. Exceeding it fails closed with a clear
+  message and is never misreported as verified. Additive; the verified spine and standing
+  invariants are untouched. Tests added for the operator (over-bound refused, at-bound
+  accepted); live-verified via a direct smoke test. **Not yet pushed.**
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -732,11 +741,13 @@ not a commitment to build a multi-tenant service. Do not build or plan
 multi-tenant anything unless the user explicitly reverses this.
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (4) — open:** `3da8879` (landing hardening) + `7c76f33`
-  (handoff capture) + `c51be25` (git-state fix) + `7ac854f` (readiness/liveness split) are local, not yet pushed. `origin/agent-centric-fbp` is at `eb3a9fc`. The
+- **Unpushed commits (5) — open:** `3da8879` (landing hardening) + `7c76f33`
+  (handoff capture) + `c51be25` (git-state fix) + `7ac854f` (readiness/liveness split) + `08deaa7` (ACP bound) are local, not yet pushed. `origin/agent-centric-fbp` is at `eb3a9fc`. The
   lead pushes; the agent does not. After a push, `git fetch` to confirm.
 - **Readiness/liveness split (this session) — built, unpushed:** a `/ready` probe exercises
   the verified spine (fail-closed 503) distinct from the pure-liveness `/health`. See arc 54.
+- **ACP bounded prompt (this session) — built, unpushed:** ACP now refuses a single
+  `session/prompt` above a 65,536-char bound, fail-closed (never misverified). See arc 55.
 - **ACP entry point:** `agent-centric-acp` (or `python -m agent_centric.acp`)
   exposes the FBP platform as an External Agent in Zed over stdio. Point Zed's
   `agent_servers` at it. **Zed's schema is an object map keyed by agent name,
