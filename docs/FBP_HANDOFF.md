@@ -25,8 +25,7 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `21a83bf` (add a Connect/external-surfaces pane + `/surfaces` route and an
-  e2e ACP/MCP demo — this session's external-surface work). This session added commits
+- **HEAD:** `09bf6e7` (external-surface CLI wiring + e2e demo tests + Zed wiring reference). This session added commits
   on top of the earlier sequence (all local, none pushed by the agent): `4b19fc0` (operator activity
   feed), `7c9a546` (wire activity feed into landing page + CLI), `e9c2caf`
   (remove the Bills tab — demonstration only), `7375698` (full-surface HTTP
@@ -40,9 +39,10 @@ we are.
   shared driver host), `860d6e6` (capture 'private product, no multi-tenant' decision),
   `d2953af` (expose acp and mcp adapters as agent-centric subcommands),
   `4de7b09` (capture CLI wiring for acp/mcp + current state),
-  `21a83bf` (external-surfaces Connect pane + `/surfaces` + e2e ACP/MCP demo).
-- **Pushed to origin:** the user pushes directly. **Unpushed (64 commits):** the
-  full `agent-centric-fbp` sequence plus this session's `21a83bf`. Run `git log origin/agent-centric-fbp..HEAD` to see the
+  `21a83bf` (external-surfaces Connect pane + `/surfaces` + e2e ACP/MCP demo),
+  `09bf6e7` (external-surface CLI wiring + e2e demo tests + Zed wiring reference).
+- **Pushed to origin:** the user pushes directly. **Unpushed (65 commits):** the
+  full `agent-centric-fbp` sequence plus this session's `21a83bf`/`09bf6e7`. Run `git log origin/agent-centric-fbp..HEAD` to see the
   exact unpushed set. No push is made by the agent; the lead pushes when they
   choose.
 - `main` stays the GitHub default and is **fully contained** in this branch.
@@ -489,6 +489,12 @@ of decisions and working style that a fresh session must inherit.
    route. `examples/fbp_external_demo.py` drives BOTH ACP and MCP through the
    shared `FbpDriverHost` verified spine, offline and honest (verified vs
    fail-closed). Additive; tested (unit + HTTP route coverage).
+51. **External-surface CLI wiring + demo tests + Zed wiring reference** (`09bf6e7`) —
+   the acp/mcp subcommands are proven wired at the parser/dispatch level
+   (`tests/test_cli.py`); `tests/test_fbp_external_demo.py` proves the e2e demo runs
+   both transports and reports honest outcomes; `examples/zed_agent_servers.json.example`
+   is the reference for wiring the FBP platform as an External Agent (ACP) in a live
+   Zed session via `agent_servers`. Additive.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -709,16 +715,18 @@ not a commitment to build a multi-tenant service. Do not build or plan
 multi-tenant anything unless the user explicitly reverses this.
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (64):** the whole `agent-centric-fbp` sequence from
+- **Unpushed commits (65):** the whole `agent-centric-fbp` sequence from
   `c4afa94` onward is local — including all of this session's work
   (`4b19ee0`, `7c9a546`, `e9c2caf`, `7375698`, `d5cb164`, `87e353e`, `d86c203`,
   `24bda00`, `9eedd69`, `c50b85d`, `aa29c27`, `9d5c8c0`, `a1cdb61`, `dac830c`,
-  `860d6e6`, `d2953af`, `4de7b09`, `21a83bf`) — none on GitHub. The lead pushes directly;
+  `860d6e6`, `d2953af`, `4de7b09`, `21a83bf`, `09bf6e7`) — none on GitHub. The lead pushes directly;
   confirm before pushing anything yourself. Run
   `git log origin/agent-centric-fbp..HEAD` for the exact set.
 - **ACP entry point:** `agent-centric-acp` (or `python -m agent_centric.acp`)
   exposes the FBP platform as an External Agent in Zed over stdio. Point Zed's
-  `agent_servers` at it. The landing page **Docs** pane has the tutorial.
+  `agent_servers` at it. The landing page **Docs** pane has the tutorial, and
+  `examples/zed_agent_servers.json.example` is the ready-to-copy reference for
+  the `agent_servers` block (the real `.zed/settings.json` stays local/gitignored).
 - **Terminal glitch (this session):** the session's local terminal began
   rejecting ``cd`` into the project with "not in any of the project's
   worktrees"; the same command had worked minutes earlier. The sub-agent (which
