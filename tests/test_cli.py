@@ -200,6 +200,29 @@ class TestCliFbp:
         b = parser.parse_args(["fbp-web", "--integrity", "x"])
         assert b.integrity == "x"
 
+    def test_fbp_accepts_curve_flag(self, tmp_path: Path) -> None:
+        """The ``--curve`` flag runs the full FBP demo over the CURVE-encrypted
+        wire on a tcp transport (opt-in, operator-reachable)."""
+        code, out = _run(tmp_path, "fbp", "--transport", "tcp", "--curve")
+        assert code == 0, out
+        assert "verified=True" in out
+        assert "replay  : passed=True" in out
+
+    def test_fbp_curve_with_inproc_fails_closed(self, tmp_path: Path) -> None:
+        """CURVE applies to tcp/ipc only; opting in with inproc fails closed."""
+        code, out = _run(tmp_path, "fbp", "--transport", "inproc", "--curve")
+        assert code == 1
+        assert "not inproc" in out
+
+    def test_parser_builds_curve_flag(self) -> None:
+        from agent_centric.cli import _build_parser
+
+        parser = _build_parser()
+        a = parser.parse_args(["fbp", "--curve", "--transport", "tcp"])
+        assert a.curve is True
+        b = parser.parse_args(["fbp", "--transport", "ipc"])
+        assert b.curve is False
+
     def test_fbp_check_reports_ready(self, tmp_path: Path) -> None:
         """``fbp-check`` is a deploy/readiness gate: it exercises the verified
         spine and exits 0 with a green verdict when everything passes."""

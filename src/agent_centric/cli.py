@@ -568,6 +568,13 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional shared traffic-integrity secret. When set, every directive "
         "on the FBP wire is HMAC-signed and verified on receipt (opt-in).",
     )
+    p_fbp.add_argument(
+        "--curve",
+        action="store_true",
+        default=False,
+        help="Encrypt the FBP wire with ZeroMQ CURVE (opt-in). Requires a "
+        "tcp/ipc transport; fails closed with inproc.",
+    )
 
     p_fbp_web = sub.add_parser(
         "fbp-web",
@@ -759,7 +766,12 @@ def _fbp_endpoint(transport: str) -> str:
     }[transport]
 
 
-def _cmd_fbp(transport: str, ledger: Path | None = None, integrity: str | None = None) -> int:
+def _cmd_fbp(
+    transport: str,
+    ledger: Path | None = None,
+    integrity: str | None = None,
+    curve: bool = False,
+) -> int:
     """Drive the FBP subsystem demo over the directive/response protocol.
 
     Uses the high-level ``FbpDriver`` (the easy-UX layer) to prove the core
@@ -787,6 +799,8 @@ def _cmd_fbp(transport: str, ledger: Path | None = None, integrity: str | None =
         driver_kwargs["ledger_path"] = str(ledger)
     if integrity:
         driver_kwargs["integrity_secret"] = integrity.encode("utf-8")
+    if curve:
+        driver_kwargs["curve"] = True
     with fbp.FbpDriver(transport=transport, endpoint=endpoint, **driver_kwargs) as driver:
         driver.register("double", _fbp_double, source_url="file:///tasks/double")
         driver.register("even", _fbp_even)
@@ -1546,7 +1560,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "replay-verify":
         return _cmd_replay_verify(args.store, args.trajectory_id)
     if args.command == "fbp":
-        return _cmd_fbp(args.transport, ledger=args.ledger, integrity=args.integrity)
+        return _cmd_fbp(
+            args.transport,
+            ledger=args.ledger,
+            integrity=args.integrity,
+            curve=args.curve,
+        )
     if args.command == "fbp-check":
         return _cmd_fbp_check(args.transport, integrity=args.integrity)
     if args.command == "fbp-web":
