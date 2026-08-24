@@ -25,7 +25,7 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `7c76f33` (handoff capture; local, unpushed) — atop `3da8879` (loopback landing-server hardening). This session added commits
+- **HEAD:** `7ac854f` (this capture) — atop `7c76f33` (handoff capture), `3da8879` (loopback landing-server hardening), and `c51be25` (git-state fix). This session added commits
   on top of the earlier sequence (all local): `4b19fc0` (operator activity feed), `7c9a546` (landing+CLI activity feed), `e9c2eaf`
   (remove Bills tab, demo-only), `7375698` (full-surface HTTP coverage), `d5cb164`
   (Designer sticky-fix), `87e353e` (drag-and-drop), `d86c203` (drag wire-fix),
@@ -36,8 +36,8 @@ we are.
   `09bf6e7` (CLI wiring + Zed ref), `4092cac` (Connect pane MCP-card clipping fix),
   `1b0f6b2` (Zed agent_servers schema fix), `cdb6618` (MCP deterministic stub test),
   `f22e4fa` (reflect push + MCP test handoff capture), `3da8879` (landing hardening),
-  `7c76f33` (this capture).
-- **Pushed to origin:** the lead pushes directly. **Unpushed (2):** `3da8879` + `7c76f33` (landing-server hardening + its capture) are local, not yet pushed. A prior `git fetch` confirmed `f22e4fa` was pushed. The agent does not push.
+  `7c76f33` (handoff capture), `c51be25` (git-state fix), `7ac854f` (this capture).
+- **Pushed to origin:** the lead pushes directly. **Unpushed (4):** `3da8879` + `7c76f33` + `c51be25` + `7ac854f` (landing hardening + its capture + git-state fix + the readiness/liveness split) are local, not yet pushed. A prior `git fetch` confirmed `eb3a9fc` was pushed. The agent does not push.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule: **do not push unless the lead explicitly says push.** The lead
 has been pushing directly; confirm per commit.
@@ -98,6 +98,7 @@ that page:
 | Determinism + auto-accept | `fbp/determinism.py`, `fbp/bills_agent.py` | `score_determinism`, `Rule`/`RuleSet`, `bills_accept_deterministic` only on an approved rule |
 | Durable approved rules | `fbp/bills_agent.py` (`bills_rule_add`) | rules persist; auto-accept across restarts — **"authorize once, run after restart"** |
 | **Landing-page server** | `fbp/web.py` | `agent-centric fbp-web`; stdlib `http.server`, loopback-only, read/verify-only; live tree, summary, invariants, actions |
+| **Readiness/liveness probe** | `fbp/web.py` | Liveness (`/health`: process up) vs **readiness** (`/ready`: exercises the verified spine; fail-closed **503** when the platform cannot do verified work). Additive hardening for probes/deploy |
 | **Model box (dropdown + spinner)** | `fbp/web.py` | `/model` POST runs a prompt through the `model` agent → OpenRouter when `OPENROUTER_API_KEY` set, else stub; model dropdown (`OPENROUTER_MODEL`), spinner, verified/source status; **Enter submits, Shift+Enter = newline** |
 | **Streaming answers + chat history** | `fbp/web.py` | `/model/stream` (SSE-over-POST) streams OpenRouter tokens live; `/history` + `/history/clear` give a bounded in-page transcript (100 turns). Streaming reports honestly as verified=False (the audited path stays `/model`) |
 | **Resource envelopes** | `fbp/envelopes.py` | `ResourceEnvelope` (step/size/latency/child bounds) granted at configure time, enforced fail-closed at run/spawn; unbounded by default |
@@ -503,6 +504,14 @@ of decisions and working style that a fresh session must inherit.
   disclosure). Additive; the verified spine and standing invariants are untouched. Tests added
   for the operator (headers, no version disclosure, read timeout); live-verified over a bound
   loopback server. **Not yet pushed.**
+54. **Readiness/liveness split** (`7ac854f`) — the landing server now distinguishes **liveness**
+  (`/health`: the process is up) from **readiness** (`/ready`: the platform can actually do
+  verified work). `/ready` runs a real, verified task through the driver's correctness spine
+  (parent re-verified, ledgered) and reports `ready`/`verified`; **fail-closed** — an unverified
+  result or a raised error returns **503** so a probe never mistakes a wedged spine for a healthy
+  one. `/health` stays a pure liveness check (unchanged shape). Additive; the verified spine and
+  standing invariants are untouched. Tests added for the operator (verified 200, fail-closed 503,
+  health stays liveness); live-verified over a bound loopback server. **Not yet pushed.**
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -723,9 +732,11 @@ not a commitment to build a multi-tenant service. Do not build or plan
 multi-tenant anything unless the user explicitly reverses this.
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (2) — open:** `3da8879` (landing-server hardening) + `7c76f33`
-  (this capture) are local, not yet pushed. `origin/agent-centric-fbp` is at `eb3a91c`. The
+- **Unpushed commits (4) — open:** `3da8879` (landing hardening) + `7c76f33`
+  (handoff capture) + `c51be25` (git-state fix) + `7ac854f` (readiness/liveness split) are local, not yet pushed. `origin/agent-centric-fbp` is at `eb3a9fc`. The
   lead pushes; the agent does not. After a push, `git fetch` to confirm.
+- **Readiness/liveness split (this session) — built, unpushed:** a `/ready` probe exercises
+  the verified spine (fail-closed 503) distinct from the pure-liveness `/health`. See arc 54.
 - **ACP entry point:** `agent-centric-acp` (or `python -m agent_centric.acp`)
   exposes the FBP platform as an External Agent in Zed over stdio. Point Zed's
   `agent_servers` at it. **Zed's schema is an object map keyed by agent name,
