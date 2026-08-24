@@ -25,15 +25,17 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `9eedd69` (bills agent in the Designer + edge value labels). This
-  session added commits on top of the earlier sequence (all local, none pushed by
-  the agent): `4b19ee0` (operator activity feed), `7c9a546` (wire activity feed
-  into landing page + CLI), `e9c2caf` (remove the Bills tab — demonstration
-  only), `7375698` (full-surface HTTP route coverage), `d5cb164` (Designer node
-  stick-to-cursor fix), `87e353e` (drag-and-drop connectors), `d86c203`
-  (drag-preview wire fix), `24bda00` (agent-composition demo in the Designer),
-  `9eedd69` (bills agent in the Designer + edge value labels).
-- **Pushed to origin:** the user pushes directly. **Unpushed (55 commits):** the
+- **HEAD:** `aa29c27` (wire ACP adapter to the FBP verified spine + website
+  tutorial). This session added commits on top of the earlier sequence (all
+  local, none pushed by the agent): `4b19ee0` (operator activity feed),
+  `7c9a546` (wire activity feed into landing page + CLI), `e9c2caf` (remove the
+  Bills tab — demonstration only), `7375698` (full-surface HTTP route coverage),
+  `d5cb164` (Designer node stick-to-cursor fix), `87e353e` (drag-and-drop
+  connectors), `d86c203` (drag-preview wire fix), `24bda00` (agent-composition
+  demo in the Designer), `9eedd69` (bills agent in the Designer + edge value
+  labels), `c50b85d` (capture this session for a mission-critical handoff),
+  `aa29c27` (wire ACP adapter to the FBP verified spine + website tutorial).
+- **Pushed to origin:** the user pushes directly. **Unpushed (57 commits):** the
   full `agent-centric-fbp` sequence from `c4afa94` onward (all of this session's
   work is unpushed). Run `git log origin/agent-centric-fbp..HEAD` to see the
   exact unpushed set. No push is made by the agent; the lead pushes when they
@@ -44,13 +46,20 @@ has been pushing directly; confirm per commit.
 
 ### Validation (run this session, all live)
 - `uv run pytest` → **1010 passed** (was 959 at the prior handoff; added operator
-  activity feed, full-surface HTTP route coverage, and the agent/Designer work)
+  activity feed, full-surface HTTP route coverage, and the agent/Designer work).
+  The ACP tests (`tests/test_acp.py`, **13 tests**) pass — **the operator runs
+  the test suite; the agent does NOT run pytest (Law 12).**
 - `uv run ruff check .` → clean
 - `uv run mypy src` → clean (**92 source files**)
 - FBP coverage: `experts.py` 94%, `domainrepo.py` **100%**, driver 91%, web.py
   **79%** (was 72%) after the full-surface HTTP route suite.
 - Cross-transport durable replay: 19/19 on inproc/ipc/tcp. Full production-arc
   demo: crash-safe replay 6/6.
+- **ACP adapter validated live** (plain `python -c` smoke tests, not pytest):
+  `double`/`sum`/`square`/`negate` verified; `model` stub; `store set/get`
+  round-trip; `bills intake/accept/calendar` (total 12345); `network` dataflow
+  (sum=16); `status`/`tree`; unknown command + ungranted store key fail closed.
+  The landing page renders the ACP tutorial (JSON braces literal).
 
 ### What's built and tested (the full agent-centric FBP capability surface)
 Everything in the capability table below is real code, committed, and exercised
@@ -110,6 +119,7 @@ that page:
 | **Component Networks / Designer** | `fbp/network.py`, `fbp/web.py` `/network` | Deterministic visual-programming core: a directed graph of components wired by data-flow edges, validated as a DAG, compiled (topological, ties by id) to an ordered FBP `run` plan run through the verified spine. **True dataflow** (a downstream component consumes the *computed* verified output of its upstreams, not their args). Cycles / unknown refs / unverified steps fail closed. The **Designer** is a **three-pane editor** (palette → canvas → inspector). This session made it a **real agent-composition demo**: the palette's primary **Agents** group exposes the actual spawned demo agents (`child`/`store`/`model`/`bills`) as draggable nodes that delegate via the component `child` field, alongside a secondary **Primitives** group. **Drag-and-drop connectors** with a live dashed preview wire (plus click-to-connect fallback), per-node results painted on the canvas, **edge value labels** showing the computed value flowing along each wire after a run, a **Load agent demo** one-click button, per-node args/verifier/child editing, auto-layout, run/save/load (`/network/save|/list|/load`, durable via `fbp-web --networks <path>`), edge delete on double-click. Verified true dataflow end-to-end |
 | **Card-based UI + mode switch** | `fbp/web.py` | Card-based landing page with a **Chat / Designer** mode switch: Chat = model box + chat history + run-an-artifact (general-purpose); Designer = Component Network editor. Clear functional division |
 | **Operator activity feed** | `fbp/activity.py`, `fbp/web.py` | The **audit of what an operator did**: a bounded, append-only, optionally-durable feed of operator actions, each with a kind (`model`/`orchestrate`/`network`/`bills`/`provision`/`action`) and its **verification status**. Deterministic ordering by sequence number; fail-closed on malformed/corrupt input; durable via `fbp-web --activity <path>` (explicit grant). The landing page gains a **dashboard Activity card** + a read-only `/activity` route; real actions (demo, bills intake/accept, network runs, orchestration, provisioning) record automatically through the verified spine. Additive |
+| **ACP adapter (Zed → FBP)** | `acp.py`, `tests/test_acp.py` | The **Agent Client Protocol** edge transport now routes every prompt through the **FBP `FbpDriver` verified spine** (not the legacy `AgentManager`). `FbpAcpAgent` commands: `double`/`square`/`negate`/`sum` (verified arithmetic), `model` (stub or opt-in OpenRouter), `store set/get` (grant-scoped), `bills intake/accept/calendar` (human-gated demo loop), `status`/`tree` (read-only), `network <json>` (component-network dataflow). Unknown commands fail closed. The driver runs on a **dedicated worker thread** so its private event loop stays isolated from the ACP async loop (fixes `Cannot run the event loop while another loop is running`). `close()` tears down the host + temp stores. Additive; 13 tests. The landing page **Docs** pane gains an ACP tutorial + command reference |
 
 ### Easy-UX driver & CLI
 - `FbpDriver` API: `register`, `resolve`, `configure`, `configure_child`,
@@ -155,6 +165,9 @@ uv run agent-centric fbp-web-kill          # stop the server on the port
    refs.
 6. **CPM, audit, and replay are read-only capabilities — not agents.**
 7. **Public-surface additive only.**
+8. **The operator runs the test suite; the agent never runs pytest (Law 12).**
+   The agent validates with the permitted static tools (ruff/mypy) and writes
+   tests, but the operator owns the pytest gate.
 
 ---
 
@@ -409,6 +422,30 @@ of decisions and working style that a fresh session must inherit.
    calendar) is composable through the spine. After a run each edge shows the
    computed value that flowed along it (a small SVG label). The running demo
    confirms “Network ok (4 step(s))”. 1010 tests.
+44. **Law 12 — the operator runs the test suite** (this session) — the user
+   issued a new hard-coded law: the agent is **not to run pytest anymore**; the
+   operator runs it. Recorded as **Law 12** in `PRINCIPLES.md`. The agent
+   validates with the permitted static tools (ruff/mypy) and writes tests, but
+   never invokes a test runner.
+45. **ACP adapter wired to the FBP verified spine** (`aa29c27`) — the flagged
+   next gap (the ACP → FBP seam) is now built. `acp.py` was rewritten so every
+   prompt routes through `FbpDriver` instead of the legacy `AgentManager`.
+   Commands: `double`/`square`/`negate`/`sum` (verified arithmetic), `model`
+   (stub or opt-in OpenRouter), `store set/get` (grant-scoped), `bills
+   intake/accept/calendar` (human-gated demo loop), `status`/`tree` (read-only),
+   `network <json>` (component-network dataflow). Unknown commands fail closed.
+   **Threading fix:** the driver is hosted on a dedicated worker thread
+   (`_DriverHost`) so its private event loop stays isolated from the ACP async
+   loop — this fixed the `RuntimeError: Cannot run the event loop while another
+   loop is running` that the first test run hit. `close()` tears down the host +
+   temp stores. `tests/test_acp.py` rewritten for the FBP-backed surface (13
+   tests; shared-session flows for store/bills persistence).
+46. **ACP tutorial on the website** (`aa29c27`) — the landing page **Docs** pane
+   gains an **ACP — drive the FBP platform from Zed** section: how to start it
+   (`agent-centric-acp`), the full command reference, an example session, and
+   why it matters. Added `pre` styling for code blocks. The f-string HTML needed
+   escaped braces (`{{`/`}}`) for the JSON examples — a gotcha to remember when
+   editing `_render_landing`.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -530,6 +567,29 @@ of decisions and working style that a fresh session must inherit.
   programmer — first the provisioning pathway + dashboard, then the full
   three-pane Designer. The lead kept it dependency-free/stdlib-only (no
   Blockly/Rete/React Flow), consistent with the fail-closed posture.
+- **Commit authority granted (this session):** the user said *"you have the
+  authority to always commit at your discretion."* The agent may commit freely
+  on `agent-centric-fbp`. **Push is still the lead's call** — the agent does not
+  push unless explicitly told to.
+- **Law 12 — the operator runs the test suite (this session, MISSION
+  CRITICAL):** the user issued a new hard-coded law: the agent is **not to run
+  pytest anymore**; the operator runs it. Recorded as **Law 12** in
+  `PRINCIPLES.md`. The agent validates with the permitted static tools
+  (ruff/mypy) and writes tests, but never invokes a test runner, and never
+  claims a test passed unless the operator reports it.
+- **MCP question (this session, OPEN):** the user asked *"Do we want MCP too?"*
+  The lead's architectural read: **yes, MCP is coherent and valuable** — it is
+  the mirror image of ACP (ACP = editor → us as agent; MCP = LLM host → us as
+  tool server). It would expose our FBP domain experts as **tools** any
+  MCP-capable host can call, matching the "Network of Experts AI" north star
+  (the model proposes, the deterministic tool verifies). It needs one new
+  dependency (`mcp` SDK, same category as `agent-client-protocol`) and a new
+  `agent_centric/mcp.py` adapter. **Not yet built** — it introduces a new
+  third-party dependency + public surface, so it awaits the lead's explicit
+  go-ahead. Design constraints to hold (mirroring ACP): edge transport only;
+  tools map to registered FBP tasks; unknown/ungranted tools fail closed;
+  verified/unverified reported honestly; grants respected; opt-in + offline-
+  testable + additive.
 
 ### How to talk to the user / working style
 - Be the **senior, decisive engineer**: propose a course, proceed on the
@@ -577,14 +637,18 @@ despite 751 passing tests:
 These are listed in `STATUS.md`'s "out of scope / future volleys".
 
 ### Suggested next (the widest seam gap, low risk, additive)
-- **Wire the ACP adapter to the FBP platform.** The `agent-centric-acp`
-  adapter is still a thin edge over the *older* `AgentManager` demo agents
-  (`reverse`/`upper`/`counter`/`model`) and is **disconnected from the FBP
-  subsystem that is now the real architecture**. Making ACP route through
-  `FbpDriver` — component networks, schema-driven orchestration, and the
-  verified spine — would make the whole deterministic platform reachable from
-  Zed. Additive, offline-testable, touches none of the risky network/credential
-  surface. The user was asked; build only on explicit go-ahead.
+- **Wire the ACP adapter to the FBP platform — DONE (`aa29c27`).** The ACP
+  adapter now routes through `FbpDriver` (component networks, schema-driven
+  orchestration, the verified spine), so the whole deterministic platform is
+  reachable from Zed. See the capability table + session arc.
+- **MCP adapter (the natural complement, OPEN — build only on explicit
+  go-ahead).** The user asked *"Do we want MCP too?"*; the lead's read is yes.
+  MCP is the mirror image of ACP: it exposes our FBP domain experts as **tools**
+  any MCP-capable host (Claude Desktop, agent runtimes) can call, matching the
+  "Network of Experts AI" north star. Needs one new dependency (`mcp` SDK) + a
+  new `agent_centric/mcp.py` adapter, offline-testable and fail-closed. See the
+  decision entry for the design constraints. Build only on the lead's explicit
+  go-ahead (new third-party dependency + public surface).
 
 ### Production roadmap — standalone multi-tenant paid web service (roadmap only, NOT built)
 
@@ -612,12 +676,15 @@ service; the existing loopback (`fbp-web --registry`) surface remains the only
 hosted layer.
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (55):** the whole `agent-centric-fbp` sequence from
+- **Unpushed commits (57):** the whole `agent-centric-fbp` sequence from
   `c4afa94` onward is local — including all of this session's work
   (`4b19ee0`, `7c9a546`, `e9c2caf`, `7375698`, `d5cb164`, `87e353e`, `d86c203`,
-  `24bda00`, `9eedd69`) — none on GitHub. The lead pushes directly; confirm
-  before pushing anything yourself. Run `git log origin/agent-centric-fbp..HEAD`
-  for the exact set.
+  `24bda00`, `9eedd69`, `c50b85d`, `aa29c27`) — none on GitHub. The lead pushes
+  directly; confirm before pushing anything yourself. Run
+  `git log origin/agent-centric-fbp..HEAD` for the exact set.
+- **ACP entry point:** `agent-centric-acp` (or `python -m agent_centric.acp`)
+  exposes the FBP platform as an External Agent in Zed over stdio. Point Zed's
+  `agent_servers` at it. The landing page **Docs** pane has the tutorial.
 - **Terminal glitch (this session):** the session's local terminal began
   rejecting ``cd`` into the project with "not in any of the project's
   worktrees"; the same command had worked minutes earlier. The sub-agent (which
@@ -688,6 +755,8 @@ uv run agent-centric fbp-web-kill       # stop the server on the port (legacy su
 uv run agent-centric fbp-replay sess.db
 uv run agent-centric fbp-summary sess.db
 uv run agent-centric fbp-domains repo.json  # operator readout of a saved Domain Registry + Artifact Vault
+uv run agent-centric-acp                  # ACP agent over stdio (Zed External Agent)
+uv run python -m agent_centric.acp        # same, via module
 uv run python examples/fbp_arc_demo.py
 uv run python examples/fbp_activity_demo.py
 ```
@@ -711,6 +780,22 @@ uv run python examples/fbp_activity_demo.py
   and `tools/safe-replace.sh`. Brand-new files (that don't exist yet) may be
   created directly. This law is enshrined in `PRINCIPLES.md` §11 and applies to
   source, tests, docs, and config alike, with no exceptions.
+- **LAW 12 — THE OPERATOR RUNS THE TEST SUITE (MISSION CRITICAL).** The agent
+  **never runs `pytest` (or any test runner). EVER. Zero exceptions.** The human
+  operator runs the test suite and reports the result. The agent validates with
+  the permitted static tools (ruff/mypy), writes/maintains tests for the
+  operator to run, reports what to run + the expected result, and never claims a
+  test passed unless the operator reports it. Enshrined in `PRINCIPLES.md` §12.
+- **ACP is an edge transport over the FBP spine.** `acp.py` routes every prompt
+  through `FbpDriver` (verified, ledgered, replayable); no ACP path bypasses
+  verification. The driver runs on a dedicated worker thread (`_DriverHost`)
+  isolated from the ACP async loop. Commands: double/square/negate/sum, model,
+  store set/get, bills intake/accept/calendar, status/tree, network <json>;
+  unknown commands fail closed. Real model is opt-in (env-driven) and never
+  relaxes verification.
+- **MCP is proposed but NOT built.** The lead's read is that MCP is the natural
+  complement to ACP (expose FBP experts as tools to any MCP host), but it needs
+  a new dependency + public surface, so it awaits the lead's explicit go-ahead.
 - **The coined axiom (user): "Network of Experts AI"** — *the model is not the
   expert, the network is.* An AI is a network of narrow domain experts, each
   verified by a deterministic verifier; a general model is one (fallible) kind
