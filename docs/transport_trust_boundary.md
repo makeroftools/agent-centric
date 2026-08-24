@@ -51,16 +51,16 @@ The driver binds loopback by default and the landing server binds
 ## 3. Honest gaps (what is NOT enforced)
 
 1. **No transport authentication.** The protocol does not require a client to
-   prove who it is before sending directives.
-2. **No authorization.** Every directive is processed the same regardless of
-   caller identity; there are no per-peer grants on the wire.
-3. **No encryption (TLS)** on `tcp://` or `ipc://` (IPC over Unix sockets is
-   local, but not encrypted).
+   prove who it is before sending directives *(plain CURVE off).*
+2. **No authorization.** *(Addressed by per-peer authz §5.4 when enabled.)*
+3. **No encryption (TLS)** on ``tcp://`` or ``ipc://`` *(CURVE now provides
+   encryption + peer-auth when enabled — see §5.6).*
 4. **Loopback is configured, not enforced.** Code can pass any host/port.
 
-These are **by design for a local, single-operator dev/demo surface** — not a
-gap that was accidentally left. They are the explicit cost of staying
-dependency-free and local-first.
+These gaps are now **closeable**: CURVE (opt-in) provides wire encryption +
+server-gated peer auth with no dependency. TLS itself is config-validated (§5.2)
+but not wired as a live encryption mechanism (see §5.6 for the honest
+*real* state of the wire).
 
 ---
 
@@ -118,7 +118,26 @@ primitives plus driver hooks. What crosses a real trust boundary still requires
 the operator to supply actual certs/secrets and a TLS-capable transport; the
 code no longer pretends these are unbuilt.
 
----
+6. **CURVE wire encryption (BUILT, opt-in, default off) — `fbp/curve.py` + the
+   driver.** ZeroMQ's native **CURVE** mechanism is the *real*, dependency-free
+   encryption layer for this wire. Because the FBP transport is ZeroMQ frames,
+   stdlib ``ssl`` cannot wrap a zmq socket; CURVE is libzmq's built-in
+   encryption/auth for exactly this. When ``FbpDriver(..., curve=True)``:
+   - the root ROUTER binds as a CURVE **server**,
+   - a ZAP authenticator allowlists the session's client key (fail-closed),
+   - the root Agent connects as a CURVE **client**, and every spawned child
+     inherits the session so the whole tree speaks one encrypted wire,
+   - verified live over ``tcp``: an authorized client round-trips encrypted
+     data; a rogue client with a wrong key returns nothing (rejected).
+
+   **Honest scope:** CURVE gives wire **confidentiality + integrity + server-
+   gated peer auth**, but it is not X.509/TLS — no CA, cert rotation, or signing
+   beyond the shared session keys. One tree = one cryptographic context (a
+   single operator). This closes the "no encryption on the wire" gap with no
+   dependency; a true cross-host PKI (cert rotation, per-peer certs) remains
+   the optional, operator-supplied TLS path (§5.2), still not wired as live
+   transport encryption.
+
 
 ## 6. Standing rule for future work
 
