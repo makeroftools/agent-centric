@@ -686,6 +686,25 @@ def _build_parser() -> argparse.ArgumentParser:
         "registry_path", type=Path, help="The saved registry/vault file (--registry path)."
     )
 
+    p_fbp_check = sub.add_parser(
+        "fbp-check",
+        help="Run a bounded, deterministic self-test of the verified spine and "
+        "capability surface; print a verdict and exit non-zero on any failure "
+        "(deploy/readiness gate).",
+    )
+    p_fbp_check.add_argument(
+        "--integrity",
+        default=None,
+        help="Optional shared traffic-integrity secret; run the self-test over the "
+        "signed wire (opt-in).",
+    )
+    p_fbp_check.add_argument(
+        "--transport",
+        choices=("inproc", "tcp", "ipc"),
+        default="inproc",
+        help="Transport to run the self-test over (default: inproc).",
+    )
+
     sub.add_parser(
         "acp",
         help="Run the ACP adapter over stdio (expose the FBP platform as an "
@@ -1037,6 +1056,114 @@ def _cmd_fbp(transport: str, ledger: Path | None = None, integrity: str | None =
         print(f"replay  : passed={replay['passed']}")
 
         return 0 if local.verified and delegated.verified and replay["passed"] else 1
+
+
+def _cmd_fbp_check(transport: str, integrity: str | None = None) -> int:
+    """Run a bounded, deterministic self-test of the verified spine.
+
+    This is a deploy/readiness gate: it builds a fresh tree, exercises a battery
+    of the capability surface through the real directive/response protocol
+    (verified arithmetic, durable state, mediated delegation + the correctness
+    spine, a deterministic plan, fail-closed delegation, registry resolve, replay
+    of a local run, and the model stub), then prints an operator-facing verdict.
+    It exits non-zero if anything is unverified or fails closed unexpectedly — a
+    self-check a CI / deploy pipeline (or an operator) can hang a gate on.
+
+    ``integrity`` optionally turns on §5.5 traffic integrity, so the self-test
+    also proves the signed wire end-to-end.
+    """
+    import agent_centric.fbp as fbp
+
+    _seed_fbp_callables(fbp)
+
+    endpoint = _fbp_endpoint(transport)
+    driver_kwargs: dict[str, Any] = {}
+    if integrity:
+        driver_kwargs["integrity_secret"] = integrity.encode("utf-8")
+
+    results: list[tuple[str, bool, str]] = []
+
+    def _check(name: str, ok: bool, detail: str = "") -> bool:
+        results.append((name, ok, detail))
+        return ok
+
+    with fbp.FbpDriver(
+        transport=transport, endpoint=endpoint, **driver_kwargs
+    ) as driver:
+        driver.register("double", _fbp_double, source_url="file:///tasks/double")
+        driver.register("even", _fbp_even)
+        driver.register("odd", _fbp_odd)
+        # Grant a temp durable state/trajectory so the state round-trip check is
+        # a real, granted store (persistence is an explicit grant — the check
+        # must prove the granted path, not fail-closed for lack of a grant).
+        import tempfile as _tf
+
+        _state = _tf.mkdtemp(prefix="agent-centric-fbp-check-")
+        driver.configure(
+            tasks=("double",), verifiers=("even", "odd"),
+            state=f"{_state}/state.db", trajectory=f"{_state}/audit.db",
+        )
+
+        # 1. local verified run
+        local = driver.run("double", {"value": 21})
+        _check("run:double(21)", local.verified and local.value == 42,
+               f"value={local.value!r}")
+
+        # 2. durable state round-trip
+        driver.state_set("check-k1", {"ok": True})
+        got = driver.state_get("check-k1")
+        _check("state:set_get", got.verified and got.value == {"ok": True})
+
+        # 3. mediated spawn + delegation + parent re-verify (correctness spine)
+        driver.spawn("child")
+        driver.configure_child("child", tasks=("double",))
+        delegated = driver.run("double", {"value": 3}, child="child")
+        _check("delegate:double(3)", delegated.verified and delegated.value == 6,
+               f"node={delegated.node!r}")
+
+        # 4. deterministic plan
+        plan = driver.run_plan([{"task": "double", "args": {"value": 2}}])
+        _check("plan:double(2)", plan.get("ok") is True
+               and plan["results"][0]["value"] == 4)
+
+        # 5. fail-closed: unknown delegation target
+        unknown = driver.run("double", {"value": 1}, child="ghost")
+        _check("delegate:ghost_fails_closed", unknown.verified is False)
+
+        # 6. registry resolve (read-only readiness)
+        resolved = driver.resolve("double")
+        _check("registry:resolve", resolved.verified is True)
+
+        # 7. replay of a local run re-verifies
+        local_id = next(
+            (cid for cid, d in driver.ledger().items()
+             if d["kind"] == "run" and "child" not in d["payload"]),
+            None,
+        )
+        if local_id is not None:
+            replay = driver.replay(target=local_id)
+            _check("replay:local", replay["passed"] is True)
+        else:
+            _check("replay:local", False, "no local run recorded")
+
+        # 8. model spine (deterministic stub)
+        driver.spawn("model", kind="model")
+        model_resp = driver.run("model", {"prompt": "hi"}, child="model")
+        _check("model-stub", model_resp.verified is True)
+
+    failed = [r for r in results if not r[1]]
+    ok_total = len(results) - len(failed)
+    print(f"fbp-check: {ok_total}/{len(results)} checks passed")
+    for name, ok, detail in results:
+        mark = "ok" if ok else "FAIL"
+        suffix = f" ({detail})" if detail else ""
+        print(f"  [{mark}] {name}{suffix}")
+    if failed:
+        for name, _, _ in failed:
+            print(f"fbp-check: FAILED on {name}", file=sys.stderr)
+        return 1
+    print("fbp-check: READY — verified spine green")
+    return 0
 
 
 def _cmd_fbp_web(
@@ -1420,6 +1547,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_replay_verify(args.store, args.trajectory_id)
     if args.command == "fbp":
         return _cmd_fbp(args.transport, ledger=args.ledger, integrity=args.integrity)
+    if args.command == "fbp-check":
+        return _cmd_fbp_check(args.transport, integrity=args.integrity)
     if args.command == "fbp-web":
         return _cmd_fbp_web(
             host=args.host, port=args.port, open_browser=args.open, reload=args.reload,

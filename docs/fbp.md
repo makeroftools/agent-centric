@@ -667,11 +667,17 @@ runs, bills intake/accept, provisioning, the demo action) is recorded with its
 verification status and survives server restarts (explicit grant; in-memory by default).
 
 Pass `--integrity <secret>` to `fbp-web` (or `fbp`) to turn on **§5.5 traffic
-integrity** for the in-process tree: every directive on the FBP wire is HMAC-
-signed and verified on receipt (opt-in). When enabled the landing page shows a
-small `traf-integrity ✓` badge in the sidebar; when omitted the wire stays
-plain (default, backward-compatible). The secret is a plain literal (operator-
-supplied, never logged).
+integrity** for the FBP tree: every directive is HMAC-signed and verified on
+receipt (opt-in). When enabled the landing page shows a `traf-integrity` badge
+in the sidebar; when omitted the wire stays plain (default, backward-
+compatible). The secret is a plain operator-supplied literal, never logged.
+
+`agent-centric fbp-check [--transport ...] [--integrity <secret>]` runs a
+bounded, deterministic self-test of the verified spine and capability surface
+(verified arithmetic, durable state, mediated delegation + the correctness
+spine, a deterministic plan, fail-closed delegation, registry resolve, replay,
+model stub) and prints a verdict. It exits 0 only when every check passes — a
+CI / deploy readiness gate you can hang a pipeline on.
 
 ## Full arc demo
 

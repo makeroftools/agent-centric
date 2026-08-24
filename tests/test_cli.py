@@ -200,6 +200,33 @@ class TestCliFbp:
         b = parser.parse_args(["fbp-web", "--integrity", "x"])
         assert b.integrity == "x"
 
+    def test_fbp_check_reports_ready(self, tmp_path: Path) -> None:
+        """``fbp-check`` is a deploy/readiness gate: it exercises the verified
+        spine and exits 0 with a green verdict when everything passes."""
+        code, out = _run(tmp_path, "fbp-check")
+        assert code == 0, out
+        assert "8/8 checks passed" in out
+        assert "[ok] run:double(21)" in out
+        assert "[ok] state:set_get" in out
+        assert "[ok] delegate:double(3)" in out
+        assert "READY" in out
+
+    def test_fbp_check_with_integrity(self, tmp_path: Path) -> None:
+        """``fbp-check --integrity`` proves the signed wire end-to-end."""
+        code, out = _run(tmp_path, "fbp-check", "--integrity", "s3cr3t")
+        assert code == 0, out
+        assert "8/8 checks passed" in out
+        assert "READY" in out
+
+    def test_parser_builds_fbp_check(self) -> None:
+        from agent_centric.cli import _build_parser
+
+        parser = _build_parser()
+        a = parser.parse_args(["fbp-check", "--integrity", "s", "--transport", "tcp"])
+        assert a.integrity == "s"
+        assert a.transport == "tcp"
+
+
 class TestCliFbpDomains:
     """fbp-domains gives an operator-facing readout of a saved Domain Registry
     + Artifact Vault (read-only)."""

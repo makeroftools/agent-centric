@@ -24,23 +24,17 @@ we are.
 ## 2. PROJECT STATE (verified live, this session)
 
 ### Git
-- **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `5cac3f7` (this capture) — atop `951b399`, `d4d8b28`, `8dc92ff`, `b202cb2`, `c3d65d0`, `9c7f4b0`, `e261932`, `08deaa7`, `7ac854f`, `c51be25`, `7c76f33`, and `3da8879`. This session added commits
-  on top of the earlier sequence (all local): `4b19fc0` (operator activity feed), `7c9a546` (landing+CLI activity feed), `e9c2eaf`
-  (remove Bills tab, demo-only), `7375698` (full-surface HTTP coverage), `d5cb164`
-  (Designer sticky-fix), `87e353e` (drag-and-drop), `d86c203` (drag wire-fix),
-  `24bda00` (Designer agent demo), `9eedd69` (Designer bills agent + edge-labels),
-  `c50b85d` (handoff), `aa29c27` (ACP verified), `9d5c8b0` (ACP->FBP, Law-12), `a1cdb61`
-  (MCP adapter), `dac830c` (MCP adapter + driver-host), `860d6e6` (private product),
-  `d2953af` (acp/mcp subcommands), `4de7b0e` (ACP/MCP CLI wiring), `21a83bf` (Connect pane),
-  `09bf6e7` (CLI wiring + Zed ref), `4092cac` (Connect pane MCP-card clipping fix),
-  `1b0f6b2` (Zed agent_servers schema fix), `cdb6618` (MCP deterministic stub test),
-  `f22e4fa` (reflect push + MCP test handoff capture), `3da8879` (landing hardening),
-  `7c76f33` (handoff capture), `c51be25` (git-state fix), `7ac854f` (readiness/liveness split),
-  `08deaa7` (ACP bound), `e261932` (MCP bound), `9c7f4b0` (operator test fixes), `c3d65d0` (413 payload bound),
-  `b202cb2` (web.py pure-helper coverage), `8dc92ff` (network step-limit), `d4d8b28` (orchestration step-limit),
-  `951b399` (render-branch coverage), `5cac3f7` (this capture).
-- **Pushed to origin:** the lead pushes directly. **Unpushed (21):** the full local arc `3da8879` → `5cac3f7` (21 commits: landing hardening + captures + readiness/liveness split + ACP bound + MCP bound + operator test fixes + the 413 payload bound + web.py pure-helper coverage + network step-limit + orchestration step-limit + render-branch coverage + their captures) are local, not yet pushed. A prior `git fetch` confirmed `eb3a9fc` was pushed. The agent does not push.
+- **Branch:** `agent-centric-fbp`; **working tree clean** (all session work committed).
+- **HEAD:** the latest capture commit — the full local arc, 2 commits ahead of
+  `origin/agent-centric-fbp` (which is at `7f0d414`).
+- **Session commits (later ones NOT pushed, all local):**
+  - `7f0d414` (on origin) — test(fbp): cover web.py fail-closed branches.
+  - `e85e44c` — feat(fbp): make wire-integrity operator-reachable via CLI + landing UX.
+  - `fa3c869` — feat(fbp): enforce traffic integrity on the wire (opt-in integrity_secret).
+  - the current checkout commit — feat(fbp): add `fbp-check` deploy/readiness self-test (+ handoff capture).
+- **Pushed to origin:** the lead pushes directly. **Unpushed (3 local):** `e85e44c`,
+  `fa3c869`, and the current checkout — `origin/agent-centric-fbp` is at `7f0d414`. The agent
+  does not push; the lead confirms per commit.
 - `main` stays the GitHub default and is **fully contained** in this branch.
 - Standing rule: **do not push unless the lead explicitly says push.** The lead
 has been pushing directly; confirm per commit.
@@ -904,6 +898,7 @@ uv run agent-centric run                # deterministic demo
 uv run agent-centric fbp                # drive FBP demo (inproc)
 uv run agent-centric fbp --transport tcp | ipc
 uv run agent-centric fbp --integrity SECRET   # run demo over the signed wire (§5.5)
+uv run agent-centric fbp-check [--integrity SECRET]   # deploy/readiness self-test of the verified spine
 uv run agent-centric fbp-web            # landing page + model box
 uv run agent-centric fbp-web --reload   # auto-restart on source edits
 uv run agent-centric fbp-web --integrity SECRET  # protect the FBP wire (badge on page)
