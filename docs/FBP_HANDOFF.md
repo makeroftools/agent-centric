@@ -25,19 +25,22 @@ we are.
 
 ### Git
 - **Branch:** `agent-centric-fbp`; **working tree clean** (nothing unstaged).
-- **HEAD:** `a1cdb61` (add MCP adapter exposing FBP capabilities as tools). This
-  session added commits on top of the earlier sequence (all local, none pushed
-  by the agent): `4b19fc0` (operator activity feed), `7c9a546` (wire activity
-  feed into landing page + CLI), `e9c2caf` (remove the Bills tab — demonstration
-  only), `7375698` (full-surface HTTP route coverage), `d5cb164` (Designer node
-  stick-to-cursor fix), `87e353e` (drag-and-drop connectors), `d86c203`
-  (drag-preview wire fix), `24bda00` (agent-composition demo in the Designer),
-  `9eedd69` (bills agent in the Designer + edge value labels), `c50b85d`
-  (capture this session for a mission-critical handoff), `aa29c27` (wire ACP
-  adapter to the FBP verified spine + website tutorial), `9d5c8c0` (capture
-  ACP->FBP work, Law 12, and the open MCP question), `a1cdb61` (add MCP adapter
-  exposing FBP capabilities as tools).
-- **Pushed to origin:** the user pushes directly. **Unpushed (59 commits):** the
+- **HEAD:** `d2953af` (expose acp and mcp adapters as agent-centric subcommands).
+  This session added commits on top of the earlier sequence (all local, none
+  pushed by the agent): `4b19fc0` (operator activity feed), `7c9a546` (wire
+  activity feed into landing page + CLI), `e9c2caf` (remove the Bills tab —
+  demonstration only), `7375698` (full-surface HTTP route coverage), `d5cb164`
+  (Designer node stick-to-cursor fix), `87e353e` (drag-and-drop connectors),
+  `d86c203` (drag-preview wire fix), `24bda00` (agent-composition demo in the
+  Designer), `9eedd69` (bills agent in the Designer + edge value labels),
+  `c50b85d` (capture this session for a mission-critical handoff), `aa29c27`
+  (wire ACP adapter to the FBP verified spine + website tutorial), `9d5c8c0`
+  (capture ACP->FBP work, Law 12, and the open MCP question), `a1cdb61` (add
+  MCP adapter exposing FBP capabilities as tools), `dac830c` (capture the MCP
+  adapter + shared driver host), `860d6e6` (capture 'private product, no
+  multi-tenant' decision), `d2953af` (expose acp and mcp adapters as
+  agent-centric subcommands).
+- **Pushed to origin:** the user pushes directly. **Unpushed (62 commits):** the
   full `agent-centric-fbp` sequence from `c4afa94` onward (all of this session's
   work is unpushed). Run `git log origin/agent-centric-fbp..HEAD` to see the
   exact unpushed set. No push is made by the agent; the lead pushes when they
@@ -465,6 +468,15 @@ of decisions and working style that a fresh session must inherit.
    operations fail closed. `mcp` dependency + `agent-centric-mcp` entry point
    added. `tests/test_fbp_mcp.py` (in-memory transport, 5 tests). MCP tutorial
    added to the landing page Docs pane.
+48. **Private product, no multi-tenant** (`860d6e6`) — the user stated plainly:
+   *"This is a private product for now — no multi-tenant anything."* Retires the
+   standalone paid multi-tenant web service from the near-term roadmap. Product
+   shape = single-tenant, loopback-first. Recorded as a decision, a
+   product-direction section, and a standing truth.
+49. **CLI wiring for acp/mcp** (`d2953af`) — `agent-centric acp` and
+   `agent-centric mcp` subcommands delegate to the ACP/MCP adapter entry points,
+   so the FBP platform's external surfaces are discoverable and launchable from
+   the main operator CLI (not just the separate console scripts). Additive.
 
 ### Decisions the user made (with consequence)
 - **"Completely forget about AC Router"** — explicitly. The AC Router / AC
@@ -685,12 +697,13 @@ not a commitment to build a multi-tenant service. Do not build or plan
 multi-tenant anything unless the user explicitly reverses this.
 
 ### Loose ends / immediate next actions
-- **Unpushed commits (60):** the whole `agent-centric-fbp` sequence from
+- **Unpushed commits (62):** the whole `agent-centric-fbp` sequence from
   `c4afa94` onward is local — including all of this session's work
   (`4b19ee0`, `7c9a546`, `e9c2caf`, `7375698`, `d5cb164`, `87e353e`, `d86c203`,
-  `24bda00`, `9eedd69`, `c50b85d`, `aa29c27`, `9d5c8c0`, `a1cdb61`, `dac830c`)
-  — none on GitHub. The lead pushes directly; confirm before pushing anything
-  yourself. Run `git log origin/agent-centric-fbp..HEAD` for the exact set.
+  `24bda00`, `9eedd69`, `c50b85d`, `aa29c27`, `9d5c8c0`, `a1cdb61`, `dac830c`,
+  `860d6e6`, `d2953af`) — none on GitHub. The lead pushes directly; confirm
+  before pushing anything yourself. Run `git log origin/agent-centric-fbp..HEAD`
+  for the exact set.
 - **ACP entry point:** `agent-centric-acp` (or `python -m agent_centric.acp`)
   exposes the FBP platform as an External Agent in Zed over stdio. Point Zed's
   `agent_servers` at it. The landing page **Docs** pane has the tutorial.
@@ -764,9 +777,11 @@ uv run agent-centric fbp-web-kill       # stop the server on the port (legacy su
 uv run agent-centric fbp-replay sess.db
 uv run agent-centric fbp-summary sess.db
 uv run agent-centric fbp-domains repo.json  # operator readout of a saved Domain Registry + Artifact Vault
-uv run agent-centric-acp                  # ACP agent over stdio (Zed External Agent)
+uv run agent-centric acp                  # ACP agent over stdio (Zed External Agent)
+uv run agent-centric mcp                  # MCP server over stdio (tools for LLM hosts)
+uv run agent-centric-acp                  # ACP agent over stdio (legacy console script)
 uv run python -m agent_centric.acp        # same, via module
-uv run agent-centric-mcp                  # MCP server over stdio (tools for LLM hosts)
+uv run agent-centric-mcp                  # MCP server over stdio (legacy console script)
 uv run python -m agent_centric.mcp        # same, via module
 uv run python examples/fbp_arc_demo.py
 uv run python examples/fbp_activity_demo.py
