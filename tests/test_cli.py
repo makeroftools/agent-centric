@@ -77,6 +77,54 @@ class TestCliReplayVerify:
         assert "no trajectory" in out
 
 
+class TestCliExternalSurfaces:
+    """The acp/mcp subcommands are wired into the operator CLI.
+
+    The adapters themselves block on stdio (they are servers), so we prove the
+    wiring at the parser level: the subcommands exist, build, and dispatch to the
+    adapter entry points. The adapter behaviour is covered by test_acp.py,
+    test_fbp_mcp.py, and the e2e demo.
+    """
+
+    def test_parser_builds_acp_mcp_subcommands(self) -> None:
+        from agent_centric.cli import _build_parser
+
+        parser = _build_parser()
+        for name in ("acp", "mcp"):
+            sub = next(s for s in parser._subparsers._group_actions[0].choices if s == name)
+            assert sub == name
+
+    def test_main_dispatches_acp(self, monkeypatch) -> None:
+        import agent_centric.acp as acp_mod
+
+        called: list[str] = []
+
+        def fake_acp_main() -> int:
+            called.append("acp")
+            return 0
+
+        monkeypatch.setattr(acp_mod, "main", fake_acp_main)
+        from agent_centric.cli import main
+
+        assert main(["acp"]) == 0
+        assert called == ["acp"]
+
+    def test_main_dispatches_mcp(self, monkeypatch) -> None:
+        import agent_centric.mcp as mcp_mod
+
+        called: list[str] = []
+
+        def fake_mcp_main() -> int:
+            called.append("mcp")
+            return 0
+
+        monkeypatch.setattr(mcp_mod, "main", fake_mcp_main)
+        from agent_centric.cli import main
+
+        assert main(["mcp"]) == 0
+        assert called == ["mcp"]
+
+
 class TestCliEntryPoint:
     def test_module_runs(self) -> None:
         """``python -m agent_centric`` is wired to the CLI main."""
