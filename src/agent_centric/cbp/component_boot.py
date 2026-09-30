@@ -12,17 +12,24 @@
    pin, and a component's identity may not disagree with its lock entry;
 4. each component's declared local SQLite state is materialized, **namespaced by
    component name** so two components can never share a state file;
-5. every execution entry is resolved strictly from the allowlist.
+5. every execution entry is resolved **strictly from the allowlist** — or, when
+   the caller explicitly opts in, executed **process-isolated** from its verified
+   bundle (see :mod:`agent_centric.cbp.component_process`).
 
 Nothing here touches the network. Any absence, mismatch, unknown contract,
-unsafe path, or un-allowlisted entry is an explicit :class:`BootError` — never a
+unsafe path, or un-executable entry is an explicit :class:`BootError` — never a
 partial success.
 
-Scope note (honest): Phase 2 executes only entries already installed in the
-harness (the Phase 1a allowlist). A component whose code ships only inside its
-bundle — e.g. an embedded child — is resolved and verified *structurally*, but
-its entry is still refused until the subprocess-isolation backend exists. This
-is deliberately conservative: nothing runs unproven.
+Execution modes (fail-closed default):
+
+- ``allow_subprocess=False`` (default): only entries already installed in the
+  harness (the Phase 1a allowlist) may run. A component whose code ships only
+  inside its bundle — e.g. an embedded child — is verified *structurally* but
+  refused.
+- ``allow_subprocess=True``: a non-allowlisted entry runs in a separate child
+  process from its verified bundle. This is process isolation, **not** an OS
+  sandbox; the signature + content hash remain the trust anchor. See
+  :mod:`agent_centric.cbp.component_process` for the honest scope.
 """
 
 from __future__ import annotations
@@ -32,10 +39,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ..contracts.component import ComponentManifest
+from ..contracts.component import ComponentManifest, EntryDescriptor
 from ..contracts.components_lock import ComponentsLock
 from .cache import ContentAddressedCache
 from .component_graph import ComponentGraphResolver, ResolvedNode
+from .component_process import DEFAULT_TIMEOUT_SECONDS, run_component
 from .component_runtime import AllowlistedEntryResolver, EntryNotAllowed
 from .component_state import materialize_state
 from .resolver import ComponentSource, ResolveError, Resolver
@@ -84,7 +92,7 @@ class BootedTree:
         raise BootError(f"booted tree has no root component {self.root!r}")
 
     def run(self, work: Any) -> Any:
-        """Invoke the root (shell) component's allowlisted entry."""
+        """Invoke the root (shell) component's resolved entry."""
         return self.root_component.entry(work)
 
 
@@ -97,6 +105,8 @@ def boot_from_lock(
     entry_allowlist: frozenset[str],
     state_root: str | Path,
     expected_lock_hash: str | None = None,
+    allow_subprocess: bool = False,
+    process_timeout: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> BootedTree:
     """Resolve, verify, and instantiate the tree pinned by ``lock`` (fail-closed).
 
@@ -105,17 +115,20 @@ def boot_from_lock(
         source: A local, offline source of component artifacts.
         cache: The content-addressed cache the resolver verifies into.
         verifier: The signature verifier; ``None`` refuses (fail-closed).
-        entry_allowlist: The execution entries the harness permits.
+        entry_allowlist: The in-process execution entries the harness permits.
         state_root: The root under which per-component SQLite state is created.
         expected_lock_hash: When given, the lock's hash must equal it exactly.
+        allow_subprocess: Permit non-allowlisted Python entries to run
+            process-isolated from their verified bundle (default ``False``).
+        process_timeout: The child-process wall-clock limit, in seconds.
 
     Returns:
         A :class:`BootedTree` with components ordered children-first and the
-        root's entry resolved.
+        entries resolved.
 
     Raises:
         BootError: On lock drift, a graph/verification failure, an identity or
-            contract mismatch, or an un-allowlisted entry.
+            contract mismatch, or an un-executable entry.
         StateError: On an unsafe or corrupt component state path.
     """
     lock_hash = lock.lock_hash()
@@ -150,7 +163,13 @@ def boot_from_lock(
                 name=node.name,
                 digest=node.digest,
                 manifest=manifest,
-                entry=_resolve_entry(entry_resolver, node),
+                entry=_resolve_entry(
+                    entry_resolver,
+                    node,
+                    cache,
+                    allow_subprocess=allow_subprocess,
+                    process_timeout=process_timeout,
+                ),
                 state_path=state_file,
             )
         )
@@ -180,10 +199,31 @@ def _check_conformance(node: ResolvedNode, supported: frozenset[str]) -> None:
 
 
 def _resolve_entry(
-    resolver: AllowlistedEntryResolver, node: ResolvedNode
+    resolver: AllowlistedEntryResolver,
+    node: ResolvedNode,
+    cache: ContentAddressedCache,
+    *,
+    allow_subprocess: bool,
+    process_timeout: float,
 ) -> Callable[..., Any]:
-    """Resolve a component's entry from the allowlist (fail-closed)."""
+    """Resolve a component's entry, allowlisted or (opt-in) process-isolated."""
     try:
         return resolver.resolve(node.manifest.entry)
     except EntryNotAllowed as exc:
-        raise BootError(f"{node.name}: entry not executable: {exc}") from exc
+        if not allow_subprocess:
+            raise BootError(f"{node.name}: entry not executable: {exc}") from exc
+    bundle = cache.get(node.digest)
+    if bundle is None:
+        raise BootError(f"{node.name}: verified bundle missing from the cache")
+    return _process_entry(bundle, node.manifest.entry, process_timeout)
+
+
+def _process_entry(
+    bundle: bytes, entry: EntryDescriptor, timeout: float
+) -> Callable[..., Any]:
+    """Wrap a verified bundle+entry as a process-isolated callable."""
+
+    def invoke(work: Any) -> Any:
+        return run_component(bundle, entry, work, timeout=timeout)
+
+    return invoke

@@ -82,8 +82,15 @@ def _boot(
     expected_lock_hash: str | None = None,
     entry_implements: tuple[str, ...] = ("component.v1",),
     contracts: tuple[str, ...] = ("component.v1",),
+    payloads: dict[str, dict[str, bytes]] | None = None,
+    allow_subprocess: bool = False,
+    process_timeout: float = 30.0,
 ) -> BootedTree:
-    bundles = {name: build_bundle(manifest) for name, manifest in manifests.items()}
+    payload_files = payloads or {}
+    bundles = {
+        name: build_bundle(manifest, payload_files.get(name))
+        for name, manifest in manifests.items()
+    }
     entries = tuple(
         LockEntry(
             name=name,
@@ -104,6 +111,8 @@ def _boot(
         entry_allowlist=allowlist,
         state_root=tmp_path / "state",
         expected_lock_hash=expected_lock_hash,
+        allow_subprocess=allow_subprocess,
+        process_timeout=process_timeout,
     )
 
 
@@ -257,6 +266,52 @@ class TestComponentEntries:
         with pytest.raises(TypeError):
             plan_delegation({"components": ["a"]})
 
+
+
+
+class TestSubprocessExecution:
+    _CODE = "def run(payload):\n    return {'doubled': payload['n'] * 2}\n"
+
+    def test_opted_in_entry_runs_from_bundle(self, tmp_path: Path) -> None:
+        shell = _manifest("shell", entry="mymod:run")
+        tree = _boot(
+            tmp_path,
+            "shell",
+            {"shell": shell},
+            allowlist=frozenset(),
+            payloads={"shell": {"mymod.py": self._CODE.encode()}},
+            allow_subprocess=True,
+        )
+        assert tree.run({"n": 21}) == {"doubled": 42}
+        assert tree.run({"n": 21}) == {"doubled": 42}
+
+    def test_subprocess_disabled_refuses_bundle_code(self, tmp_path: Path) -> None:
+        shell = _manifest("shell", entry="mymod:run")
+        with pytest.raises(BootError):
+            _boot(
+                tmp_path,
+                "shell",
+                {"shell": shell},
+                allowlist=frozenset(),
+                payloads={"shell": {"mymod.py": self._CODE.encode()}},
+            )
+
+    def test_subprocess_timeout_fails_closed(self, tmp_path: Path) -> None:
+        from agent_centric.cbp.component_process import ComponentProcessError
+
+        shell = _manifest("shell", entry="mymod:run")
+        sleepy = b"import time\ndef run(payload):\n    time.sleep(5)\n    return 1\n"
+        tree = _boot(
+            tmp_path,
+            "shell",
+            {"shell": shell},
+            allowlist=frozenset(),
+            payloads={"shell": {"mymod.py": sleepy}},
+            allow_subprocess=True,
+            process_timeout=0.5,
+        )
+        with pytest.raises(ComponentProcessError):
+            tree.run({})
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git not available")
 class TestExampleShellBoot:

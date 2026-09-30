@@ -85,6 +85,11 @@ from .component_graph import (
     ResolvedChild,
     ResolvedNode,
 )
+from .component_process import (
+    ComponentProcessError,
+    extract_bundle,
+    run_component,
+)
 from .component_runtime import (
     AllowlistedEntryResolver,
     EntryNotAllowed,
@@ -426,6 +431,10 @@ __all__ = [
     "BootedComponent",
     "BootedTree",
     "boot_from_lock",
+    # Component process isolation (SPEC-0007 Phase 2)
+    "ComponentProcessError",
+    "extract_bundle",
+    "run_component",
     # Component bundle / source / runtime (SPEC-0007 Phase 1a)
     "BUNDLE_MANIFEST",
     "BundleError",

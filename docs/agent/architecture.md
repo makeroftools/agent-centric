@@ -52,8 +52,10 @@ harness resolves a component **offline**:
    or `GitSource` over a local repo at the pinned commit);
 2. verify `tree_sha256` and the detached signature (minisign/gpg) — fail closed;
 3. load the `component.v1` manifest from the verified bundle;
-4. resolve the entry **only if allowlisted** (Phase 1a) — a fetched bundle's own
-   code is not imported until the subprocess isolation backend exists.
+4. resolve the entry from the allowlist, or — when a caller explicitly opts in
+   (`boot_from_lock(..., allow_subprocess=True)`) — run the verified bundle's own
+   code **process-isolated** (`cbp/component_process.py`; process isolation, not
+   an OS sandbox — the signature + content hash remain the trust anchor).
 
 Runnable demo:
 [`examples/component_distribution.py`](../../examples/component_distribution.py).

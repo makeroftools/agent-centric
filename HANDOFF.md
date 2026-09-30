@@ -104,21 +104,30 @@ Run the fresh-session checklist below before acting.
     conformance, materialize per-component namespaced SQLite state, and resolve
     allowlisted entries, failing closed at every step; example `shell` (root
     composite → `registry`) and `registry` components; demo
-    `examples/component_boot.py`. The committed umbrella `components.lock` and
-    subprocess-isolated child execution remain.
+    `examples/component_boot.py`.
+  - **Phase 2 (MVP) — process-isolated execution** (`cbp/component_process.py`,
+    private `_component_runner.py`): a verified bundle's own entry runs in a child
+    process (one JSON request/response, `python -I`, minimal env, hard timeout,
+    output bound); opt-in via `boot_from_lock(..., allow_subprocess=True)` and
+    fail-closed. Process isolation, **not** an OS sandbox — the signature +
+    content hash remain the trust anchor. The committed umbrella
+    `components.lock` still needs the Phase 0.5b mirror.
 
 ## Validation (last full run)
 
-- `uv run pytest -o addopts="" -p no:cacheprovider` → **1254 passed**.
+- `uv run pytest -o addopts="" -p no:cacheprovider` → **1268 passed**.
 - `uv run ruff check .` → clean.
-- `uv run mypy src` → clean (**109** source files).
+- `uv run mypy src` → clean (**111** source files).
 - `uv run agent-centric cbp-check` → **8/8**, READY.
 - Convention guard → **37 passed**.
 
 ## Next (candidate — not started)
 
-- **Phase 2 remainder:** commit the umbrella `components.lock`; subprocess
-  isolation so bundle-shipped (embedded) code can run without an allowlist.
+- **Phase 2 remainder:** commit the umbrella `components.lock` (blocked on the
+  Phase 0.5b mirror — no real pinned remotes yet).
+- **Shell interface (SPEC-0008):** the shell as the human-facing interface to the
+  system, with a self-hosted n8n adapter that *designs* CBP graphs and never
+  enters the run path (design-time authoring, local-first execution).
 - **Phase 0.5b:** automated signing service + append-only transparency log +
   live self-hosted mirror (needs the Forgejo/Gitea instance).
 - **Phases 3–5:** directives aggregated into skills + pinned model components;
@@ -144,9 +153,9 @@ See [`docs/agent/levels.md`](docs/agent/levels.md),
 
 - `src/agent_centric/cbp/` — the active subsystem: `component_bundle.py`,
   `component_source.py`, `component_runtime.py`, `component_state.py`,
-  `component_graph.py`, `component_boot.py`, `bills_component.py`,
-  `shell_component.py`, `registry_component.py`, `cache.py`, `resolver.py`,
-  `signing.py`.
+  `component_graph.py`, `component_boot.py`, `component_process.py`
+  (+ private `_component_runner.py`), `bills_component.py`, `shell_component.py`,
+  `registry_component.py`, `cache.py`, `resolver.py`, `signing.py`.
 - `src/agent_centric/contracts/` — versioned contracts, including
   `component.py` and `components_lock.py`.
 - `specs/` — specs (SPEC-0002 target; SPEC-0007 distribution plan).
@@ -155,8 +164,8 @@ See [`docs/agent/levels.md`](docs/agent/levels.md),
   `shell` (root composite → `registry`) + `registry` components.
 - `tests/test_agent_conventions.py` — convention + anti-drift guard;
   `tests/test_component_distribution.py`, `tests/test_component_state.py`,
-  `tests/test_component_graph.py`, and `tests/test_component_boot.py` — the
-  distribution slice.
+  `tests/test_component_graph.py`, `tests/test_component_boot.py`, and
+  `tests/test_component_process.py` — the distribution slice.
 
 ## Non-goals (do not build without explicit direction)
 
