@@ -6,6 +6,7 @@ compatibility: opencode
 metadata:
   component: test-authority
   determinism: deterministic
+  terminates-in: uv run pytest -p no:cacheprovider
 ---
 
 # Test authority (Law 12)

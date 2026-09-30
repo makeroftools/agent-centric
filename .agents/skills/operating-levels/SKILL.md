@@ -6,6 +6,7 @@ compatibility: opencode
 metadata:
   component: operating-levels
   determinism: deterministic
+  terminates-in: uv run pytest -p no:cacheprovider -q tests/test_agent_conventions.py
 ---
 
 # Operating levels (the factory mode)

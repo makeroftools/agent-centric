@@ -6,6 +6,7 @@ compatibility: opencode
 metadata:
   component: safe-file-editing
   determinism: suspect
+  terminates-in: ./tools/safe-replace.sh <file>
 ---
 
 # Safe file editing (Law 11 — no in-place edits)

@@ -6,6 +6,7 @@ compatibility: opencode
 metadata:
   component: commit-and-push
   determinism: deterministic
+  terminates-in: git push
 ---
 
 # Commit and push continuously (Law 13)

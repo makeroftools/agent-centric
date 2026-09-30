@@ -6,6 +6,7 @@ compatibility: opencode
 metadata:
   component: cbp-architecture
   determinism: suspect
+  terminates-in: uv run agent-centric fbp-check
 ---
 
 # CBP — Component-Based Programming

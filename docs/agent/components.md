@@ -35,6 +35,7 @@ uv run pytest -p no:cacheprovider -q tests/test_agent_conventions.py
 | `description` | 1–1024 chars, specific enough to choose correctly. |
 | `metadata.component` | **equals the skill name** (the CBP equivalence). |
 | `metadata.determinism` | `deterministic` or `suspect`. |
+| `metadata.terminates-in` | the deterministic component/command the skill ends in (its execution mapping); must be filled in, never left a placeholder. |
 | `## Deterministic termination` | the command/gate the component ends in. |
 | `## Non-determinism (suspect)` | what is suspect and how it is contained. |
 

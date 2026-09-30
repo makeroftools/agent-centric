@@ -6,6 +6,7 @@ compatibility: opencode
 metadata:
   component: verification-gates
   determinism: deterministic
+  terminates-in: uv run agent-centric fbp-check
 ---
 
 # Verification gates
