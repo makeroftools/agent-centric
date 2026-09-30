@@ -15,6 +15,8 @@ it does not restate. The constitution is [`PRINCIPLES.md`](PRINCIPLES.md):
    [`src/agent_centric/fbp/protocol.md`](src/agent_centric/fbp/protocol.md) — architecture contracts.
 5. [`specs/SPEC-0002-cbp-component-architecture.md`](specs/SPEC-0002-cbp-component-architecture.md)
    — the target CBP component architecture (MVP + roadmap).
+6. [`specs/SPEC-0007-harness-shell-component-distribution.md`](specs/SPEC-0007-harness-shell-component-distribution.md)
+   — the harness/shell split and component distribution (target).
 
 ## The hard laws you are judged on
 
@@ -47,6 +49,11 @@ directive: [`docs/HOME_DIRECTIVE_for_agents.md`](docs/HOME_DIRECTIVE_for_agents.
 
 ## Layout
 
+- **Two layers:** `agent-centric` is the **harness** (boot + runtime; it
+  *executes* the CBP tree and is **not** a node). The tree's root is the **shell
+  component**, an ordinary component. Target:
+  [`specs/SPEC-0007-harness-shell-component-distribution.md`](specs/SPEC-0007-harness-shell-component-distribution.md);
+  human page: [`docs/agent/architecture.md`](docs/agent/architecture.md).
 - `src/agent_centric/fbp/` — the active FBP subsystem (the tree of agents).
 - `src/agent_centric/contracts/` — versioned contracts; **additive-only**.
 - `tests/` — invariant tests; the operator or CI runs them, not the authoring agent.

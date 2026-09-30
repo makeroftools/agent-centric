@@ -56,11 +56,18 @@ Public interfaces are minimal and intentional. Details are revealed only where
 they are needed. The core contracts are small and stable; complexity is added
 incrementally and only when justified.
 
-## 5. Local-First
+## 5. Local-First (run time)
 
-Everything runs in-process and on the local machine. No distribution, no
-networking, no cloud dependencies are required for the core. This keeps the
-system auditable, replayable, and testable.
+Everything **runs** in-process and on the local machine. At **run time** the
+core requires no distribution, no networking, and no cloud dependencies; this
+keeps the system auditable, replayable, and testable.
+
+**Acquisition is separate and bounded (amended).** Component *distribution* —
+fetching versioned components from the self-hosted registry — happens only at
+**acquisition time**, is **pinned** (immutable commit + content hash),
+**signed and verified** (fail-closed), and **offline-capable** (served from a
+local mirror or cache). Acquisition never weakens the run-time guarantee. See
+[`specs/SPEC-0007-harness-shell-component-distribution.md`](specs/SPEC-0007-harness-shell-component-distribution.md).
 
 ## 6. Full Auditability
 

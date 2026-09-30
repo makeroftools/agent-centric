@@ -42,6 +42,7 @@ _REQUIRED_AGENT_DOCS = {
     "verification.md",
     "committing.md",
     "components.md",
+    "architecture.md",
 }
 _ENTRY_POINTER_DOCS = (
     "HANDOFF.md",
@@ -247,6 +248,24 @@ class TestStragglers:
             assert "AGENTS.md" in head, f"{rel} lacks an entry pointer to AGENTS.md"
 
 
+class TestDistributionBoundary:
+    """SPEC-0007: run-time stays local-first; acquisition is pinned and verified."""
+
+    def test_law5_distinguishes_acquisition_from_run_time(self) -> None:
+        law = _read("PRINCIPLES.md")
+        assert "SPEC-0007" in law
+        assert "Acquisition is separate and bounded" in law
+
+    def test_kernel_marks_distribution_superseded_for_components(self) -> None:
+        assert "SPEC-0007" in _read("KERNEL.md")
+
+    def test_architecture_page_describes_the_two_layers(self) -> None:
+        text = _read("docs/agent/architecture.md")
+        assert "harness" in text.lower()
+        assert "shell component" in text
+        assert "components.lock" in text
+
+
 class TestEnforcement:
     def test_opencode_denies_in_place_edits(self) -> None:
         cfg = json.loads(_read("opencode.json"))
@@ -298,3 +317,7 @@ class TestSpecs:
 
     def test_skill_component_same_name_spec_is_recorded(self) -> None:
         assert (REPO_ROOT / "specs" / "SPEC-0006-skill-component-same-name.md").is_file()
+
+    def test_harness_distribution_spec_is_recorded(self) -> None:
+        spec = REPO_ROOT / "specs" / "SPEC-0007-harness-shell-component-distribution.md"
+        assert spec.is_file()

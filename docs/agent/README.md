@@ -31,6 +31,7 @@ revealed here, only as needed:
 | [`verification.md`](verification.md) | Verification gates and the holdout validator. |
 | [`committing.md`](committing.md) | Commit and push (Law 13). |
 | [`components.md`](components.md) | Adding a component (a skill); the scaffold and the contract. |
+| [`architecture.md`](architecture.md) | Harness vs tree; components contain or point to children; distribution boundaries. |
 
 ## The constitution
 

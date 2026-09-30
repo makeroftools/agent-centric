@@ -54,7 +54,10 @@ as changes to Manager semantics:
 - A Rust core or native reimplementation.
 - Deep workflow graphs, cyclic or dynamic workflows, or durable workflow
   engines / FBP networks.
-- Multi-tenancy, distribution, or cloud concerns.
+- Multi-tenancy, distribution, or cloud concerns. *(The **distribution** part is
+  superseded for component distribution — see
+  [`specs/SPEC-0007-harness-shell-component-distribution.md`](specs/SPEC-0007-harness-shell-component-distribution.md);
+  run time stays local-first.)*
 - UI.
 - CPM-driven scheduling (analysis exists; execution stays Manager-driven and
   CPM remains observational).
