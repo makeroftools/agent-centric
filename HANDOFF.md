@@ -6,7 +6,7 @@
 > restate.
 
 **Prepared for a new session thread.** All facts below are current as of
-`HEAD = 3ac749d` (branch `main`, pushed to `origin`).
+`HEAD = aed1385` (branch `main`, pushed to `origin`).
 
 ## Read first (in order)
 
