@@ -84,6 +84,29 @@ Example composite:
 [`examples/components/bills_registry/`](../../examples/components/bills_registry)
 (embedded `bills_rules`, referenced `agenda`).
 
+## Booting a tree (Phase 2)
+
+`boot_from_lock` is the deterministic bridge from a pinned `components.lock` to a
+runnable tree: it checks the lock's `lock_hash`, resolves the verified graph
+children-first, cross-checks each manifest against its lock entry, materializes
+each component's **namespaced** SQLite state, and resolves each entry —
+allowlisted, or (opt-in) process-isolated. Every failure is `BootError`.
+
+Runnable demo: [`examples/component_boot.py`](../../examples/component_boot.py).
+Example root: [`examples/components/shell/`](../../examples/components/shell)
+(points to `registry`).
+
+## Signing and transparency (Phase 0.5b)
+
+- **Signing is machine-performed and operator-keyed**: `cbp/signing_service.py`
+  signs a lock's `lock_hash` with `gpg`/`minisign`; no private key is read by the
+  process, and signing fails closed when no signer is configured.
+- **Every signed release is appended** to a hash-chained, append-only
+  transparency log (`cbp/transparency.py`). Altering any record breaks the chain;
+  a pinned head detects truncation; signatures are re-verified on read.
+
+Runnable demo: [`examples/release_signing.py`](../../examples/release_signing.py).
+
 ## Boundaries (non-negotiable)
 
 - **Run time is local-first**; distribution happens only at **acquisition time**,

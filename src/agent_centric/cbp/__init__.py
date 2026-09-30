@@ -265,6 +265,16 @@ from .signing import (
     SystemVerifier,
     tool_available,
 )
+from .signing_service import (
+    GpgSigner,
+    MinisignSigner,
+    SignedLock,
+    Signer,
+    SigningError,
+    record_release,
+    sign_lock,
+    signing_backend,
+)
 from .slm import (
     SlmError,
     SlmExpert,
@@ -285,6 +295,13 @@ from .training_plan import (
     TrainingPlan,
     TrainingTier,
     plan_training,
+)
+from .transparency import (
+    GENESIS,
+    LOG_SCHEMA,
+    TransparencyEntry,
+    TransparencyError,
+    TransparencyLog,
 )
 from .transport import (
     IPC_SOCKET_MODE,
@@ -426,6 +443,20 @@ __all__ = [
     "SignatureVerifier",
     "SystemVerifier",
     "tool_available",
+    # Release signing + transparency (SPEC-0007 Phase 0.5b)
+    "Signer",
+    "SigningError",
+    "GpgSigner",
+    "MinisignSigner",
+    "SignedLock",
+    "sign_lock",
+    "record_release",
+    "signing_backend",
+    "TransparencyLog",
+    "TransparencyEntry",
+    "TransparencyError",
+    "LOG_SCHEMA",
+    "GENESIS",
     # Component boot (SPEC-0007 Phase 2): resolve -> verify -> instantiate
     "BootError",
     "BootedComponent",

@@ -187,7 +187,7 @@ trusted at resolve time; the lock stores commits only.
 | --- | --- | --- |
 | 0 | **delivered** | this spec; Law 5 amendment; KERNEL note; `AGENTS.md` + `docs/agent/architecture.md`; guard |
 | 0.5a | **delivered** | `component.v1` + `components.lock/v1`; content-addressed atomic cache; deterministic resolver; minisign/gpg signature verification (system tool); offline directory source |
-| 0.5b | roadmap | automated signing service; append-only transparency log; live self-hosted mirror |
+| 0.5b | MVP | machine-performed release signing (`cbp/signing_service.py`: gpg/minisign, no private key in-process) + append-only, hash-chained transparency log (`cbp/transparency.py`); demo `examples/release_signing.py`. The **live self-hosted mirror** (Forgejo/Gitea) remains |
 | 1a | **delivered** | example `counter` component; deterministic bundle; offline git source + pinner; resolve→verify→load→run with an allowlisted entry; replay-from-lock proof. The committed umbrella `components.lock` lands in Phase 2 with the shell component; live server + signing service are 0.5b |
 | 1b | **delivered** | real example composite `bills_registry`: a SQLite **state descriptor** (`cbp/component_state.py`); both child modes — **contains** the embedded `bills_rules` component, **points-to** the referenced `agenda`; deterministic dependency-ordered graph resolution (`cbp/component_graph.py`), cycles/absences fail closed |
 | 2 | MVP | boot-from-lock (`cbp/component_boot.py`): children-first graph, `lock_hash` drift gate, manifest↔lock conformance, per-component namespaced SQLite state, allowlisted entries; **process-isolated execution** of a verified bundle's own entry (`cbp/component_process.py`), opt-in and fail-closed; example `shell` (root composite → `registry`) + `registry` components; demo `examples/component_boot.py`. The committed umbrella `components.lock` remains (needs the Phase 0.5b mirror) |
@@ -218,6 +218,9 @@ trusted at resolve time; the lock stores commits only.
 - [x] Phase 2 (MVP): process-isolated execution of a verified bundle's entry
       (opt-in, fail-closed; process isolation, not an OS sandbox);
       `tests/test_component_process.py`.
+- [x] Phase 0.5b (MVP): machine-performed signing (gpg/minisign) + an
+      append-only, tamper-evident transparency log; `tests/test_release_signing.py`.
+      The live self-hosted mirror remains.
 - [ ] Later phases: their own acceptance criteria.
 
 ## 12. Risks / invariants
