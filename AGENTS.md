@@ -9,7 +9,8 @@ it does not restate. The constitution is [`PRINCIPLES.md`](PRINCIPLES.md):
 
 1. [`PRINCIPLES.md`](PRINCIPLES.md) — the non-negotiable laws.
 2. [`.agentfactory.toml`](.agentfactory.toml) — the active operating level (mode).
-3. [`docs/agent/`](docs/agent/README.md) — progressive disclosure, one page per concern.
+3. [`.agents/skills/`](.agents/skills) — on-demand Agent Skills, one concern each
+   (canonical, industry-standard `SKILL.md`).
 4. [`KERNEL.md`](KERNEL.md), [`src/agent_centric/fbp/spec.md`](src/agent_centric/fbp/spec.md),
    [`src/agent_centric/fbp/protocol.md`](src/agent_centric/fbp/protocol.md) — architecture contracts.
 5. [`specs/SPEC-0002-cbp-component-architecture.md`](specs/SPEC-0002-cbp-component-architecture.md)
@@ -21,13 +22,13 @@ it does not restate. The constitution is [`PRINCIPLES.md`](PRINCIPLES.md):
   atomic replace. In opencode the `edit`/`write` tools are denied by
   [`opencode.json`](opencode.json); use `./tools/safe-replace.sh <file>`
   (temp + `cp`, byte-complete). Full page:
-  [`docs/agent/editing.md`](docs/agent/editing.md).
+  [`.agents/skills/safe-file-editing/SKILL.md`](.agents/skills/safe-file-editing/SKILL.md).
 - **Law 12 — test authority.** The agent **may run any tests**; report results
   faithfully. The operator's run and CI remain the record of truth for a
-  release. Full page: [`docs/agent/testing.md`](docs/agent/testing.md).
+  release. Skill: [`.agents/skills/test-authority/SKILL.md`](.agents/skills/test-authority/SKILL.md).
 - **Law 13 — commit and push continuously.** Commit each coherent unit and
   push often; no permission is needed. Hooks and CI are the guardrails. Full
-  page: [`docs/agent/committing.md`](docs/agent/committing.md).
+  skill: [`.agents/skills/commit-and-push/SKILL.md`](.agents/skills/commit-and-push/SKILL.md).
 
 ## Operating level (mode)
 
@@ -35,20 +36,22 @@ The active mode is `factory.level` in [`.agentfactory.toml`](.agentfactory.toml)
 Levels: **L0** harness-only · **L1** assisted · **L2** light-factory ·
 **L3** dark-factory (declared, gated). What each level authorizes — across the
 axes *autonomy*, *gates*, *review* — is defined in
-[`docs/agent/levels.md`](docs/agent/levels.md). Never act above the active level
+[`.agents/skills/operating-levels/SKILL.md`](.agents/skills/operating-levels/SKILL.md). Never act above the active level
 without the operator changing it first.
 
 ## Home directory — never hand-type it
 
-Resolve every home path from `$HOME`; never type the username.
-[`docs/HOME_DIRECTIVE_for_agents.md`](docs/HOME_DIRECTIVE_for_agents.md).
+Resolve every home path from `$HOME`; never type the username. Skill:
+[`.agents/skills/home-path-safety/SKILL.md`](.agents/skills/home-path-safety/SKILL.md);
+directive: [`docs/HOME_DIRECTIVE_for_agents.md`](docs/HOME_DIRECTIVE_for_agents.md).
 
 ## Layout
 
 - `src/agent_centric/fbp/` — the active FBP subsystem (the tree of agents).
 - `src/agent_centric/contracts/` — versioned contracts; **additive-only**.
 - `tests/` — invariant tests; the operator or CI runs them, not the authoring agent.
-- `docs/` — design/handoff docs, plus `docs/agent/` (this convention layer).
+- `docs/` — design/handoff docs; `docs/agent/` is the human convention map.
+- `.agents/skills/` — the canonical, on-demand Agent Skills (agent convention layer).
 - `specs/` — spec files with YAML front-matter; `specs/holdout/` is never fed to the author.
 - `tools/` — the only sanctioned file-mutation primitives.
 
@@ -60,8 +63,8 @@ uv run mypy src
 uv run agent-centric fbp-check        # deterministic readiness gate
 ```
 
-Run the test suite only as the active level permits — see
-[`docs/agent/testing.md`](docs/agent/testing.md).
+Run the test suite as the active level permits (the agent may run any tests); see
+[`.agents/skills/test-authority/SKILL.md`](.agents/skills/test-authority/SKILL.md).
 
 ## Branches
 

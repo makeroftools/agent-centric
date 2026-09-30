@@ -289,7 +289,8 @@ PRINCIPLES.md          Non-negotiable governing rules
 KERNEL.md              v0 kernel freeze note
 STATUS.md              Volley history + correctness evidence
 README_FBP.md          The FBP deep-dive
-docs/agent/            Convention layer (progressive disclosure)
+docs/agent/            Human convention map (skills index)
+.agents/skills/        Canonical Agent Skills (on-demand agent layer)
 src/agent_centric/
   fbp/                 The FBP subsystem (active)
   contracts/           Versioned contracts
@@ -305,7 +306,8 @@ tests/                 Invariants across every volley
 | Doc | What it's for |
 | --- | --- |
 | [`AGENTS.md`](AGENTS.md) | Agent entry point; points to every rule. |
-| [`docs/agent/`](docs/agent/README.md) | Convention layer: laws, levels, editing, testing, verification. |
+| [`.agents/skills/`](.agents/skills) | Canonical Agent Skills (on-demand agent convention layer). |
+| [`docs/agent/`](docs/agent/README.md) | Human map of the convention layer. |
 | [`.agentfactory.toml`](.agentfactory.toml) | Active operating level (mode). |
 | [`docs/fbp.md`](docs/fbp.md) | FBP easy-UX driver companion. |
 | [`src/agent_centric/fbp/spec.md`](src/agent_centric/fbp/spec.md) | FBP architecture spec. |

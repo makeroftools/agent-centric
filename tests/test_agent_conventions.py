@@ -1,28 +1,65 @@
 """Convention guard (deterministic, offline).
 
-Asserts that the agent-factory convention layer is present, consistent, and
-enforcing. This is the machine half of the convention: prose points, this test
-decides. It reads files and TOML/JSON only; it never touches ``$HOME`` and never
-runs the platform.
-
-The JSON here is not a config file for this test; it is the repository's
-``opencode.json``. ``json`` is imported as ``json`` deliberately (no aliasing).
+Asserts that the agent convention layer is present and consistent: the factory
+policy, the canonical Agent Skills (`.agents/skills/<name>/SKILL.md`), the
+vendor pointers, the enforcement config, and the specs. Prose points; this test
+decides. It reads files and TOML/JSON only; it never touches ``$HOME``.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import tomllib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+SKILLS_DIR = REPO_ROOT / ".agents" / "skills"
 
 _VALID_LEVELS = {"L0", "L1", "L2", "L3"}
 _REQUIRED_LEVEL_FIELDS = {"name", "autonomy", "gates", "review"}
+_NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+_REQUIRED_SKILLS = {
+    "safe-file-editing",
+    "test-authority",
+    "commit-and-push",
+    "operating-levels",
+    "verification-gates",
+    "home-path-safety",
+    "cbp-architecture",
+}
 
 
 def _read(rel: str) -> str:
     return (REPO_ROOT / rel).read_text(encoding="utf-8")
+
+
+def _parse_frontmatter(text: str) -> tuple[dict[str, object], str]:
+    """Minimal YAML frontmatter parse (scalars + a ``metadata`` string map)."""
+    assert text.startswith("---\n"), "SKILL.md must start with YAML frontmatter"
+    end = text.find("\n---", 4)
+    assert end != -1, "unterminated frontmatter"
+    fields: dict[str, object] = {}
+    meta: dict[str, str] = {}
+    current: str | None = None
+    for line in text[4:end].splitlines():
+        if not line.strip():
+            continue
+        if line.startswith("  ") and current == "metadata":
+            key, _, value = line.strip().partition(":")
+            meta[key.strip()] = value.strip()
+            continue
+        key, _, value = line.partition(":")
+        key, value = key.strip(), value.strip()
+        if value == "":
+            current = key
+            fields[key] = meta if key == "metadata" else {}
+        else:
+            fields[key] = value
+            current = None
+    if meta:
+        fields["metadata"] = meta
+    return fields, text[end + 4 :]
 
 
 class TestFactoryPolicy:
@@ -54,19 +91,50 @@ class TestFactoryPolicy:
 
 
 class TestEntryPoints:
-    def test_agents_md_points_at_laws_and_convention_layer(self) -> None:
+    def test_agents_md_points_at_laws_and_skills(self) -> None:
         text = _read("AGENTS.md")
         assert "PRINCIPLES.md" in text
-        assert "docs/agent/README.md" in text
+        assert ".agents/skills" in text
         assert ".agentfactory.toml" in text
 
     def test_vendor_pointer_files_defer_to_agents_md(self) -> None:
         for name in ("CLAUDE.md", "GEMINI.md"):
             assert "AGENTS.md" in _read(name)
 
-    def test_convention_pages_are_present(self) -> None:
-        for page in ("README", "laws", "levels", "editing", "testing", "verification"):
-            assert (REPO_ROOT / "docs" / "agent" / f"{page}.md").is_file()
+    def test_human_convention_map_points_at_skills(self) -> None:
+        text = _read("docs/agent/README.md")
+        assert ".agents/skills" in text
+
+
+class TestSkills:
+    def test_required_skills_are_present_and_canonical(self) -> None:
+        for name in _REQUIRED_SKILLS:
+            skill = SKILLS_DIR / name / "SKILL.md"
+            assert skill.is_file(), f"missing skill: {name}"
+            fm, _ = _parse_frontmatter(skill.read_text(encoding="utf-8"))
+            assert fm.get("name") == name
+            assert _NAME_RE.match(name)
+            description = fm.get("description")
+            assert isinstance(description, str) and 1 <= len(description) <= 1024
+            meta = fm.get("metadata")
+            assert isinstance(meta, dict)
+            assert "component" in meta, f"{name} metadata.component missing"
+            assert "determinism" in meta, f"{name} metadata.determinism missing"
+
+    def test_skills_declare_their_deterministic_termination(self) -> None:
+        for name in _REQUIRED_SKILLS:
+            _, body = _parse_frontmatter(
+                (SKILLS_DIR / name / "SKILL.md").read_text(encoding="utf-8")
+            )
+            assert "## Deterministic termination" in body, name
+            assert "## Non-determinism (suspect)" in body, name
+
+    def test_claude_skills_symlink_resolves_to_the_canonical_tree(self) -> None:
+        link = REPO_ROOT / ".claude" / "skills"
+        assert link.is_symlink(), ".claude/skills must be a symlink"
+        assert link.resolve() == SKILLS_DIR.resolve()
+        exposed = {p.name for p in link.iterdir() if (p / "SKILL.md").is_file()}
+        assert exposed >= _REQUIRED_SKILLS
 
 
 class TestEnforcement:

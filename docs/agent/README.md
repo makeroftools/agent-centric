@@ -1,27 +1,35 @@
-# docs/agent — the convention layer
+# docs/agent — the convention map (human)
 
-Progressive disclosure for coding agents: [`AGENTS.md`](../../AGENTS.md) is the
-thin table of contents; these pages are the detail, loaded only when a task
-needs them. Each page covers exactly one concern.
+This directory is the **human** map of the agent convention layer. The
+agent-facing, on-demand instructions are now **Agent Skills** under
+[`.agents/skills/`](../../.agents/skills) — the canonical, industry-standard
+form. They are mirrored for Claude via the [`.claude/skills`](../../.claude/skills)
+symlink, and opencode discovers them through the `skill` tool.
 
-| Page | Read it when |
+| Skill | Use when |
 | --- | --- |
-| [`laws.md`](laws.md) | You need the index of non-negotiable laws. |
-| [`levels.md`](levels.md) | You need to know what the active mode authorizes. |
-| [`editing.md`](editing.md) | You are about to change any file (Law 11). |
-| [`testing.md`](testing.md) | You are about to validate work (Law 12). |
-| [`committing.md`](committing.md) | You are about to commit or push (Law 13). |
-| [`verification.md`](verification.md) | You are designing or judging a gate. |
+| [`safe-file-editing`](../../.agents/skills/safe-file-editing/SKILL.md) | Changing any file (Law 11). |
+| [`test-authority`](../../.agents/skills/test-authority/SKILL.md) | Validating work (Law 12). |
+| [`commit-and-push`](../../.agents/skills/commit-and-push/SKILL.md) | Committing or pushing (Law 13). |
+| [`operating-levels`](../../.agents/skills/operating-levels/SKILL.md) | You need the active mode. |
+| [`verification-gates`](../../.agents/skills/verification-gates/SKILL.md) | Designing or judging a gate. |
+| [`home-path-safety`](../../.agents/skills/home-path-safety/SKILL.md) | Any home path or username. |
+| [`cbp-architecture`](../../.agents/skills/cbp-architecture/SKILL.md) | The execution architecture. |
 
-## How this layer is enforced
+## The constitution
 
-Prose points; machines decide. The following are deterministic and may not be
-argued with:
+[`PRINCIPLES.md`](../../PRINCIPLES.md) is supreme; [`AGENTS.md`](../../AGENTS.md)
+is the always-loaded table of contents. The target architecture is
+[`specs/SPEC-0002-cbp-component-architecture.md`](../../specs/SPEC-0002-cbp-component-architecture.md).
+
+## Enforcement
+
+Prose points; machines decide:
 
 - [`opencode.json`](../../opencode.json) denies the `edit`/`write`/`patch` tools.
-- [`tools/safe-replace.sh`](../../tools/safe-replace.sh) is the only sanctioned mutation primitive.
-- [`tests/test_agent_conventions.py`](../../tests/test_agent_conventions.py) asserts this layer stays consistent.
-- [`.github/workflows/gates.yml`](../../.github/workflows/gates.yml) runs the gates in CI.
-- [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) runs the fast gates on every commit.
+- [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) and
+  [`.github/workflows/gates.yml`](../../.github/workflows/gates.yml) run the gates.
+- [`tests/test_agent_conventions.py`](../../tests/test_agent_conventions.py)
+  validates the skills and this layer.
 
-If prose here ever contradicts [`PRINCIPLES.md`](../../PRINCIPLES.md), the laws win.
+If this map ever contradicts [`PRINCIPLES.md`](../../PRINCIPLES.md), the laws win.

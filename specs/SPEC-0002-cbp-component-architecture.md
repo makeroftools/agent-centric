@@ -99,6 +99,7 @@ Contracts remain **additive-only**. New versioned contracts:
 - **`component.v1`** — a component's identity, kind (atomic | composite), ports, declared capabilities, grants, and envelope.
 - **`network.v1`** — components, ports, edges, grants, envelope; canonical, content-hashable; the compiled plan is derived (not stored as source).
 - **`review.v1`** — a review item: correlation id, domain, confidence, provenance, status, resolution; append-only, write-once.
+- **`skill.v1`** — a skill-as-component: identity, description, deterministic termination, confidence/review policy; mirrors `component.v1`.
 
 Shapes are sketched in Appendix A and finalized in the contract code during Phase 1.
 
@@ -172,3 +173,15 @@ network.v1:   {id, version, components:[component.v1...],
 review.v1:    {correlation_id, domain, confidence, provenance:[...],
                status: pending|resolved, resolution?, seq}
 ```
+
+## Skills as components
+
+A **skill** is a component (in LLM terms): an agent-oriented component whose
+reasoning is non-deterministic and therefore **suspect**. A skill must terminate
+in a call to a deterministic process — a command, a gate, or another component.
+
+The canonical, industry-standard form is `SKILL.md` under
+[`.agents/skills/`](../.agents/skills) (mirrored for Claude via the
+`.claude/skills` symlink), carrying `metadata: {component, determinism}` — the
+portable encoding of the equivalence. The `skill.v1` contract (roadmap)
+formalizes this mapping. See the `cbp-architecture` skill.
