@@ -21,6 +21,12 @@
    [`specs/SPEC-0007-harness-shell-component-distribution.md`](specs/SPEC-0007-harness-shell-component-distribution.md)
    (harness/shell + distribution).
 
+> **Background (optional, non-normative).** The external **literature** that
+> informed the design (FBP, CPM, agent SDLC, dark factory) is indexed in
+> [`docs/references/README.md`](docs/references/README.md); its PDFs are
+> **local-only** (not in git) and non-normative. Reading it is **not required** —
+> the laws and specs are authoritative.
+
 ## Current git state
 
 - **Branch:** `main` — the FBP line. Working tree clean; in sync with

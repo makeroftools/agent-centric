@@ -39,6 +39,14 @@ revealed here, only as needed:
 is the always-loaded table of contents. The target architecture is
 [`specs/SPEC-0002-cbp-component-architecture.md`](../../specs/SPEC-0002-cbp-component-architecture.md).
 
+## Background (non-normative)
+
+The external **literature** that informed the design — Flow-Based Programming,
+the Critical Path Method, agent SDLC, and the dark-factory essays — is indexed in
+[`docs/references/README.md`](../references/README.md). It is **non-normative**
+and its PDFs are **local-only**; reading it is optional. The authoritative
+sources are [`PRINCIPLES.md`](../../PRINCIPLES.md) and [`specs/`](../../specs).
+
 ## Enforcement
 
 Prose points; machines decide:

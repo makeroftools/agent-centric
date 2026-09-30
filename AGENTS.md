@@ -19,6 +19,17 @@ it does not restate. The constitution is [`PRINCIPLES.md`](PRINCIPLES.md):
 6. [`specs/SPEC-0007-harness-shell-component-distribution.md`](specs/SPEC-0007-harness-shell-component-distribution.md)
    — the harness/shell split and component distribution (target).
 
+## Background (optional, non-normative)
+
+What is here is **enough to work**. The external **literature** that informed the
+design — Flow-Based Programming, the Critical Path Method, agent SDLC, and the
+dark-factory essays — is indexed in
+[`docs/references/README.md`](docs/references/README.md). Those PDFs are
+**local-only** (not in git) and **non-normative**: the authoritative sources are
+[`PRINCIPLES.md`](PRINCIPLES.md), [`specs/`](specs/), and
+[`docs/agent/`](docs/agent/README.md). Reading the literature is **not required**
+to continue as a coding agent.
+
 ## The hard laws you are judged on
 
 - **Law 11 — no in-place file edits, ever.** Every change is a whole-file,
