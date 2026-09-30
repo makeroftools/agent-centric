@@ -99,21 +99,30 @@ Run the fresh-session checklist below before acting.
   - **Anti-drift guard** — `tests/test_agent_conventions.py::TestNoStaleLabels`
     asserts the legacy `agent_centric.fbp` package and the retired `fbp-*` gates
     cannot return.
+  - **Phase 2 (MVP) — boot from lock** (`cbp/component_boot.py`): resolve the
+    graph children-first, gate on `lock_hash`, cross-check manifest↔lock
+    conformance, materialize per-component namespaced SQLite state, and resolve
+    allowlisted entries, failing closed at every step; example `shell` (root
+    composite → `registry`) and `registry` components; demo
+    `examples/component_boot.py`. The committed umbrella `components.lock` and
+    subprocess-isolated child execution remain.
 
 ## Validation (last full run)
 
-- `uv run pytest -o addopts="" -p no:cacheprovider` → **1240 passed**.
+- `uv run pytest -o addopts="" -p no:cacheprovider` → **1254 passed**.
 - `uv run ruff check .` → clean.
-- `uv run mypy src` → clean (**106** source files).
+- `uv run mypy src` → clean (**109** source files).
 - `uv run agent-centric cbp-check` → **8/8**, READY.
 - Convention guard → **37 passed**.
 
 ## Next (candidate — not started)
 
+- **Phase 2 remainder:** commit the umbrella `components.lock`; subprocess
+  isolation so bundle-shipped (embedded) code can run without an allowlist.
 - **Phase 0.5b:** automated signing service + append-only transparency log +
   live self-hosted mirror (needs the Forgejo/Gitea instance).
-- **Phase 2:** registry component + shell component; boot from the lock.
-- **Phases 3–5:** directives/models; migration + hermetic CI; hardening drills.
+- **Phases 3–5:** directives aggregated into skills + pinned model components;
+  migration + hermetic CI; hardening drills.
 
 ## How to work here (hard laws)
 
@@ -135,17 +144,19 @@ See [`docs/agent/levels.md`](docs/agent/levels.md),
 
 - `src/agent_centric/cbp/` — the active subsystem: `component_bundle.py`,
   `component_source.py`, `component_runtime.py`, `component_state.py`,
-  `component_graph.py`, `bills_component.py`, `cache.py`, `resolver.py`,
+  `component_graph.py`, `component_boot.py`, `bills_component.py`,
+  `shell_component.py`, `registry_component.py`, `cache.py`, `resolver.py`,
   `signing.py`.
 - `src/agent_centric/contracts/` — versioned contracts, including
   `component.py` and `components_lock.py`.
 - `specs/` — specs (SPEC-0002 target; SPEC-0007 distribution plan).
-- `examples/components/counter/` (atomic) and
-  `examples/components/bills_registry/` (composite: SQLite state + embedded
-  `bills_rules` + referenced `agenda`) — example component sources.
+- `examples/components/` — `counter` (atomic), `bills_registry` (composite:
+  SQLite state + embedded `bills_rules` + referenced `agenda`), and the Phase 2
+  `shell` (root composite → `registry`) + `registry` components.
 - `tests/test_agent_conventions.py` — convention + anti-drift guard;
-  `tests/test_component_distribution.py`, `tests/test_component_state.py`, and
-  `tests/test_component_graph.py` — the distribution slice.
+  `tests/test_component_distribution.py`, `tests/test_component_state.py`,
+  `tests/test_component_graph.py`, and `tests/test_component_boot.py` — the
+  distribution slice.
 
 ## Non-goals (do not build without explicit direction)
 

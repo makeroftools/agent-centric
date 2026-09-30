@@ -1,0 +1,18 @@
+{
+  "version": "component.v1",
+  "name": "shell",
+  "kind": "composite",
+  "implements": ["component.v1"],
+  "entry": {
+    "runtime": "python",
+    "entrypoint": "agent_centric.cbp.shell_component:plan_delegation"
+  },
+  "children": [
+    {"ref": "registry"}
+  ],
+  "directive": "",
+  "capabilities": [{"name": "shell", "version": "1"}],
+  "state": {"kind": "sqlite", "path": "state/shell.db", "single_writer": true},
+  "provenance": null,
+  "ports": {}
+}

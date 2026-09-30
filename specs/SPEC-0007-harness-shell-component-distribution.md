@@ -190,7 +190,7 @@ trusted at resolve time; the lock stores commits only.
 | 0.5b | roadmap | automated signing service; append-only transparency log; live self-hosted mirror |
 | 1a | **delivered** | example `counter` component; deterministic bundle; offline git source + pinner; resolve→verify→load→run with an allowlisted entry; replay-from-lock proof. The committed umbrella `components.lock` lands in Phase 2 with the shell component; live server + signing service are 0.5b |
 | 1b | **delivered** | real example composite `bills_registry`: a SQLite **state descriptor** (`cbp/component_state.py`); both child modes — **contains** the embedded `bills_rules` component, **points-to** the referenced `agenda`; deterministic dependency-ordered graph resolution (`cbp/component_graph.py`), cycles/absences fail closed |
-| 2 | roadmap | registry component + shell component; boot from lock |
+| 2 | MVP | boot-from-lock (`cbp/component_boot.py`): children-first graph, `lock_hash` drift gate, manifest↔lock conformance, per-component namespaced SQLite state, allowlisted entries; example `shell` (root composite → `registry`) + `registry` components; demo `examples/component_boot.py`. The committed umbrella `components.lock` and subprocess-isolated child execution remain |
 | 3 | roadmap | directives aggregated into `.agents/skills/`; LLM components pinned; `review.v1` |
 | 4 | roadmap | incremental migration; hermetic/offline CI; retire monolith |
 | 5 | roadmap | hardening verification: DR drill, rotation rehearsal, offline CI, mirror-outage |
@@ -212,6 +212,9 @@ trusted at resolve time; the lock stores commits only.
 - [x] `AGENTS.md` and `docs/agent/architecture.md` describe the harness-vs-tree
       split; examples live under `examples/`.
 - [x] The convention guard validates the above.
+- [x] Phase 2 (MVP): boot-from-lock resolves, verifies, and instantiates the
+      tree (children-first, fail-closed); example `shell` + `registry`
+      components; `tests/test_component_boot.py`.
 - [ ] Later phases: their own acceptance criteria.
 
 ## 12. Risks / invariants

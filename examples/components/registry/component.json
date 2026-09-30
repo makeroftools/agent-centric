@@ -1,0 +1,16 @@
+{
+  "version": "component.v1",
+  "name": "registry",
+  "kind": "atomic",
+  "implements": ["component.v1"],
+  "entry": {
+    "runtime": "python",
+    "entrypoint": "agent_centric.cbp.registry_component:catalog_snapshot"
+  },
+  "children": [],
+  "directive": "",
+  "capabilities": [{"name": "registry", "version": "1"}],
+  "state": {"kind": "sqlite", "path": "state/registry.db", "single_writer": true},
+  "provenance": null,
+  "ports": {}
+}

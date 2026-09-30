@@ -62,6 +62,12 @@ from .chat_pipeline import (
     schema_parse,
 )
 from .chatstore import ChatHistoryError, ChatHistoryStore, open_chat_history
+from .component_boot import (
+    BootedComponent,
+    BootedTree,
+    BootError,
+    boot_from_lock,
+)
 from .component_bundle import (
     BUNDLE_MANIFEST,
     BundleError,
@@ -415,6 +421,11 @@ __all__ = [
     "SignatureVerifier",
     "SystemVerifier",
     "tool_available",
+    # Component boot (SPEC-0007 Phase 2): resolve -> verify -> instantiate
+    "BootError",
+    "BootedComponent",
+    "BootedTree",
+    "boot_from_lock",
     # Component bundle / source / runtime (SPEC-0007 Phase 1a)
     "BUNDLE_MANIFEST",
     "BundleError",
