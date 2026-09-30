@@ -83,6 +83,11 @@ class TestEnforcement:
         for token in ("ruff", "mypy", "fbp-check", "pytest"):
             assert token in ci, f"CI does not run {token}"
 
+    def test_version_control_law_and_hooks_are_enforced(self) -> None:
+        assert "COMMIT AND PUSH CONTINUOUSLY" in _read("PRINCIPLES.md")
+        hooks = _read(".pre-commit-config.yaml")
+        assert "ruff" in hooks and "mypy" in hooks
+
 
 class TestSpecs:
     def test_spec_layer_exists(self) -> None:

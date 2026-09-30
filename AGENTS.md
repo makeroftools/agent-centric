@@ -15,7 +15,7 @@ it does not restate. The constitution is [`PRINCIPLES.md`](PRINCIPLES.md):
 5. [`specs/SPEC-0002-cbp-component-architecture.md`](specs/SPEC-0002-cbp-component-architecture.md)
    — the target CBP component architecture (MVP + roadmap).
 
-## The two hard laws you are judged on
+## The hard laws you are judged on
 
 - **Law 11 — no in-place file edits, ever.** Every change is a whole-file,
   atomic replace. In opencode the `edit`/`write` tools are denied by
@@ -25,6 +25,9 @@ it does not restate. The constitution is [`PRINCIPLES.md`](PRINCIPLES.md):
 - **Law 12 — test authority.** The agent **may run any tests**; report results
   faithfully. The operator's run and CI remain the record of truth for a
   release. Full page: [`docs/agent/testing.md`](docs/agent/testing.md).
+- **Law 13 — commit and push continuously.** Commit each coherent unit and
+  push often; no permission is needed. Hooks and CI are the guardrails. Full
+  page: [`docs/agent/committing.md`](docs/agent/committing.md).
 
 ## Operating level (mode)
 
@@ -75,4 +78,4 @@ is the archived pre-convention line. Historical documents (e.g. `STATUS.md`,
 - Cloud OCR, cloud APIs, or any network in CI.
 - Changing Manager orchestration, verification, policy, envelope, or accounting
   semantics (prefer adapters/backends over core changes).
-- Pushing to any remote unless the operator explicitly says *push*.
+- Bypassing pre-commit hooks or CI (never `--no-verify`); fix the cause instead.

@@ -1,0 +1,23 @@
+# Pre-commit guardrails — fast, deterministic, offline (Law 13).
+#
+# These run on every commit. If a hook fails, fix the cause and commit again;
+# never bypass with `--no-verify`. The full suite runs in CI
+# (.github/workflows/gates.yml).
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff check
+        entry: uv run ruff check .
+        language: system
+        pass_filenames: false
+      - id: mypy
+        name: mypy (src)
+        entry: uv run mypy src
+        language: system
+        pass_filenames: false
+      - id: convention-guard
+        name: convention + home-path guards
+        entry: uv run pytest -p no:cacheprovider -q tests/test_agent_conventions.py tests/test_repo_home_paths.py
+        language: system
+        pass_filenames: false

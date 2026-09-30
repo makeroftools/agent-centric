@@ -39,8 +39,8 @@ we are.
   repo (`makeroftools/nautilus_trader`); the lead resolved access and pushed successfully.
   The origin remote itself (`git@github.com:makeroftools/agent-centric.git`) is correct.
 - `main` stays the GitHub default and is **fully contained** in this branch.
-- Standing rule: **do not push unless the lead explicitly says push.** The lead
-has been pushing directly; confirm per commit.
+- Standing rule (superseded by Law 13): commit and push continuously; no
+permission needed. Historical note: the lead pushed directly in earlier arcs.
 
 ### Validation (run this session, all live)
 - `uv run pytest` → **1010 passed** at the prior handoff; **this arc added tests** (readiness/liveness, ACP bound, MCP bound, 413 payload bound, web.py pure helpers, render branches, network step-limit, orchestration step-limit) and **fixed two operator-reported test failures** (503 HTTPError handling; ACP model-stub determinism). The operator confirmed **50/50 passed** on the web/acp/mcp route+adapter suite. **The operator runs the test suite; the agent does NOT run pytest (Law 12).** The full-suite count is not re-measured here — the operator owns that gate. This session the operator confirmed the three new web.py fail-closed branch tests pass: `pytest tests/test_fbp_web.py -k "render_ledger_populated_runs or run_model_provider_error or stream_model_provider_error"` → **3 passed, 90 deselected** (0.29s). The operator also confirmed the new wire-integrity tests pass: `pytest tests/test_fbp_driver.py::TestWireIntegrity tests/test_fbp_security.py::TestTrailerHelpers` → **15 passed** (1.06s).

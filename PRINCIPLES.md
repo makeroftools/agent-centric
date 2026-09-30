@@ -155,3 +155,22 @@ itself.
 4. Keep the suite green; fix any regression the agent caused before handoff.
 
 See `docs/agent/testing.md` and `docs/agent/levels.md`.
+
+## 13. COMMIT AND PUSH CONTINUOUSLY — NO PERMISSION NEEDED
+
+> **Commit often; push often; no permission is required.** Version control is a
+> correctness tool: small, frequent, descriptive commits and frequent pushes
+> keep work recoverable and the record honest.
+
+**Rules.**
+
+1. Commit each coherent unit as soon as it is green — never hoard work in the
+   working tree.
+2. Push after committing; do not wait to be asked. `main` is the shared line.
+3. Never commit secrets. Never force-push `main` unless the old line is
+   preserved elsewhere (as `agent-manager-version` preserves the Manager line).
+4. Pre-commit hooks and CI are the guardrails. **Never bypass them** with
+   `--no-verify`; if a hook fails, fix the cause and commit again.
+5. A commit message states what and why; report the checks run.
+
+See `docs/agent/committing.md`.

@@ -19,6 +19,7 @@ source. If this index and the constitution disagree, **the constitution wins.**
 | 10 | Registries Passive; Evidence Immutable | Catalogs never decide; evidence is write-once. |
 | 11 | No In-Place File Edits, Ever | Whole-file atomic replace only — see [`editing.md`](editing.md). |
 | 12 | Test Authority | The agent may run any tests; report faithfully; operator/CI is the record. |
+| 13 | Commit and Push Continuously | Commit often, push often; hooks/CI guard; never bypass. |
 
 ## Adding a law
 

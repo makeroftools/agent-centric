@@ -127,7 +127,7 @@ this if convenient; it is optional and low-risk.
   passive catalogs; evidence is immutable; fail-closed everywhere.
 - **Registries never decide; authority stays in the topology.** The Domain
   Registry is a passive catalog; the Artifact Vault is write-once evidence.
-- **The user pushes directly.** Do not push unless asked. Confirm before pushing.
+- **Commit and push continuously (Law 13).** No permission needed; hooks and CI guard.
 
 ---
 

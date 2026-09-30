@@ -14,8 +14,7 @@ handoff.
   `archive/agent-centric-fbp` is the archived pre-convention line.
 - **Convention:** SPEC-0001 applied here — see [`AGENTS.md`](AGENTS.md) and
   [`.agentfactory.toml`](.agentfactory.toml).
-- **Push policy:** the standing **do NOT push** rule holds; pushes happen only
-  on explicit operator instruction.
+- **Push policy:** commit and push continuously — no permission needed (Law 13).
 
 > The Manager-line description below is historical; that line now lives on the
 > `agent-manager-version` branch and is not updated here.
@@ -214,8 +213,7 @@ uv run mypy src      # clean, 54 source files
 - Mission-critical: **correctness first, deterministic control plane,
   fail-closed, full auditability, additive-only.** Prefer docs/packaging/
   adapters over new machinery.
-- Strict typing, linting, high test coverage. One descriptive commit per volley;
-  **do not push unless the lead explicitly says push** (the current baseline is
-  fully pushed).
+- Strict typing, linting, high test coverage. Commit each coherent unit and push
+  often (Law 13); pre-commit hooks and CI are the guardrails.
 - When in doubt, ask the lead before starting a volley; do not expand
   composition or introduce messaging/a2a without explicit direction.
