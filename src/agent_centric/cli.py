@@ -808,7 +808,14 @@ def _cmd_fbp(
         driver_kwargs["integrity_secret"] = integrity.encode("utf-8")
     if curve:
         driver_kwargs["curve"] = True
-    with fbp.FbpDriver(transport=transport, endpoint=endpoint, **driver_kwargs) as driver:
+    try:
+        driver = fbp.FbpDriver(
+            transport=transport, endpoint=endpoint, **driver_kwargs
+        )
+    except fbp.TransportSecurityError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    with driver:
         driver.register("double", _fbp_double, source_url="file:///tasks/double")
         driver.register("even", _fbp_even)
         driver.register("odd", _fbp_odd)
@@ -1113,9 +1120,14 @@ def _cmd_fbp_check(
         results.append((name, ok, detail))
         return ok
 
-    with fbp.FbpDriver(
-        transport=transport, endpoint=endpoint, **driver_kwargs
-    ) as driver:
+    try:
+        driver = fbp.FbpDriver(
+            transport=transport, endpoint=endpoint, **driver_kwargs
+        )
+    except fbp.TransportSecurityError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    with driver:
         driver.register("double", _fbp_double, source_url="file:///tasks/double")
         driver.register("even", _fbp_even)
         driver.register("odd", _fbp_odd)

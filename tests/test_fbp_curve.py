@@ -69,9 +69,10 @@ class TestCurveAuth:
         ctx = zmq.Context()
         sock = ctx.socket(zmq.ROUTER)
         try:
-            apply_options(sock, server_options(cfg))
-            assert sock.getsockopt(zmq.CURVE_SERVER) is True
-            assert sock.getsockopt(zmq.CURVE_PUBLICKEY) == cfg.server_public
+            so = server_options(cfg)
+            apply_options(sock, so)
+            assert sock.getsockopt(zmq.CURVE_SERVER) == 1
+            assert so["curve_publickey"] == cfg.server_public
         finally:
             sock.close(0)
             ctx.term()
@@ -132,8 +133,9 @@ class TestCurveDriver:
         def _double(value: int) -> int:
             return value * 2
 
+        # A concrete loopback port: the driver does not resolve an ephemeral ":0".
         driver = FbpDriver(
-            transport="tcp", endpoint="127.0.0.1:0", curve=True, identity="root"
+            transport="tcp", endpoint="127.0.0.1:5629", curve=True, identity="root"
         )
         try:
             driver.register("double", _double, source_url="file:///tasks/double")
