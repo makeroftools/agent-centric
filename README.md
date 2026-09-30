@@ -12,8 +12,8 @@ The platform *uses* — but never fully trusts — non-deterministic tools; only
 deterministic check can ever make a result count.
 
 > **Branches.** `main` is the active **CBP line** (a rooted, deterministic
-> tree of agents). `agent-manager-version` is the frozen prior **Manager-line**
-> (a central `AgentManager`). `archive/agent-centric-fbp` is the archived
+> tree of agents). The prior **Manager-line** (a central `AgentManager`) is
+> frozen in history (tag `v0.29.0-milestone`). `archive/agent-centric-fbp` is the archived
 > pre-convention line. Coding agents start at [`AGENTS.md`](AGENTS.md); the
 > active operating level lives in [`.agentfactory.toml`](.agentfactory.toml).
 
@@ -238,8 +238,8 @@ that map to deterministic demo tasks.
 ## 🏗️ The Manager-line (frozen branch)
 
 The prior **Manager-driven** architecture — an `AgentManager` that mediates
-every tool/model call, policy, envelope, and verification — is preserved on
-the `agent-manager-version` branch. It shares the same "no unverified
+every tool/model call, policy, envelope, and verification — is preserved in
+history (tag `v0.29.0-milestone`). It shares the same "no unverified
 success, fail-closed, full audit, deterministic" posture and remains intact
 as the frozen Manager line.
 

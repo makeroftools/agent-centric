@@ -92,7 +92,7 @@ Run the test suite as the active level permits (the agent may run any tests); se
 ## Branches
 
 `main` is the CBP line (history of the former `clean` branch).
-`agent-manager-version` is the frozen Manager line. `archive/agent-centric-fbp`
+The prior Manager line is frozen in history, marked by tag `v0.29.0-milestone`. `archive/agent-centric-fbp`
 is the archived pre-convention line. Historical documents (e.g. `STATUS.md`,
 `docs/CBP_HANDOFF.md`) describe past states and are not updated retroactively.
 

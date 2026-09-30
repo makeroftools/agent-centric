@@ -30,7 +30,7 @@ Commit often; push often; **no permission is needed**.
 - CI: [`.github/workflows/gates.yml`](../../../.github/workflows/gates.yml).
 - **Never** `--no-verify`. If a hook fails, fix the cause and commit again.
 - Never commit secrets. Never force-push `main` unless the old line is preserved
-  (as `agent-manager-version` preserves the Manager line).
+  (e.g. an archive tag such as `v0.29.0-milestone`).
 
 Fresh clone: `uv sync --extra dev && uv run pre-commit install`.
 

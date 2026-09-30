@@ -23,7 +23,7 @@
 - CI is the isolated gate:
   [`.github/workflows/gates.yml`](../../.github/workflows/gates.yml).
 - Never commit secrets. Never force-push `main` unless the old line is preserved
-  elsewhere (as `agent-manager-version` preserves the Manager line).
+  elsewhere (e.g. an archive tag such as `v0.29.0-milestone`).
 
 A commit message states what and why, and reports the checks run. See
 `PRINCIPLES.md` Law 13 and the on-demand skill

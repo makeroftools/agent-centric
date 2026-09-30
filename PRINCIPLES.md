@@ -175,7 +175,7 @@ See `docs/agent/testing.md` and `docs/agent/levels.md`.
    working tree.
 2. Push after committing; do not wait to be asked. `main` is the shared line.
 3. Never commit secrets. Never force-push `main` unless the old line is
-   preserved elsewhere (as `agent-manager-version` preserves the Manager line).
+   preserved elsewhere (e.g. an archive tag such as `v0.29.0-milestone`).
 4. Pre-commit hooks and CI are the guardrails. **Never bypass them** with
    `--no-verify`; if a hook fails, fix the cause and commit again.
 5. A commit message states what and why; report the checks run.

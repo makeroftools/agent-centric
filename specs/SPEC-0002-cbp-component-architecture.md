@@ -158,7 +158,7 @@ Holdout scenarios (author-blind, validator-run) cover: determinism/replay, the v
 
 - The highest risk is the adapter subtly changing verification or replay semantics; each phase must prove equivalence before the old path is removed.
 - Determinism must not be traded for concurrency; async is confined to I/O and recorded.
-- Respects Laws 1, 2, 3, 4, 6, 7, 8, 9 (amended), 10, 11, 12; does not touch the frozen `agent-manager-version` line.
+- Respects Laws 1, 2, 3, 4, 6, 7, 8, 9 (amended), 10, 11, 12; does not touch the frozen prior Manager line (tag `v0.29.0-milestone`).
 
 ## Appendix A — contract sketches (to be finalized)
 

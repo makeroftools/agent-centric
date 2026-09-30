@@ -31,7 +31,7 @@
 
 - **Branch:** `main` — the CBP line. Working tree clean; in sync with
   `origin/main`.
-- **Topology:** `agent-manager-version` is the frozen prior Manager line;
+- **Topology:** the prior Manager line is frozen in history (tag `v0.29.0-milestone`);
   `archive/agent-centric-fbp` is the archived pre-convention line.
 - **Tag:** `v0.29.0-milestone` (historical kernel milestone).
 - **Push policy:** commit and push continuously, no permission needed (Law 13);
