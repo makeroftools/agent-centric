@@ -1048,7 +1048,7 @@ uv run python examples/fbp_activity_demo.py
 - Trust only what the tests prove and what is committed; say clearly when
   something is unverifiable or unpushed.
 - **Correct home-dir spelling (MISSION CRITICAL, revisit every session):** the real
-  home dir is **`/home/makeroftools`** — exactly one "o" in the middle. The
+  home dir is **`$HOME`** — resolve it; the username has exactly one "o" in the middle. The
   recurring bug adds an extra "o" in the middle (the two-o spelling) and silently
   breaks every address that uses it. Never type the two-o form in tool/terminal calls
   or docs; always resolve addresses via `$HOME`. The regression guard in

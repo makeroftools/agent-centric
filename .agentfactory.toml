@@ -1,0 +1,83 @@
+# .agentfactory.toml — the single source of truth for this repository's
+# agent operating level ("mode").
+#
+# Humans and agents both read THIS file; guards and CI assert it. Changing the
+# level is a deliberate, reviewed act — not a side effect of a prompt.
+#
+# North star: a dark factory (L3), where the constraint is verification, not
+# generation. Levels are earned by verification strength, never by enthusiasm.
+# See docs/agent/levels.md and docs/agent/verification.md.
+
+schema = "agentfactory/v1"
+
+[factory]
+# Active level: one of L0, L1, L2, L3.
+level = "L1"
+# Long-term target. L3 automation is declared but gated until the isolated
+# validator exists — honest, not aspirational.
+target = "L3"
+# If a gate named by the active level is missing, refuse rather than proceed.
+on_missing_gate = "fail-closed"
+
+# --- Levels ---------------------------------------------------------------
+# Each level sets three axes: autonomy, gates (hard checks), review.
+# `caps` are the attempt/token limits that will gate L3.
+# can_run_suite is true only for the ISOLATED VALIDATOR, never the authoring
+# agent (see docs/agent/testing.md).
+
+[levels.L0]
+name = "harness-only"
+summary = "A human authors; the agent assists only."
+autonomy = "assist"
+gates = ["ruff", "mypy"]
+review = "human-all"
+can_run_suite = false
+can_merge = false
+caps = { attempts = 1, tokens = "unbounded" }
+
+[levels.L1]
+name = "assisted"
+summary = "The agent authors; build-before-push; a human reviews every change."
+autonomy = "author"
+gates = ["ruff", "mypy", "fbp-check"]
+review = "human-all"
+can_run_suite = false
+can_merge = false
+caps = { attempts = 3, tokens = "bounded" }
+
+[levels.L2]
+name = "light-factory"
+summary = "Spec-driven; an isolated validator runs the suite; a human holds the review gate."
+autonomy = "spec-driven"
+gates = ["ruff", "mypy", "fbp-check", "pytest"]
+review = "human-gate"
+can_run_suite = true
+can_merge = false
+caps = { attempts = 3, tokens = "bounded" }
+
+[levels.L3]
+name = "dark-factory"
+summary = "Merge-ready on isolated holdout-scenario pass. NOT YET ENABLED."
+autonomy = "holdout"
+gates = ["ruff", "mypy", "fbp-check", "pytest", "holdout"]
+review = "none-on-green"
+can_run_suite = true
+can_merge = true # gated: requires the isolated holdout validator
+status = "declared-gated"
+caps = { attempts = 3, tokens = "monitored" }
+
+# --- Per-path floors ------------------------------------------------------
+# A path may never operate below its floor, regardless of the global level.
+# Mission-critical code never drops below reviewed authoring.
+
+[paths."src/**"]
+min_level = "L1"
+
+[paths."tests/**"]
+min_level = "L0"
+
+[paths."docs/**"]
+min_level = "L0"
+
+[paths."specs/**"]
+min_level = "L0"

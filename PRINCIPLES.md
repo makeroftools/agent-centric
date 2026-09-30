@@ -4,6 +4,11 @@ These are the non-negotiable rules governing every decision in this repository.
 They override all other considerations. When a choice trades any of these for
 speed, convenience, or feature completeness, that choice is forbidden.
 
+**Operating levels.** The active level ("mode") is declared in
+[`.agentfactory.toml`](.agentfactory.toml) and explained in
+[`docs/agent/levels.md`](docs/agent/levels.md). The level changes which
+gates and which human review apply; it never suspends any law below.
+
 ## 1. Correctness First
 
 Correctness, accuracy, robustness, and verifiability outrank every other
@@ -75,11 +80,14 @@ A failure is a first-class, audited outcome, never implicit or silent. A task
 either returns a verified result or an explicit, contained, audited failure.
 There is no third, ambiguous state.
 
-## 9. Critical Path as Truth
+## 9. Critical Path Is the Deterministic Scheduler
 
-The critical path is a fundamental, first-class view of the architecture. It is
-a deterministic, read-only observational aid: a pure function over a plan. It
-never mutates and never drives execution — only informs it.
+The critical path is a fundamental, first-class view of the architecture: a
+deterministic, pure function over the declared component network. It **may
+drive** the schedule of a composite's children — a parent schedules its
+reduced, networked-component form by CPM — but it never mutates state and
+never bypasses a verifier. Scheduling is deterministic: identical networks
+schedule identically.
 
 ## 10. Registries Are Passive Catalogs; Evidence Is Immutable
 
@@ -125,23 +133,31 @@ auditable, deterministic unit.
 is just a comment." There is only whole-file replacement, done as above, or the
 change is refused.
 
-## 12. THE OPERATOR RUNS THE TEST SUITE — THE AGENT DOES NOT
+## 12. THE OPERATOR RUNS THE TEST SUITE — THE AUTHORING AGENT DOES NOT
 
-> **The agent NEVER runs `pytest` (or any test runner). EVER. Zero exceptions.**
-> The human operator runs the test suite themselves and reports the result. The
-> agent does not invoke `pytest`, does not start a test runner, and does not
-> interpret a test run as its own validation.
+> **The authoring agent NEVER runs `pytest` (or any test runner) and NEVER
+> claims a pass. Zero exceptions.** Authority is the human operator — and, at
+> L2 and above, an isolated validator that is a separate process from the one
+> that wrote the code. The authoring agent does not invoke `pytest`, does not
+> start a test runner, and does not interpret a test run as its own validation.
 
 **Why.** The operator owns the validation gate for this mission-critical system.
 Test runs are the operator's authority, not the agent's. The agent may validate
-its work with the static tools the operator permits (e.g. `ruff`, `mypy`), but
-the test suite is run only by the operator.
+its work with the static tools the operator permits (e.g. `ruff`, `mypy`,
+`fbp-check`), but the suite is run only by the operator or the isolated
+validator.
+
+**Automation with checks (amended).** The suite MAY be run by operator-owned
+automation — CI, and at L2+ the isolated validator — provided the authoring
+layer is never the layer that judges it. This amendment is what makes the
+operating levels coherent: L0–L1 defer the suite to the operator; L2–L3
+delegate it to the isolated validator. See `docs/agent/testing.md`.
 
 **The agent's obligations under this law:**
 
 1. **Never** run `pytest` or any test runner, in any form, for any reason.
-2. Write and maintain tests so the operator can run them.
-3. Use the permitted static checks (ruff/mypy) to catch errors before handing
-   work to the operator.
-4. Report clearly what the operator should run and what the expected result is.
-5. Never claim a test passed unless the operator has reported it passed.
+2. **Never** report "tests pass"; only the operator's run or the validator's
+   recorded result may say that.
+3. Write and maintain tests so the operator can run them.
+4. Use the permitted static checks (ruff / mypy / fbp-check) before handoff.
+5. Report clearly what to run and the expected result.

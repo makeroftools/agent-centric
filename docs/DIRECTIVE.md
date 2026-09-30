@@ -1,5 +1,12 @@
 # DIRECTIVE — For the next agent (Lead Architect continuity)
 
+> **Superseded in part (SPEC-0001).** Start at [`../AGENTS.md`](../AGENTS.md).
+> The active operating level is in [`../.agentfactory.toml`](../.agentfactory.toml).
+> As of the convention change, `main` is the FBP line; `agent-manager-version`
+> is the frozen Manager line. The rename task in §3 and the Law-12 wording in
+> §5 are historical; the operative editing workflow (§2) is now enforced by
+> [`../opencode.json`](../opencode.json) and [`../tools/safe-replace.sh`](../tools/safe-replace.sh).
+
 **To the next agent.** Read this before touching anything. It tells you exactly
 what was just done, why, and the rules you MUST now operate under. Do not
 override it with your own instincts; these are the user's explicit, standing,

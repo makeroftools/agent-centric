@@ -11,11 +11,11 @@ its children, and together they form a rooted, recursive **tree**. Work flows
 The platform *uses* — but never fully trusts — non-deterministic tools; only a
 deterministic check can ever make a result count.
 
-> This repository currently hosts **two lines**: the `main` branch carries the
-> prior **Manager-line** (a central `AgentManager`), and this
-> `agent-centric-fbp` branch carries the **FBP subsystem** — the rooted,
-> manager-less tree that is the active architecture. This README is oriented to
-> the FBP branch while keeping `main`'s Manager-line documented below.
+> **Branches.** `main` is the active **FBP line** (a rooted, deterministic
+> tree of agents). `agent-manager-version` is the frozen prior **Manager-line**
+> (a central `AgentManager`). `archive/agent-centric-fbp` is the archived
+> pre-convention line. Coding agents start at [`AGENTS.md`](AGENTS.md); the
+> active operating level lives in [`.agentfactory.toml`](.agentfactory.toml).
 
 ---
 
@@ -237,13 +237,12 @@ that map to deterministic demo tasks.
 
 ## 🏗️ The Manager-line (main branch)
 
-The `main` branch still carries the prior **Manager-driven** architecture — an
-`AgentManager` that mediates every tool/model call, policy, envelope, and
-verification. It is manager-orchestrated and shares the same "no unverified
-success, fail-closed, full audit, deterministic" posture. It is intact and
-contained on `main`; this FBP branch builds the future.
+The prior **Manager-driven** architecture — an `AgentManager` that mediates
+every tool/model call, policy, envelope, and verification — is preserved on
+the `agent-manager-version` branch. It shares the same "no unverified
+success, fail-closed, full audit, deterministic" posture and remains intact
+as the frozen Manager line.
 
----
 
 ## 💻 Operator path
 
@@ -283,24 +282,31 @@ uv run agent-centric fbp-replay ses.db        # re-verify 18/18 runs
 ## 📂 Layout
 
 ```
+AGENTS.md              Agent entry point (table of contents)
+.agentfactory.toml     Active operating level (mode)
+opencode.json          Harness enforcement (Law 11: edit denied)
 PRINCIPLES.md          Non-negotiable governing rules
 KERNEL.md              v0 kernel freeze note
 STATUS.md              Volley history + correctness evidence
-README_FBP.md          The FBP deep-dive (this branch)
+README_FBP.md          The FBP deep-dive
+docs/agent/            Convention layer (progressive disclosure)
 src/agent_centric/
   fbp/                 The FBP subsystem (active)
   contracts/           Versioned contracts
-  control_plane/       Manager (main) control plane
+  control_plane/       Manager control plane (agent-manager-version line)
+specs/                 Spec files (+ specs/holdout/ for the validator)
+tools/                 Sanctioned mutation primitives (safe-replace.sh)
 examples/              Demos
 tests/                 Invariants across every volley
 ```
-
----
 
 ## 📚 References
 
 | Doc | What it's for |
 | --- | --- |
+| [`AGENTS.md`](AGENTS.md) | Agent entry point; points to every rule. |
+| [`docs/agent/`](docs/agent/README.md) | Convention layer: laws, levels, editing, testing, verification. |
+| [`.agentfactory.toml`](.agentfactory.toml) | Active operating level (mode). |
 | [`docs/fbp.md`](docs/fbp.md) | FBP easy-UX driver companion. |
 | [`src/agent_centric/fbp/spec.md`](src/agent_centric/fbp/spec.md) | FBP architecture spec. |
 | [`src/agent_centric/fbp/protocol.md`](src/agent_centric/fbp/protocol.md) | FBP wire contract. |

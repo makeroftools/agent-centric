@@ -4,6 +4,10 @@
 **Authority:** Lead Architect (via this session).
 **Classification:** Mission-Critical.
 
+> **Status: baseline (pre-CBP).** This document describes the current wire
+> contract. The target component architecture is
+> [`specs/SPEC-0002-cbp-component-architecture.md`](../../../specs/SPEC-0002-cbp-component-architecture.md).
+
 This document is the **crux of the system**: the standard "language" that every
 agent speaks. It is a versioned, enforced contract. Messages that do not conform
 are rejected — never silently accepted.

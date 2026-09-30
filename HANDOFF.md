@@ -8,16 +8,17 @@ handoff.
 > + correctness evidence; `README.md` is the GitHub frontpage with the Zed ACP
 > quickstart; this file is the authoritative one-pager for session continuity.
 
-## Current git state — clean and synced
-- **Branch:** `main`; **working tree clean**; **in sync with `origin/main`**.
-- **HEAD:** `2ed0251b7b74fe9dec012ff9c6aebb3267e6f462` =
-  `feat(volley-029): email to unverified bill draft - human-gated`.
-- **Version:** **0.29.0** (kernel milestone aligned with volley depth: 29 volleys delivered).
-- **Pushed:** Volleys 022–029 are on `origin/main`; nothing is unpushed. The
-  standing `do NOT push` rule holds; pushes happen only on explicit instruction.
-- **Recommended tag (not created — repo has no tags yet):**
-  `git tag -a v0.29.0-milestone -m "v0.29.0 milestone (Volleys 001-029)"`
-  (create only on explicit direction).
+## Current git state
+- **Branch:** `main` — the FBP line (history of the former `clean` branch).
+- **Topology:** `agent-manager-version` is the frozen prior Manager line;
+  `archive/agent-centric-fbp` is the archived pre-convention line.
+- **Convention:** SPEC-0001 applied here — see [`AGENTS.md`](AGENTS.md) and
+  [`.agentfactory.toml`](.agentfactory.toml).
+- **Push policy:** the standing **do NOT push** rule holds; pushes happen only
+  on explicit operator instruction.
+
+> The Manager-line description below is historical; that line now lives on the
+> `agent-manager-version` branch and is not updated here.
 
 ## What Agent-centric is
 A deterministic, local-first, in-process control plane for governed, verifiable

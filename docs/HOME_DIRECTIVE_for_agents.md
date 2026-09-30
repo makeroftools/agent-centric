@@ -97,7 +97,7 @@ Before you use **any** path or address that includes the home directory or a
 username, ask:
 
 - [ ] Did I get this from `$HOME`, or did I type it? **(typed = redo it)**
-- [ ] Does it start with `/home/<correct-user>/` and not the bug form?
+- [ ] Does it start with the home directory resolved from `$HOME` (and not the bug form)?
 - [ ] Does the search/scan of the repo show **zero** occurrences of the wrong
       spelling?
 - [ ] If I wrote a note or a guard, is the wrong spelling **absent** from the

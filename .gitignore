@@ -233,3 +233,6 @@ examples/.trajectories/
 /root
 /store
 /bills-store
+
+# Reference PDFs: local-only. Large binaries are kept out of git.
+/docs/references/*.pdf

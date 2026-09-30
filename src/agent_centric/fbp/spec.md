@@ -4,6 +4,12 @@
 **Authority:** Lead Architect (via this session).
 **Classification:** Mission-Critical.
 
+> **Status: baseline (pre-CBP).** This document describes the current
+> implementation. The target architecture is
+> [`specs/SPEC-0002-cbp-component-architecture.md`](../../../specs/SPEC-0002-cbp-component-architecture.md);
+> it is rewritten in Phase 1 of that plan. The target paradigm is CBP;
+> FBP heritage is credited in documentation.
+
 This spec locks in the model refined in session and is the contract the
 foundation code implements. It is deliberately a *draft* — the first concrete
 step of a pivot, not the finished system.

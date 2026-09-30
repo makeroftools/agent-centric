@@ -1,5 +1,11 @@
 # KERNEL — v0 Kernel Freeze Note (Volley 017)
 
+> **Superseded for the CBP line (SPEC-0002).** The v0 freeze below describes
+> the Manager-line kernel, including "CPM remains observational" and FBP
+> networks as out of scope. For the component architecture those stances are
+> superseded by [`specs/SPEC-0002-cbp-component-architecture.md`](specs/SPEC-0002-cbp-component-architecture.md)
+> and the amended Law 9. This note remains the historical freeze record.
+
 **Authority:** Lead Architect
 **Classification:** Mission-Critical
 **Status:** Kernel-complete — the minimalist working v0.19 kernel is declared complete (Volleys 001–019 accepted).
