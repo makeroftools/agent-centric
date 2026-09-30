@@ -133,31 +133,25 @@ auditable, deterministic unit.
 is just a comment." There is only whole-file replacement, done as above, or the
 change is refused.
 
-## 12. THE OPERATOR RUNS THE TEST SUITE — THE AUTHORING AGENT DOES NOT
+## 12. TEST AUTHORITY — THE AGENT MAY RUN TESTS; RESULTS ARE REPORTED FAITHFULLY
 
-> **The authoring agent NEVER runs `pytest` (or any test runner) and NEVER
-> claims a pass. Zero exceptions.** Authority is the human operator — and, at
-> L2 and above, an isolated validator that is a separate process from the one
-> that wrote the code. The authoring agent does not invoke `pytest`, does not
-> start a test runner, and does not interpret a test run as its own validation.
+> **The agent MAY run any tests, at any level.** The earlier prohibition is
+> lifted by explicit operator direction. Running the suite is encouraged as part
+> of correctness work.
 
-**Why.** The operator owns the validation gate for this mission-critical system.
-Test runs are the operator's authority, not the agent's. The agent may validate
-its work with the static tools the operator permits (e.g. `ruff`, `mypy`,
-`fbp-check`), but the suite is run only by the operator or the isolated
-validator.
-
-**Automation with checks (amended).** The suite MAY be run by operator-owned
-automation — CI, and at L2+ the isolated validator — provided the authoring
-layer is never the layer that judges it. This amendment is what makes the
-operating levels coherent: L0–L1 defer the suite to the operator; L2–L3
-delegate it to the isolated validator. See `docs/agent/testing.md`.
+**Why.** Correctness is the first law (Law 1); withholding the agent from the
+suite removed a cheap, reliable check. The operator retains authority of record
+for a mission-critical release, but the agent is expected to exercise the tests
+itself.
 
 **The agent's obligations under this law:**
 
-1. **Never** run `pytest` or any test runner, in any form, for any reason.
-2. **Never** report "tests pass"; only the operator's run or the validator's
-   recorded result may say that.
-3. Write and maintain tests so the operator can run them.
-4. Use the permitted static checks (ruff / mypy / fbp-check) before handoff.
-5. Report clearly what to run and the expected result.
+1. Run tests as needed and report their results faithfully — never overstate a
+   pass and never hide a failure.
+2. Distinguish the agent's run from the authoritative gate: for a release, the
+   operator's run and CI (the isolated validator) remain the record of truth.
+3. Treat a failure as first-class (Law 8): surface it immediately with the exact
+   command and output.
+4. Keep the suite green; fix any regression the agent caused before handoff.
+
+See `docs/agent/testing.md` and `docs/agent/levels.md`.

@@ -18,12 +18,14 @@ level = "L1"
 target = "L3"
 # If a gate named by the active level is missing, refuse rather than proceed.
 on_missing_gate = "fail-closed"
+# Law 12 (amended): the agent may run any tests; the operator/CI is the record.
+agent_may_run_tests = true
 
 # --- Levels ---------------------------------------------------------------
 # Each level sets three axes: autonomy, gates (hard checks), review.
 # `caps` are the attempt/token limits that will gate L3.
-# can_run_suite is true only for the ISOLATED VALIDATOR, never the authoring
-# agent (see docs/agent/testing.md).
+# can_run_suite marks levels where the suite is part of the release gate. The
+# agent may run tests at any level (Law 12); see docs/agent/testing.md.
 
 [levels.L0]
 name = "harness-only"

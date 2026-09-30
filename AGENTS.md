@@ -22,9 +22,9 @@ it does not restate. The constitution is [`PRINCIPLES.md`](PRINCIPLES.md):
   [`opencode.json`](opencode.json); use `./tools/safe-replace.sh <file>`
   (temp + `cp`, byte-complete). Full page:
   [`docs/agent/editing.md`](docs/agent/editing.md).
-- **Law 12 — test authority.** The *authoring* agent never runs the suite and
-  never claims a pass. At L0–L2 the operator runs it; at L3 an isolated
-  validator does. Full page: [`docs/agent/testing.md`](docs/agent/testing.md).
+- **Law 12 — test authority.** The agent **may run any tests**; report results
+  faithfully. The operator's run and CI remain the record of truth for a
+  release. Full page: [`docs/agent/testing.md`](docs/agent/testing.md).
 
 ## Operating level (mode)
 
