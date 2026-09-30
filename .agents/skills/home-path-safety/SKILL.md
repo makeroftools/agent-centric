@@ -6,7 +6,6 @@ compatibility: opencode
 metadata:
   component: home-path-safety
   determinism: deterministic
-  terminates-in: uv run pytest -p no:cacheprovider -q tests/test_repo_home_paths.py
 ---
 
 # Home-directory & username safety

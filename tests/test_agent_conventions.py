@@ -188,15 +188,10 @@ class TestSkills:
             assert isinstance(description, str) and 1 <= len(description) <= 1024, name
             meta = fm.get("metadata")
             assert isinstance(meta, dict), f"{name}: metadata missing"
-            assert meta.get("component") == name, f"{name}: metadata.component must equal name"
+            assert meta.get("component") == name, (
+                f"{name}: must map to a component of the same name"
+            )
             assert meta.get("determinism") in _VALID_DETERMINISM, name
-            terminates_in = meta.get("terminates-in")
-            assert isinstance(terminates_in, str) and terminates_in.strip(), (
-                f"{name}: metadata.terminates-in missing (the execution mapping)"
-            )
-            assert not terminates_in.lstrip().startswith("<"), (
-                f"{name}: metadata.terminates-in is still a placeholder"
-            )
             assert "## Deterministic termination" in body, name
             assert "## Non-determinism (suspect)" in body, name
 
@@ -300,3 +295,6 @@ class TestSpecs:
 
     def test_skill_execution_mapping_spec_is_recorded(self) -> None:
         assert (REPO_ROOT / "specs" / "SPEC-0005-skill-execution-mapping.md").is_file()
+
+    def test_skill_component_same_name_spec_is_recorded(self) -> None:
+        assert (REPO_ROOT / "specs" / "SPEC-0006-skill-component-same-name.md").is_file()

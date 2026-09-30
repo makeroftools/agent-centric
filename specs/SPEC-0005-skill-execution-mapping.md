@@ -10,6 +10,11 @@ owner: operator
 
 # Map every skill to its deterministic execution component
 
+> **Superseded by [`SPEC-0006-skill-component-same-name.md`](SPEC-0006-skill-component-same-name.md).**
+> The command-based `metadata.terminates-in` field below was replaced by the rule
+> that a skill maps to a component of the same name (`metadata.component == skill
+> name`). Kept as a historical record.
+
 ## Context
 
 In CBP a skill **is** a component (SPEC-0002). A skill's own reasoning is

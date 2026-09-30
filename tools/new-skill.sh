@@ -68,7 +68,6 @@ compatibility: opencode
 metadata:
   component: __NAME__
   determinism: __DETERMINISM__
-  terminates-in: <the deterministic component or command this skill terminates in>
 ---
 
 # __NAME__
