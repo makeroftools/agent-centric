@@ -16,6 +16,17 @@ from .bills_registry import (
     RegistryBill,
 )
 from .capability import Capability
+from .component import (
+    ChildRef,
+    ComponentKind,
+    ComponentManifest,
+    ComponentVersion,
+    EntryDescriptor,
+    Provenance,
+    RuntimeKind,
+    StateDescriptor,
+)
+from .components_lock import LOCK_SCHEMA, ComponentsLock, LockEntry, LockError
 from .critical_path import CpmMetric, CpmVersion, CriticalPathResult, CriticalPathStage
 from .email import EmailList, EmailMessage, EmailVersion, MessageSummary
 from .handoff import HandoffSchema, is_valid_schema, validate_handoff
@@ -66,6 +77,18 @@ from .workspace import (
 
 __all__ = [
     "Capability",
+    "ChildRef",
+    "ComponentKind",
+    "ComponentManifest",
+    "ComponentVersion",
+    "ComponentsLock",
+    "EntryDescriptor",
+    "LOCK_SCHEMA",
+    "LockEntry",
+    "LockError",
+    "Provenance",
+    "RuntimeKind",
+    "StateDescriptor",
     "Bill",
     "BillLine",
     "BillTotal",

@@ -186,7 +186,8 @@ trusted at resolve time; the lock stores commits only.
 | Phase | Status | Deliverable |
 | --- | --- | --- |
 | 0 | **delivered** | this spec; Law 5 amendment; KERNEL note; `AGENTS.md` + `docs/agent/architecture.md`; guard |
-| 0.5 | roadmap | signing service; content-addressed cache; offline mirror; lock schema + verify; transparency log |
+| 0.5a | **delivered** | `component.v1` + `components.lock/v1`; content-addressed atomic cache; deterministic resolver; minisign/gpg signature verification (system tool); offline directory source |
+| 0.5b | roadmap | automated signing service; append-only transparency log; live self-hosted mirror |
 | 1a | roadmap | `component.v1`; resolver/pinner; extract `counter`; pin it; replay-from-lock proof |
 | 1b | roadmap | extract `bills_registry`; SQLite state descriptor; contains + points-to |
 | 2 | roadmap | registry component + shell component; boot from lock |

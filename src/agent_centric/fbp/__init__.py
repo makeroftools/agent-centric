@@ -47,6 +47,13 @@ from .bills_agent import (
     TASK_RULE_ADD,
     BillsAgent,
 )
+from .cache import (
+    CacheError,
+    ContentAddressedCache,
+    atomic_write,
+    sha256_bytes,
+    sha256_file,
+)
 from .chat_pipeline import (
     PinCache,
     canonical_json,
@@ -172,6 +179,13 @@ from .provision import (
     ProvisionResult,
     provision_expert,
 )
+from .resolver import (
+    ComponentSource,
+    DirectorySource,
+    ResolvedComponent,
+    ResolveError,
+    Resolver,
+)
 from .security import (
     INTEGRITY_TAG,
     PeerAuthz,
@@ -196,6 +210,14 @@ from .settlement import (
     settle_run,
 )
 from .shell import Shell
+from .signing import (
+    GpgVerifier,
+    MinisignVerifier,
+    SignatureError,
+    SignatureVerifier,
+    SystemVerifier,
+    tool_available,
+)
 from .slm import (
     SlmError,
     SlmExpert,
@@ -340,6 +362,23 @@ __all__ = [
     "verify_and_strip_integrity",
     "security_canonical_json",
     "INTEGRITY_TAG",
+    # Component distribution (SPEC-0007): lock, cache, resolver, signing
+    "CacheError",
+    "ContentAddressedCache",
+    "atomic_write",
+    "sha256_bytes",
+    "sha256_file",
+    "ComponentSource",
+    "DirectorySource",
+    "ResolveError",
+    "ResolvedComponent",
+    "Resolver",
+    "GpgVerifier",
+    "MinisignVerifier",
+    "SignatureError",
+    "SignatureVerifier",
+    "SystemVerifier",
+    "tool_available",
     # CPM: a read-only, deterministic capability (not an agent)
     "CpmAnalysis",
     "CpmNode",
