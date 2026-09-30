@@ -5,8 +5,9 @@
 > is the **current** session-continuity one-pager: it points, it does not
 > restate.
 
-**Prepared for a new session thread.** All facts below are current as of
-`HEAD = 97e32f2` (branch `main`, pushed to `origin`).
+**Prepared for a new model session.** Facts below are current as of the tip of
+`main` (see `git log -1`); `main` is the only branch and is pushed to `origin`.
+Run the fresh-session checklist below before acting.
 
 ## Read first (in order)
 
@@ -31,10 +32,25 @@
 
 - **Branch:** `main` — the CBP line. Working tree clean; in sync with
   `origin/main`.
-- **Topology:** the prior Manager line is frozen in history (tag `v0.29.0-milestone`).
+- **Topology:** `main` is the only branch. The prior Manager line and the
+  pre-convention FBP line were retired as redundant (0 commits unique to them);
+  their history remains in `main`, and the Manager line's tip is marked by the
+  annotated tag `v0.29.0-milestone`. The convention guard forbids the legacy
+  `agent_centric.fbp` package and `fbp-*` gates from returning.
 - **Tag:** `v0.29.0-milestone` (historical kernel milestone).
 - **Push policy:** commit and push continuously, no permission needed (Law 13);
   never bypass hooks (`--no-verify` is forbidden).
+
+## Fresh-session start
+
+1. Read [`AGENTS.md`](AGENTS.md) → [`PRINCIPLES.md`](PRINCIPLES.md) →
+   [`.agentfactory.toml`](.agentfactory.toml) (active mode **L1**; target L3, gated).
+2. Confirm the tree: `git branch --show-current` → `main`; `git status` clean.
+3. Baseline gates (fast, offline): `uv run ruff check .`, `uv run mypy src`,
+   `uv run agent-centric cbp-check`.
+4. Run the test suite as the level permits (Law 12); the operator/CI is the record.
+5. Continue from **Next** below. Never act above the active level without the
+   operator changing `.agentfactory.toml` first.
 
 ## What Agent-centric is
 
@@ -80,13 +96,17 @@
     CLI `fbp-check`/`fbp-web`/… → `cbp-*`; tests `tests/test_cbp_*`; examples
     `examples/cbp_*.py`; docs `docs/cbp.md`. The acronym `FBP` now survives only
     as the **heritage credit** (SPEC-0002 §10, `docs/references/`).
+  - **Anti-drift guard** — `tests/test_agent_conventions.py::TestNoStaleLabels`
+    asserts the legacy `agent_centric.fbp` package and the retired `fbp-*` gates
+    cannot return.
 
 ## Validation (last full run)
 
-- `uv run pytest -p no:cacheprovider` → **1237 passed**.
+- `uv run pytest -o addopts="" -p no:cacheprovider` → **1240 passed**.
 - `uv run ruff check .` → clean.
 - `uv run mypy src` → clean (**106** source files).
-- Convention guard → passes.
+- `uv run agent-centric cbp-check` → **8/8**, READY.
+- Convention guard → **37 passed**.
 
 ## Next (candidate — not started)
 
@@ -114,14 +134,18 @@ See [`docs/agent/levels.md`](docs/agent/levels.md),
 ## Key files
 
 - `src/agent_centric/cbp/` — the active subsystem: `component_bundle.py`,
-  `component_source.py`, `component_runtime.py`, `cache.py`, `resolver.py`,
+  `component_source.py`, `component_runtime.py`, `component_state.py`,
+  `component_graph.py`, `bills_component.py`, `cache.py`, `resolver.py`,
   `signing.py`.
 - `src/agent_centric/contracts/` — versioned contracts, including
   `component.py` and `components_lock.py`.
 - `specs/` — specs (SPEC-0002 target; SPEC-0007 distribution plan).
-- `examples/components/counter/` — example component source.
-- `tests/test_agent_conventions.py` — convention guard;
-  `tests/test_component_distribution.py` — the distribution slice.
+- `examples/components/counter/` (atomic) and
+  `examples/components/bills_registry/` (composite: SQLite state + embedded
+  `bills_rules` + referenced `agenda`) — example component sources.
+- `tests/test_agent_conventions.py` — convention + anti-drift guard;
+  `tests/test_component_distribution.py`, `tests/test_component_state.py`, and
+  `tests/test_component_graph.py` — the distribution slice.
 
 ## Non-goals (do not build without explicit direction)
 
