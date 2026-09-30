@@ -31,8 +31,7 @@
 
 - **Branch:** `main` — the CBP line. Working tree clean; in sync with
   `origin/main`.
-- **Topology:** the prior Manager line is frozen in history (tag `v0.29.0-milestone`);
-  `archive/agent-centric-fbp` is the archived pre-convention line.
+- **Topology:** the prior Manager line is frozen in history (tag `v0.29.0-milestone`).
 - **Tag:** `v0.29.0-milestone` (historical kernel milestone).
 - **Push policy:** commit and push continuously, no permission needed (Law 13);
   never bypass hooks (`--no-verify` is forbidden).
@@ -80,8 +79,7 @@
     moved `agent_centric.fbp` → **`agent_centric.cbp`**; classes `Fbp*` → `Cbp*`;
     CLI `fbp-check`/`fbp-web`/… → `cbp-*`; tests `tests/test_cbp_*`; examples
     `examples/cbp_*.py`; docs `docs/cbp.md`. The acronym `FBP` now survives only
-    as the **heritage credit** (SPEC-0002 §10, `docs/references/`) and the
-    archived branch `archive/agent-centric-fbp`.
+    as the **heritage credit** (SPEC-0002 §10, `docs/references/`).
 
 ## Validation (last full run)
 

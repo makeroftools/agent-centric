@@ -321,3 +321,34 @@ class TestSpecs:
     def test_harness_distribution_spec_is_recorded(self) -> None:
         spec = REPO_ROOT / "specs" / "SPEC-0007-harness-shell-component-distribution.md"
         assert spec.is_file()
+
+
+class TestNoStaleLabels:
+    """Guard the FBP -> CBP cut-over and the branch retirements (no drift).
+
+    These are deterministic, offline checks: the legacy ``agent_centric.fbp``
+    package and the retired ``fbp-*`` gates/branches must not reappear. Heritage
+    credit for Flow-Based Programming (the acronym ``FBP`` in prose) is allowed.
+    """
+
+    def test_legacy_fbp_package_is_gone(self) -> None:
+        agent = REPO_ROOT / "src" / "agent_centric"
+        assert (agent / "cbp").is_dir(), "the CBP package must exist"
+        assert not (agent / "fbp").exists(), "the legacy fbp package must not return"
+
+    def test_source_has_no_legacy_fbp_paths(self) -> None:
+        offenders: list[str] = []
+        for source in (REPO_ROOT / "src").rglob("*.py"):
+            body = source.read_text(encoding="utf-8")
+            if "agent_centric.fbp" in body or "agent_centric/fbp" in body:
+                offenders.append(source.relative_to(REPO_ROOT).as_posix())
+        assert not offenders, f"legacy fbp references found: {offenders}"
+
+    def test_gates_use_cbp_check(self) -> None:
+        data = tomllib.loads(_read(".agentfactory.toml"))
+        gates = [gate for level in data["levels"].values() for gate in level["gates"]]
+        stale = [gate for gate in gates if gate.startswith("fbp")]
+        assert not stale, f"stale gates: {stale}"
+        ci = _read(".github/workflows/gates.yml")
+        assert "cbp-check" in ci, "CI must run cbp-check"
+        assert "fbp-check" not in ci, "CI must not run the retired fbp-check"

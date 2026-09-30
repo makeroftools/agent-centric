@@ -1,6 +1,6 @@
-> **Subsystem reference — for the current agent rules start at [`AGENTS.md`](AGENTS.md).**
-> This file documents the FBP subsystem; it is not a rule source. The laws are in
-> [`PRINCIPLES.md`](PRINCIPLES.md).
+> **Historical — start at [`AGENTS.md`](AGENTS.md).** This document records the
+> pre-rename **FBP-era** subsystem reference and is not updated retroactively.
+> Current system docs: [`docs/cbp.md`](docs/cbp.md); laws: [`PRINCIPLES.md`](PRINCIPLES.md).
 
 # FBP — the Agent-Centric Flow-Based Subsystem
 
@@ -28,10 +28,10 @@
 > are inputs we *use* — never authorities we fully trust; only a deterministic
 > check can make a result count.
 
-`agent-centric-fbp` is the flow-based, agent-centric branch of the
-Agent-centric system. It is a **mission-critical, automated backbone** built for
-correctness, determinism, security, and an easy UX. Everything below is real,
-tested, and reachable today through a single synchronous driver.
+The `agent-centric-fbp` branch was the flow-based, agent-centric line of the
+Agent-centric system. It was a **mission-critical, automated backbone** built for
+correctness, determinism, security, and an easy UX. Everything below was real and
+tested at the time of writing; it is preserved here as history.
 
 ---
 
@@ -291,6 +291,6 @@ contract are at `src/agent_centric/cbp/{spec,protocol}.md`.
 
 ---
 
-> **Status.** This is the **active** FBP subsystem on `agent-centric-fbp`.
-> `main` remains the default repo and the prior Manager-line stays contained
-> there. Nothing here claims more than the code and **824 passing tests** prove.
+> **Status (historical).** This described the then-active FBP subsystem on
+> `agent-centric-fbp`; it is **superseded** by the CBP subsystem and is kept only
+> as a record. It claimed no more than the code and tests of its time proved.

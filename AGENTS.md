@@ -92,9 +92,12 @@ Run the test suite as the active level permits (the agent may run any tests); se
 ## Branches
 
 `main` is the CBP line (history of the former `clean` branch).
-The prior Manager line is frozen in history, marked by tag `v0.29.0-milestone`. `archive/agent-centric-fbp`
-is the archived pre-convention line. Historical documents (e.g. `STATUS.md`,
-`docs/CBP_HANDOFF.md`) describe past states and are not updated retroactively.
+The prior Manager line is frozen in history, marked by tag `v0.29.0-milestone`.
+Historical documents (e.g. `STATUS.md`, `docs/CBP_HANDOFF.md`) describe past
+states and are not updated retroactively. The legacy `agent_centric.fbp`
+package and the retired `fbp-*` gates/branches are gone; `main` is the only
+branch, and the convention guard (`tests/test_agent_conventions.py`)
+forbids their return.
 
 ## Non-goals — do not build without explicit direction
 

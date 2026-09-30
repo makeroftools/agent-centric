@@ -3,7 +3,7 @@
 > [`../AGENTS.md`](../AGENTS.md) and [`../PRINCIPLES.md`](../PRINCIPLES.md);
 > the active mode is in [`../.agentfactory.toml`](../.agentfactory.toml).
 
-# HANDOFF — Agent-centric FBP subsystem (branch `agent-centric-fbp`)
+# HANDOFF — Agent-centric FBP subsystem (historical)
 
 **Prepared by the Lead Architect so a NEW session can resume with full context.**
 Facts are current as of this handoff (verified live). This file captures BOTH

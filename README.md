@@ -13,8 +13,8 @@ deterministic check can ever make a result count.
 
 > **Branches.** `main` is the active **CBP line** (a rooted, deterministic
 > tree of agents). The prior **Manager-line** (a central `AgentManager`) is
-> frozen in history (tag `v0.29.0-milestone`). `archive/agent-centric-fbp` is the archived
-> pre-convention line. Coding agents start at [`AGENTS.md`](AGENTS.md); the
+> frozen in history (tag `v0.29.0-milestone`). Coding agents start at
+> [`AGENTS.md`](AGENTS.md); the
 > active operating level lives in [`.agentfactory.toml`](.agentfactory.toml).
 
 ---
@@ -149,7 +149,7 @@ uv run agent-centric cbp --transport tcp
 uv run agent-centric cbp --transport ipc
 ```
 
-Deep dive: [`README_CBP.md`](README_CBP.md) and [`docs/cbp.md`](docs/cbp.md).
+Deep dive: [`docs/cbp.md`](docs/cbp.md).
 
 ---
 
@@ -312,7 +312,7 @@ tests/                 Invariants across every volley
 | [`docs/cbp.md`](docs/cbp.md) | CBP easy-UX driver companion. |
 | [`src/agent_centric/cbp/spec.md`](src/agent_centric/cbp/spec.md) | CBP architecture spec. |
 | [`src/agent_centric/cbp/protocol.md`](src/agent_centric/cbp/protocol.md) | CBP wire contract. |
-| [`README_CBP.md`](README_CBP.md) | Story-led CBP deep-dive. |
+| [`README_CBP.md`](README_CBP.md) | Story-led FBP-era deep-dive (historical). |
 | [`PRINCIPLES.md`](PRINCIPLES.md) | Non-negotiable rules. |
 | [`KERNEL.md`](KERNEL.md) | v0 freeze note + versioning (historical). |
 | [`STATUS.md`](STATUS.md) | Volley-by-volley history + correctness evidence (historical). |
