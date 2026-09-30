@@ -60,6 +60,28 @@ Runnable demo:
 Example component source:
 [`examples/components/counter/`](../../examples/components/counter).
 
+## Resolving a composite (Phase 1b)
+
+A **composite** may *contain* children (embed them) and/or *point to* children
+(pinned external components). The harness resolves the graph **deterministically,
+children first**, and fails closed:
+
+1. a **referenced** child must be its own `components.lock` entry and is verified
+   exactly like any other component (hash + signature + contracts);
+2. an **embedded** child must be present inside the verified parent bundle and
+   must itself be a real `component.v1` (covered by the parent's `tree_sha256`);
+3. resolution order is post-order (children before parents) with a deterministic
+   tie-break; a reference **cycle** fails closed;
+4. a composite's declared **SQLite state** is materialized atomically (WAL,
+   `integrity_check`, path-safe) under a caller-supplied state root — mutable
+   state never lives inside the immutable bundle cache.
+
+Runnable demo:
+[`examples/component_graph.py`](../../examples/component_graph.py).
+Example composite:
+[`examples/components/bills_registry/`](../../examples/components/bills_registry)
+(embedded `bills_rules`, referenced `agenda`).
+
 ## Boundaries (non-negotiable)
 
 - **Run time is local-first**; distribution happens only at **acquisition time**,

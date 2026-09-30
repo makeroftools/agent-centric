@@ -1,0 +1,16 @@
+{
+  "version": "component.v1",
+  "name": "agenda",
+  "kind": "atomic",
+  "implements": ["component.v1"],
+  "entry": {
+    "runtime": "python",
+    "entrypoint": "agent_centric.fbp.bills_component:project_agenda"
+  },
+  "children": [],
+  "directive": "",
+  "capabilities": [{"name": "agenda", "version": "1"}],
+  "state": null,
+  "provenance": null,
+  "ports": {}
+}

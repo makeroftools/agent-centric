@@ -1,0 +1,19 @@
+{
+  "version": "component.v1",
+  "name": "bills_registry",
+  "kind": "composite",
+  "implements": ["component.v1"],
+  "entry": {
+    "runtime": "python",
+    "entrypoint": "agent_centric.fbp.bills_component:registry_snapshot"
+  },
+  "children": [
+    {"embed": "children/bills_rules"},
+    {"ref": "agenda"}
+  ],
+  "directive": "",
+  "capabilities": [{"name": "bills_registry", "version": "1"}],
+  "state": {"kind": "sqlite", "path": "state/bills.db", "single_writer": true},
+  "provenance": null,
+  "ports": {}
+}

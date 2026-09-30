@@ -189,7 +189,7 @@ trusted at resolve time; the lock stores commits only.
 | 0.5a | **delivered** | `component.v1` + `components.lock/v1`; content-addressed atomic cache; deterministic resolver; minisign/gpg signature verification (system tool); offline directory source |
 | 0.5b | roadmap | automated signing service; append-only transparency log; live self-hosted mirror |
 | 1a | **delivered** | example `counter` component; deterministic bundle; offline git source + pinner; resolve→verify→load→run with an allowlisted entry; replay-from-lock proof. The committed umbrella `components.lock` lands in Phase 2 with the shell component; live server + signing service are 0.5b |
-| 1b | roadmap | extract `bills_registry`; SQLite state descriptor; contains + points-to |
+| 1b | **delivered** | real example composite `bills_registry`: a SQLite **state descriptor** (`fbp/component_state.py`); both child modes — **contains** the embedded `bills_rules` component, **points-to** the referenced `agenda`; deterministic dependency-ordered graph resolution (`fbp/component_graph.py`), cycles/absences fail closed |
 | 2 | roadmap | registry component + shell component; boot from lock |
 | 3 | roadmap | directives aggregated into `.agents/skills/`; LLM components pinned; `review.v1` |
 | 4 | roadmap | incremental migration; hermetic/offline CI; retire monolith |

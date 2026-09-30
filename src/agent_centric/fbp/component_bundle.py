@@ -8,6 +8,12 @@ Determinism: members are written in sorted order with fixed metadata (``mtime=0`
 ``uid/gid=0``, no user/group names), so the same input always yields the same
 bytes and therefore the same hash — independent of the host filesystem or the
 git tar format.
+
+A **composite** may *contain* children (embedded): a child component's files
+(including its own ``component.json``) live inside the parent bundle and are
+covered by the parent's ``tree_sha256``. ``list_members`` / ``read_member`` let
+the graph resolver verify that an embedded child is present and is a real
+``component.v1`` (not merely a data folder).
 """
 
 from __future__ import annotations
@@ -75,7 +81,12 @@ def bundle_sha256(bundle: bytes) -> str:
 
 
 def build_bundle_from_dir(root: Path, *, manifest_name: str = BUNDLE_MANIFEST) -> bytes:
-    """Build a bundle from a component source directory (canonicalized)."""
+    """Build a bundle from a component source directory (canonicalized).
+
+    Embedded children (``children/<name>/...``) are ordinary files under the
+    root, so they are included automatically and therefore covered by the
+    bundle hash.
+    """
     root = Path(root)
     manifest_path = root / manifest_name
     if not manifest_path.is_file():
@@ -94,13 +105,37 @@ def build_bundle_from_dir(root: Path, *, manifest_name: str = BUNDLE_MANIFEST) -
 
 def load_manifest(bundle: bytes) -> ComponentManifest:
     """Load the ``component.v1`` manifest out of a bundle (no disk extraction)."""
+    return ComponentManifest.from_dict(
+        json.loads(read_member(bundle, BUNDLE_MANIFEST))
+    )
+
+
+def list_members(bundle: bytes) -> tuple[str, ...]:
+    """Return the sorted regular-file member names of a bundle.
+
+    Deterministic (sorted). Used to verify that an embedded child is present.
+    """
+    with tarfile.open(fileobj=io.BytesIO(bundle), mode="r:") as tar:
+        names = sorted(m.name for m in tar.getmembers() if m.isfile())
+    return tuple(names)
+
+
+def read_member(bundle: bytes, name: str) -> bytes:
+    """Read one regular-file member from a bundle (fail-closed on absence).
+
+    The member name is validated (no absolute path, no ``..``), so a caller can
+    never be tricked into reading outside the bundle's logical root.
+    """
+    _check_name(name)
     with tarfile.open(fileobj=io.BytesIO(bundle), mode="r:") as tar:
         try:
-            member = tar.getmember(BUNDLE_MANIFEST)
+            member = tar.getmember(name)
         except KeyError as exc:
-            raise BundleError(f"bundle has no {BUNDLE_MANIFEST}") from exc
+            raise BundleError(f"bundle has no member {name!r}") from exc
+        if not member.isfile():
+            raise BundleError(f"bundle member {name!r} is not a regular file")
         handle = tar.extractfile(member)
         if handle is None:
-            raise BundleError(f"bundle {BUNDLE_MANIFEST} is not a regular file")
+            raise BundleError(f"bundle member {name!r} is not readable")
         data = handle.read()
-    return ComponentManifest.from_dict(json.loads(data))
+    return data

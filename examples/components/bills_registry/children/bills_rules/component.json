@@ -1,0 +1,16 @@
+{
+  "version": "component.v1",
+  "name": "bills_rules",
+  "kind": "atomic",
+  "implements": ["component.v1"],
+  "entry": {
+    "runtime": "python",
+    "entrypoint": "agent_centric.fbp.bills_component:validate_bill"
+  },
+  "children": [],
+  "directive": "",
+  "capabilities": [{"name": "bills_rules", "version": "1"}],
+  "state": null,
+  "provenance": null,
+  "ports": {}
+}

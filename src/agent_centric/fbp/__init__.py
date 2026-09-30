@@ -69,7 +69,15 @@ from .component_bundle import (
     build_bundle_from_dir,
     bundle_sha256,
     component_json,
+    list_members,
     load_manifest,
+    read_member,
+)
+from .component_graph import (
+    ComponentGraphResolver,
+    GraphError,
+    ResolvedChild,
+    ResolvedNode,
 )
 from .component_runtime import (
     AllowlistedEntryResolver,
@@ -82,6 +90,13 @@ from .component_source import (
     bundle_at,
     git_commit,
     pin_from_git,
+)
+from .component_state import (
+    StateError,
+    check_integrity,
+    connect_state,
+    materialize_state,
+    state_path,
 )
 from .config import AgentConfig
 from .context import Context, Verifier
@@ -408,6 +423,17 @@ __all__ = [
     "bundle_sha256",
     "component_json",
     "load_manifest",
+    "list_members",
+    "read_member",
+    "ComponentGraphResolver",
+    "GraphError",
+    "ResolvedChild",
+    "ResolvedNode",
+    "StateError",
+    "check_integrity",
+    "connect_state",
+    "materialize_state",
+    "state_path",
     "AllowlistedEntryResolver",
     "EntryNotAllowed",
     "GitError",

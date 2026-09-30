@@ -68,18 +68,24 @@
     `fbp/component_runtime.py`). Example component
     [`examples/components/counter/`](examples/components/counter) and demo
     [`examples/component_distribution.py`](examples/component_distribution.py).
+  - **Phase 1b** — real example composite `bills_registry`: a SQLite **state
+    descriptor** (`fbp/component_state.py`: path-safe, WAL, integrity-checked,
+    atomic); both child modes — **contains** the embedded `bills_rules`
+    component, **points-to** the referenced `agenda`; deterministic
+    dependency-ordered graph resolution (`fbp/component_graph.py`), with cycles
+    and absences failing closed. Demo
+    [`examples/component_graph.py`](examples/component_graph.py); example
+    [`examples/components/bills_registry/`](examples/components/bills_registry).
 
 ## Validation (last full run)
 
-- `uv run pytest -p no:cacheprovider` → **1216 passed**.
+- `uv run pytest -p no:cacheprovider` → **1237 passed**.
 - `uv run ruff check .` → clean.
-- `uv run mypy src` → clean (**103** source files).
+- `uv run mypy src` → clean (**106** source files).
 - Convention guard → passes.
 
 ## Next (candidate — not started)
 
-- **Phase 1b:** extract `bills_registry` (proves the SQLite state descriptor and
-  both child modes: **contains** one child, **points to** another).
 - **Phase 0.5b:** automated signing service + append-only transparency log +
   live self-hosted mirror (needs the Forgejo/Gitea instance).
 - **Phase 2:** registry component + shell component; boot from the lock.
