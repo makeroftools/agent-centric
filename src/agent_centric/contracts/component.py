@@ -83,6 +83,14 @@ class StateDescriptor:
     def to_dict(self) -> dict[str, Any]:
         return {"kind": self.kind, "path": self.path, "single_writer": self.single_writer}
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> StateDescriptor:
+        return cls(
+            kind=str(data["kind"]),
+            path=str(data["path"]),
+            single_writer=bool(data.get("single_writer", True)),
+        )
+
 
 @dataclass(frozen=True)
 class EntryDescriptor:
@@ -104,6 +112,10 @@ class EntryDescriptor:
 
     def to_dict(self) -> dict[str, Any]:
         return {"runtime": self.runtime, "entrypoint": self.entrypoint}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> EntryDescriptor:
+        return cls(runtime=str(data["runtime"]), entrypoint=str(data["entrypoint"]))
 
 
 @dataclass(frozen=True)
@@ -132,6 +144,10 @@ class ChildRef:
 
     def to_dict(self) -> dict[str, Any]:
         return {self.mode: self.target}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ChildRef:
+        return cls(embed=str(data.get("embed", "")), ref=str(data.get("ref", "")))
 
 
 @dataclass(frozen=True)
@@ -165,6 +181,15 @@ class Provenance:
             "tree_sha256": self.tree_sha256,
             "signature": self.signature,
         }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Provenance:
+        return cls(
+            repo_url=str(data["repo_url"]),
+            commit_sha=str(data["commit_sha"]),
+            tree_sha256=str(data["tree_sha256"]),
+            signature=str(data.get("signature", "")),
+        )
 
 
 @dataclass(frozen=True)
@@ -214,3 +239,27 @@ class ComponentManifest:
             "provenance": self.provenance.to_dict() if self.provenance else None,
             "ports": {k: list(v) for k, v in self.ports.items()},
         }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ComponentManifest:
+        state_raw = data.get("state")
+        prov_raw = data.get("provenance")
+        return cls(
+            version=str(data["version"]),
+            name=str(data["name"]),
+            kind=str(data["kind"]),
+            entry=EntryDescriptor.from_dict(data["entry"]),
+            implements=tuple(str(x) for x in data.get("implements", ())),
+            state=StateDescriptor.from_dict(state_raw) if state_raw else None,
+            children=tuple(ChildRef.from_dict(c) for c in data.get("children", ())),
+            directive=str(data.get("directive", "")),
+            capabilities=tuple(
+                Capability(name=str(c["name"]), version=str(c.get("version", "1")))
+                for c in data.get("capabilities", ())
+            ),
+            provenance=Provenance.from_dict(prov_raw) if prov_raw else None,
+            ports={
+                str(k): tuple(str(x) for x in v)
+                for k, v in data.get("ports", {}).items()
+            },
+        )

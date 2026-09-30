@@ -1,0 +1,16 @@
+{
+  "version": "component.v1",
+  "name": "counter",
+  "kind": "atomic",
+  "implements": ["component.v1"],
+  "entry": {
+    "runtime": "python",
+    "entrypoint": "agent_centric.agents.counter:create_counter_agent"
+  },
+  "children": [],
+  "directive": "",
+  "capabilities": [{"name": "count", "version": "1"}],
+  "state": null,
+  "provenance": null,
+  "ports": {}
+}

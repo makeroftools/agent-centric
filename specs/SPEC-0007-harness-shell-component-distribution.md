@@ -188,7 +188,7 @@ trusted at resolve time; the lock stores commits only.
 | 0 | **delivered** | this spec; Law 5 amendment; KERNEL note; `AGENTS.md` + `docs/agent/architecture.md`; guard |
 | 0.5a | **delivered** | `component.v1` + `components.lock/v1`; content-addressed atomic cache; deterministic resolver; minisign/gpg signature verification (system tool); offline directory source |
 | 0.5b | roadmap | automated signing service; append-only transparency log; live self-hosted mirror |
-| 1a | roadmap | `component.v1`; resolver/pinner; extract `counter`; pin it; replay-from-lock proof |
+| 1a | **delivered** | example `counter` component; deterministic bundle; offline git source + pinner; resolve→verify→load→run with an allowlisted entry; replay-from-lock proof. The committed umbrella `components.lock` lands in Phase 2 with the shell component; live server + signing service are 0.5b |
 | 1b | roadmap | extract `bills_registry`; SQLite state descriptor; contains + points-to |
 | 2 | roadmap | registry component + shell component; boot from lock |
 | 3 | roadmap | directives aggregated into `.agents/skills/`; LLM components pinned; `review.v1` |

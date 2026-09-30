@@ -43,6 +43,23 @@ Every runnable example lives under an [`examples/`](../../examples) directory �
 the top-level one in the harness, and an `examples/` inside each component's
 layout. The guard ensures `examples/**` is never mistaken for a component.
 
+## Resolving a component (Phase 1a)
+
+`components.lock` pins each component by `commit_sha` + `tree_sha256`. The
+harness resolves a component **offline**:
+
+1. fetch the deterministic bundle from the source (a `DirectorySource` mirror,
+   or `GitSource` over a local repo at the pinned commit);
+2. verify `tree_sha256` and the detached signature (minisign/gpg) — fail closed;
+3. load the `component.v1` manifest from the verified bundle;
+4. resolve the entry **only if allowlisted** (Phase 1a) — a fetched bundle's own
+   code is not imported until the subprocess isolation backend exists.
+
+Runnable demo:
+[`examples/component_distribution.py`](../../examples/component_distribution.py).
+Example component source:
+[`examples/components/counter/`](../../examples/components/counter).
+
 ## Boundaries (non-negotiable)
 
 - **Run time is local-first**; distribution happens only at **acquisition time**,

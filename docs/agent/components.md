@@ -44,3 +44,5 @@ points; the guard decides.
 
 See the on-demand skill
 [`.agents/skills/skill-authoring/SKILL.md`](../../.agents/skills/skill-authoring/SKILL.md).
+A component's distribution manifest (`component.v1`), lock, and resolution are
+described in [`architecture.md`](architecture.md).

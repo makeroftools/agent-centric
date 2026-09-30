@@ -62,6 +62,8 @@ directive: [`docs/HOME_DIRECTIVE_for_agents.md`](docs/HOME_DIRECTIVE_for_agents.
   component (CBP). Add one with `./tools/new-skill.sh <name>`; the convention
   guard auto-discovers every skill. See `docs/agent/components.md`.
 - `specs/` — spec files with YAML front-matter; `specs/holdout/` is never fed to the author.
+- `examples/` — runnable demos; `examples/components/<name>/` are example component
+  sources (SPEC-0007).
 - `tools/` — the only sanctioned file-mutation primitives.
 
 ## Validation (static checks you may run)

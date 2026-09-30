@@ -62,6 +62,27 @@ from .chat_pipeline import (
     schema_parse,
 )
 from .chatstore import ChatHistoryError, ChatHistoryStore, open_chat_history
+from .component_bundle import (
+    BUNDLE_MANIFEST,
+    BundleError,
+    build_bundle,
+    build_bundle_from_dir,
+    bundle_sha256,
+    component_json,
+    load_manifest,
+)
+from .component_runtime import (
+    AllowlistedEntryResolver,
+    EntryNotAllowed,
+)
+from .component_source import (
+    GitError,
+    GitSource,
+    PinnedComponent,
+    bundle_at,
+    git_commit,
+    pin_from_git,
+)
 from .config import AgentConfig
 from .context import Context, Verifier
 from .critical_path import CpmAnalysis, CpmError, CpmNode, analyse_cpm, cpm_from_dict
@@ -379,6 +400,22 @@ __all__ = [
     "SignatureVerifier",
     "SystemVerifier",
     "tool_available",
+    # Component bundle / source / runtime (SPEC-0007 Phase 1a)
+    "BUNDLE_MANIFEST",
+    "BundleError",
+    "build_bundle",
+    "build_bundle_from_dir",
+    "bundle_sha256",
+    "component_json",
+    "load_manifest",
+    "AllowlistedEntryResolver",
+    "EntryNotAllowed",
+    "GitError",
+    "GitSource",
+    "PinnedComponent",
+    "bundle_at",
+    "git_commit",
+    "pin_from_git",
     # CPM: a read-only, deterministic capability (not an agent)
     "CpmAnalysis",
     "CpmNode",
