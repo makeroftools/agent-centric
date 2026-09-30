@@ -112,6 +112,13 @@ from .component_state import (
 from .config import AgentConfig
 from .context import Context, Verifier
 from .critical_path import CpmAnalysis, CpmError, CpmNode, analyse_cpm, cpm_from_dict
+from .design import (
+    CompiledDesign,
+    DesignError,
+    DesignReport,
+    compile_design,
+    validate_design,
+)
 from .determinism import DeterminismRating, Rule, RuleSet, resolve_with_rules, score_determinism
 from .domainrepo import (
     Artifact,
@@ -493,6 +500,12 @@ __all__ = [
     "bundle_at",
     "git_commit",
     "pin_from_git",
+    # Design document: validate/compile (SPEC-0008 Phase 1)
+    "DesignError",
+    "DesignReport",
+    "CompiledDesign",
+    "validate_design",
+    "compile_design",
     # CPM: a read-only, deterministic capability (not an agent)
     "CpmAnalysis",
     "CpmNode",

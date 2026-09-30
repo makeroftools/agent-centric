@@ -107,12 +107,17 @@ Example root: [`examples/components/shell/`](../../examples/components/shell)
 
 Runnable demo: [`examples/release_signing.py`](../../examples/release_signing.py).
 
-## Human graph design (SPEC-0008, draft)
+## Human graph design (SPEC-0008)
 
-Humans may design CBP process graphs in a **design-time** surface (n8n), which
-emits a declarative `design.v1` document. The shell is the boundary: a design is
-validated fail-closed, pinned and signed, then booted. n8n is an out-of-process
-adapter and never enters the local-first run path.
+`agent-centric` is the **wrapper/harness agent** around the CBP/ABM execution
+model; a network (and its interfaces) may be **composed or generated at start-up**
+and is executable only once **frozen and content-hashed**. Humans (or agents, or
+n8n) author a declarative `design.v1` document — a `network.v1` graph plus
+requested component refs. Phase 1 (`contracts/design.py`, `cbp/design.py`)
+delivers the content-hashed document and deterministic, fail-closed
+`validate`/`compile` (demo: [`examples/design_compile.py`](../../examples/design_compile.py)).
+The shell is the boundary: a design is then pinned, signed, and booted; n8n is an
+out-of-process adapter and never enters the local-first run path.
 
 See [`specs/SPEC-0008-shell-design-interface-n8n.md`](../../specs/SPEC-0008-shell-design-interface-n8n.md).
 

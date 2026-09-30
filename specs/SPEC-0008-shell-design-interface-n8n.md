@@ -19,6 +19,14 @@ operator's suite proves.
 
 ## Context
 
+The harness (`agent-centric`) is the **wrapper and harness agent** around the
+CBP/ABM execution model. That model — the network of components/agents — may be
+**generated dynamically at run time**, and **any interface** (the user interface,
+an n8n surface, an API, …) is itself **composed and available at start-up** of an
+`agent-centric` execution network. The invariant that keeps this deterministic is
+that whatever is generated or composed is **frozen and content-hashed before it
+executes** (SPEC-0002 §3).
+
 - The shell is already the root **component** of the tree — not an external
   orchestrator — see [`SPEC-0007`](SPEC-0007-harness-shell-component-distribution.md)
   §1 and [`docs/agent/architecture.md`](../docs/agent/architecture.md). Phase 2
@@ -35,15 +43,26 @@ operator's suite proves.
 
 ## Decision
 
-### 1. Two planes, one boundary
+### 1. Compose (or generate), freeze, then execute
 
-| Plane | Runs where | Artifact | Never does |
+| Phase | Where | Artifact | Never does |
 | --- | --- | --- | --- |
-| **Design** (authoring) | human tools, incl. n8n | a `design.v1` document | execute components; hold runtime credentials; bypass validation |
-| **Execution** | the harness, local-first | a verified `components.lock` + booted tree | call n8n; require network; accept an unvalidated design |
+| **Compose / generate** | human tools (n8n) **or** the running harness | a `design.v1` document | execute an unfrozen component; hold runtime credentials; bypass validation |
+| **Execute** | the harness, local-first | a verified `components.lock` + booted tree | call n8n; require network; accept an unfrozen design |
 
-The **shell** is the single boundary: it is the root component *and* the surface
-through which a design is validated, compiled, pinned, signed, and booted.
+The harness (`agent-centric`) is the **wrapper/harness agent** around the CBP/ABM
+execution model. The **shell** is its root component — the single boundary
+through which a design is validated, compiled, pinned, signed, and booted. A
+network may be generated dynamically (by an agent, a human, or n8n); it becomes
+executable only after it is frozen, content-hashed, and verified.
+
+### 1a. Interfaces are composed components
+
+An **interface** (UI, n8n surface, CLI, API) is not a privileged harness feature:
+it is a component, composed and available **at start-up** of the execution
+network, exactly like any other node (SPEC-0002 §1: no privileged type). Local
+interfaces compose freely; interfaces that require network are **declared-gated**
+and off by default (Law 5).
 
 ### 2. The design artifact is declarative and content-hashed
 
@@ -115,23 +134,26 @@ workflow setting ⇄ envelope/grant — all validated against `design.v1`.
 
 | Phase | Status | Deliverable |
 | --- | --- | --- |
-| 0 | **delivered** | this spec; the design/execution boundary and non-goals |
-| 1 | roadmap | `design.v1` contract + `validate`/`compile` (offline, deterministic) |
+| 0 | **delivered** | this spec; the wrapper/interface model; the compose-freeze-execute boundary and non-goals |
+| 1 | MVP | `design.v1` contract (`contracts/design.py`) + deterministic, fail-closed `validate`/`compile` (`cbp/design.py`); demo `examples/design_compile.py`; `tests/test_design.py` |
 | 2 | roadmap | n8n adapter import/export + canonical round-trip; fixture tests |
 | 3 | roadmap | `pin`/`record` wiring: design → signed lock → boot |
 | 4 | declared-gated | live self-hosted n8n integration (needs operator infra) |
 
 ## Acceptance criteria
 
-- [ ] `design.v1` exists, is additive, canonical, and content-hashable.
-- [ ] `validate` is deterministic and fail-closed on schema, cycle, port/edge,
-      absence, and envelope violations — proven by tests.
-- [ ] An identical design compiles to the same `design_hash`; pinning resolves
-      refs to commits and never floats at run time.
+- [x] `design.v1` exists, is additive, canonical, and content-hashable
+      (`contracts/design.py`).
+- [x] `validate` is deterministic and fail-closed on schema, cycle, port/edge,
+      and absence violations — proven by `tests/test_design.py`.
+- [x] An identical design compiles to the same `design_hash`; compilation is
+      deterministic and offline.
+- [ ] `validate` also enforces envelope limits (with the runtime/pin phase).
+- [ ] Pinning resolves refs to commits and never floats at run time.
 - [ ] The n8n round-trip is stable (same canonical bytes) and tested with
       fixtures only — no network in CI.
 - [ ] No execution path imports n8n; a design cannot introduce unsigned code.
-- [ ] The convention guard asserts this spec is recorded.
+- [x] The convention guard asserts this spec is recorded.
 
 ## Risks / invariants
 

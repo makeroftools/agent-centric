@@ -117,12 +117,17 @@ Run the fresh-session checklist below before acting.
     (no private key in-process) and an append-only, hash-chained transparency log
     (tamper + truncation detection, signatures re-verified on read); demo
     `examples/release_signing.py`. The **live self-hosted mirror** remains.
+  - **Shell design (SPEC-0008, Phase 1 MVP)** (`contracts/design.py`,
+    `cbp/design.py`): a content-hashed `design.v1` (a `network.v1` + requested
+    refs) with deterministic, fail-closed `validate_design`/`compile_design`
+    (schema/cycle/edge/absence gates); demo `examples/design_compile.py`. The
+    n8n adapter and the pin/record wiring remain.
 
 ## Validation (last full run)
 
-- `uv run pytest -o addopts="" -p no:cacheprovider` → **1280 passed**.
+- `uv run pytest -o addopts="" -p no:cacheprovider` → **1293 passed**.
 - `uv run ruff check .` → clean.
-- `uv run mypy src` → clean (**113** source files).
+- `uv run mypy src` → clean (**115** source files).
 - `uv run agent-centric cbp-check` → **8/8**, READY.
 - Convention guard → **38 passed**.
 
@@ -130,10 +135,10 @@ Run the fresh-session checklist below before acting.
 
 - **Phase 2 remainder:** commit the umbrella `components.lock` (blocked on the
   Phase 0.5b mirror — no real pinned remotes yet).
-- **Shell design interface (SPEC-0008, draft):** the shell as the human-facing
-  interface; n8n as a design-time authoring surface that emits `design.v1` and
-  never enters the run path. Spec written; implementation is Phase 1
-  (`design.v1` + validate/compile), then the adapter.
+- **Shell design (SPEC-0008) remainder:** the n8n adapter (import/export +
+  canonical round-trip, fixture-tested) and the pin/record wiring
+  (design → signed lock → boot). Phase 1 (`design.v1` + validate/compile) is
+  delivered.
 - **Phase 0.5b remainder:** the live self-hosted mirror (Forgejo/Gitea); the
   signing service and transparency log are delivered.
 - **Phases 3–5:** directives aggregated into skills + pinned model components;
@@ -161,20 +166,20 @@ See [`docs/agent/levels.md`](docs/agent/levels.md),
   `component_source.py`, `component_runtime.py`, `component_state.py`,
   `component_graph.py`, `component_boot.py`, `component_process.py`
   (+ private `_component_runner.py`), `bills_component.py`, `shell_component.py`,
-  `registry_component.py`, `signing_service.py`, `transparency.py`, `cache.py`,
-  `resolver.py`, `signing.py`.
-- `src/agent_centric/contracts/` — versioned contracts, including
-  `component.py` and `components_lock.py`.
+  `registry_component.py`, `signing_service.py`, `transparency.py`, `design.py`,
+  `cache.py`, `resolver.py`, `signing.py`.
+- `src/agent_centric/contracts/` — versioned contracts, including `component.py`,
+  `components_lock.py`, and `design.py` (`design.v1`).
 - `specs/` — specs (SPEC-0002 target; SPEC-0007 distribution plan;
-  SPEC-0008 shell design interface, draft).
+  SPEC-0008 shell design interface).
 - `examples/components/` — `counter` (atomic), `bills_registry` (composite:
   SQLite state + embedded `bills_rules` + referenced `agenda`), and the Phase 2
   `shell` (root composite → `registry`) + `registry` components.
 - `tests/test_agent_conventions.py` — convention + anti-drift guard;
   `tests/test_component_distribution.py`, `tests/test_component_state.py`,
   `tests/test_component_graph.py`, `tests/test_component_boot.py`,
-  `tests/test_component_process.py`, and `tests/test_release_signing.py` — the
-  distribution slice.
+  `tests/test_component_process.py`, `tests/test_release_signing.py`, and
+  `tests/test_design.py` — the distribution + design slice.
 
 ## Non-goals (do not build without explicit direction)
 
