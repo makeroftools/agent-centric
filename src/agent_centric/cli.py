@@ -24,7 +24,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# Make CLI output stream live, even when piped (``agent-centric fbp | ...``),
+# Make CLI output stream live, even when piped (``agent-centric cbp | ...``),
 # so an operator sees progress as it happens rather than in bursts only when
 # the pipe buffer flushes. Line-buffered stdout is the safe minimum.
 try:
@@ -549,58 +549,58 @@ def _build_parser() -> argparse.ArgumentParser:
     p_replay = sub.add_parser("replay-verify", help="Re-run and verify a demo trajectory.")
     p_replay.add_argument("trajectory_id", help="The durable trajectory id to verify.")
 
-    p_fbp = sub.add_parser("fbp", help="Drive the FBP subsystem demo (inproc, offline).")
-    p_fbp.add_argument(
+    p_cbp = sub.add_parser("cbp", help="Drive the CBP subsystem demo (inproc, offline).")
+    p_cbp.add_argument(
         "--transport",
         choices=("inproc", "tcp", "ipc"),
         default="inproc",
         help="Transport to prove the protocol over (default: inproc).",
     )
-    p_fbp.add_argument(
+    p_cbp.add_argument(
         "--ledger",
         type=Path,
         default=None,
         help="Optional durable directive-ledger path to record the demo session to.",
     )
-    p_fbp.add_argument(
+    p_cbp.add_argument(
         "--integrity",
         default=None,
         help="Optional shared traffic-integrity secret. When set, every directive "
-        "on the FBP wire is HMAC-signed and verified on receipt (opt-in).",
+        "on the CBP wire is HMAC-signed and verified on receipt (opt-in).",
     )
-    p_fbp.add_argument(
+    p_cbp.add_argument(
         "--curve",
         action="store_true",
         default=False,
-        help="Encrypt the FBP wire with ZeroMQ CURVE (opt-in). Requires a "
+        help="Encrypt the CBP wire with ZeroMQ CURVE (opt-in). Requires a "
         "tcp/ipc transport; fails closed with inproc.",
     )
 
-    p_fbp_web = sub.add_parser(
-        "fbp-web",
-        help="Serve a local, actionable landing page for the FBP subsystem (stdlib http.server).",
+    p_cbp_web = sub.add_parser(
+        "cbp-web",
+        help="Serve a local, actionable landing page for the CBP subsystem (stdlib http.server).",
     )
-    p_fbp_web.add_argument(
+    p_cbp_web.add_argument(
         "--host", default="127.0.0.1", help="Loopback bind host (default: 127.0.0.1)."
     )
-    p_fbp_web.add_argument(
+    p_cbp_web.add_argument(
         "--port",
         type=int,
         default=8790,
         help="Loopback bind port (default: 8790).",
     )
-    p_fbp_web.add_argument(
+    p_cbp_web.add_argument(
         "--open",
         action="store_true",
         help="Open a browser at the landing page on startup.",
     )
-    p_fbp_web.add_argument(
+    p_cbp_web.add_argument(
         "--reload",
         action="store_true",
-        help="Watch the FBP source tree and auto-restart the server on changes "
+        help="Watch the CBP source tree and auto-restart the server on changes "
         "(dev convenience; loopback-only).",
     )
-    p_fbp_web.add_argument(
+    p_cbp_web.add_argument(
         "--history",
         type=Path,
         default=None,
@@ -608,7 +608,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional durable chat-history store path. The model box's transcript "
         "persists across restarts (explicit grant; with default: in-memory only).",
     )
-    p_fbp_web.add_argument(
+    p_cbp_web.add_argument(
         "--networks",
         type=Path,
         default=None,
@@ -616,7 +616,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional durable store for saved component networks. Networks persist "
         "across restarts (explicit grant; with default: in-memory only).",
     )
-    p_fbp_web.add_argument(
+    p_cbp_web.add_argument(
         "--bills",
         type=Path,
         default=None,
@@ -624,7 +624,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional durable bills registry store. The bills loop's registry "
         "persists across restarts (explicit grant; with default: in-memory only).",
     )
-    p_fbp_web.add_argument(
+    p_cbp_web.add_argument(
         "--registry",
         type=Path,
         default=None,
@@ -633,7 +633,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "The domain catalog + artifacts persist across restarts (explicit grant; "
         "with default: in-memory only).",
     )
-    p_fbp_web.add_argument(
+    p_cbp_web.add_argument(
         "--activity",
         type=Path,
         default=None,
@@ -641,77 +641,77 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional durable operator activity feed. Records operator actions\n"
         "across restarts (explicit grant; with default: in-memory only).",
     )
-    p_fbp_web.add_argument(
+    p_cbp_web.add_argument(
         "--kill",
         action="store_true",
-        help="Stop a running fbp-web server on the port (instead of serving).",
+        help="Stop a running cbp-web server on the port (instead of serving).",
     )
-    p_fbp_web.add_argument(
+    p_cbp_web.add_argument(
         "--integrity",
         default=None,
         help="Optional shared traffic-integrity secret for the in-process tree. "
-        "When set, every directive on the FBP wire is HMAC-signed and verified "
+        "When set, every directive on the CBP wire is HMAC-signed and verified "
         "on receipt (opt-in); a badge shows on the page.",
     )
 
-    p_fbp_web_kill = sub.add_parser(
-        "fbp-web-kill",
-        help="Stop a running fbp-web server (by port, default 8790).",
+    p_cbp_web_kill = sub.add_parser(
+        "cbp-web-kill",
+        help="Stop a running cbp-web server (by port, default 8790).",
     )
-    p_fbp_web_kill.add_argument(
+    p_cbp_web_kill.add_argument(
         "--port",
         type=int,
         default=8790,
         help="Port of the running server to stop (default: 8790).",
     )
 
-    p_fbp_replay = sub.add_parser(
-        "fbp-replay",
+    p_cbp_replay = sub.add_parser(
+        "cbp-replay",
         help="Re-open a durable directive ledger and re-verify (replay) it.",
     )
-    p_fbp_replay.add_argument("ledger_path", type=Path, help="The durable ledger file.")
-    p_fbp_replay.add_argument(
+    p_cbp_replay.add_argument("ledger_path", type=Path, help="The durable ledger file.")
+    p_cbp_replay.add_argument(
         "--transport",
         choices=("inproc", "tcp", "ipc"),
         default="inproc",
         help="Transport to replay over (default: inproc).",
     )
 
-    p_fbp_summary = sub.add_parser(
-        "fbp-summary",
+    p_cbp_summary = sub.add_parser(
+        "cbp-summary",
         help="Summarise a durable directive ledger (operator-facing, read-only).",
     )
-    p_fbp_summary.add_argument(
+    p_cbp_summary.add_argument(
         "ledger_path", type=Path, help="The durable ledger file."
     )
 
-    p_fbp_domains = sub.add_parser(
-        "fbp-domains",
+    p_cbp_domains = sub.add_parser(
+        "cbp-domains",
         help="Summarise a saved Domain Registry + Artifact Vault (operator-facing, read-only).",
     )
-    p_fbp_domains.add_argument(
+    p_cbp_domains.add_argument(
         "registry_path", type=Path, help="The saved registry/vault file (--registry path)."
     )
 
-    p_fbp_check = sub.add_parser(
-        "fbp-check",
+    p_cbp_check = sub.add_parser(
+        "cbp-check",
         help="Run a bounded, deterministic self-test of the verified spine and "
         "capability surface; print a verdict and exit non-zero on any failure "
         "(deploy/readiness gate).",
     )
-    p_fbp_check.add_argument(
+    p_cbp_check.add_argument(
         "--integrity",
         default=None,
         help="Optional shared traffic-integrity secret; run the self-test over the "
         "signed wire (opt-in).",
     )
-    p_fbp_check.add_argument(
+    p_cbp_check.add_argument(
         "--transport",
         choices=("inproc", "tcp", "ipc"),
         default="inproc",
         help="Transport to run the self-test over (default: inproc).",
     )
-    p_fbp_check.add_argument(
+    p_cbp_check.add_argument(
         "--curve",
         action="store_true",
         default=False,
@@ -721,36 +721,36 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser(
         "acp",
-        help="Run the ACP adapter over stdio (expose the FBP platform as an "
+        help="Run the ACP adapter over stdio (expose the CBP platform as an "
         "External Agent in Zed).",
     )
     sub.add_parser(
         "mcp",
-        help="Run the MCP adapter over stdio (expose the FBP platform as tools to any LLM host).",
+        help="Run the MCP adapter over stdio (expose the CBP platform as tools to any LLM host).",
     )
     return parser
 
 
-def _fbp_double(value: int) -> int:
+def _cbp_double(value: int) -> int:
     return value * 2
 
 
-def _fbp_even(value: Any) -> bool:
+def _cbp_even(value: Any) -> bool:
     return isinstance(value, int) and value % 2 == 0
 
 
-def _fbp_odd(value: Any) -> bool:
+def _cbp_odd(value: Any) -> bool:
     return isinstance(value, int) and value % 2 == 1
 
 
-def _fbp_cpm(nodes: Any) -> Any:
+def _cbp_cpm(nodes: Any) -> Any:
     """Deterministic critical-path analysis as a registered capability."""
-    from agent_centric.fbp.critical_path import cpm_from_dict
+    from agent_centric.cbp.critical_path import cpm_from_dict
 
     return cpm_from_dict(nodes).to_dict()
 
 
-def _seed_fbp_callables(fbp: Any) -> None:
+def _seed_cbp_callables(cbp: Any) -> None:
     """Register the deterministic demo callables in the module-level registry.
 
     These are needed both to drive the live demo and to re-resolve directives
@@ -758,49 +758,49 @@ def _seed_fbp_callables(fbp: Any) -> None:
     the demo's directives reference (double/even/odd/cpm), so a replayed ledger
     re-resolves them deterministically.
     """
-    fbp.register_callable("double", _fbp_double, source_url="file:///tasks/double")
-    fbp.register_callable("even", _fbp_even)
-    fbp.register_callable("odd", _fbp_odd)
-    fbp.register_callable("cpm", _fbp_cpm)
+    cbp.register_callable("double", _cbp_double, source_url="file:///tasks/double")
+    cbp.register_callable("even", _cbp_even)
+    cbp.register_callable("odd", _cbp_odd)
+    cbp.register_callable("cpm", _cbp_cpm)
 
 
-def _fbp_endpoint(transport: str) -> str:
-    """A transport-appropriate root endpoint for the FBP driver/CLI."""
+def _cbp_endpoint(transport: str) -> str:
+    """A transport-appropriate root endpoint for the CBP driver/CLI."""
     return {
         "inproc": "root",
         "tcp": "127.0.0.1:5599",
-        "ipc": "/tmp/agent-centric-fbp-root",
+        "ipc": "/tmp/agent-centric-cbp-root",
     }[transport]
 
 
-def _cmd_fbp(
+def _cmd_cbp(
     transport: str,
     ledger: Path | None = None,
     integrity: str | None = None,
     curve: bool = False,
 ) -> int:
-    """Drive the FBP subsystem demo over the directive/response protocol.
+    """Drive the CBP subsystem demo over the directive/response protocol.
 
-    Uses the high-level ``FbpDriver`` (the easy-UX layer) to prove the core
+    Uses the high-level ``CbpDriver`` (the easy-UX layer) to prove the core
     properties on a real tree: registry-as-agent, configure, local run,
     mediated spawn + delegation, the correctness spine (parent re-verifies a
     child's value on the way up), and fail-closed delegation. All offline; the
     transport exercises ``inproc``/``tcp``/``ipc``. When ``ledger`` is given, the
     session is recorded to a durable directive ledger (recoverable replay).
     """
-    import agent_centric.fbp as fbp
+    import agent_centric.cbp as cbp
 
-    _seed_fbp_callables(fbp)
+    _seed_cbp_callables(cbp)
 
     # A transport-appropriate root endpoint: "inproc" uses a bare name;
     # "tcp" needs host:port; "ipc" needs a path. Child endpoints are
     # resolved by the driver against the same transport.
-    endpoint = _fbp_endpoint(transport)
+    endpoint = _cbp_endpoint(transport)
     import tempfile
 
-    from agent_centric.fbp import open_state, open_trajectory
+    from agent_centric.cbp import open_state, open_trajectory
 
-    _workdir = tempfile.mkdtemp(prefix="agent-centric-fbp-")
+    _workdir = tempfile.mkdtemp(prefix="agent-centric-cbp-")
     driver_kwargs: dict[str, Any] = {}
     if ledger is not None:
         driver_kwargs["ledger_path"] = str(ledger)
@@ -809,16 +809,16 @@ def _cmd_fbp(
     if curve:
         driver_kwargs["curve"] = True
     try:
-        driver = fbp.FbpDriver(
+        driver = cbp.CbpDriver(
             transport=transport, endpoint=endpoint, **driver_kwargs
         )
-    except fbp.TransportSecurityError as exc:
+    except cbp.TransportSecurityError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     with driver:
-        driver.register("double", _fbp_double, source_url="file:///tasks/double")
-        driver.register("even", _fbp_even)
-        driver.register("odd", _fbp_odd)
+        driver.register("double", _cbp_double, source_url="file:///tasks/double")
+        driver.register("even", _cbp_even)
+        driver.register("odd", _cbp_odd)
         driver.configure(
             tasks=("double",),
             verifiers=("even", "odd"),
@@ -937,7 +937,7 @@ def _cmd_fbp(
 
         # CPM: a read-only, deterministic capability (a registered callable,
         # not an agent — it is a pure observation, not a unit of work).
-        driver.register("cpm", _fbp_cpm)
+        driver.register("cpm", _cbp_cpm)
         driver.configure(tasks=("cpm",))
         cpm = driver.run(
             "cpm",
@@ -1018,7 +1018,7 @@ def _cmd_fbp(
         print(f"maintain: open_after_paid={open_ids}")
 
         # Allowlisted workspace capability: a fail-closed file-resource guard.
-        from agent_centric.fbp import WorkspaceError, WorkspaceFS, WorkspaceLayout
+        from agent_centric.cbp import WorkspaceError, WorkspaceFS, WorkspaceLayout
 
         ws = WorkspaceFS(
             f"{_workdir}/ws",
@@ -1052,7 +1052,7 @@ def _cmd_fbp(
 
         # Determinism: an ambiguous draft scores low (human judgment); an
         # approved rule makes a matching draft deterministic (auto-resolve).
-        from agent_centric.fbp import Rule, RuleSet, resolve_with_rules, score_determinism
+        from agent_centric.cbp import Rule, RuleSet, resolve_with_rules, score_determinism
 
         ambiguous = {"vendor": "GasCo"}
         score = score_determinism(ambiguous)
@@ -1086,7 +1086,7 @@ def _cmd_fbp(
         return 0 if local.verified and delegated.verified and replay["passed"] else 1
 
 
-def _cmd_fbp_check(
+def _cmd_cbp_check(
     transport: str, integrity: str | None = None, curve: bool = False
 ) -> int:
     """Run a bounded, deterministic self-test of the verified spine.
@@ -1103,11 +1103,11 @@ def _cmd_fbp_check(
     CURVE wire encryption — so the self-test can prove either the signed wire or
     the encrypted wire end-to-end (opt-in).
     """
-    import agent_centric.fbp as fbp
+    import agent_centric.cbp as cbp
 
-    _seed_fbp_callables(fbp)
+    _seed_cbp_callables(cbp)
 
-    endpoint = _fbp_endpoint(transport)
+    endpoint = _cbp_endpoint(transport)
     driver_kwargs: dict[str, Any] = {}
     if integrity:
         driver_kwargs["integrity_secret"] = integrity.encode("utf-8")
@@ -1121,22 +1121,22 @@ def _cmd_fbp_check(
         return ok
 
     try:
-        driver = fbp.FbpDriver(
+        driver = cbp.CbpDriver(
             transport=transport, endpoint=endpoint, **driver_kwargs
         )
-    except fbp.TransportSecurityError as exc:
+    except cbp.TransportSecurityError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     with driver:
-        driver.register("double", _fbp_double, source_url="file:///tasks/double")
-        driver.register("even", _fbp_even)
-        driver.register("odd", _fbp_odd)
+        driver.register("double", _cbp_double, source_url="file:///tasks/double")
+        driver.register("even", _cbp_even)
+        driver.register("odd", _cbp_odd)
         # Grant a temp durable state/trajectory so the state round-trip check is
         # a real, granted store (persistence is an explicit grant — the check
         # must prove the granted path, not fail-closed for lack of a grant).
         import tempfile as _tf
 
-        _state = _tf.mkdtemp(prefix="agent-centric-fbp-check-")
+        _state = _tf.mkdtemp(prefix="agent-centric-cbp-check-")
         driver.configure(
             tasks=("double",), verifiers=("even", "odd"),
             state=f"{_state}/state.db", trajectory=f"{_state}/audit.db",
@@ -1191,20 +1191,20 @@ def _cmd_fbp_check(
 
     failed = [r for r in results if not r[1]]
     ok_total = len(results) - len(failed)
-    print(f"fbp-check: {ok_total}/{len(results)} checks passed")
+    print(f"cbp-check: {ok_total}/{len(results)} checks passed")
     for name, ok, detail in results:
         mark = "ok" if ok else "FAIL"
         suffix = f" ({detail})" if detail else ""
         print(f"  [{mark}] {name}{suffix}")
     if failed:
         for name, _, _ in failed:
-            print(f"fbp-check: FAILED on {name}", file=sys.stderr)
+            print(f"cbp-check: FAILED on {name}", file=sys.stderr)
         return 1
-    print("fbp-check: READY — verified spine green")
+    print("cbp-check: READY — verified spine green")
     return 0
 
 
-def _cmd_fbp_web(
+def _cmd_cbp_web(
     *,
     host: str = "127.0.0.1",
     port: int = 8790,
@@ -1218,15 +1218,15 @@ def _cmd_fbp_web(
     integrity: str | None = None,
     kill: bool = False,
 ) -> int:
-    """Serve a local, actionable landing page for the FBP subsystem.
+    """Serve a local, actionable landing page for the CBP subsystem.
 
     Binds a stdlib ``http.server`` on loopback (fail-closed: never exposed
     beyond the local machine) and renders a live landing page against an
-    in-process ``FbpDriver``. The page is read/verify-only and never mutates
+    in-process ``CbpDriver``. The page is read/verify-only and never mutates
     durable state. Blocks until interrupted (Ctrl-C).
 
     With ``reload=True`` the server runs as a child process that is restarted
-    whenever the FBP source tree changes (a dev convenience so edits are picked
+    whenever the CBP source tree changes (a dev convenience so edits are picked
     up without a manual restart). ``history`` optionally grants a durable,
     cross-restart chat-history store; ``networks`` optionally grants durable
     storage for saved component networks; ``bills`` optionally grants a durable
@@ -1236,16 +1236,16 @@ def _cmd_fbp_web(
     port instead of serving.
     """
     if kill:
-        return _cmd_fbp_web_kill(port=port)
+        return _cmd_cbp_web_kill(port=port)
 
     if reload:
-        return _fbp_web_reload(
+        return _cbp_web_reload(
             host=host, port=port, open_browser=open_browser, history=history,
             networks=networks, bills=bills, registry=registry, activity=activity,
             integrity=integrity,
         )
 
-    from agent_centric.fbp.web import serve
+    from agent_centric.cbp.web import serve
 
     try:
         serve(host=host, port=port, open_browser=open_browser, history_path=history,
@@ -1253,21 +1253,21 @@ def _cmd_fbp_web(
               activity_path=activity,
               integrity_secret=integrity.encode("utf-8") if integrity else None)
     except OSError as exc:
-        print(f"fbp-web: could not bind {host}:{port}: {exc}", file=sys.stderr)
+        print(f"cbp-web: could not bind {host}:{port}: {exc}", file=sys.stderr)
         return 1
     return 0
 
 
-def _fbp_web_reload(
+def _cbp_web_reload(
     *, host: str, port: int, open_browser: bool, history: Path | None = None,
     networks: Path | None = None, bills: Path | None = None,
     registry: Path | None = None, activity: Path | None = None,
     integrity: str | None = None,
 ) -> int:
-    """Run ``fbp-web`` as a child process, restarting it on source changes.
+    """Run ``cbp-web`` as a child process, restarting it on source changes.
 
-    A tiny, stdlib-only dev loop: it spawns ``python -m agent_centric fbp-web``
-    as a child, watches the FBP source tree, and restarts the child whenever a
+    A tiny, stdlib-only dev loop: it spawns ``python -m agent_centric cbp-web``
+    as a child, watches the CBP source tree, and restarts the child whenever a
     ``.py`` file changes. The child inherits the current environment (so
     ``OPENROUTER_API_KEY`` / ``OPENROUTER_MODEL`` are honoured). Ctrl-C stops
     both the watcher and the child.
@@ -1276,23 +1276,23 @@ def _fbp_web_reload(
     import subprocess
     import time
 
-    from agent_centric.fbp import _FBP_DIR
+    from agent_centric.cbp import _CBP_DIR
 
     child: subprocess.Popen[Any] | None = None
 
-    # If an fbp-web server (that we can positively identify) already owns the
+    # If an cbp-web server (that we can positively identify) already owns the
     # port, take it over so `--reload` is idempotent and convenient. We only
     # kill when we can confirm it is one of ours; an unrelated process on the
     # port is left untouched (fail-closed). This also means a second `--reload`
-    # (or a plain already-running `fbp-web`) never leaves two instances alive.
-    _fbp_kill_stale_web(port)
+    # (or a plain already-running `cbp-web`) never leaves two instances alive.
+    _cbp_kill_stale_web(port)
 
     def _spawn(*, open_browser: bool) -> subprocess.Popen[Any]:
         cmd = [
             sys.executable,
             "-m",
             "agent_centric",
-            "fbp-web",
+            "cbp-web",
             "--host",
             str(host),
             "--port",
@@ -1333,27 +1333,27 @@ def _fbp_web_reload(
         # re-uses the same port, so later reloads re-fresh the already-open tab
         # rather than spawning a second one.
         child = _spawn(open_browser=open_browser)
-        print(f"fbp-web: watching {_FBP_DIR} for changes (Ctrl-C to stop)")
+        print(f"cbp-web: watching {_CBP_DIR} for changes (Ctrl-C to stop)")
         while True:
             time.sleep(1.0)
             if child.poll() is not None:
                 # Child exited on its own (e.g. bind error). Surface and stop.
                 print(
-                    f"fbp-web: server exited with code {child.returncode}; stopping.",
+                    f"cbp-web: server exited with code {child.returncode}; stopping.",
                     file=sys.stderr,
                 )
                 return child.returncode or 1
-            if _fbp_tree_changed(_FBP_DIR):
-                print("fbp-web: change detected; restarting...")
+            if _cbp_tree_changed(_CBP_DIR):
+                print("cbp-web: change detected; restarting...")
                 _stop(child)
                 child = _spawn(open_browser=False)
     except KeyboardInterrupt:
-        print("\nfbp-web: stopping.")
+        print("\ncbp-web: stopping.")
         _stop(child)
         return 0
 
 
-def _fbp_tree_changed(root: Path, *, interval: float = 1.0) -> bool:
+def _cbp_tree_changed(root: Path, *, interval: float = 1.0) -> bool:
     """Return True if any ``.py`` file under ``root`` changed since last call.
 
     Uses (mtime, size) snapshots; cheap and adequate for a dev reload loop.
@@ -1361,16 +1361,16 @@ def _fbp_tree_changed(root: Path, *, interval: float = 1.0) -> bool:
     """
     import time
 
-    state = _fbp_watch_state
+    state = _cbp_watch_state
     if state["snapshot"] is None:
-        state["snapshot"] = _fbp_snapshot(root)
+        state["snapshot"] = _cbp_snapshot(root)
         state["last"] = time.monotonic()
         return False
     now = time.monotonic()
     if now - state["last"] < interval:
         return False
     state["last"] = now
-    snap = _fbp_snapshot(root)
+    snap = _cbp_snapshot(root)
     prev = state["snapshot"]
     changed = prev is not None and snap != prev
     state["snapshot"] = snap
@@ -1378,10 +1378,10 @@ def _fbp_tree_changed(root: Path, *, interval: float = 1.0) -> bool:
 
 
 # Module-level state for the reload watcher (avoids function-attribute typing).
-_fbp_watch_state: dict[str, Any] = {"snapshot": None, "last": 0.0}
+_cbp_watch_state: dict[str, Any] = {"snapshot": None, "last": 0.0}
 
 
-def _fbp_snapshot(root: Path) -> dict[str, tuple[int, int]]:
+def _cbp_snapshot(root: Path) -> dict[str, tuple[int, int]]:
     """Snapshot (mtime, size) of every ``.py`` file under ``root``."""
     snap: dict[str, tuple[int, int]] = {}
     for p in root.rglob("*.py"):
@@ -1393,8 +1393,8 @@ def _fbp_snapshot(root: Path) -> dict[str, tuple[int, int]]:
     return snap
 
 
-def _cmd_fbp_web_kill(*, port: int = 8790) -> int:
-    """Stop a running ``fbp-web`` server bound to ``port``.
+def _cmd_cbp_web_kill(*, port: int = 8790) -> int:
+    """Stop a running ``cbp-web`` server bound to ``port``.
 
     Finds the process listening on the given loopback port and terminates it.
     Uses ``psutil`` when available; otherwise falls back to ``lsof``/``fuser``.
@@ -1405,14 +1405,14 @@ def _cmd_fbp_web_kill(*, port: int = 8790) -> int:
 
     pid = _pid_on_port(port)
     if pid is None:
-        print(f"fbp-web-kill: no server found on port {port}.")
+        print(f"cbp-web-kill: no server found on port {port}.")
         return 1
     try:
         os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
-        print(f"fbp-web-kill: process {pid} already gone.")
+        print(f"cbp-web-kill: process {pid} already gone.")
         return 1
-    print(f"fbp-web-kill: stopped server on port {port} (pid {pid}).")
+    print(f"cbp-web-kill: stopped server on port {port} (pid {pid}).")
     return 0
 
 
@@ -1450,11 +1450,11 @@ def _pid_on_port(port: int) -> int | None:
         return None
 
 
-def _fbp_kill_stale_web(port: int) -> None:
-    """Kill a running ``fbp-web`` server on ``port``, if we can identify it.
+def _cbp_kill_stale_web(port: int) -> None:
+    """Kill a running ``cbp-web`` server on ``port``, if we can identify it.
 
     Used by ``--reload`` to take the port over. We only terminate the process if
-    we can confirm it is one of ours (an ``agent-centric fbp-web`` command); if
+    we can confirm it is one of ours (an ``agent-centric cbp-web`` command); if
     the port is owned by something else or we cannot tell, we leave it alone
     (fail-closed) so unrelated services are never harmed.
     """
@@ -1465,42 +1465,42 @@ def _fbp_kill_stale_web(port: int) -> None:
     if pid is None:
         return
 
-    # The child server is started via ``python -m agent_centric fbp-web``; match
+    # The child server is started via ``python -m agent_centric cbp-web``; match
     # on the cmdline so we never kill an unrelated service bound to the port.
     try:
         with open(f"/proc/{pid}/cmdline", "rb") as fh:
             cmdline = fh.read().replace(b"\x00", b" ").decode("utf-8", errors="replace")
     except OSError:
         cmdline = ""
-    if "agent_centric" not in cmdline or "fbp-web" not in cmdline:
+    if "agent_centric" not in cmdline or "cbp-web" not in cmdline:
         print(
-            f"fbp-web: port {port} is in use by a non-fbp process (pid {pid}); "
+            f"cbp-web: port {port} is in use by a non-cbp process (pid {pid}); "
             "leaving it untouched. Stop it yourself or pick another --port.",
             file=sys.stderr,
         )
         return
 
     os.kill(pid, signal.SIGTERM)
-    print(f"fbp-web: port {port} owned by a prior fbp-web (pid {pid}); taking it over.")
+    print(f"cbp-web: port {port} owned by a prior cbp-web (pid {pid}); taking it over.")
 
 
-def _cmd_fbp_replay(ledger_path: Path, transport: str) -> int:
+def _cmd_cbp_replay(ledger_path: Path, transport: str) -> int:
     """Re-open a durable directive ledger and re-verify (replay) it.
 
     This is the crash-safe recovery path: a session recorded to a durable
-    ledger (via ``fbp --ledger <path>``) is re-issued on a fresh, state-isolated
+    ledger (via ``cbp --ledger <path>``) is re-issued on a fresh, state-isolated
     tree and every run outcome compared to the recorded one.
     """
-    import agent_centric.fbp as fbp
+    import agent_centric.cbp as cbp
 
     # ``replay_ledger`` re-seeds the recorded callables from the ledger's
     # registry manifest (importing module.qualname). The deterministic demo set
     # is still re-registered here when available, keeping manual seeding the
     # documented fallback for non-importable callables.
-    _seed_fbp_callables(fbp)
-    endpoint = _fbp_endpoint(transport)
+    _seed_cbp_callables(cbp)
+    endpoint = _cbp_endpoint(transport)
     try:
-        result = fbp.replay_ledger(
+        result = cbp.replay_ledger(
             str(ledger_path), transport=transport, endpoint=endpoint
         )
     except FileNotFoundError:
@@ -1515,12 +1515,12 @@ def _cmd_fbp_replay(ledger_path: Path, transport: str) -> int:
     return 0 if result["ok"] else 1
 
 
-def _cmd_fbp_summary(ledger_path: Path) -> int:
+def _cmd_cbp_summary(ledger_path: Path) -> int:
     """Summarise a durable directive ledger (operator-facing, read-only)."""
-    import agent_centric.fbp as fbp
+    import agent_centric.cbp as cbp
 
     try:
-        s = fbp.summarise_ledger(str(ledger_path))
+        s = cbp.summarise_ledger(str(ledger_path))
     except FileNotFoundError:
         print(f"ledger  : no ledger file at {ledger_path}")
         return 1
@@ -1534,7 +1534,7 @@ def _cmd_fbp_summary(ledger_path: Path) -> int:
     return 0 if s["ok"] else 1
 
 
-def _cmd_fbp_domains(registry_path: Path) -> int:
+def _cmd_cbp_domains(registry_path: Path) -> int:
     """Summarise a saved Domain Registry + Artifact Vault (read-only)."""
     import json
     import os
@@ -1583,31 +1583,31 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_summarise(args.store, args.trajectory_id)
     if args.command == "replay-verify":
         return _cmd_replay_verify(args.store, args.trajectory_id)
-    if args.command == "fbp":
-        return _cmd_fbp(
+    if args.command == "cbp":
+        return _cmd_cbp(
             args.transport,
             ledger=args.ledger,
             integrity=args.integrity,
             curve=args.curve,
         )
-    if args.command == "fbp-check":
-        return _cmd_fbp_check(
+    if args.command == "cbp-check":
+        return _cmd_cbp_check(
             args.transport, integrity=args.integrity, curve=args.curve
         )
-    if args.command == "fbp-web":
-        return _cmd_fbp_web(
+    if args.command == "cbp-web":
+        return _cmd_cbp_web(
             host=args.host, port=args.port, open_browser=args.open, reload=args.reload,
             history=args.history, networks=args.networks, kill=args.kill,
             integrity=args.integrity,
         )
-    if args.command == "fbp-web-kill":
-        return _cmd_fbp_web_kill(port=args.port)
-    if args.command == "fbp-replay":
-        return _cmd_fbp_replay(args.ledger_path, args.transport)
-    if args.command == "fbp-summary":
-        return _cmd_fbp_summary(args.ledger_path)
-    if args.command == "fbp-domains":
-        return _cmd_fbp_domains(args.registry_path)
+    if args.command == "cbp-web-kill":
+        return _cmd_cbp_web_kill(port=args.port)
+    if args.command == "cbp-replay":
+        return _cmd_cbp_replay(args.ledger_path, args.transport)
+    if args.command == "cbp-summary":
+        return _cmd_cbp_summary(args.ledger_path)
+    if args.command == "cbp-domains":
+        return _cmd_cbp_domains(args.registry_path)
     if args.command == "acp":
         from agent_centric.acp import main as acp_main
 

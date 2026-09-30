@@ -41,7 +41,7 @@ caps = { attempts = 1, tokens = "unbounded" }
 name = "assisted"
 summary = "The agent authors; build-before-push; a human reviews every change."
 autonomy = "author"
-gates = ["ruff", "mypy", "fbp-check"]
+gates = ["ruff", "mypy", "cbp-check"]
 review = "human-all"
 can_run_suite = false
 can_merge = false
@@ -51,7 +51,7 @@ caps = { attempts = 3, tokens = "bounded" }
 name = "light-factory"
 summary = "Spec-driven; an isolated validator runs the suite; a human holds the review gate."
 autonomy = "spec-driven"
-gates = ["ruff", "mypy", "fbp-check", "pytest"]
+gates = ["ruff", "mypy", "cbp-check", "pytest"]
 review = "human-gate"
 can_run_suite = true
 can_merge = false
@@ -61,7 +61,7 @@ caps = { attempts = 3, tokens = "bounded" }
 name = "dark-factory"
 summary = "Merge-ready on isolated holdout-scenario pass. NOT YET ENABLED."
 autonomy = "holdout"
-gates = ["ruff", "mypy", "fbp-check", "pytest", "holdout"]
+gates = ["ruff", "mypy", "cbp-check", "pytest", "holdout"]
 review = "none-on-green"
 can_run_suite = true
 can_merge = true # gated: requires the isolated holdout validator

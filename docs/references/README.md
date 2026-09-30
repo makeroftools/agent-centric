@@ -18,4 +18,4 @@ large. This index records what belongs here.
 | `Software Factories, Light and Dark _ AddyOsmani.com.pdf` | Harness, loops, back-pressure, verification-as-constraint. |
 | `The Dark Factory Pattern_ ... _ HackerNoon.pdf` | Phased autonomy, holdout validation, isolation of codegen from validation. |
 
-The file `docs/fbp.md` (tracked) is the driver companion, not a reference PDF.
+The file `docs/cbp.md` (tracked) is the driver companion, not a reference PDF.

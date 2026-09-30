@@ -1,7 +1,7 @@
 """Bundled reference behavior for the example ``bills_registry`` composite.
 
 The harness executes the **allowlisted, in-tree** entry
-(``agent_centric.fbp.bills_component:registry_snapshot``); this file documents
+(``agent_centric.cbp.bills_component:registry_snapshot``); this file documents
 the component's own behavior and is included in the bundle so its bytes are
 content-hashed (see ``SPEC-0007`` Phase 1b).
 

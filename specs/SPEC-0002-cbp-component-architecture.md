@@ -22,7 +22,7 @@ code are branded **CBP**. See §10.
 
 ## Context
 
-The current baseline (`src/agent_centric/fbp/`) is a tree of async `Agent`
+The current baseline (`src/agent_centric/cbp/`) is a tree of async `Agent`
 objects speaking a request/response directive protocol over a driver-owned shared
 ZeroMQ context, with a separate legacy `Node`/`Shell` model, a module-level
 global registry, and a compile-time `ComponentNetwork` whose "components" are
@@ -120,7 +120,7 @@ Shapes are sketched in Appendix A and finalized in the contract code during Phas
 
 ## 8. Roadmap (declared, gated)
 
-Backends beyond `inproc`; bounded connections and back-pressure; asynchronous deterministic scheduler; static/dynamic network documents persisted as graph config files; model determinization techniques; automated review tier; the `fbp` → `cbp` package/CLI rename (Phase 3, §10). Each item is admitted only with proven determinism and verification.
+Backends beyond `inproc`; bounded connections and back-pressure; asynchronous deterministic scheduler; static/dynamic network documents persisted as graph config files; model determinization techniques; automated review tier; the `fbp` → `cbp` package/CLI rename (completed early, §10). Each item is admitted only with proven determinism and verification.
 
 ## 9. Migration (incremental, adapter-first)
 
@@ -128,15 +128,15 @@ Backends beyond `inproc`; bounded connections and back-pressure; asynchronous de
 2. Convert capabilities to atomic components; registry to a component; children declared by parents; CPM scheduler added.
 3. Add the document/compiler seam and ports/IPs; switch the reference backend to compiled documents.
 4. Retire the legacy `Node`/`Shell` dual model and the driver-owned shared context once the adapter proves equivalent (replay + audit must match).
-5. Rename `fbp` → `cbp` (§10) as its own reviewed, mechanical change after the model is green.
+5. Rename `fbp` → `cbp` (§10) as its own reviewed, mechanical change. **(completed)**
 
 Each step is its own spec-accepted change; no big-bang.
 
 ## 10. Naming and branding
 
 - **CBP** is the branded paradigm; **FBP** appears only in documentation, with credit to J. Paul Morrison.
-- The project is **Agent-centric** (Creative Development Systems umbrella). The package remains `agent_centric`; the import path stays `agent_centric.fbp` for now and is renamed to `agent_centric.cbp` at the Phase 3 cut-over.
-- After cut-over, code and CLI use `cbp`; `fbp` survives only in `docs/` as heritage.
+- The project is **Agent-centric** (Creative Development Systems umbrella). The package remains `agent_centric`, with the **CBP subsystem at `agent_centric.cbp`**. The `fbp` → `cbp` cut-over (below) was performed as its own reviewed, mechanical change at operator direction — earlier than the planned Phase 3 — and is recorded here.
+- After the cut-over, code and CLI use `cbp`; the acronym `FBP` survives only in heritage documentation, with credit to J. Paul Morrison.
 
 ## 11. Constitutional changes
 

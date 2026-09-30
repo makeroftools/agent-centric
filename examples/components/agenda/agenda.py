@@ -3,7 +3,7 @@
 Projects a deterministic agenda (bills due in a date window) from a validated
 registry mapping. It is the pointed-to (``ref``) child of the example
 ``bills_registry`` composite. The allowlisted in-tree entry is
-``agent_centric.fbp.bills_component:project_agenda``.
+``agent_centric.cbp.bills_component:project_agenda``.
 
 Deterministic and read-only: entries are ordered by due date then bill id; the
 total is the sum of the included amounts. Nothing is invented.

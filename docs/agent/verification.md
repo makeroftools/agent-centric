@@ -11,7 +11,7 @@ enthusiasm.
 | --- | --- | --- | --- |
 | `ruff` | lint | yes | pre-commit + CI |
 | `mypy src` | types | yes | pre-commit + CI |
-| `agent-centric fbp-check` | readiness | yes | pre-commit + CI |
+| `agent-centric cbp-check` | readiness | yes | pre-commit + CI |
 | `pytest` | invariant suite | yes | CI / agent |
 | `holdout` | acceptance scenarios | yes | isolated validator (not built) |
 

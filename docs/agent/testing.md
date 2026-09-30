@@ -27,7 +27,7 @@
 uv run ruff check .
 uv run mypy src
 uv run pytest -p no:cacheprovider
-uv run agent-centric fbp-check     # deterministic readiness gate
+uv run agent-centric cbp-check     # deterministic readiness gate
 ```
 
 See `PRINCIPLES.md` Law 12, the on-demand skill

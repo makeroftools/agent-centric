@@ -29,7 +29,7 @@
 
 ## Current git state
 
-- **Branch:** `main` — the FBP line. Working tree clean; in sync with
+- **Branch:** `main` — the CBP line. Working tree clean; in sync with
   `origin/main`.
 - **Topology:** `agent-manager-version` is the frozen prior Manager line;
   `archive/agent-centric-fbp` is the archived pre-convention line.
@@ -42,7 +42,7 @@
 - **Two layers (SPEC-0007).** `agent-centric` is the **harness** — boot +
   runtime + meta. It **executes** the CBP tree and is **not** a node. The tree's
   root is the **shell component**, an ordinary component.
-- **Everything is a component** (FBP node = ABM agent), self-contained with
+- **Everything is a component** (CBP node = ABM agent), self-contained with
   local SQLite state; a **skill** is a component directive; an **LLM** is a
   component of kind `model`.
 - **Posture:** deterministic control plane, local-first, fail-closed, no
@@ -61,21 +61,27 @@
   - **Phase 0.5a** — `component.v1` + `components.lock/v1` contracts;
     content-addressed atomic cache; deterministic resolver; minisign/gpg
     signature verification; offline directory source
-    (`fbp/cache.py`, `fbp/resolver.py`, `fbp/signing.py`).
+    (`cbp/cache.py`, `cbp/resolver.py`, `cbp/signing.py`).
   - **Phase 1a** — deterministic bundle; offline git source + pinner; offline
     pin→lock→resolve→verify→load→run with an allowlisted entry; replay proof
-    (`fbp/component_bundle.py`, `fbp/component_source.py`,
-    `fbp/component_runtime.py`). Example component
+    (`cbp/component_bundle.py`, `cbp/component_source.py`,
+    `cbp/component_runtime.py`). Example component
     [`examples/components/counter/`](examples/components/counter) and demo
     [`examples/component_distribution.py`](examples/component_distribution.py).
   - **Phase 1b** — real example composite `bills_registry`: a SQLite **state
-    descriptor** (`fbp/component_state.py`: path-safe, WAL, integrity-checked,
+    descriptor** (`cbp/component_state.py`: path-safe, WAL, integrity-checked,
     atomic); both child modes — **contains** the embedded `bills_rules`
     component, **points-to** the referenced `agenda`; deterministic
-    dependency-ordered graph resolution (`fbp/component_graph.py`), with cycles
+    dependency-ordered graph resolution (`cbp/component_graph.py`), with cycles
     and absences failing closed. Demo
     [`examples/component_graph.py`](examples/component_graph.py); example
     [`examples/components/bills_registry/`](examples/components/bills_registry).
+  - **Rebrand (operator-directed, early Phase 3 cut-over).** The active subsystem
+    moved `agent_centric.fbp` → **`agent_centric.cbp`**; classes `Fbp*` → `Cbp*`;
+    CLI `fbp-check`/`fbp-web`/… → `cbp-*`; tests `tests/test_cbp_*`; examples
+    `examples/cbp_*.py`; docs `docs/cbp.md`. The acronym `FBP` now survives only
+    as the **heritage credit** (SPEC-0002 §10, `docs/references/`) and the
+    archived branch `archive/agent-centric-fbp`.
 
 ## Validation (last full run)
 
@@ -109,7 +115,7 @@ See [`docs/agent/levels.md`](docs/agent/levels.md),
 
 ## Key files
 
-- `src/agent_centric/fbp/` — the active subsystem: `component_bundle.py`,
+- `src/agent_centric/cbp/` — the active subsystem: `component_bundle.py`,
   `component_source.py`, `component_runtime.py`, `cache.py`, `resolver.py`,
   `signing.py`.
 - `src/agent_centric/contracts/` — versioned contracts, including
@@ -130,6 +136,6 @@ hooks or CI.
 ## Historical documents
 
 [`STATUS.md`](STATUS.md), [`KERNEL.md`](KERNEL.md),
-[`docs/FBP_HANDOFF.md`](docs/FBP_HANDOFF.md),
-[`README_FBP.md`](README_FBP.md), and [`docs/DIRECTIVE.md`](docs/DIRECTIVE.md)
+[`docs/CBP_HANDOFF.md`](docs/CBP_HANDOFF.md),
+[`README_CBP.md`](README_CBP.md), and [`docs/DIRECTIVE.md`](docs/DIRECTIVE.md)
 describe past states and are not updated retroactively.

@@ -32,7 +32,7 @@ Heritage: **Flow-Based Programming** (J. Paul Morrison). The branded paradigm is
 
 ## Deterministic termination
 
-`uv run agent-centric fbp-check` proves the verified spine; the convention guard
+`uv run agent-centric cbp-check` proves the verified spine; the convention guard
 enforces this layer. The target architecture is
 [`specs/SPEC-0002-cbp-component-architecture.md`](../../../specs/SPEC-0002-cbp-component-architecture.md).
 

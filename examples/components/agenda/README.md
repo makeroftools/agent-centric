@@ -10,6 +10,6 @@ the "points to an independently versioned component" mode of
 
 - `component.json` — the `component.v1` manifest.
 - `agenda.py` — the bundled reference behavior (the allowlisted in-tree entry is
-  `agent_centric.fbp.bills_component:project_agenda`).
+  `agent_centric.cbp.bills_component:project_agenda`).
 
 Due dates and amounts are read from registry data only — never invented.

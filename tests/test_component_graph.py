@@ -13,6 +13,12 @@ from pathlib import Path
 
 import pytest
 
+from agent_centric.cbp.cache import ContentAddressedCache
+from agent_centric.cbp.component_bundle import build_bundle, bundle_sha256, component_json
+from agent_centric.cbp.component_graph import ComponentGraphResolver, GraphError
+from agent_centric.cbp.component_state import materialize_state
+from agent_centric.cbp.resolver import ResolveError, Resolver
+from agent_centric.cbp.signing import SignatureError
 from agent_centric.contracts.component import (
     ChildRef,
     ComponentKind,
@@ -22,12 +28,6 @@ from agent_centric.contracts.component import (
     StateDescriptor,
 )
 from agent_centric.contracts.components_lock import ComponentsLock, LockEntry
-from agent_centric.fbp.cache import ContentAddressedCache
-from agent_centric.fbp.component_bundle import build_bundle, bundle_sha256, component_json
-from agent_centric.fbp.component_graph import ComponentGraphResolver, GraphError
-from agent_centric.fbp.component_state import materialize_state
-from agent_centric.fbp.resolver import ResolveError, Resolver
-from agent_centric.fbp.signing import SignatureError
 
 _COMPONENTS = Path(__file__).resolve().parents[1] / "examples" / "components"
 
@@ -254,9 +254,9 @@ class TestExampleComponents:
         return dest
 
     def test_example_graph_end_to_end(self, tmp_path: Path) -> None:
-        from agent_centric.fbp.bills_component import registry_snapshot
-        from agent_centric.fbp.component_runtime import AllowlistedEntryResolver
-        from agent_centric.fbp.component_source import GitSource, pin_from_git
+        from agent_centric.cbp.bills_component import registry_snapshot
+        from agent_centric.cbp.component_runtime import AllowlistedEntryResolver
+        from agent_centric.cbp.component_source import GitSource, pin_from_git
 
         br_repo = self._repo(_COMPONENTS / "bills_registry", tmp_path / "br")
         ag_repo = self._repo(_COMPONENTS / "agenda", tmp_path / "ag")
@@ -307,7 +307,7 @@ class TestExampleComponents:
         assert state.is_file()
 
         entry = AllowlistedEntryResolver(
-            frozenset({"agent_centric.fbp.bills_component:registry_snapshot"})
+            frozenset({"agent_centric.cbp.bills_component:registry_snapshot"})
         ).resolve(root.manifest.entry)
         assert entry is registry_snapshot
         payload = {

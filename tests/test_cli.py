@@ -83,7 +83,7 @@ class TestCliExternalSurfaces:
     The adapters themselves block on stdio (they are servers), so we prove the
     wiring at the parser level: the subcommands exist, build, and dispatch to the
     adapter entry points. The adapter behaviour is covered by test_acp.py,
-    test_fbp_mcp.py, and the e2e demo.
+    test_cbp_mcp.py, and the e2e demo.
     """
 
     def test_parser_builds_acp_mcp_subcommands(self) -> None:
@@ -133,84 +133,84 @@ class TestCliEntryPoint:
         assert callable(m.main)
 
 
-class TestCliFbp:
-    """The FBP subcommand and durable-ledger replay (crash-safe recovery)."""
+class TestCliCbp:
+    """The CBP subcommand and durable-ledger replay (crash-safe recovery)."""
 
-    def test_fbp_records_and_replays_durable_ledger(self, tmp_path: Path) -> None:
+    def test_cbp_records_and_replays_durable_ledger(self, tmp_path: Path) -> None:
         ledger = tmp_path / "session.ledger.db"
-        code, _ = _run(tmp_path, "fbp", "--ledger", str(ledger))
+        code, _ = _run(tmp_path, "cbp", "--ledger", str(ledger))
         assert code == 0
         assert ledger.exists()
 
         # Replay the durable ledger (a fresh ``main`` invocation re-seeds the
         # module-level callable registry, simulating a fresh process).
-        code, out = _run(tmp_path, "fbp-replay", str(ledger))
+        code, out = _run(tmp_path, "cbp-replay", str(ledger))
         assert code == 0, out
         assert "passed=20" in out
         assert "failed=0" in out
 
-    def test_fbp_replay_missing_ledger_fails_closed(self, tmp_path: Path) -> None:
-        code, out = _run(tmp_path, "fbp-replay", str(tmp_path / "nope.db"))
+    def test_cbp_replay_missing_ledger_fails_closed(self, tmp_path: Path) -> None:
+        code, out = _run(tmp_path, "cbp-replay", str(tmp_path / "nope.db"))
         assert code == 1
 
-    def test_fbp_replay_over_transports(self, tmp_path: Path) -> None:
+    def test_cbp_replay_over_transports(self, tmp_path: Path) -> None:
         """Durable ledger replay works over ipc and tcp (the endpoint is
         resolved per transport, not a bare inproc-style name)."""
         for transport in ("ipc", "tcp"):
             ledger = tmp_path / f"session-{transport}.ledger.db"
-            code, _ = _run(tmp_path, "fbp", "--transport", transport, "--ledger", str(ledger))
+            code, _ = _run(tmp_path, "cbp", "--transport", transport, "--ledger", str(ledger))
             assert code == 0
-            code, out = _run(tmp_path, "fbp-replay", str(ledger), "--transport", transport)
+            code, out = _run(tmp_path, "cbp-replay", str(ledger), "--transport", transport)
             assert code == 0, out
             assert "failed=0" in out
 
-    def test_fbp_summary_reports_ledger(self, tmp_path: Path) -> None:
-        """fbp-summary gives an operator-facing readout of a durable ledger. The
+    def test_cbp_summary_reports_ledger(self, tmp_path: Path) -> None:
+        """cbp-summary gives an operator-facing readout of a durable ledger. The
         demo contains intentional fail-closed cases (demote / unknown target /
         ungranted store key), so it reports errors and exits non-zero."""
         ledger = tmp_path / "session.ledger.db"
-        code, _ = _run(tmp_path, "fbp", "--ledger", str(ledger))
+        code, _ = _run(tmp_path, "cbp", "--ledger", str(ledger))
         assert code == 0
 
-        code, out = _run(tmp_path, "fbp-summary", str(ledger))
+        code, out = _run(tmp_path, "cbp-summary", str(ledger))
         assert "run_count=20" in out
         assert "errors=3" in out
         assert "ok=False" in out
         assert code == 1  # the demo has intentional failures
 
-    def test_fbp_summary_missing_fails_closed(self, tmp_path: Path) -> None:
-        code, out = _run(tmp_path, "fbp-summary", str(tmp_path / "nope.db"))
+    def test_cbp_summary_missing_fails_closed(self, tmp_path: Path) -> None:
+        code, out = _run(tmp_path, "cbp-summary", str(tmp_path / "nope.db"))
         assert code == 1
         assert "no ledger file" in out
 
-    def test_fbp_accepts_integrity_flag(self, tmp_path: Path) -> None:
+    def test_cbp_accepts_integrity_flag(self, tmp_path: Path) -> None:
         """The ``--integrity`` flag runs the demo over the signed wire (so the
         operator can turn on §5.5 traffic integrity from the CLI)."""
-        code, out = _run(tmp_path, "fbp", "--integrity", "s3cr3t")
+        code, out = _run(tmp_path, "cbp", "--integrity", "s3cr3t")
         assert code == 0, out
         assert "verified=True" in out
 
     def test_parser_builds_integrity_flags(self) -> None:
-        """Both ``fbp`` and ``fbp-web`` accept ``--integrity``."""
+        """Both ``cbp`` and ``cbp-web`` accept ``--integrity``."""
         from agent_centric.cli import _build_parser
 
         parser = _build_parser()
-        a = parser.parse_args(["fbp", "--integrity", "s3cr3t", "--transport", "tcp"])
+        a = parser.parse_args(["cbp", "--integrity", "s3cr3t", "--transport", "tcp"])
         assert a.integrity == "s3cr3t"
-        b = parser.parse_args(["fbp-web", "--integrity", "x"])
+        b = parser.parse_args(["cbp-web", "--integrity", "x"])
         assert b.integrity == "x"
 
-    def test_fbp_accepts_curve_flag(self, tmp_path: Path) -> None:
-        """The ``--curve`` flag runs the full FBP demo over the CURVE-encrypted
+    def test_cbp_accepts_curve_flag(self, tmp_path: Path) -> None:
+        """The ``--curve`` flag runs the full CBP demo over the CURVE-encrypted
         wire on a tcp transport (opt-in, operator-reachable)."""
-        code, out = _run(tmp_path, "fbp", "--transport", "tcp", "--curve")
+        code, out = _run(tmp_path, "cbp", "--transport", "tcp", "--curve")
         assert code == 0, out
         assert "verified=True" in out
         assert "replay  : passed=True" in out
 
-    def test_fbp_curve_with_inproc_fails_closed(self, tmp_path: Path) -> None:
+    def test_cbp_curve_with_inproc_fails_closed(self, tmp_path: Path) -> None:
         """CURVE applies to tcp/ipc only; opting in with inproc fails closed."""
-        code, out = _run(tmp_path, "fbp", "--transport", "inproc", "--curve")
+        code, out = _run(tmp_path, "cbp", "--transport", "inproc", "--curve")
         assert code == 1
         assert "not inproc" in out
 
@@ -218,15 +218,15 @@ class TestCliFbp:
         from agent_centric.cli import _build_parser
 
         parser = _build_parser()
-        a = parser.parse_args(["fbp", "--curve", "--transport", "tcp"])
+        a = parser.parse_args(["cbp", "--curve", "--transport", "tcp"])
         assert a.curve is True
-        b = parser.parse_args(["fbp", "--transport", "ipc"])
+        b = parser.parse_args(["cbp", "--transport", "ipc"])
         assert b.curve is False
 
-    def test_fbp_check_reports_ready(self, tmp_path: Path) -> None:
-        """``fbp-check`` is a deploy/readiness gate: it exercises the verified
+    def test_cbp_check_reports_ready(self, tmp_path: Path) -> None:
+        """``cbp-check`` is a deploy/readiness gate: it exercises the verified
         spine and exits 0 with a green verdict when everything passes."""
-        code, out = _run(tmp_path, "fbp-check")
+        code, out = _run(tmp_path, "cbp-check")
         assert code == 0, out
         assert "8/8 checks passed" in out
         assert "[ok] run:double(21)" in out
@@ -234,62 +234,62 @@ class TestCliFbp:
         assert "[ok] delegate:double(3)" in out
         assert "READY" in out
 
-    def test_fbp_check_with_integrity(self, tmp_path: Path) -> None:
-        """``fbp-check --integrity`` proves the signed wire end-to-end."""
-        code, out = _run(tmp_path, "fbp-check", "--integrity", "s3cr3t")
+    def test_cbp_check_with_integrity(self, tmp_path: Path) -> None:
+        """``cbp-check --integrity`` proves the signed wire end-to-end."""
+        code, out = _run(tmp_path, "cbp-check", "--integrity", "s3cr3t")
         assert code == 0, out
         assert "8/8 checks passed" in out
         assert "READY" in out
 
-    def test_fbp_check_with_curve(self, tmp_path: Path) -> None:
-        """``fbp-check --curve`` proves the CURVE-encrypted wire end-to-end on
+    def test_cbp_check_with_curve(self, tmp_path: Path) -> None:
+        """``cbp-check --curve`` proves the CURVE-encrypted wire end-to-end on
         the deploy/readiness gate (opt-in)."""
-        code, out = _run(tmp_path, "fbp-check", "--transport", "tcp", "--curve")
+        code, out = _run(tmp_path, "cbp-check", "--transport", "tcp", "--curve")
         assert code == 0, out
         assert "8/8 checks passed" in out
         assert "READY" in out
 
-    def test_fbp_check_curve_with_inproc_fails_closed(self, tmp_path: Path) -> None:
-        code, out = _run(tmp_path, "fbp-check", "--transport", "inproc", "--curve")
+    def test_cbp_check_curve_with_inproc_fails_closed(self, tmp_path: Path) -> None:
+        code, out = _run(tmp_path, "cbp-check", "--transport", "inproc", "--curve")
         assert code == 1
         assert "not inproc" in out
 
-    def test_parser_builds_fbp_check_curve(self) -> None:
+    def test_parser_builds_cbp_check_curve(self) -> None:
         from agent_centric.cli import _build_parser
 
         parser = _build_parser()
-        a = parser.parse_args(["fbp-check", "--curve", "--transport", "tcp"])
+        a = parser.parse_args(["cbp-check", "--curve", "--transport", "tcp"])
         assert a.curve is True
-        b = parser.parse_args(["fbp-check"])
+        b = parser.parse_args(["cbp-check"])
         assert b.curve is False
 
-    def test_parser_builds_fbp_check(self) -> None:
+    def test_parser_builds_cbp_check(self) -> None:
         from agent_centric.cli import _build_parser
 
         parser = _build_parser()
-        a = parser.parse_args(["fbp-check", "--integrity", "s", "--transport", "tcp"])
+        a = parser.parse_args(["cbp-check", "--integrity", "s", "--transport", "tcp"])
         assert a.integrity == "s"
         assert a.transport == "tcp"
 
 
-class TestCliFbpDomains:
-    """fbp-domains gives an operator-facing readout of a saved Domain Registry
+class TestCliCbpDomains:
+    """cbp-domains gives an operator-facing readout of a saved Domain Registry
     + Artifact Vault (read-only)."""
 
-    def test_fbp_domains_reports_vault(self, tmp_path: Path) -> None:
-        from agent_centric.fbp.web import FbpLandingServer
+    def test_cbp_domains_reports_vault(self, tmp_path: Path) -> None:
+        from agent_centric.cbp.web import CbpLandingServer
 
         path = tmp_path / "repo.json"
-        s = FbpLandingServer(registry_path=str(path))
+        s = CbpLandingServer(registry_path=str(path))
         s._save_artifacts()
         s._driver.close()
-        code, out = _run(tmp_path, "fbp-domains", str(path))
+        code, out = _run(tmp_path, "cbp-domains", str(path))
         assert code == 0
         assert "artifacts=" in out
         assert "total_cost=" in out
         assert "kinds=[" in out
 
-    def test_fbp_domains_missing_fails_closed(self, tmp_path: Path) -> None:
-        code, out = _run(tmp_path, "fbp-domains", str(tmp_path / "nope.json"))
+    def test_cbp_domains_missing_fails_closed(self, tmp_path: Path) -> None:
+        code, out = _run(tmp_path, "cbp-domains", str(tmp_path / "nope.json"))
         assert code == 1
         assert "no registry/vault file" in out

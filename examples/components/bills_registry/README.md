@@ -7,7 +7,7 @@ It demonstrates the two things a composite adds over an atomic component:
 - **state** — a self-contained, single-writer **SQLite** store, declared in the
   manifest as `state: {kind: sqlite, path: state/bills.db, single_writer: true}`
   (materialized by the harness via
-  [`agent_centric.fbp.component_state`](../../../src/agent_centric/fbp/component_state.py));
+  [`agent_centric.cbp.component_state`](../../../src/agent_centric/cbp/component_state.py));
 - **children**, in both modes:
   - **contains** — the embedded [`children/bills_rules/`](children/bills_rules/component.json)
     component (a real `component.v1`, not a data folder) is bundled inside this
@@ -19,7 +19,7 @@ It demonstrates the two things a composite adds over an atomic component:
 
 - `component.json` — the composite `component.v1` manifest.
 - `bills_registry.py` — the bundled reference behavior (documentation; the
-  allowlisted in-tree entry is `agent_centric.fbp.bills_component:registry_snapshot`).
+  allowlisted in-tree entry is `agent_centric.cbp.bills_component:registry_snapshot`).
 - `children/bills_rules/` — the embedded child component.
 
 ## Phase 1b note

@@ -17,7 +17,7 @@ Phase 1a atomic slice:
 
 Signature note: this demo uses a clearly-labelled ``_DemoVerifier`` so the slice
 runs without a signing key. Production verification uses ``minisign``/``gpg``
-via :class:`agent_centric.fbp.signing.SystemVerifier` — never the demo verifier.
+via :class:`agent_centric.cbp.signing.SystemVerifier` — never the demo verifier.
 """
 
 from __future__ import annotations
@@ -27,18 +27,18 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from agent_centric.cbp.cache import ContentAddressedCache
+from agent_centric.cbp.component_graph import ComponentGraphResolver
+from agent_centric.cbp.component_runtime import AllowlistedEntryResolver
+from agent_centric.cbp.component_source import GitSource, pin_from_git
+from agent_centric.cbp.component_state import materialize_state
+from agent_centric.cbp.resolver import Resolver
+from agent_centric.cbp.signing import SignatureError
 from agent_centric.contracts.components_lock import ComponentsLock, LockEntry
-from agent_centric.fbp.cache import ContentAddressedCache
-from agent_centric.fbp.component_graph import ComponentGraphResolver
-from agent_centric.fbp.component_runtime import AllowlistedEntryResolver
-from agent_centric.fbp.component_source import GitSource, pin_from_git
-from agent_centric.fbp.component_state import materialize_state
-from agent_centric.fbp.resolver import Resolver
-from agent_centric.fbp.signing import SignatureError
 
 _HERE = Path(__file__).resolve().parent
 _COMPONENTS = _HERE / "components"
-_ENTRY = "agent_centric.fbp.bills_component:registry_snapshot"
+_ENTRY = "agent_centric.cbp.bills_component:registry_snapshot"
 
 _REGISTRY = {
     "bills": [

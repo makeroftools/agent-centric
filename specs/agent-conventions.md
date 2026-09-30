@@ -50,7 +50,7 @@ instructions + progressive disclosure + deterministic gates, with verification
 - [ ] `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` exist; pointers resolve.
 - [ ] `opencode.json` sets `permission.edit = "deny"` with `$schema`.
 - [ ] `tests/test_agent_conventions.py` passes under the operator's run.
-- [ ] CI runs `ruff`, `mypy`, `fbp-check`, and the suite.
+- [ ] CI runs `ruff`, `mypy`, `cbp-check`, and the suite.
 - [ ] `PRINCIPLES.md` Law 12 reflects the amendment; README/HANDOFF state the new branch topology.
 
 ## Risks / invariants

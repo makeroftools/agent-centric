@@ -1,0 +1,1286 @@
+"""Tests for the high-level CBP driver (the easy-UX layer).
+
+These prove that ``CbpDriver`` makes the directive/response protocol usable
+without touching ZeroMQ frames or an event loop:
+
+- register / resolve (registry-as-agent, passive catalog),
+- configure (parent provides context: rules, verifiers, task allowlist),
+- run a task locally (verified result or explicit failure),
+- spawn a real child and delegate a run down to it (verified response up),
+- the correctness spine: a parent re-verifies a child's value on the way up,
+- fail-closed on an unknown delegation target.
+
+No network, no daemons — the driver is deterministic and offline-testable.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from agent_centric.cbp import CbpDriver, register_callable
+
+
+def _double(value: int) -> int:
+    return value * 2
+
+
+def _even(value: Any) -> bool:
+    return isinstance(value, int) and value % 2 == 0
+
+
+def _odd(value: Any) -> bool:
+    return isinstance(value, int) and value % 2 == 1
+
+
+class TestRegistryAsAgent:
+    def test_register_then_resolve(self) -> None:
+        with CbpDriver() as driver:
+            driver.register("double", _double, source_url="file:///tasks/double.py")
+            resp = driver.resolve("double")
+            assert resp.verified is True
+            assert resp.value["name"] == "double"
+            assert resp.value["source_url"] == "file:///tasks/double.py"
+
+    def test_resolve_unknown_fails_closed(self) -> None:
+        with CbpDriver() as driver:
+            resp = driver.resolve("ghost")
+            assert resp.verified is False
+            assert resp.error is not None
+
+
+class TestSourceReferences:
+    """Non-deterministic producers can attach source references to their output;
+    they flow through the response, relays, and the trajectory audit."""
+
+    def test_local_run_carries_sources(self) -> None:
+        with CbpDriver() as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            r = driver.run(
+                "double",
+                {"value": 21},
+                sources=[{"kind": "model", "id": "grok-4.6", "content_ref": "doc://pricing"}],
+            )
+            assert r.verified is True
+            assert r.sources == [
+                {"kind": "model", "id": "grok-4.6", "content_ref": "doc://pricing"}
+            ]
+
+    def test_delegated_run_preserves_sources_across_relay(self) -> None:
+        with CbpDriver() as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            driver.spawn("child")
+            driver.configure_child("child", tasks=("double",))
+            r = driver.run(
+                "double",
+                {"value": 21},
+                child="child",
+                sources=[{"kind": "model", "id": "ds-v4"}],
+            )
+            assert r.verified is True and r.node == "child"
+            # The child's sources survive the parent's relay up.
+            assert r.sources == [{"kind": "model", "id": "ds-v4"}]
+
+    def test_sources_recorded_in_audit(self, tmp_path: Path) -> None:
+        with CbpDriver() as driver:
+            driver.configure(trajectory=str(tmp_path / "audit.db"))
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            driver.run(
+                "double",
+                {"value": 21},
+                sources=[{"kind": "doc", "location": "file:///a.pdf"}],
+            )
+            audit = driver.audit().value
+            assert any(
+                e.get("sources") == [{"kind": "doc", "location": "file:///a.pdf"}]
+                for e in audit
+            )
+
+    def test_sources_surface_in_reconstructed_chain(self, tmp_path: Path) -> None:
+        """Audit-as-proof includes the source references on the reconstructed
+        chain for a non-deterministic producer."""
+        with CbpDriver() as driver:
+            driver.configure(trajectory=str(tmp_path / "root.db"))
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            driver.run(
+                "double",
+                {"value": 21},
+                sources=[{"kind": "model", "id": "grok-4.6"}],
+            )
+            chains = driver.reconstruct_audit()
+            assert any(
+                any(
+                    e.get("sources") == [{"kind": "model", "id": "grok-4.6"}]
+                    for e in chain["events"]
+                )
+                for chain in chains
+            )
+
+
+class TestRunLocal:
+    def test_run_verified_task(self) -> None:
+        with CbpDriver() as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            resp = driver.run("double", {"value": 21})
+            assert resp.verified is True
+            assert resp.value == 42
+
+    def test_run_fails_verification(self) -> None:
+        with CbpDriver() as driver:
+            driver.register("double", _double)
+            driver.register("odd", _odd)
+            driver.configure(tasks=("double",), verifiers=("odd",), verifier="odd")
+            # 21*2 = 42 is even; the odd-verifier rejects it.
+            resp = driver.run("double", {"value": 21})
+            assert resp.verified is False
+            assert resp.error is not None
+
+    def test_run_unknown_task_fails_closed(self) -> None:
+        with CbpDriver() as driver:
+            resp = driver.run("ghost", {})
+            assert resp.verified is False
+            assert resp.error is not None
+
+
+class TestRunPlan:
+    """run_plan executes a deterministic sequence of run steps, failing closed
+    on the first unverified one."""
+
+    def test_all_verified(self) -> None:
+        with CbpDriver() as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            result = driver.run_plan(
+                [
+                    {"task": "double", "args": {"value": 21}},
+                    {"task": "double", "args": {"value": 5}},
+                ]
+            )
+            assert result["ok"] is True
+            assert result["completed"] == 2
+            assert [r["value"] for r in result["results"]] == [42, 10]
+
+    def test_fails_closed_on_first_unverified(self) -> None:
+        with CbpDriver() as driver:
+            driver.register("double", _double)
+            driver.register("odd", _odd)
+            driver.configure(tasks=("double",), verifiers=("odd",), verifier="odd")
+            result = driver.run_plan(
+                [
+                    {"task": "double", "args": {"value": 21}},  # 42 even -> fails
+                    {"task": "double", "args": {"value": 1}},
+                ]
+            )
+            assert result["ok"] is False
+            assert result["completed"] == 0
+            assert result["failed"]["verified"] is False
+            assert result["failed"]["error"] is not None
+
+    def test_plan_is_replayable(self) -> None:
+        """A plan's runs are normal run directives, recorded in the ledger and
+        replayed by replay_session."""
+        with CbpDriver() as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            driver.run_plan(
+                [
+                    {"task": "double", "args": {"value": 21}},
+                    {"task": "double", "args": {"value": 5}},
+                ]
+            )
+            result = driver.replay_session()
+            assert result["ok"] is True, result["failed"]
+            assert result["runs"] == 2
+
+    def test_empty_plan_fails_closed(self) -> None:
+        with CbpDriver() as driver, pytest.raises(ValueError, match="non-empty"):
+            driver.run_plan([])
+
+    def test_on_step_streams_progress(self) -> None:
+        """run_plan(on_step=...) streams each step's outcome as it completes."""
+        seen: list[str] = []
+
+        def observe(result: dict[str, Any]) -> None:
+            seen.append(f"{result['step']}:{result['task']}:{result['verified']}")
+
+        with CbpDriver() as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            result = driver.run_plan(
+                [
+                    {"task": "double", "args": {"value": 21}},
+                    {"task": "double", "args": {"value": 5}},
+                ],
+                on_step=observe,
+            )
+            assert result["ok"] is True
+            assert seen == ["0:double:True", "1:double:True"]
+
+    def test_on_step_sees_failing_step(self) -> None:
+        seen: list[str] = []
+
+        def observe(r: dict[str, Any]) -> None:
+            seen.append(f"{r['step']}:{r['verified']}")
+
+        with CbpDriver() as driver:
+            driver.register("double", _double)
+            driver.register("odd", _odd)
+            driver.configure(tasks=("double",), verifiers=("odd",), verifier="odd")
+            result = driver.run_plan(
+                [
+                    {"task": "double", "args": {"value": 21}},
+                    {"task": "double", "args": {"value": 1}},
+                ],
+                on_step=observe,
+            )
+            assert result["ok"] is False
+            assert seen == ["0:False"]  # only the failing step is streamed
+
+
+
+class TestMediatedSpawnDelegation:
+    def test_spawn_and_delegate(self) -> None:
+        with CbpDriver() as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            spawn = driver.spawn("child")
+            assert spawn.verified is True
+            driver.configure_child("child", tasks=("double",))
+            resp = driver.run("double", {"value": 21}, child="child")
+            assert resp.verified is True
+            assert resp.value == 42
+            assert resp.node == "child"
+
+    def test_unknown_delegation_target_fails_closed(self) -> None:
+        with CbpDriver() as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            resp = driver.run("double", {"value": 21}, child="ghost")
+            # The parent cannot delegate to an unknown child; it must produce a
+            # terminal response rather than hang or silently drop.
+            assert resp.verified is False
+            assert resp.error is not None
+
+    def test_parent_reverifies_child_on_upward_path(self) -> None:
+        with CbpDriver() as driver:
+            register_callable("double", _double)
+            register_callable("odd", _odd)
+            driver.configure(tasks=("double",), verifiers=("odd",), verifier="odd")
+            driver.spawn("child")
+            driver.configure_child("child", tasks=("double",))
+            # Child returns 42 (even); the parent's odd-verifier rejects it.
+            resp = driver.run("double", {"value": 21}, child="child")
+            assert resp.verified is False
+            assert resp.error is not None
+
+
+class TestStoreAgent:
+    """A StoreAgent is a single-writer registry over a StateStore, reached
+    through the parent's mediated delegation, bounded by a key allowlist."""
+
+    def test_store_agent_serves_read_and_write(self, tmp_path: Path) -> None:
+        with CbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store",
+                state=str(tmp_path / "store.db"),
+                store_keys=("bill-b3", "bill-b4"),
+            )
+            ok = driver.run(
+                "store_set",
+                {"key": "bill-b3", "value": {"status": "paid"}},
+                child="store",
+            )
+            assert ok.verified is True
+            ok2 = driver.run(
+                "store_set",
+                {"key": "bill-b3", "value": {"status": "paid"}},
+                child="store",
+            )  # idempotent replay
+            assert ok2.verified is True
+            got = driver.run("store_get", {"key": "bill-b3"}, child="store")
+            assert got.verified is True
+            assert got.value["status"] == "paid"
+            assert got.node == "store"
+
+            # store_keys lists only granted keys that exist.
+            keys = driver.run("store_keys", {}, child="store")
+            assert keys.verified is True
+            assert keys.value == ["bill-b3"]  # JSON wire -> list
+
+    def test_store_keys_only_serves_granted(self, tmp_path: Path) -> None:
+        """store_keys must never reveal a non-granted key, even one present in
+        the underlying store file."""
+        from agent_centric.cbp import store as store_mod
+
+        path = str(tmp_path / "store.db")
+        # Write a key that is NOT granted, directly into the store file.
+        st = store_mod.open_state(path)
+        st.set("secret-key", {"x": 1}, fingerprint="direct")
+        st.close()
+
+        with CbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store", state=path, store_keys=("bill-b3",)
+            )
+            # A granted key the store agent writes.
+            ok = driver.run("store_set", {"key": "bill-b3", "value": {"s": 1}}, child="store")
+            assert ok.verified is True
+
+            keys = driver.run("store_keys", {}, child="store")
+            assert keys.verified is True
+            # The ungranted key is never revealed through the grant.
+            assert keys.value == ["bill-b3"]
+
+            # An ungranted key cannot be read through the grant either.
+            denied = driver.run("store_get", {"key": "secret-key"}, child="store")
+            assert denied.verified is False
+
+    def test_store_agent_rejects_ungranted_key(self, tmp_path: Path) -> None:
+        with CbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store",
+                state=str(tmp_path / "store.db"),
+                store_keys=("bill-b3",),
+            )
+            # bill-b9 is not on the grant allowlist -> fail closed.
+            resp = driver.run(
+                "store_set",
+                {"key": "bill-b9", "value": {"status": "open"}},
+                child="store",
+            )
+            assert resp.verified is False
+            assert "not granted" in (resp.error or "")
+
+    def test_store_agent_prefix_grant(self, tmp_path: Path) -> None:
+        """A ``bill-*`` grant authorises every key under the prefix, but still
+        fails closed on keys outside it (a namespace grant, not a wildcard)."""
+        with CbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store",
+                state=str(tmp_path / "store.db"),
+                store_keys=("bill-*",),
+            )
+            # Any key under the granted prefix is served.
+            ok = driver.run(
+                "store_set",
+                {"key": "bill-b1", "value": {"status": "open"}},
+                child="store",
+            )
+            assert ok.verified is True
+            ok2 = driver.run(
+                "store_set",
+                {"key": "bill-b2", "value": {"status": "open"}},
+                child="store",
+            )
+            assert ok2.verified is True
+            got = driver.run("store_get", {"key": "bill-b1"}, child="store")
+            assert got.verified is True
+            assert got.value["status"] == "open"
+            keys = driver.run("store_keys", {}, child="store")
+            assert keys.verified is True
+            assert set(keys.value) == {"bill-b1", "bill-b2"}
+            # A key outside the prefix still fails closed.
+            denied = driver.run(
+                "store_set",
+                {"key": "other-x", "value": {"status": "open"}},
+                child="store",
+            )
+            assert denied.verified is False
+            assert "not granted" in (denied.error or "")
+        state_path = tmp_path / "store.db"
+        with CbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store", state=str(state_path), store_keys=("bill-b3",)
+            )
+            driver.run(
+                "store_set",
+                {"key": "bill-b3", "value": {"amount_cents": 12345}},
+                child="store",
+            )
+        # Durable: reopen the StoreAgent's file directly.
+        from agent_centric.cbp import store
+
+        st = store.open_state(state_path)
+        assert st.get("bill-b3")["amount_cents"] == 12345
+        st.close()
+
+    def test_store_agent_get_missing_key_fails_closed(self, tmp_path: Path) -> None:
+        """store_get on a granted but absent key fails closed (not found)."""
+        with CbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store", state=str(tmp_path / "s.db"), store_keys=("bk",)
+            )
+            resp = driver.run("store_get", {"key": "bk"}, child="store")
+            assert resp.verified is False
+            assert "not found" in (resp.error or "")
+
+    def test_store_get_requires_key_name(self, tmp_path: Path) -> None:
+        """A store_get without a key name fails closed."""
+        with CbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store", state=str(tmp_path / "s.db"), store_keys=("bk",)
+            )
+            resp = driver.run("store_get", {}, child="store")
+            assert resp.verified is False
+            assert "key" in (resp.error or "")
+
+    def test_store_ops_with_no_granted_store_fail_closed(self) -> None:
+        """A store agent configured without a state store cannot serve ops."""
+        with CbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            # No state grant and no store_keys.
+            resp = driver.run("store_get", {"key": "bk"}, child="store")
+            assert resp.verified is False
+            assert "no granted state store" in (resp.error or "")
+            resp2 = driver.run("store_keys", {}, child="store")
+            assert resp2.verified is False
+            assert "no granted state store" in (resp2.error or "")
+
+    def test_store_set_requires_key_and_value(self, tmp_path: Path) -> None:
+        """store_set without a key fails closed on a granted store."""
+        with CbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store", state=str(tmp_path / "s.db"), store_keys=("bk",)
+            )
+            resp = driver.run("store_set", {"value": 1}, child="store")
+            assert resp.verified is False
+            assert "key" in (resp.error or "")
+
+    def test_store_set_no_granted_store_fails_closed(self) -> None:
+        """store_set without a granted store fails closed."""
+        with CbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            resp = driver.run("store_set", {"key": "bk", "value": 1}, child="store")
+            assert resp.verified is False
+            assert "no granted state store" in (resp.error or "")
+
+
+class TestCpmCapability:
+    """CPM is a read-only, deterministic *capability* (a registered callable),
+    not an agent: it is a pure observation, not a unit of work with
+    responsibility. It is reached as a local run task, not via delegation."""
+
+    def test_cpm_capability_returns_analysis(self) -> None:
+        from agent_centric.cbp.critical_path import cpm_from_dict
+
+        with CbpDriver() as driver:
+            driver.register("cpm", lambda nodes: cpm_from_dict(nodes).to_dict())
+            driver.configure(tasks=("cpm",))
+            resp = driver.run(
+                "cpm",
+                {
+                    "nodes": [
+                        {"id": "a", "duration": 3},
+                        {"id": "b", "duration": 2, "depends_on": ["a"]},
+                        {"id": "c", "duration": 1, "depends_on": ["a"]},
+                        {"id": "d", "duration": 2, "depends_on": ["b", "c"]},
+                    ]
+                },
+            )
+            assert resp.verified is True
+            assert resp.value["duration"] == 7
+            assert set(resp.value["critical_path"]) == {"a", "b", "d"}
+            assert resp.value["slack"]["c"] == 1
+
+    def test_cpm_capability_fails_closed_on_cycle(self) -> None:
+        from agent_centric.cbp.critical_path import cpm_from_dict
+
+        with CbpDriver() as driver:
+            driver.register("cpm", lambda nodes: cpm_from_dict(nodes).to_dict())
+            driver.configure(tasks=("cpm",))
+            resp = driver.run(
+                "cpm",
+                {
+                    "nodes": [
+                        {"id": "a", "duration": 1, "depends_on": ["b"]},
+                        {"id": "b", "duration": 1, "depends_on": ["a"]},
+                    ]
+                },
+            )
+            assert resp.verified is False
+            assert "cycle" in (resp.error or "")
+
+    def test_cpm_capability_is_read_only(self) -> None:
+        from agent_centric.cbp.critical_path import cpm_from_dict
+
+        # A pure capability needs no state grant and never writes anything.
+        with CbpDriver() as driver:
+            driver.register("cpm", lambda nodes: cpm_from_dict(nodes).to_dict())
+            driver.configure(tasks=("cpm",))
+            resp = driver.run("cpm", {"nodes": [{"id": "x", "duration": 2}]})
+            assert resp.verified is True
+            assert resp.value["duration"] == 2
+
+
+class TestBillsLoop:
+    """The bills loop end-to-end on the foundation: intake -> human-gated
+    accept -> durable single-writer registry -> verified calendar projection.
+    Topology: root -> bills -> store. Nothing auto-accepts; money stays
+    integer cents and dates ISO; malformed intake fails closed."""
+
+    def _setup(self, driver: Any, tmp_path: Path) -> None:
+        driver.spawn("bills", kind="bills")
+        driver.run(
+            "bills_setup",
+            {"state": str(tmp_path / "registry.db"), "store_keys": ["b1", "b2"]},
+            child="bills",
+        )
+
+    def test_full_loop(self, tmp_path: Path) -> None:
+        from agent_centric.cbp.bills_agent import (
+            TASK_ACCEPT,
+            TASK_CALENDAR,
+            TASK_INTAKE,
+        )
+
+        with CbpDriver() as driver:
+            self._setup(driver, tmp_path)
+
+            # 1. Intake an unverified draft.
+            draft = driver.run(
+                TASK_INTAKE,
+                {
+                    "draft": {
+                        "id": "b1",
+                        "vendor": "GasCo",
+                        "amount_cents": 12345,
+                        "due_date": "2026-10-01",
+                    }
+                },
+                child="bills",
+            )
+            assert draft.verified is True
+            assert draft.value["id"] == "b1"
+            # An intake draft is unverified: it has no registry 'status' yet.
+            assert "status" not in draft.value
+
+            # 2. Human-gated accept -> persisted to the registry via the store.
+            accepted = driver.run(TASK_ACCEPT, {"draft": draft.value}, child="bills")
+            assert accepted.verified is True
+
+            # 3. Calendar projection from the durable registry (b1 due 2026-10-01).
+            cal = driver.run(
+                TASK_CALENDAR,
+                {"from_date": "2026-10-01", "to_date": "2026-10-31"},
+                child="bills",
+            )
+            assert cal.verified is True
+            assert [e["id"] for e in cal.value["entries"]] == ["b1"]
+            assert cal.value["total_cents"] == 12345
+
+            # 4. The registry is durable on disk.
+            from agent_centric.cbp import store
+
+            st = store.open_state(tmp_path / "registry.db")
+            assert st.get("b1")["status"] == "open"
+            assert st.get("b1")["amount_cents"] == 12345
+            st.close()
+
+    def test_registry_readout(self, tmp_path: Path) -> None:
+        """bills_registry is a read-only snapshot of the durable registry."""
+        from agent_centric.cbp.bills_agent import (
+            TASK_ACCEPT,
+            TASK_INTAKE,
+            TASK_REGISTRY,
+        )
+
+        with CbpDriver() as driver:
+            self._setup(driver, tmp_path)
+            draft = driver.run(
+                TASK_INTAKE,
+                {
+                    "draft": {
+                        "id": "b1",
+                        "vendor": "GasCo",
+                        "amount_cents": 12345,
+                        "due_date": "2026-10-01",
+                    }
+                },
+                child="bills",
+            )
+            driver.run(TASK_ACCEPT, {"draft": draft.value}, child="bills")
+            reg = driver.run(TASK_REGISTRY, {}, child="bills")
+            assert reg.verified is True
+            assert reg.value["count"] == 1
+            assert reg.value["registry"]["b1"]["status"] == "open"
+
+    def test_registry_readout_empty(self, tmp_path: Path) -> None:
+        from agent_centric.cbp.bills_agent import TASK_REGISTRY
+
+        with CbpDriver() as driver:
+            self._setup(driver, tmp_path)
+            reg = driver.run(TASK_REGISTRY, {}, child="bills")
+            assert reg.verified is True
+            assert reg.value["count"] == 0
+            assert reg.value["registry"] == {}
+        """Intake alone never writes the registry; only accept does."""
+        from agent_centric.cbp import store
+        from agent_centric.cbp.bills_agent import TASK_INTAKE
+
+        with CbpDriver() as driver:
+            self._setup(driver, tmp_path)
+            driver.run(
+                TASK_INTAKE,
+                {
+                    "draft": {
+                        "id": "b2",
+                        "vendor": "PostCo",
+                        "amount_cents": 999,
+                        "due_date": "2026-09-15",
+                    }
+                },
+                child="bills",
+            )
+        st = store.open_state(tmp_path / "registry.db")
+        assert st.get("b2") is None, "intake alone must not write the registry"
+        st.close()
+
+    def test_malformed_intake_fails_closed(self, tmp_path: Path) -> None:
+        from agent_centric.cbp.bills_agent import TASK_INTAKE
+
+        with CbpDriver() as driver:
+            self._setup(driver, tmp_path)
+            resp = driver.run(
+                TASK_INTAKE,
+                {
+                    "draft": {
+                        "id": "b3",
+                        "vendor": "X",
+                        "amount_cents": "NaN",
+                        "due_date": "not-a-date",
+                    }
+                },
+                child="bills",
+            )
+            assert resp.verified is False
+            assert resp.error is not None
+
+
+class TestBillsMaintenance:
+    """Registry maintenance: explicit, mediated status updates that keep the
+    calendar correct (paid bills drop out of the open agenda)."""
+
+    def _accept(self, driver, tmp_path, bid: str = "b1") -> None:
+        from agent_centric.cbp.bills_agent import TASK_ACCEPT, TASK_INTAKE
+
+        draft = driver.run(
+            TASK_INTAKE,
+            {
+                "draft": {
+                    "id": bid,
+                    "vendor": "GasCo",
+                    "amount_cents": 12345,
+                    "due_date": "2026-10-01",
+                }
+            },
+            child="bills",
+        )
+        driver.run(TASK_ACCEPT, {"draft": draft.value}, child="bills")
+
+    def test_mark_paid_updates_registry_and_calendar(self, tmp_path: Path) -> None:
+        from agent_centric.cbp import CbpDriver, store
+        from agent_centric.cbp.bills_agent import (
+            TASK_CALENDAR,
+            TASK_MARK_PAID,
+            TASK_SETUP,
+        )
+
+        with CbpDriver() as driver:
+            driver.spawn("bills", kind="bills")
+            driver.run(
+                TASK_SETUP,
+                {"state": str(tmp_path / "registry.json"), "store_keys": ["b1"]},
+                child="bills",
+            )
+            self._accept(driver, tmp_path)
+
+            before = driver.run(
+                TASK_CALENDAR,
+                {"from_date": "2026-10-01", "to_date": "2026-10-31"},
+                child="bills",
+            )
+            assert before.verified is True
+            assert [e["id"] for e in before.value["entries"]] == ["b1"]
+
+            paid = driver.run(TASK_MARK_PAID, {"id": "b1"}, child="bills")
+            assert paid.verified is True
+            assert paid.value["status"] == "paid"
+
+            cal = driver.run(
+                TASK_CALENDAR,
+                {"from_date": "2026-10-01", "to_date": "2026-10-31"},
+                child="bills",
+            )
+            assert cal.value["entries"] == []
+
+        st = store.open_state(tmp_path / "registry.json")
+        assert st.get("b1")["status"] == "paid"
+        st.close()
+
+    def test_mark_status_validates_and_fails_closed(self, tmp_path: Path) -> None:
+        from agent_centric.cbp.bills_agent import (
+            TASK_MARK_PAID,
+            TASK_MARK_STATUS,
+            TASK_SETUP,
+        )
+
+        with CbpDriver() as driver:
+            driver.spawn("bills", kind="bills")
+            driver.run(
+                TASK_SETUP,
+                {"state": str(tmp_path / "registry.json"), "store_keys": ["b1"]},
+                child="bills",
+            )
+            self._accept(driver, tmp_path)
+
+            bad = driver.run(TASK_MARK_STATUS, {"id": "b1", "status": "bogus"}, child="bills")
+            assert bad.verified is False
+            missing = driver.run(TASK_MARK_PAID, {"id": "nope"}, child="bills")
+            assert missing.verified is False
+
+    def test_mark_status_note_and_mark_void(self, tmp_path: Path) -> None:
+        from agent_centric.cbp import store
+        from agent_centric.cbp.bills_agent import TASK_MARK_STATUS, TASK_SETUP
+
+        with CbpDriver() as driver:
+            driver.spawn("bills", kind="bills")
+            driver.run(
+                TASK_SETUP,
+                {"state": str(tmp_path / "registry.json"), "store_keys": ["b1"]},
+                child="bills",
+            )
+            self._accept(driver, tmp_path)
+            r = driver.run(
+                TASK_MARK_STATUS,
+                {"id": "b1", "status": "void", "note": "overcharged"},
+                child="bills",
+            )
+            assert r.verified is True
+            assert r.value["status"] == "void"
+            assert r.value["note"] == "overcharged"
+
+        st = store.open_state(tmp_path / "registry.json")
+        assert st.get("b1")["status"] == "void"
+        st.close()
+
+
+class TestDeterministicAccept:
+    """Deterministic auto-accept: an approved rule lets a matching draft enter
+    the registry without a fresh human gate; a non-matching draft routes back to
+    human review (fail-closed)."""
+
+    def _setup(self, driver, tmp_path, keys=("b1",), rules=()):
+        driver.spawn("bills", kind="bills")
+        driver.run(
+            "bills_setup",
+            {"state": str(tmp_path / "registry.json"), "store_keys": list(keys)},
+            child="bills",
+        )
+        driver.configure_child("bills", rules=tuple(rules))
+
+    def _draft(self, bid="b1", vendor="GasCo"):
+        return {
+            "id": bid, "vendor": vendor,
+            "amount_cents": 12345, "due_date": "2026-10-01",
+        }
+
+    def test_matching_rule_auto_accepts(self, tmp_path: Path) -> None:
+        from agent_centric.cbp import CbpDriver, store
+        from agent_centric.cbp.bills_agent import (
+            TASK_ACCEPT_DETERMINISTIC,
+        )
+
+        with CbpDriver() as driver:
+            self._setup(
+                driver, tmp_path,
+                rules=[{"id": "r-gasco", "domain": "vendor",
+                        "method": "from_vendor", "matcher": {"vendor": "GasCo"}}],
+            )
+            resp = driver.run(
+                TASK_ACCEPT_DETERMINISTIC, {"draft": self._draft()}, child="bills"
+            )
+            assert resp.verified is True
+            # The result is attributable to the approved rule.
+            assert resp.sources == [{"kind": "rule", "id": "r-gasco"}]
+
+        st = store.open_state(tmp_path / "registry.json")
+        assert st.get("b1")["status"] == "open"
+        st.close()
+
+    def test_no_rule_routes_to_review(self, tmp_path: Path) -> None:
+        from agent_centric.cbp import CbpDriver, store
+        from agent_centric.cbp.bills_agent import TASK_ACCEPT_DETERMINISTIC
+
+        with CbpDriver() as driver:
+            self._setup(driver, tmp_path, keys=("b2",))
+            resp = driver.run(
+                TASK_ACCEPT_DETERMINISTIC,
+                {"draft": self._draft(bid="b2", vendor="UnknownCo")},
+                child="bills",
+            )
+            # No rule matches -> fail closed to human review, nothing written.
+            assert resp.verified is False
+            assert "human review" in (resp.error or "")
+
+        st = store.open_state(tmp_path / "registry.json")
+        assert st.get("b1") is None
+        st.close()
+
+    def test_rule_persistence_via_bills_rule_add(self, tmp_path: Path) -> None:
+        """An approved rule persisted via bills_rule_add works for later
+        deterministic auto-accept, surviving a fresh driver (durable)."""
+        from agent_centric.cbp import CbpDriver, store
+        from agent_centric.cbp.bills_agent import (
+            TASK_ACCEPT_DETERMINISTIC,
+            TASK_INTAKE,
+            TASK_RULE_ADD,
+        )
+
+        registry = tmp_path / "registry.json"
+        # Session 1: add a durable rule.
+        with CbpDriver() as driver:
+            driver.spawn("bills", kind="bills")
+            driver.run(
+                "bills_setup",
+                {"state": str(registry), "store_keys": ["b1"]},
+                child="bills",
+            )
+            add = driver.run(
+                TASK_RULE_ADD,
+                {"rule": {"id": "r-1", "domain": "vendor", "method": "mv",
+                            "matcher": {"vendor": "DurableCo"}}},
+                child="bills",
+            )
+            assert add.verified is True
+
+        # Session 2: a fresh driver (no configure_child rules) auto-accepts via
+        # the persisted rule.
+        with CbpDriver() as driver:
+            driver.spawn("bills", kind="bills")
+            driver.run(
+                "bills_setup",
+                {"state": str(registry), "store_keys": ["b1"]},
+                child="bills",
+            )
+            draft = driver.run(
+                TASK_INTAKE,
+                {"draft": {"id": "b1", "vendor": "DurableCo",
+                            "amount_cents": 100, "due_date": "2026-10-01"}},
+                child="bills",
+            )
+            auto = driver.run(
+                TASK_ACCEPT_DETERMINISTIC, {"draft": draft.value}, child="bills"
+            )
+            assert auto.verified is True
+            assert auto.sources == [{"kind": "rule", "id": "r-1"}]
+
+        st = store.open_state(registry)
+        assert st.get("b1")["status"] == "open"
+        st.close()
+
+
+class TestAuditReconstruction:
+    """The driver reconstructs the full audit chain per correlation id across
+    the tree (audit as proof), including delegated parent-child relay hops."""
+
+    def test_reconstructs_local_chain(self, tmp_path: Path) -> None:
+        with CbpDriver() as driver:
+            driver.configure(trajectory=str(tmp_path / "root.db"))
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            r = driver.run("double", {"value": 21})
+            assert r.verified is True
+
+            chains = driver.reconstruct_audit()
+            # The run chain (kind result, value 42) is recovered.
+            run_chains = [
+                c for c in chains if c["terminal"] == "result" and c["terminal_value"] == 42
+            ]
+            assert run_chains, "should reconstruct the verified run chain"
+
+    def test_reconstructs_delegated_parent_child_chain(self, tmp_path: Path) -> None:
+        with CbpDriver() as driver:
+            driver.configure(trajectory=str(tmp_path / "root_traj.db"))
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            driver.spawn("child")
+            driver.configure_child(
+                "child", tasks=("double",), trajectory=str(tmp_path / "child_traj.db")
+            )
+            r = driver.run("double", {"value": 21}, child="child")
+            assert r.verified is True
+
+            chains = driver.reconstruct_audit()
+            # Find the chain that ended in the child's verified 42 result.
+            hit = None
+            for c in chains:
+                if c["terminal_value"] == 42 and c["verified"]:
+                    hit = c
+                    break
+            assert hit is not None, "should reconstruct the delegated chain"
+            nodes = [(e["node"], e["kind"]) for e in hit["events"]]
+            # child produced the result; root recorded the relay hop.
+            assert ("child", "result") in nodes and ("root", "relay") in nodes
+
+
+class TestLifecycle:
+    def test_ping(self) -> None:
+        with CbpDriver() as driver:
+            resp = driver.ping()
+            assert resp.verified is True
+            assert resp.kind == "ok"
+
+    def test_children_view(self) -> None:
+        with CbpDriver() as driver:
+            driver.spawn("child")
+            assert "child" in driver._root.children
+
+
+class TestDurableStateAndAudit:
+    """The driver exposes durable state and local audit over the wire:
+    state is persisted idempotently and read back; the audit records the
+    agent's local activity as the start of chain audit."""
+
+    def test_state_set_and_get(self, tmp_path: Path) -> None:
+        state_path = tmp_path / "state.db"
+        with CbpDriver() as driver:
+            driver.configure(state=str(state_path))
+            ok = driver.state_set("b3", {"status": "paid"})
+            assert ok.verified is True
+            got = driver.state_get("b3")
+            assert got.verified is True
+            assert got.value["status"] == "paid"
+        # Durable: re-open and read the same state.
+        from agent_centric.cbp import store
+
+        st = store.open_state(state_path)
+        assert st.get("b3")["status"] == "paid"
+        st.close()
+
+    def test_state_get_ungranted_fails_closed(self) -> None:
+        with CbpDriver() as driver:
+            resp = driver.state_get("b3")
+            assert resp.verified is False
+            assert resp.error is not None
+
+    def test_audit_records_local_activity(self, tmp_path: Path) -> None:
+        traj_path = tmp_path / "traj.db"
+        with CbpDriver() as driver:
+            driver.configure(trajectory=str(traj_path))
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            driver.run("double", {"value": 21})
+            audit = driver.audit()
+            assert audit.verified is True
+            # The run's verified result is recorded locally — the chain's start.
+            expected = ("result", 42)
+            assert any(
+                (row["kind"], row["value"]) == expected for row in audit.value
+            )
+
+    def test_parent_records_relay_hop_for_delegated_child(self, tmp_path: Path) -> None:
+        """Chain audit is reconstructible end-to-end: a parent records the
+        child-response it accepted (a ``relay`` hop), sharing the correlation
+        id, so an operator can follow child "result" + parent "relay"."""
+        traj_path = tmp_path / "traj.db"
+        with CbpDriver() as driver:
+            driver.configure(trajectory=str(traj_path))
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            driver.spawn("child")
+            driver.configure_child("child", tasks=("double",))
+            delegated = driver.run("double", {"value": 21}, child="child")
+            assert delegated.verified is True
+            assert delegated.value == 42
+
+            # The parent's local audit includes a relay hop naming the child.
+            audit = driver.audit()
+            assert audit.verified is True
+            relays = [row for row in audit.value if row["kind"] == "relay"]
+            assert relays, "parent should record a relay hop for the delegated child"
+            assert relays[0]["node"] == "root"
+            assert relays[0]["parent"] == "child"
+            assert relays[0]["value"] == 42
+
+
+class TestTransportParity:
+    """The driver (and its tree) must run the whole directive/response flow
+    identically over ``tcp`` and ``ipc``, not just ``inproc``. This is the
+    easy-UX layer proving transport parity end-to-end, including delegate."""
+
+    @pytest.mark.parametrize(
+        ("transport", "endpoint"),
+        [("tcp", "127.0.0.1:5599"), ("ipc", "/tmp/agent-centric-cbp-driver-test")],
+    )
+    def test_full_flow_over_transport(self, transport: str, endpoint: str) -> None:
+        with CbpDriver(transport=transport, endpoint=endpoint) as driver:
+            driver.register("double", _double)
+            driver.register("even", _even)
+            driver.configure(tasks=("double",), verifiers=("even",))
+
+            local = driver.run("double", {"value": 21})
+            assert local.verified is True
+            assert local.value == 42
+
+            driver.spawn("child")
+            driver.configure_child("child", tasks=("double",))
+            delegated = driver.run("double", {"value": 21}, child="child")
+            assert delegated.verified is True
+            assert delegated.value == 42
+            assert delegated.node == "child"
+
+    @pytest.mark.parametrize(
+        ("transport", "endpoint"),
+        [
+            ("tcp", "127.0.0.1:5599"),
+            ("ipc", "/tmp/agent-centric-cbp-driver-bills-test"),
+        ],
+    )
+    def test_nested_bills_loop_over_transport(
+        self, transport: str, endpoint: str, tmp_path: Path
+    ) -> None:
+        """The bills loop — which spawns its own store child internally — must
+        run identically over every transport. This is the regression that broke
+        ``tcp``: the store child's endpoint must be transport-resolved, not a
+        bare ``tcp://<name>`` address."""
+        from agent_centric.cbp.bills_agent import (
+            TASK_ACCEPT,
+            TASK_CALENDAR,
+            TASK_INTAKE,
+        )
+
+        with CbpDriver(transport=transport, endpoint=endpoint) as driver:
+            driver.spawn("bills", kind="bills")
+            driver.run(
+                "bills_setup",
+                {"state": str(tmp_path / "registry.db"), "store_keys": ["b1"]},
+                child="bills",
+            )
+            draft = driver.run(
+                TASK_INTAKE,
+                {
+                    "draft": {
+                        "id": "b1",
+                        "vendor": "GasCo",
+                        "amount_cents": 12345,
+                        "due_date": "2026-10-01",
+                    }
+                },
+                child="bills",
+            )
+            assert draft.verified is True
+            accepted = driver.run(TASK_ACCEPT, {"draft": draft.value}, child="bills")
+            assert accepted.verified is True
+            cal = driver.run(
+                TASK_CALENDAR,
+                {"from_date": "2026-10-01", "to_date": "2026-10-31"},
+                child="bills",
+            )
+            assert cal.verified is True
+            assert [e["id"] for e in cal.value["entries"]] == ["b1"]
+            assert cal.value["total_cents"] == 12345
+
+
+class TestWireIntegrity:
+    """§5.5 traffic integrity wired into the directive/response path (opt-in).
+
+    When ``integrity_secret`` is set, every directive and response across the
+    tree is HMAC-signed over a canonical message and verified on receipt
+    (fail-closed on mismatch). The default (no secret) is unchanged and fully
+    backward-compatible. The ledger records the *clean* payload so replay never
+    stores or re-verifies the trailer.
+    """
+
+    def _setup(self, driver: CbpDriver) -> None:
+        driver.register("double", _double)
+        driver.register("even", _even)
+        driver.configure(tasks=("double",), verifiers=("even",))
+
+    def test_off_is_backward_compatible(self) -> None:
+        with CbpDriver() as driver:
+            self._setup(driver)
+            r = driver.run("double", {"value": 21})
+            assert r.verified is True and r.value == 42
+
+    def test_on_signed_directive_verifies(self) -> None:
+        with CbpDriver(integrity_secret=b"shared-secret") as driver:
+            self._setup(driver)
+            r = driver.run("double", {"value": 21})
+            assert r.verified is True and r.value == 42
+
+    def test_on_delegation_across_protected_wire(self) -> None:
+        with CbpDriver(integrity_secret=b"shared-secret") as driver:
+            self._setup(driver)
+            driver.spawn("child")
+            driver.configure_child("child", tasks=("double",))
+            r = driver.run("double", {"value": 4}, child="child")
+            assert r.verified is True and r.value == 8
+            assert r.node == "child"
+
+    def test_unsigned_directive_fails_closed(self) -> None:
+        import json
+        import time
+
+        with CbpDriver(integrity_secret=b"shared-secret") as driver:
+            self._setup(driver)
+            # A well-formed but UNSIGNED directive must be refused by the root.
+            # The driver records only signed directives, so the ledger is the
+            # proof: sending an unsigned directive does not change it.
+            before = len(driver.ledger())
+            cid = driver._correlation("run")
+            frames = [
+                driver._root.identity.encode(),
+                cid.encode(),
+                b"directive",
+                b"run",
+                json.dumps({"task": "double", "args": {"value": 21}}).encode(),
+            ]
+            driver._root_socket.send_multipart(frames)
+            time.sleep(0.2)
+            assert len(driver.ledger()) == before
+
+    def test_wrong_secret_directive_fails_closed(self) -> None:
+        import json
+        import time
+
+        from agent_centric.cbp import security as _sec
+
+        with CbpDriver(integrity_secret=b"correct") as driver:
+            self._setup(driver)
+            before = len(driver.ledger())
+            cid = driver._correlation("run")
+            signed = _sec.attach_integrity(
+                b"wrong-secret",
+                correlation_id=cid,
+                directive_kind="run",
+                payload={"task": "double", "args": {"value": 21}},
+            )
+            frames = [
+                driver._root.identity.encode(),
+                cid.encode(),
+                b"directive",
+                b"run",
+                json.dumps(signed).encode(),
+            ]
+            driver._root_socket.send_multipart(frames)
+            time.sleep(0.2)
+            assert len(driver.ledger()) == before
+
+    @pytest.mark.parametrize(
+        ("transport", "endpoint"),
+        [
+            ("tcp", "127.0.0.1:5599"),
+            ("ipc", "/tmp/agent-centric-cbp-driver-integrity-test"),
+        ],
+    )
+    def test_on_over_real_transports(
+        self, transport: str, endpoint: str
+    ) -> None:
+        """Integrity works end-to-end over tcp/ipc — the exact cross-process
+        trust boundary where wire integrity matters most."""
+        with CbpDriver(
+            transport=transport, endpoint=endpoint, integrity_secret=b"shared-secret"
+        ) as driver:
+            self._setup(driver)
+            local = driver.run("double", {"value": 21})
+            assert local.verified is True and local.value == 42
+            driver.spawn("child")
+            driver.configure_child("child", tasks=("double",))
+            delegated = driver.run("double", {"value": 4}, child="child")
+            assert delegated.verified is True and delegated.value == 8
+
+    def test_ledger_holds_clean_payload(self) -> None:
+        """The recorded ledger must carry the clean payload, never the
+        integrity trailer (so replay/audit never sees reserved keys)."""
+        from agent_centric.cbp import security as _sec
+
+        with CbpDriver(integrity_secret=b"shared-secret") as driver:
+            self._setup(driver)
+            driver.run("double", {"value": 21})
+            for entry in driver.ledger().values():
+                payload = entry["payload"]
+                assert _sec.INTEGRITY_KEY not in payload
+                assert _sec.INTEGRITY_DIGEST_KEY not in payload
+
+
+class TestInspection:
+    """Read-only operator inspection: discover the live tree and its grants,
+    and enumerate a store agent's granted keys, without reaching into private
+    internals or mutating anything."""
+
+    def test_tree_reports_root_and_children(self, tmp_path: Path) -> None:
+        register_callable("double", _double)
+        with CbpDriver() as driver:
+            driver.spawn("child")
+            driver.configure_child("child", tasks=("double",))
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store",
+                state=str(tmp_path / "store.db"),
+                store_keys=("bill-b3",),
+                trajectory=str(tmp_path / "audit.db"),
+            )
+
+            tree = driver.tree()
+            ids = [n["identity"] for n in tree]
+            assert "root" in ids
+            assert "child" in ids
+            assert "store" in ids
+
+            by_id = {n["identity"]: n for n in tree}
+            # Root agent kind.
+            assert by_id["root"]["kind"] == "Agent"
+            # Store child is a StoreAgent with its granted keys.
+            assert by_id["store"]["kind"] == "StoreAgent"
+            assert by_id["store"]["store_keys"] == ["bill-b3"]
+            assert by_id["store"]["state"].endswith("store.db")
+            assert by_id["store"]["trajectory"].endswith("audit.db")
+            # A plain child has no store grant.
+            assert "state" not in by_id["child"]
+            # The child is authorized to run the 'double' task.
+            assert "double" in by_id["child"]["capabilities"]
+
+    def test_tree_is_deterministic_and_read_only(self, tmp_path: Path) -> None:
+        with CbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store", state=str(tmp_path / "s.db"), store_keys=("a", "b")
+            )
+            first = driver.tree()
+            second = driver.tree()
+            assert first == second  # deterministic snapshot
+            # tree() must not mutate or disturb the tree/liveness.
+            assert driver.ping().verified is True
+
+    def test_store_keys_convenience_lists_granted_existing(self, tmp_path: Path) -> None:
+        with CbpDriver() as driver:
+            driver.spawn("store", kind="store")
+            driver.configure_child(
+                "store", state=str(tmp_path / "s.db"), store_keys=("a", "b")
+            )
+            driver.run("store_set", {"key": "a", "value": 1}, child="store")
+            resp = driver.store_keys("store")
+            assert resp.verified is True
+            assert resp.value == ["a"]  # only existing + granted
+
+    def test_tree_reports_bills_kind(self, tmp_path: Path) -> None:
+        with CbpDriver() as driver:
+            driver.spawn("bills", kind="bills")
+            tree = driver.tree()
+            bills = next(n for n in tree if n["identity"] == "bills")
+            assert bills["kind"] == "BillsAgent"

@@ -34,8 +34,8 @@ jobs:
       - name: Types (mypy)
         run: uv run mypy src
 
-      - name: Readiness gate (fbp-check)
-        run: uv run agent-centric fbp-check
+      - name: Readiness gate (cbp-check)
+        run: uv run agent-centric cbp-check
 
       - name: Invariant suite (operator's isolated validator)
         run: uv run pytest -p no:cacheprovider

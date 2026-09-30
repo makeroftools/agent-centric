@@ -24,7 +24,7 @@ mission-critical instructions.
    concept: *the model is not the expert; the network is.* An AI is a network of
    narrow domain experts, each verified by a deterministic verifier; a general
    model is one (fallible) kind of expert. It lives at the top of
-   `README_FBP.md`, `spec.md` §0, and `docs/fbp.md`.
+   `README_CBP.md`, `spec.md` §0, and `docs/cbp.md`.
 2. **Expert selection + cost ledger** (`fbp/experts.py`) was built: `Domain`,
    `select_expert` (deterministic method → learned per-domain SLM → human,
    fail-closed), and `CostLedger`/`CostAccount`. Landing page has a read-only
@@ -104,7 +104,7 @@ Sweep ALL of: `fbp/domainrepo.py` (class names + docstrings), `fbp/web.py`
 (imports, methods `_domain_readout`, `_artifact_readout`, the `/domains` and
 `/artifacts` route comments, the UI card titles/notes), `fbp/__init__.py`
 (exports), `cli.py` (`--registry` help text), `tests/test_fbp_domainrepo.py`,
-and the docs (`docs/fbp.md`, `README_FBP.md`, `docs/FBP_HANDOFF.md`,
+and the docs (`docs/cbp.md`, `README_CBP.md`, `docs/CBP_HANDOFF.md`,
 `PRINCIPLES.md`). Use the temp+`cp` method for each file.
 
 ### 3b. Confirm the exact final naming with the user's intent

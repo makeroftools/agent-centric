@@ -47,10 +47,10 @@ _REQUIRED_AGENT_DOCS = {
 _ENTRY_POINTER_DOCS = (
     "HANDOFF.md",
     "STATUS.md",
-    "README_FBP.md",
+    "README_CBP.md",
     "KERNEL.md",
     "docs/DIRECTIVE.md",
-    "docs/FBP_HANDOFF.md",
+    "docs/CBP_HANDOFF.md",
 )
 _MD_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 _FENCED_RE = re.compile(r"```.*?```", re.DOTALL)
@@ -286,7 +286,7 @@ class TestEnforcement:
 
     def test_ci_runs_the_gates(self) -> None:
         ci = _read(".github/workflows/gates.yml")
-        for token in ("ruff", "mypy", "fbp-check", "pytest"):
+        for token in ("ruff", "mypy", "cbp-check", "pytest"):
             assert token in ci, f"CI does not run {token}"
 
     def test_version_control_law_and_hooks_are_enforced(self) -> None:

@@ -77,7 +77,7 @@ metadata:
 ## Deterministic termination
 
 <The exact command or gate this component terminates in — e.g.
-`./tools/safe-replace.sh <file>`, `uv run agent-centric fbp-check`, or the
+`./tools/safe-replace.sh <file>`, `uv run agent-centric cbp-check`, or the
 convention guard `uv run pytest -p no:cacheprovider -q tests/test_agent_conventions.py`.>
 
 ## Non-determinism (suspect)

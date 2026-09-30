@@ -27,7 +27,7 @@ correctness work. What remains is honesty and authority of record.
 uv run ruff check .
 uv run mypy src
 uv run pytest -p no:cacheprovider
-uv run agent-centric fbp-check     # deterministic readiness gate
+uv run agent-centric cbp-check     # deterministic readiness gate
 ```
 
 ## Reporting
@@ -39,7 +39,7 @@ uv run agent-centric fbp-check     # deterministic readiness gate
 
 ## Deterministic termination
 
-`uv run pytest -p no:cacheprovider` and `uv run agent-centric fbp-check` are the
+`uv run pytest -p no:cacheprovider` and `uv run agent-centric cbp-check` are the
 deterministic gates; their exit codes are the truth.
 
 ## Non-determinism (suspect)

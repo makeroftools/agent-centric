@@ -23,8 +23,8 @@ incomplete. A read-only audit found:
 - **Broken relative links.** `specs/SPEC-0002-cbp-component-architecture.md`
   used `../../` where `../` was correct; `docs/references/README.md` used
   `../PRINCIPLES.md` instead of `../../PRINCIPLES.md`.
-- **Un-normalized stragglers.** `HANDOFF.md`, `STATUS.md`, `README_FBP.md`,
-  `docs/DIRECTIVE.md`, `docs/FBP_HANDOFF.md`, and `KERNEL.md` carried no
+- **Un-normalized stragglers.** `HANDOFF.md`, `STATUS.md`, `README_CBP.md`,
+  `docs/DIRECTIVE.md`, `docs/CBP_HANDOFF.md`, and `KERNEL.md` carried no
   canonical entry pointer; `docs/DIRECTIVE.md` still carried an obsolete rename
   mandate.
 - **No enforcement.** `tests/test_agent_conventions.py` validated an allowlist

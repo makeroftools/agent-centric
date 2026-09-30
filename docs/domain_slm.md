@@ -1,7 +1,7 @@
 # Domain-Expert SLMs — the "learned" tier of Network of Experts AI
 
 **Status:** Reference for the `learned` expert tier in `select_expert` and the
-provider contract in `fbp/slm.py`. This is the engineering reality that makes a
+provider contract in `cbp/slm.py`. This is the engineering reality that makes a
 per-domain expert a practical, opt-in capability — not a research exercise.
 
 ## The thesis
@@ -44,7 +44,7 @@ bypassing the domain's verifier**. A domain SLM is a *better* expert, not a
    (4/8-bit).
 6. **Deployment**: vLLM / Ollama; combine with RAG for dynamic knowledge.
 
-## The provider contract (`fbp/slm.py`)
+## The provider contract (`cbp/slm.py`)
 
 Training is **external and opt-in** — it is never built into the deterministic
 core. The contract:
@@ -65,7 +65,7 @@ provenance as write-once evidence.
 ## Recommended base models for domain adaptation (2026) — the catalog
 
 The platform keeps a **deterministic catalog** of recommended open-weight bases
-in `fbp/model_catalog.py` (``model_catalog.resolve_base`` / ``min_tier_for``).
+in `cbp/model_catalog.py` (``model_catalog.resolve_base`` / ``min_tier_for``).
 Each entry records size class, minimum hardware tier, licensing, and whether an
 instruction-tuned variant exists. The training plan (`plan_training`) uses the
 base's **size-class hardware floor** to gate the tier — a 14B base cannot train

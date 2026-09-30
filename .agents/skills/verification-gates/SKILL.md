@@ -19,7 +19,7 @@ verify.
 | --- | --- | --- | --- |
 | `ruff` | lint | yes | pre-commit + CI |
 | `mypy src` | types | yes | pre-commit + CI |
-| `agent-centric fbp-check` | readiness | yes | pre-commit + CI |
+| `agent-centric cbp-check` | readiness | yes | pre-commit + CI |
 | `pytest` | invariant suite | yes | CI / agent |
 | `holdout` | acceptance scenarios | yes | isolated validator (not built) |
 
@@ -36,7 +36,7 @@ verify.
 
 ## Deterministic termination
 
-`uv run agent-centric fbp-check` proves the verified spine and exits non-zero on
+`uv run agent-centric cbp-check` proves the verified spine and exits non-zero on
 any failure; `uv run pytest` proves the invariants.
 
 ## Non-determinism (suspect)

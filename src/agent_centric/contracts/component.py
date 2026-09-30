@@ -1,6 +1,6 @@
 """Component contract (versioned) — ``component.v1``.
 
-A **component** is the single unit of the CBP tree: an FBP node and an ABM
+A **component** is the single unit of the CBP tree: an CBP node and an ABM
 agent, self-contained, with local (SQLite) state, executed by the harness
 (see ``specs/SPEC-0007-harness-shell-component-distribution.md``). This module
 is the immutable, versioned declaration of a component: its identity, kind,

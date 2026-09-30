@@ -1,17 +1,17 @@
-# FBP Transport Trust Boundary
+# CBP Transport Trust Boundary
 
 **Status:** largely enforced in code. §5.1 (trust-boundary switch), §5.3
 (owner-only IPC sockets), and — new this session — §5.2 (mutual-TLS credential
 config), §5.4 (per-peer authorization), and §5.5 (traffic integrity) are now
-implemented in `fbp/transport.py` + `fbp/security.py` and wired into
-`FbpDriver`/`Agent._spawn`, with tests in `tests/test_fbp_transport.py` and
-`tests/test_fbp_security.py`. The `security.py` primitives are **opt-in and
+implemented in `cbp/transport.py` + `cbp/security.py` and wired into
+`CbpDriver`/`Agent._spawn`, with tests in `tests/test_cbp_transport.py` and
+`tests/test_cbp_security.py`. The `security.py` primitives are **opt-in and
 default-off**; an operator who wants TLS/authn/intrinsity calls the explicit
-driver arguments. See `fbp/security.py`.
-**Scope:** the `agent_centric.fbp` directive/response protocol over its three
+driver arguments. See `cbp/security.py`.
+**Scope:** the `agent_centric.cbp` directive/response protocol over its three
 transports (`inproc://`, `tcp://`, `ipc://`).
 
-This document defines what the FBP transport guarantees today, where its trust
+This document defines what the CBP transport guarantees today, where its trust
 boundary sits, and what hardening is required before it should be used across
 a *real* trust boundary (i.e. anything other than localhost / a single
 operator's machine).
@@ -20,7 +20,7 @@ operator's machine).
 
 ## 1. The one-line posture
 
-> The FBP protocol assumes **one local operator on one machine** (loopback). It
+> The CBP protocol assumes **one local operator on one machine** (loopback). It
 > is **not** a security boundary: there is no TLS, no authentication, and no
 > authorization on the wire. Using `tcp://` or `ipc://` across a trust boundary
 > (different machines, different users, an untrusted network) is **out of
@@ -86,26 +86,26 @@ about **who may drive the tree** and **whether traffic is readable**.
 To move to a real trust boundary (recommended TOTI, in order of value):
 
 1. **Document + enforce a trust-boundary switch.** ✅ **BUILT.** The driver
-   (`FbpDriver(security=...)`) and `Agent._spawn` refuse a non-loopback `tcp://`
+   (`CbpDriver(security=...)`) and `Agent._spawn` refuse a non-loopback `tcp://`
    bind unless the caller opts in to a security profile (`security="local"` or
-   `"tls"`). The default profile `loopback` fails closed. See `fbp/transport.py`.
+   `"tls"`). The default profile `loopback` fails closed. See `cbp/transport.py`.
 2. **Mutual TLS (or TLS + client auth) on `tcp://`.** ✅ **BUILT (config).**
-   `TlsCreds`/`configure_tls` in `fbp/security.py` validate mutually-TLS material
+   `TlsCreds`/`configure_tls` in `cbp/security.py` validate mutually-TLS material
    (cert + key + optional CA) and fail closed on incomplete material; the driver
    refuses a `security="tls"` bind without ready creds. A live cross-host
    deployment still supplies the actual PEM affs + a TLS-capable transport.
 3. **IPC socket permissions** — ✅ **BUILT.** An `ipc://` socket is created
    with mode `0o600` (owner-only) after bind, and existing sockets are validated
-   as owner-only before use. See `fbp/transport.py`.
+   as owner-only before use. See `cbp/transport.py`.
 4. **Per-peer authorization map.** ✅ **BUILT.** `PeerAuthz`/`PeerPolicy` in
-   `fbp/security.py` map an authenticated peer to allowed directive kinds /
-   subtree, enforced at the driver boundary via `FbpDriver(peer_autz=...)`
+   `cbp/security.py` map an authenticated peer to allowed directive kinds /
+   subtree, enforced at the driver boundary via `CbpDriver(peer_autz=...)`
    (fail-closed for an unknown/unpermitted peer).
 5. **Traffic integrity.** ✅ **BUILT AND WIRED INTO THE WIRE PATH.**
-   `sign_payload`/`verify_payload`/`integrity_headers` in `fbp/security.py`
+   `sign_payload`/`verify_payload`/`integrity_headers` in `cbp/security.py`
    produce and check an HMAC-SHA256 over the canonical message so a frame
    cannot be replayed/altered without the shared secret. Wired end-to-end:
-   when `FbpDriver(integrity_secret=...)` is set (opt-in, default off), every
+   when `CbpDriver(integrity_secret=...)` is set (opt-in, default off), every
    directive is signed before it leaves the driver, inherited by every spawned
    child (whole-tree shares the secret), and verified on receipt — a missing,
    tampered, or wrong-secret directive fails closed (never a verified success).
@@ -118,11 +118,11 @@ primitives plus driver hooks. What crosses a real trust boundary still requires
 the operator to supply actual certs/secrets and a TLS-capable transport; the
 code no longer pretends these are unbuilt.
 
-6. **CURVE wire encryption (BUILT, opt-in, default off) — `fbp/curve.py` + the
+6. **CURVE wire encryption (BUILT, opt-in, default off) — `cbp/curve.py` + the
    driver.** ZeroMQ's native **CURVE** mechanism is the *real*, dependency-free
-   encryption layer for this wire. Because the FBP transport is ZeroMQ frames,
+   encryption layer for this wire. Because the CBP transport is ZeroMQ frames,
    stdlib ``ssl`` cannot wrap a zmq socket; CURVE is libzmq's built-in
-   encryption/auth for exactly this. When ``FbpDriver(..., curve=True)``:
+   encryption/auth for exactly this. When ``CbpDriver(..., curve=True)``:
    - the root ROUTER binds as a CURVE **server**,
    - a ZAP authenticator allowlists the session's client key (fail-closed),
    - the root Agent connects as a CURVE **client**, and every spawned child
@@ -143,12 +143,12 @@ code no longer pretends these are unbuilt.
 
 - Do **not** claim the protocol is "secure for the network" anywhere in docs or
   code until TLS + authn are actually implemented and tested.
-- Keep the FBP default loopback. Treat any non-loopback bind as an **explicit,
+- Keep the CBP default loopback. Treat any non-loopback bind as an **explicit,
   audited opt-in** that prints a warning.
 - A future agent should find this doc before reaching for a "transport
   security" change, and should implement the steps in §5, testing each.
 
 ---
 
-*This document is authoritative for the FBP transport boundary. Keep it
+*This document is authoritative for the CBP transport boundary. Keep it
 current whenever the transport posture changes.*

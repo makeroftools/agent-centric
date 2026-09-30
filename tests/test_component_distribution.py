@@ -17,20 +17,20 @@ import pytest
 
 from agent_centric.agents.counter import create_counter_agent
 from agent_centric.agents.interface import ToolContext
-from agent_centric.contracts.components_lock import ComponentsLock, LockEntry
-from agent_centric.fbp.cache import ContentAddressedCache
-from agent_centric.fbp.component_bundle import (
+from agent_centric.cbp.cache import ContentAddressedCache
+from agent_centric.cbp.component_bundle import (
     build_bundle_from_dir,
     bundle_sha256,
     load_manifest,
 )
-from agent_centric.fbp.component_runtime import (
+from agent_centric.cbp.component_runtime import (
     AllowlistedEntryResolver,
     EntryNotAllowed,
 )
-from agent_centric.fbp.component_source import GitSource, pin_from_git
-from agent_centric.fbp.resolver import ResolveError, Resolver
-from agent_centric.fbp.signing import SignatureError
+from agent_centric.cbp.component_source import GitSource, pin_from_git
+from agent_centric.cbp.resolver import ResolveError, Resolver
+from agent_centric.cbp.signing import SignatureError
+from agent_centric.contracts.components_lock import ComponentsLock, LockEntry
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not available")
 

@@ -11,7 +11,7 @@ its children, and together they form a rooted, recursive **tree**. Work flows
 The platform *uses* — but never fully trusts — non-deterministic tools; only a
 deterministic check can ever make a result count.
 
-> **Branches.** `main` is the active **FBP line** (a rooted, deterministic
+> **Branches.** `main` is the active **CBP line** (a rooted, deterministic
 > tree of agents). `agent-manager-version` is the frozen prior **Manager-line**
 > (a central `AgentManager`). `archive/agent-centric-fbp` is the archived
 > pre-convention line. Coding agents start at [`AGENTS.md`](AGENTS.md); the
@@ -35,7 +35,7 @@ deterministic check can ever make a result count.
 - [Why it exists](#star2-why-it-exists)
 - [How to think about it (conceptual)](#thinking-how-to-think-about-it)
 - [How it compares to other agent harnesses](#balance_scale-how-it-compares-to-other-agent-harnesses)
-- [The FBP subsystem](#zap-the-fbp-subsystem)
+- [The CBP subsystem](#zap-the-cbp-subsystem)
 - [The bills loop — the mission-critical arc](#receipt-the-bills-loop)
 - [Quick start](#rocket-quick-start)
 - [Use from Zed (ACP)](#electric_plug-use-from-zed-acp)
@@ -109,7 +109,7 @@ because the correctness spine holds at every level of the tree.
 
 ## ⚖️ How it compares to other agent harnesses
 
-| Dimension | **Agent-centric (FBP)** | Classic manager / orchestrator | LangChain / semantic-OMRE | Autogen-ish multi-agent |
+| Dimension | **Agent-centric (CBP)** | Classic manager / orchestrator | LangChain / semantic-OMRE | Autogen-ish multi-agent |
 | --- | --- | --- | --- | --- |
 | **Governance** | Topology: parent governs child | Central `Manager` object | Pipeline/composable steps | Chat-based role distribution |
 | **Trust model** | Re-verified on every hop upward | Manager stamps verified | Per-stage determined by the runner | Conversational, loosely verified |
@@ -118,15 +118,15 @@ because the correctness spine holds at every level of the tree.
 | **Underlying graph** | Rooted tree (recursive, deterministic) | Manager-drawn composition | Directed graph | Ad-hoc graph |
 
 The table is deliberately honest: it describes *aspirations* vs. today's concrete
-capabilities. The FBP column lists what is **implemented and tested**; the
+capabilities. The CBP column lists what is **implemented and tested**; the
 others are representative sketches.
 
 ---
 
-## ⚡ The FBP subsystem
+## ⚡ The CBP subsystem
 
-The **`agent-centric-fbp`** branch is a rooted, recursive **tree of agents** with
-**no central manager**. It is run through a synchronous, easy-UX `FbpDriver`.
+The **CBP subsystem** is a rooted, recursive **tree of agents** with
+**no central manager**. It is run through a synchronous, easy-UX `CbpDriver`.
 
 | Capability | What it guarantees |
 | --- | --- |
@@ -144,12 +144,12 @@ The **`agent-centric-fbp`** branch is a rooted, recursive **tree of agents** wit
 Run the whole story:
 
 ```sh
-uv run agent-centric fbp
-uv run agent-centric fbp --transport tcp
-uv run agent-centric fbp --transport ipc
+uv run agent-centric cbp
+uv run agent-centric cbp --transport tcp
+uv run agent-centric cbp --transport ipc
 ```
 
-Deep dive: [`README_FBP.md`](README_FBP.md) and [`docs/fbp.md`](docs/fbp.md).
+Deep dive: [`README_CBP.md`](README_CBP.md) and [`docs/cbp.md`](docs/cbp.md).
 
 ---
 
@@ -196,10 +196,10 @@ uv run ruff check .
 uv run mypy
 ```
 
-Run the FBP demo or the operator CLI:
+Run the CBP demo or the operator CLI:
 
 ```bash
-uv run agent-centric fbp
+uv run agent-centric cbp
 uv run agent-centric run
 ```
 
@@ -253,16 +253,16 @@ as the frozen Manager line.
 | `run` | Run the deterministic demo task set and persist trajectories. |
 | `summarise <id>` | Print a trajectory's deterministic summary. |
 | `replay-verify <id>` | Re-run the demo task and verify equivalence. |
-| `fbp` | Drive the FBP demo (`--transport inproc|tcp|ipc`, `--ledger <path>`). |
-| `fbp-summary <path>` | Operator readout of a durable FBP ledger. |
-| `fbp-replay <path>` | Re-verify an FBP ledger in a fresh process. |
+| `cbp` | Drive the CBP demo (`--transport inproc|tcp|ipc`, `--ledger <path>`). |
+| `cbp-summary <path>` | Operator readout of a durable CBP ledger. |
+| `cbp-replay <path>` | Re-verify an CBP ledger in a fresh process. |
 
 Example:
 
 ```sh
-uv run agent-centric fbp --ledger ses.db      # record a session durably
-uv run agent-centric fbp-summary ses.db       # observe it
-uv run agent-centric fbp-replay ses.db        # re-verify 18/18 runs
+uv run agent-centric cbp --ledger ses.db      # record a session durably
+uv run agent-centric cbp-summary ses.db       # observe it
+uv run agent-centric cbp-replay ses.db        # re-verify 18/18 runs
 ```
 
 ---
@@ -292,7 +292,7 @@ HANDOFF.md             Current session-continuity one-pager
 docs/agent/            Human convention map (architecture, levels, testing, …)
 .agents/skills/        Canonical Agent Skills (on-demand agent layer)
 src/agent_centric/
-  fbp/                 The FBP subsystem (active; + component distribution)
+  cbp/                 The CBP subsystem (active; + component distribution)
   contracts/           Versioned contracts (incl. component.v1, components.lock/v1)
   control_plane/       Legacy Manager control plane (frozen line; still present)
 specs/                 Spec files (SPEC-0002 CBP; SPEC-0007 distribution)
@@ -309,17 +309,17 @@ tests/                 Invariants across every volley
 | [`.agents/skills/`](.agents/skills) | Canonical Agent Skills (on-demand agent convention layer). |
 | [`docs/agent/`](docs/agent/README.md) | Human map of the convention layer. |
 | [`.agentfactory.toml`](.agentfactory.toml) | Active operating level (mode). |
-| [`docs/fbp.md`](docs/fbp.md) | FBP easy-UX driver companion. |
-| [`src/agent_centric/fbp/spec.md`](src/agent_centric/fbp/spec.md) | FBP architecture spec. |
-| [`src/agent_centric/fbp/protocol.md`](src/agent_centric/fbp/protocol.md) | FBP wire contract. |
-| [`README_FBP.md`](README_FBP.md) | Story-led FBP deep-dive. |
+| [`docs/cbp.md`](docs/cbp.md) | CBP easy-UX driver companion. |
+| [`src/agent_centric/cbp/spec.md`](src/agent_centric/cbp/spec.md) | CBP architecture spec. |
+| [`src/agent_centric/cbp/protocol.md`](src/agent_centric/cbp/protocol.md) | CBP wire contract. |
+| [`README_CBP.md`](README_CBP.md) | Story-led CBP deep-dive. |
 | [`PRINCIPLES.md`](PRINCIPLES.md) | Non-negotiable rules. |
 | [`KERNEL.md`](KERNEL.md) | v0 freeze note + versioning (historical). |
 | [`STATUS.md`](STATUS.md) | Volley-by-volley history + correctness evidence (historical). |
 | [`HANDOFF.md`](HANDOFF.md) | Current session-continuity one-pager. |
 | [`specs/SPEC-0002-cbp-component-architecture.md`](specs/SPEC-0002-cbp-component-architecture.md) | Target CBP component architecture. |
 | [`specs/SPEC-0007-harness-shell-component-distribution.md`](specs/SPEC-0007-harness-shell-component-distribution.md) | Harness/shell split + component distribution plan. |
-| [`docs/FBP_HANDOFF.md`](docs/FBP_HANDOFF.md) | Session continuity one-pager (historical). |
+| [`docs/CBP_HANDOFF.md`](docs/CBP_HANDOFF.md) | Session continuity one-pager (historical). |
 
 ---
 

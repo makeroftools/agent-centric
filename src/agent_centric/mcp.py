@@ -1,13 +1,13 @@
-"""MCP adapter: expose Agent-centric FBP as Model Context Protocol tools.
+"""MCP adapter: expose Agent-centric CBP as Model Context Protocol tools.
 
 This module bridges the **Model Context Protocol (MCP)** — the tool-calling transport
-used by LLM hosts (Claude Desktop, agent runtimes, etc.) — to the **FBP subsystem**
+used by LLM hosts (Claude Desktop, agent runtimes, etc.) — to the **CBP subsystem**
 (the deterministic platform that is now the real architecture). MCP is an edge transport
-only: the ``FbpDriver`` remains the sole authority for policy, verification, and audit.
-No MCP path can produce a verified success that bypasses the FBP correctness chain (every
+only: the ``CbpDriver`` remains the sole authority for policy, verification, and audit.
+No MCP path can produce a verified success that bypasses the CBP correctness chain (every
 ``run`` is a normal directive, parent re-verified, ledgered, replayable).
 
-The server exposes the deterministic FBP capabilities as **tools** an external model can
+The server exposes the deterministic CBP capabilities as **tools** an external model can
 call — the "model proposes, the deterministic tool verifies" seam. Tools:
 
 - ``double`` / ``square`` / ``negate`` / ``sum`` — verified arithmetic.
@@ -23,7 +23,7 @@ An unhandled tool / a raised error is reported honestly (``is_error=True``), nev
 verified success. Use the ``agent-centric-mcp`` console entry point (or ``python -m
 agent_centric.mcp``) and point an MCP client at it over stdio.
 
-**Threading.** The ``FbpDriver`` binds a private asyncio event loop and drives it with
+**Threading.** The ``CbpDriver`` binds a private asyncio event loop and drives it with
 ``run_until_complete``. That loop must never be the MCP loop (which is already running
 asyncio), so the driver is hosted on a **dedicated worker thread**: the driver's loop is bound
 to that thread and every tool call is submitted to the worker and awaited by the caller.
@@ -38,8 +38,8 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 from mcp_types import CallToolResult, TextContent
 
-from agent_centric.fbp import FbpDriver
-from agent_centric.fbp.driverhost import FbpDriverHost
+from agent_centric.cbp import CbpDriver
+from agent_centric.cbp.driverhost import CbpDriverHost
 
 
 def _as_text(value: Any) -> str:
@@ -67,13 +67,13 @@ def _call_oversized(args: dict[str, Any]) -> bool:
 
 
 def _call_unless_result(
-    host: FbpDriverHost,
+    host: CbpDriverHost,
     task: str,
     args: dict[str, Any],
     *,
     child: str | None = None,
 ) -> CallToolResult:
-    """Run one FBP task through the verified spine; return a CallToolResult."""
+    """Run one CBP task through the verified spine; return a CallToolResult."""
 
     if _call_oversized(args):
         return CallToolResult(
@@ -89,7 +89,7 @@ def _call_unless_result(
             is_error=True,
         )
 
-    def _fn(driver: FbpDriver) -> Any:
+    def _fn(driver: CbpDriver) -> Any:
         return driver.run(task, args, child=child)
 
     try:
@@ -110,10 +110,10 @@ def _call_unless_result(
     )
 
 
-def _readonly_result(host: FbpDriverHost, kind: str) -> CallToolResult:
+def _readonly_result(host: CbpDriverHost, kind: str) -> CallToolResult:
     """Run a read-only driver method (status/tree); never a task run."""
 
-    def _fn(driver: FbpDriver) -> Any:
+    def _fn(driver: CbpDriver) -> Any:
         return driver.status() if kind == "status" else driver.tree()
 
     try:
@@ -130,21 +130,21 @@ def _readonly_result(host: FbpDriverHost, kind: str) -> CallToolResult:
 
 
 def build_server(*, store_prefix: str = "mcp-*") -> MCPServer[Any]:
-    """Build the MCP server exposing FBP capabilities as tools.
+    """Build the MCP server exposing CBP capabilities as tools.
 
-    One process owns one ``FbpDriverHost`` (built lazily, reused) on a dedicated
+    One process owns one ``CbpDriverHost`` (built lazily, reused) on a dedicated
     worker thread. Each tool maps to a deterministic ``run`` through the verified
     driver spine. ``store_prefix`` scopes the store keys the store child may serve.
     """
-    host = FbpDriverHost(store_keys=store_prefix)
+    host = CbpDriverHost(store_keys=store_prefix)
 
     def _verify_run(task: str, args: dict[str, Any], *, child: str | None = None) -> CallToolResult:
         return _call_unless_result(host, task, args, child=child)
 
     server: MCPServer[Any] = MCPServer(
         name="agent-centric",
-        title="Agent-centric (FBP deterministic verified) — MCP tools",
-        description="Expose the deterministic FBP platform as MCP tools for LLM hosts.",
+        title="Agent-centric (CBP deterministic verified) — MCP tools",
+        description="Expose the deterministic CBP platform as MCP tools for LLM hosts.",
         version="0.1.0",
         instructions=(
             "These tools execute through a verified, deterministic spine. A verified "
@@ -230,7 +230,7 @@ def build_server(*, store_prefix: str = "mcp-*") -> MCPServer[Any]:
         description="Run a component network as true dataflow.",
     )
     def network(network_json: dict[str, Any]) -> CallToolResult:
-        from agent_centric.fbp.network import network_from_dict, run_network
+        from agent_centric.cbp.network import network_from_dict, run_network
 
         try:
             net = network_from_dict(network_json)
@@ -240,7 +240,7 @@ def build_server(*, store_prefix: str = "mcp-*") -> MCPServer[Any]:
                 is_error=True,
             )
 
-        def _fn(driver: FbpDriver) -> Any:
+        def _fn(driver: CbpDriver) -> Any:
             return run_network(driver, net)
 
         try:

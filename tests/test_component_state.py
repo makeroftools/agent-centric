@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from agent_centric.contracts.component import StateDescriptor
-from agent_centric.fbp.component_state import (
+from agent_centric.cbp.component_state import (
     StateError,
     check_integrity,
     connect_state,
     materialize_state,
     state_path,
 )
+from agent_centric.contracts.component import StateDescriptor
 
 
 def _desc(path: str = "state/bills.db") -> StateDescriptor:

@@ -6,6 +6,34 @@ Public surface is intentionally minimal. The primary entry point is
 """
 
 from .agents import ToolContext, ToolRequest, ToolResult
+
+# The component-based-programming (CBP) subsystem: a rooted, recursive tree of
+# agents over the directive/response protocol. Exported additively so the
+# existing control-plane surface is untouched.
+from .cbp import (
+    Agent as CbpAgent,
+)
+from .cbp import (
+    AgentConfig as CbpAgentConfig,
+)
+from .cbp import (
+    CbpDriver,
+)
+from .cbp import (
+    Context as CbpContext,
+)
+from .cbp import (
+    Directive as CbpDirective,
+)
+from .cbp import (
+    Response as CbpResponse,
+)
+from .cbp import (
+    Shell as CbpShell,
+)
+from .cbp import (
+    register_callable as cbp_register_callable,
+)
 from .contracts import (
     AcceptResult,
     AgendaEntry,
@@ -99,34 +127,6 @@ from .control_plane import (
     analyse_critical_path,
     ensure_bills_layout,
     ensure_intake_layout,
-)
-
-# The flow-based-programming (FBP) subsystem: a rooted, recursive tree of
-# agents over the directive/response protocol. Exported additively so the
-# existing control-plane surface is untouched.
-from .fbp import (
-    Agent as FbpAgent,
-)
-from .fbp import (
-    AgentConfig as FbpAgentConfig,
-)
-from .fbp import (
-    Context as FbpContext,
-)
-from .fbp import (
-    Directive as FbpDirective,
-)
-from .fbp import (
-    FbpDriver,
-)
-from .fbp import (
-    Response as FbpResponse,
-)
-from .fbp import (
-    Shell as FbpShell,
-)
-from .fbp import (
-    register_callable as fbp_register_callable,
 )
 from .providers import (
     EmailGatewayError,
@@ -243,13 +243,13 @@ __all__ = [
     "IntakeVersion",
     "IntakeOps",
     "ensure_intake_layout",
-    # Flow-based-programming (FBP) subsystem
-    "FbpAgent",
-    "FbpAgentConfig",
-    "FbpContext",
-    "FbpDirective",
-    "FbpDriver",
-    "FbpResponse",
-    "FbpShell",
-    "fbp_register_callable",
+    # Component-based-programming (CBP) subsystem
+    "CbpAgent",
+    "CbpAgentConfig",
+    "CbpContext",
+    "CbpDirective",
+    "CbpDriver",
+    "CbpResponse",
+    "CbpShell",
+    "cbp_register_callable",
 ]

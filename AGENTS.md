@@ -12,8 +12,8 @@ it does not restate. The constitution is [`PRINCIPLES.md`](PRINCIPLES.md):
 3. [`.agents/skills/`](.agents/skills) — on-demand Agent Skills, one concern each
    (canonical, industry-standard `SKILL.md`).
 4. [`KERNEL.md`](KERNEL.md) (historical v0 freeze),
-   [`src/agent_centric/fbp/spec.md`](src/agent_centric/fbp/spec.md),
-   [`src/agent_centric/fbp/protocol.md`](src/agent_centric/fbp/protocol.md) — architecture contracts.
+   [`src/agent_centric/cbp/spec.md`](src/agent_centric/cbp/spec.md),
+   [`src/agent_centric/cbp/protocol.md`](src/agent_centric/cbp/protocol.md) — architecture contracts.
 5. [`specs/SPEC-0002-cbp-component-architecture.md`](specs/SPEC-0002-cbp-component-architecture.md)
    — the target CBP component architecture (MVP + roadmap).
 6. [`specs/SPEC-0007-harness-shell-component-distribution.md`](specs/SPEC-0007-harness-shell-component-distribution.md)
@@ -66,7 +66,7 @@ directive: [`docs/HOME_DIRECTIVE_for_agents.md`](docs/HOME_DIRECTIVE_for_agents.
   component**, an ordinary component. Target:
   [`specs/SPEC-0007-harness-shell-component-distribution.md`](specs/SPEC-0007-harness-shell-component-distribution.md);
   human page: [`docs/agent/architecture.md`](docs/agent/architecture.md).
-- `src/agent_centric/fbp/` — the active FBP subsystem (the tree of agents).
+- `src/agent_centric/cbp/` — the active CBP subsystem (the tree of agents).
 - `src/agent_centric/contracts/` — versioned contracts; **additive-only**.
 - `tests/` — invariant tests; the operator or CI runs them, not the authoring agent.
 - `docs/` — design/handoff docs; `docs/agent/` is the human convention map.
@@ -83,7 +83,7 @@ directive: [`docs/HOME_DIRECTIVE_for_agents.md`](docs/HOME_DIRECTIVE_for_agents.
 ```sh
 uv run ruff check .
 uv run mypy src
-uv run agent-centric fbp-check        # deterministic readiness gate
+uv run agent-centric cbp-check        # deterministic readiness gate
 ```
 
 Run the test suite as the active level permits (the agent may run any tests); see
@@ -91,10 +91,10 @@ Run the test suite as the active level permits (the agent may run any tests); se
 
 ## Branches
 
-`main` is the FBP line (history of the former `clean` branch).
+`main` is the CBP line (history of the former `clean` branch).
 `agent-manager-version` is the frozen Manager line. `archive/agent-centric-fbp`
 is the archived pre-convention line. Historical documents (e.g. `STATUS.md`,
-`docs/FBP_HANDOFF.md`) describe past states and are not updated retroactively.
+`docs/CBP_HANDOFF.md`) describe past states and are not updated retroactively.
 
 ## Non-goals — do not build without explicit direction
 

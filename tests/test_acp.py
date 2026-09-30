@@ -1,13 +1,13 @@
-"""Tests for the ACP adapter (FBP-backed, Volley 021).
+"""Tests for the ACP adapter (CBP-backed, Volley 021).
 
 These tests prove the adapter is a client-facing transport only: every prompt is
-routed through the FBP ``FbpDriver`` verified spine, and no ACP path can produce
+routed through the CBP ``CbpDriver`` verified spine, and no ACP path can produce
 a verified success that bypasses it. They drive the adapter over the SDK's
 in-memory transport (``memory_transport_pair``) with raw JSON-RPC — no Zed, no
 subprocess, no network is required in CI.
 
 Covered:
-- a prompt maps to a governed FBP run and the verified result is streamed back;
+- a prompt maps to a governed CBP run and the verified result is streamed back;
 - arithmetic (double/square/negate/sum), model, store, bills, status/tree, and
   component-network commands all route through the driver;
 - a fail-closed outcome is reported explicitly, never as a verified success;
@@ -25,10 +25,10 @@ from typing import Any
 from acp._transport import memory_transport_pair
 from acp.agent import AgentSideConnection
 
-from agent_centric.acp import FbpAcpAgent
+from agent_centric.acp import CbpAcpAgent
 
 
-async def _drive(agent: FbpAcpAgent) -> tuple[Any, Any]:
+async def _drive(agent: CbpAcpAgent) -> tuple[Any, Any]:
     """Wire the agent to one end of an in-memory transport and start listening."""
     left, right = memory_transport_pair()
     conn = AgentSideConnection(agent, left, listening=False)
@@ -76,7 +76,7 @@ async def _close(right: Any, listen_task: asyncio.Task) -> None:
         await listen_task
 
 
-async def _establish_session(agent: FbpAcpAgent) -> tuple[Any, asyncio.Task, str]:
+async def _establish_session(agent: CbpAcpAgent) -> tuple[Any, asyncio.Task, str]:
     """initialize + session/new, returning the transport, listen task, and session id."""
     right, listen_task = await _drive(agent)
     await _req(right, 1, "initialize", {"protocolVersion": 1})
@@ -108,7 +108,7 @@ def _run_scenario(prompt_text: str) -> tuple[list[str], str]:
         # (the operator's shell may set OPENROUTER_API_KEY), so the model path
         # is deterministic — the same convention the web-route and MCP tests use.
         os.environ.pop("OPENROUTER_API_KEY", None)
-        agent = FbpAcpAgent()
+        agent = CbpAcpAgent()
         right, listen_task, session_id = await _establish_session(agent)
         try:
             resp, streamed = await _run_prompt(right, listen_task, session_id, prompt_text)
@@ -127,13 +127,13 @@ def _run_session_shared(*prompt_texts: str) -> list[tuple[str, str]]:
     One ACP process owns one agent (and one driver/store), so multi-step flows
     (store set -> get, bills intake -> accept -> calendar) must reuse the same
     agent to observe persisted state across prompts. Each prompt still routes
-    through the FBP verified spine.
+    through the CBP verified spine.
     """
 
     async def scenario() -> list[tuple[str, str]]:
         # Force the deterministic stub (see _run_scenario).
         os.environ.pop("OPENROUTER_API_KEY", None)
-        agent = FbpAcpAgent()
+        agent = CbpAcpAgent()
         right, listen_task, session_id = await _establish_session(agent)
         try:
             results: list[tuple[str, str]] = []
@@ -239,7 +239,7 @@ def test_acp_cancelled_session_refuses_prompt() -> None:
     """A cancelled session refuses a prompt with stop_reason cancelled."""
 
     async def scenario() -> None:
-        agent = FbpAcpAgent()
+        agent = CbpAcpAgent()
         right, listen_task = await _drive(agent)
         try:
             await _req(right, 1, "initialize", {"protocolVersion": 1})
@@ -258,7 +258,7 @@ def test_acp_cancelled_session_refuses_prompt() -> None:
 
 def test_acp_driver_is_shared_and_closed() -> None:
     """The driver host is built once (lazy) and torn down on close."""
-    a1 = FbpAcpAgent()
+    a1 = CbpAcpAgent()
     h1 = a1._host
     assert a1._host is h1
     a1.close()

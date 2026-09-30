@@ -1,10 +1,10 @@
-"""ACP adapter: expose Agent-centric's FBP platform as an External Agent in Zed.
+"""ACP adapter: expose Agent-centric's CBP platform as an External Agent in Zed.
 
 This module bridges the Agent Client Protocol (ACP) — a client-facing transport
-used by editors such as Zed — to the **FBP subsystem** (the deterministic
+used by editors such as Zed — to the **CBP subsystem** (the deterministic
 platform that is now the real architecture). ACP is an edge transport only: the
-``FbpDriver`` remains the sole authority for policy, verification, and audit.
-No ACP path can produce a verified success that bypasses the FBP correctness
+``CbpDriver`` remains the sole authority for policy, verification, and audit.
+No ACP path can produce a verified success that bypasses the CBP correctness
 chain (every ``run`` is a normal directive, parent re-verified, ledgered,
 replayable).
 
@@ -12,7 +12,7 @@ The adapter implements the smallest usable ACP surface:
 
 - ``initialize`` — honest, minimal capabilities (all disabled by default).
 - ``session/new`` — a session id is minted; one process owns one driver.
-- ``session/prompt`` — a user prompt is mapped to a deterministic FBP run (or
+- ``session/prompt`` — a user prompt is mapped to a deterministic CBP run (or
   plan / component network) and the verified result (or a clear fail-closed
   failure) is streamed back as agent text.
 - ``session/cancel`` — tracked per session. Mid-run cancellation of the
@@ -36,7 +36,7 @@ Only deterministic, offline-safe paths run by default; a real model provider is
 an opt-in env-driven hook. Use the ``agent-centric-acp`` console entry point (or
 ``python -m agent_centric.acp``) and point an ACP client at it over stdio.
 
-**Threading model.** The ``FbpDriver`` binds a private asyncio event loop and
+**Threading model.** The ``CbpDriver`` binds a private asyncio event loop and
 drives it with ``run_until_complete``. That loop must never be the ACP process
 loop (which is already running asyncio), so the driver is hosted on a dedicated
 worker thread: the driver's loop is bound to that thread, and every command is
@@ -81,9 +81,9 @@ from acp.schema import (
     TextContentBlock,
 )
 
-from agent_centric.fbp import FbpDriver
-from agent_centric.fbp.driverhost import FbpDriverHost
-from agent_centric.fbp.network import network_from_dict
+from agent_centric.cbp import CbpDriver
+from agent_centric.cbp.driverhost import CbpDriverHost
+from agent_centric.cbp.network import network_from_dict
 
 # The ACP protocol version this agent implements and advertises.
 _ACP_VERSION = PROTOCOL_VERSION
@@ -142,8 +142,8 @@ def _parse_json(text: str, name: str) -> dict[str, Any]:
     return value
 
 
-class FbpAcpAgent(Agent):
-    """An ACP agent that runs every prompt through the FBP verified chain.
+class CbpAcpAgent(Agent):
+    """An ACP agent that runs every prompt through the CBP verified chain.
 
     One process owns one ``_DriverHost`` (built lazily, reused across sessions).
     Each prompt maps to a deterministic run / plan / network executed through
@@ -154,7 +154,7 @@ class FbpAcpAgent(Agent):
     """
 
     def __init__(self) -> None:
-        self._host = FbpDriverHost(store_keys="acp-*")
+        self._host = CbpDriverHost(store_keys="acp-*")
         self._conn: Client | None = None
         self._cancelled: set[str] = set()
 
@@ -190,7 +190,7 @@ class FbpAcpAgent(Agent):
             protocol_version=_ACP_VERSION,
             agent_info=Implementation(
                 name=_AGENT_NAME,
-                title="Agent-centric (FBP deterministic verified chain)",
+                title="Agent-centric (CBP deterministic verified chain)",
                 version=_AGENT_VERSION,
             ),
         )
@@ -326,8 +326,8 @@ class FbpAcpAgent(Agent):
 # -- command dispatch ---------------------------------------------------------
 
 
-def _run_command(host: FbpDriverHost, text: str) -> tuple[str, list[str]]:
-    """Dispatch a prompt to a deterministic FBP run; return (label, lines).
+def _run_command(host: CbpDriverHost, text: str) -> tuple[str, list[str]]:
+    """Dispatch a prompt to a deterministic CBP run; return (label, lines).
 
     Runs on the ACP caller's thread (via ``asyncio.to_thread``) and submits the
     actual driver call to the worker thread that owns the driver's loop. This
@@ -380,7 +380,7 @@ def _two_ints(text: str, name: str) -> tuple[int, int]:
 
 
 def _run_verified(
-    host: FbpDriverHost,
+    host: CbpDriverHost,
     task: str,
     args: dict[str, Any],
     label: str,
@@ -389,7 +389,7 @@ def _run_verified(
 ) -> tuple[str, list[str]]:
     """Run a single task through the verified chain and render the result."""
 
-    def _fn(driver: FbpDriver) -> Any:
+    def _fn(driver: CbpDriver) -> Any:
         return driver.run(task, args, child=child)
 
     resp = host.submit(_fn)
@@ -398,17 +398,17 @@ def _run_verified(
     return label, [f"fail-closed: {resp.error or 'unverified'}"]
 
 
-def _run_readonly(host: FbpDriverHost, kind: str, label: str) -> tuple[str, list[str]]:
+def _run_readonly(host: CbpDriverHost, kind: str, label: str) -> tuple[str, list[str]]:
     """Run a read-only inspection (status/tree) through the driver."""
 
-    def _fn(driver: FbpDriver) -> Any:
+    def _fn(driver: CbpDriver) -> Any:
         return driver.status() if kind == "status" else driver.tree()
 
     value = host.submit(_fn)
     return label, [_as_text(value)]
 
 
-def _run_store(host: FbpDriverHost, rest: str) -> tuple[str, list[str]]:
+def _run_store(host: CbpDriverHost, rest: str) -> tuple[str, list[str]]:
     """Handle ``store set <key> <json>`` / ``store get <key>`` (grant-scoped)."""
     op, _, tail = rest.strip().partition(" ")
     if op == "set":
@@ -427,7 +427,7 @@ def _run_store(host: FbpDriverHost, rest: str) -> tuple[str, list[str]]:
     raise ValueError("store requires 'set <key> <json>' or 'get <key>'")
 
 
-def _run_bills(host: FbpDriverHost, rest: str) -> tuple[str, list[str]]:
+def _run_bills(host: CbpDriverHost, rest: str) -> tuple[str, list[str]]:
     """Handle the bills demonstration loop (intake/accept/calendar)."""
     op, _, tail = rest.strip().partition(" ")
     if op == "intake":
@@ -447,13 +447,13 @@ def _run_bills(host: FbpDriverHost, rest: str) -> tuple[str, list[str]]:
     raise ValueError("bills requires 'intake <json>', 'accept <json>', or 'calendar <from> <to>'")
 
 
-def _run_network(host: FbpDriverHost, rest: str) -> tuple[str, list[str]]:
+def _run_network(host: CbpDriverHost, rest: str) -> tuple[str, list[str]]:
     """Run a component network (JSON) as true dataflow through the chain."""
     data = _parse_json(rest, "network")
     network = network_from_dict(data)
 
-    def _fn(driver: FbpDriver) -> Any:
-        from agent_centric.fbp.network import run_network
+    def _fn(driver: CbpDriver) -> Any:
+        from agent_centric.cbp.network import run_network
 
         return run_network(driver, network)
 
@@ -471,7 +471,7 @@ def _run_network(host: FbpDriverHost, rest: str) -> tuple[str, list[str]]:
 
 async def _serve_agent() -> None:
     """Run the ACP agent over stdio (blocking until the client disconnects)."""
-    agent = FbpAcpAgent()
+    agent = CbpAcpAgent()
     try:
         await run_agent(cast(Agent, agent))
     finally:
