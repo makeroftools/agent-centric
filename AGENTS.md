@@ -51,7 +51,9 @@ directive: [`docs/HOME_DIRECTIVE_for_agents.md`](docs/HOME_DIRECTIVE_for_agents.
 - `src/agent_centric/contracts/` — versioned contracts; **additive-only**.
 - `tests/` — invariant tests; the operator or CI runs them, not the authoring agent.
 - `docs/` — design/handoff docs; `docs/agent/` is the human convention map.
-- `.agents/skills/` — the canonical, on-demand Agent Skills (agent convention layer).
+- `.agents/skills/` — the canonical, on-demand Agent Skills; a skill **is** a
+  component (CBP). Add one with `./tools/new-skill.sh <name>`; the convention
+  guard auto-discovers every skill. See `docs/agent/components.md`.
 - `specs/` — spec files with YAML front-matter; `specs/holdout/` is never fed to the author.
 - `tools/` — the only sanctioned file-mutation primitives.
 

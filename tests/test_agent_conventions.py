@@ -1,15 +1,16 @@
 """Convention guard (deterministic, offline).
 
 Asserts that the agent convention layer is present and consistent: the factory
-policy, the canonical Agent Skills (`.agents/skills/<name>/SKILL.md`), the
-vendor pointers, the enforcement config, the progressive-disclosure pages, and
-the specs. Prose points; this test decides. It reads files and TOML/JSON only;
-it never touches ``$HOME``.
+policy, the canonical Agent Skills / components (`.agents/skills/<name>/SKILL.md`),
+the vendor pointers, the enforcement config, the progressive-disclosure pages,
+and the specs. Prose points; this test decides. It reads files and TOML/JSON
+only; it never touches ``$HOME``.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import tomllib
 from pathlib import Path
@@ -20,6 +21,9 @@ SKILLS_DIR = REPO_ROOT / ".agents" / "skills"
 _VALID_LEVELS = {"L0", "L1", "L2", "L3"}
 _REQUIRED_LEVEL_FIELDS = {"name", "autonomy", "gates", "review"}
 _NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+# The law-critical skills that must always exist. Every OTHER skill under
+# .agents/skills/ is auto-discovered and must satisfy the same contract, so
+# adding components never requires editing this allowlist.
 _REQUIRED_SKILLS = {
     "safe-file-editing",
     "test-authority",
@@ -28,13 +32,16 @@ _REQUIRED_SKILLS = {
     "verification-gates",
     "home-path-safety",
     "cbp-architecture",
+    "skill-authoring",
 }
+_VALID_DETERMINISM = {"deterministic", "suspect"}
 _REQUIRED_AGENT_DOCS = {
     "README.md",
     "levels.md",
     "testing.md",
     "verification.md",
     "committing.md",
+    "components.md",
 }
 _ENTRY_POINTER_DOCS = (
     "HANDOFF.md",
@@ -60,6 +67,19 @@ _SKIP_DIRS = {
 
 def _read(rel: str) -> str:
     return (REPO_ROOT / rel).read_text(encoding="utf-8")
+
+
+def _discover_skills() -> set[str]:
+    """Every skill directory under .agents/skills/ that contains a SKILL.md."""
+    if not SKILLS_DIR.is_dir():
+        return set()
+    found: set[str] = set()
+    for child in SKILLS_DIR.iterdir():
+        if not child.is_dir() or child.name.startswith((".", "_")):
+            continue
+        if (child / "SKILL.md").is_file():
+            found.add(child.name)
+    return found
 
 
 def _iter_markdown() -> list[Path]:
@@ -150,34 +170,44 @@ class TestEntryPoints:
 
 
 class TestSkills:
-    def test_required_skills_are_present_and_canonical(self) -> None:
-        for name in _REQUIRED_SKILLS:
-            skill = SKILLS_DIR / name / "SKILL.md"
-            assert skill.is_file(), f"missing skill: {name}"
-            fm, _ = _parse_frontmatter(skill.read_text(encoding="utf-8"))
-            assert fm.get("name") == name
-            assert _NAME_RE.match(name)
-            description = fm.get("description")
-            assert isinstance(description, str) and 1 <= len(description) <= 1024
-            meta = fm.get("metadata")
-            assert isinstance(meta, dict)
-            assert "component" in meta, f"{name} metadata.component missing"
-            assert "determinism" in meta, f"{name} metadata.determinism missing"
+    def test_there_is_at_least_one_skill(self) -> None:
+        assert _discover_skills(), "no skills discovered under .agents/skills/"
 
-    def test_skills_declare_their_deterministic_termination(self) -> None:
-        for name in _REQUIRED_SKILLS:
-            _, body = _parse_frontmatter(
-                (SKILLS_DIR / name / "SKILL.md").read_text(encoding="utf-8")
-            )
+    def test_required_skills_are_present(self) -> None:
+        assert _discover_skills() >= _REQUIRED_SKILLS
+
+    def test_every_discovered_skill_is_canonical(self) -> None:
+        # Auto-discovery is the hard wiring: ANY skill dir is held to the
+        # contract, with no per-skill registration.
+        for name in sorted(_discover_skills()):
+            skill = SKILLS_DIR / name / "SKILL.md"
+            fm, body = _parse_frontmatter(skill.read_text(encoding="utf-8"))
+            assert fm.get("name") == name, f"{name}: name must equal directory"
+            assert _NAME_RE.match(name) and len(name) <= 64, name
+            description = fm.get("description")
+            assert isinstance(description, str) and 1 <= len(description) <= 1024, name
+            meta = fm.get("metadata")
+            assert isinstance(meta, dict), f"{name}: metadata missing"
+            assert meta.get("component") == name, f"{name}: metadata.component must equal name"
+            assert meta.get("determinism") in _VALID_DETERMINISM, name
             assert "## Deterministic termination" in body, name
             assert "## Non-determinism (suspect)" in body, name
+
+    def test_no_stray_skill_directories(self) -> None:
+        for child in SKILLS_DIR.iterdir():
+            if not child.is_dir() or child.name.startswith((".", "_")):
+                continue
+            assert (child / "SKILL.md").is_file(), f"{child.name} has no SKILL.md"
 
     def test_claude_skills_symlink_resolves_to_the_canonical_tree(self) -> None:
         link = REPO_ROOT / ".claude" / "skills"
         assert link.is_symlink(), ".claude/skills must be a symlink"
         assert link.resolve() == SKILLS_DIR.resolve()
+
+    def test_claude_exposes_every_discovered_skill(self) -> None:
+        link = REPO_ROOT / ".claude" / "skills"
         exposed = {p.name for p in link.iterdir() if (p / "SKILL.md").is_file()}
-        assert exposed >= _REQUIRED_SKILLS
+        assert _discover_skills() <= exposed
 
 
 class TestProgressiveDisclosure:
@@ -228,6 +258,11 @@ class TestEnforcement:
     def test_sanctioned_mutation_primitive_exists(self) -> None:
         assert (REPO_ROOT / "tools" / "safe-replace.sh").is_file()
 
+    def test_skill_scaffold_is_executable(self) -> None:
+        scaffold = REPO_ROOT / "tools" / "new-skill.sh"
+        assert scaffold.is_file(), "tools/new-skill.sh missing"
+        assert os.access(scaffold, os.X_OK), "tools/new-skill.sh must be executable"
+
     def test_ci_runs_the_gates(self) -> None:
         ci = _read(".github/workflows/gates.yml")
         for token in ("ruff", "mypy", "fbp-check", "pytest"):
@@ -252,3 +287,6 @@ class TestSpecs:
 
     def test_convention_completion_spec_is_recorded(self) -> None:
         assert (REPO_ROOT / "specs" / "SPEC-0003-agent-convention-completion.md").is_file()
+
+    def test_convention_hardwiring_spec_is_recorded(self) -> None:
+        assert (REPO_ROOT / "specs" / "SPEC-0004-hardwire-component-convention.md").is_file()

@@ -1,10 +1,12 @@
 # docs/agent — the convention map (human)
 
 This directory is the **human** map of the agent convention layer. The
-agent-facing, on-demand instructions are now **Agent Skills** under
+agent-facing, on-demand instructions are **Agent Skills** under
 [`.agents/skills/`](../../.agents/skills) — the canonical, industry-standard
-form. They are mirrored for Claude via the [`.claude/skills`](../../.claude/skills)
-symlink, and opencode discovers them through the `skill` tool.
+form. A skill **is a component** (CBP); opencode discovers them directly, and
+they are mirrored for Claude via the [`.claude/skills`](../../.claude/skills)
+symlink. The guard auto-discovers every skill, so adding components needs no
+registration here beyond the map below.
 
 | Skill | Use when |
 | --- | --- |
@@ -15,6 +17,7 @@ symlink, and opencode discovers them through the `skill` tool.
 | [`verification-gates`](../../.agents/skills/verification-gates/SKILL.md) | Designing or judging a gate. |
 | [`home-path-safety`](../../.agents/skills/home-path-safety/SKILL.md) | Any home path or username. |
 | [`cbp-architecture`](../../.agents/skills/cbp-architecture/SKILL.md) | The execution architecture. |
+| [`skill-authoring`](../../.agents/skills/skill-authoring/SKILL.md) | Adding or changing a component/skill. |
 
 ## Pages (progressive disclosure)
 
@@ -27,6 +30,7 @@ revealed here, only as needed:
 | [`testing.md`](testing.md) | Test authority (Law 12). |
 | [`verification.md`](verification.md) | Verification gates and the holdout validator. |
 | [`committing.md`](committing.md) | Commit and push (Law 13). |
+| [`components.md`](components.md) | Adding a component (a skill); the scaffold and the contract. |
 
 ## The constitution
 
@@ -42,6 +46,6 @@ Prose points; machines decide:
 - [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) and
   [`.github/workflows/gates.yml`](../../.github/workflows/gates.yml) run the gates.
 - [`tests/test_agent_conventions.py`](../../tests/test_agent_conventions.py)
-  validates the skills and this layer.
+  auto-discovers every skill/component and validates the skills and this layer.
 
 If this map ever contradicts [`PRINCIPLES.md`](../../PRINCIPLES.md), the laws win.
