@@ -120,19 +120,20 @@ Run the fresh-session checklist below before acting.
 
 ## Validation (last full run)
 
-- `uv run pytest -o addopts="" -p no:cacheprovider` → **1279 passed**.
+- `uv run pytest -o addopts="" -p no:cacheprovider` → **1280 passed**.
 - `uv run ruff check .` → clean.
 - `uv run mypy src` → clean (**113** source files).
 - `uv run agent-centric cbp-check` → **8/8**, READY.
-- Convention guard → **37 passed**.
+- Convention guard → **38 passed**.
 
 ## Next (candidate — not started)
 
 - **Phase 2 remainder:** commit the umbrella `components.lock` (blocked on the
   Phase 0.5b mirror — no real pinned remotes yet).
-- **Shell interface (SPEC-0008):** the shell as the human-facing interface to the
-  system, with a self-hosted n8n adapter that *designs* CBP graphs and never
-  enters the run path (design-time authoring, local-first execution).
+- **Shell design interface (SPEC-0008, draft):** the shell as the human-facing
+  interface; n8n as a design-time authoring surface that emits `design.v1` and
+  never enters the run path. Spec written; implementation is Phase 1
+  (`design.v1` + validate/compile), then the adapter.
 - **Phase 0.5b remainder:** the live self-hosted mirror (Forgejo/Gitea); the
   signing service and transparency log are delivered.
 - **Phases 3–5:** directives aggregated into skills + pinned model components;
@@ -164,7 +165,8 @@ See [`docs/agent/levels.md`](docs/agent/levels.md),
   `resolver.py`, `signing.py`.
 - `src/agent_centric/contracts/` — versioned contracts, including
   `component.py` and `components_lock.py`.
-- `specs/` — specs (SPEC-0002 target; SPEC-0007 distribution plan).
+- `specs/` — specs (SPEC-0002 target; SPEC-0007 distribution plan;
+  SPEC-0008 shell design interface, draft).
 - `examples/components/` — `counter` (atomic), `bills_registry` (composite:
   SQLite state + embedded `bills_rules` + referenced `agenda`), and the Phase 2
   `shell` (root composite → `registry`) + `registry` components.

@@ -107,6 +107,15 @@ Example root: [`examples/components/shell/`](../../examples/components/shell)
 
 Runnable demo: [`examples/release_signing.py`](../../examples/release_signing.py).
 
+## Human graph design (SPEC-0008, draft)
+
+Humans may design CBP process graphs in a **design-time** surface (n8n), which
+emits a declarative `design.v1` document. The shell is the boundary: a design is
+validated fail-closed, pinned and signed, then booted. n8n is an out-of-process
+adapter and never enters the local-first run path.
+
+See [`specs/SPEC-0008-shell-design-interface-n8n.md`](../../specs/SPEC-0008-shell-design-interface-n8n.md).
+
 ## Boundaries (non-negotiable)
 
 - **Run time is local-first**; distribution happens only at **acquisition time**,
