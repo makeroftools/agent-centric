@@ -1,224 +1,123 @@
-> **Historical — start at [`AGENTS.md`](AGENTS.md).** This document records a
-> past state and is not updated retroactively. Current rules live in
-> [`AGENTS.md`](AGENTS.md) and [`PRINCIPLES.md`](PRINCIPLES.md); the active mode
-> is in [`.agentfactory.toml`](.agentfactory.toml).
-
 # HANDOFF — Agent-centric (mission-critical system)
 
-**Prepared for a new session thread.** All facts below are current as of this
-handoff.
+> **Read first:** [`AGENTS.md`](AGENTS.md) is the always-loaded table of
+> contents, and [`PRINCIPLES.md`](PRINCIPLES.md) is the constitution. This file
+> is the **current** session-continuity one-pager: it points, it does not
+> restate.
 
-> **Read first: `KERNEL.md`, `README.md`, `STATUS.md`, then this `HANDOFF.md`.**
-> `KERNEL.md` is the v0 freeze note; `STATUS.md` is the volley-by-volley history
-> + correctness evidence; `README.md` is the GitHub frontpage with the Zed ACP
-> quickstart; this file is the authoritative one-pager for session continuity.
+**Prepared for a new session thread.** All facts below are current as of
+`HEAD = c64fcf2` (branch `main`, pushed to `origin`).
+
+## Read first (in order)
+
+1. [`AGENTS.md`](AGENTS.md) — table of contents + the hard laws.
+2. [`PRINCIPLES.md`](PRINCIPLES.md) — the non-negotiable laws (1–13).
+3. [`.agentfactory.toml`](.agentfactory.toml) — the active mode (**L1**; target L3, gated).
+4. [`.agents/skills/`](.agents/skills) — the on-demand Agent Skills.
+5. [`docs/agent/`](docs/agent/README.md) — progressive disclosure: architecture,
+   levels, testing, verification, committing, components.
+6. [`specs/SPEC-0002-cbp-component-architecture.md`](specs/SPEC-0002-cbp-component-architecture.md)
+   (CBP target) and
+   [`specs/SPEC-0007-harness-shell-component-distribution.md`](specs/SPEC-0007-harness-shell-component-distribution.md)
+   (harness/shell + distribution).
 
 ## Current git state
-- **Branch:** `main` — the FBP line (history of the former `clean` branch).
+
+- **Branch:** `main` — the FBP line. Working tree clean; in sync with
+  `origin/main`.
 - **Topology:** `agent-manager-version` is the frozen prior Manager line;
   `archive/agent-centric-fbp` is the archived pre-convention line.
-- **Convention:** SPEC-0001 applied here — see [`AGENTS.md`](AGENTS.md) and
-  [`.agentfactory.toml`](.agentfactory.toml).
-- **Push policy:** commit and push continuously — no permission needed (Law 13).
-
-> The Manager-line description below is historical; that line now lives on the
-> `agent-manager-version` branch and is not updated here.
+- **Tag:** `v0.29.0-milestone` (historical kernel milestone).
+- **Push policy:** commit and push continuously, no permission needed (Law 13);
+  never bypass hooks (`--no-verify` is forbidden).
 
 ## What Agent-centric is
-A deterministic, local-first, in-process control plane for governed, verifiable
-agents. The **Agent Manager** is the sole authority for policy, tool/model
-mediation, resource envelopes, verification, and audit. A task terminates in a
-**verified result or an explicit, audited failure** — no third state. Agents
-never spawn or directly invoke one another.
 
-Governing docs: `PRINCIPLES.md` (non-negotiable rules), `KERNEL.md` (v0 freeze
-note), `STATUS.md` (volley-by-volley history + correctness evidence),
-`README.md` (GitHub frontpage, now enriched with a working Zed ACP quickstart).
+- **Two layers (SPEC-0007).** `agent-centric` is the **harness** — boot +
+  runtime + meta. It **executes** the CBP tree and is **not** a node. The tree's
+  root is the **shell component**, an ordinary component.
+- **Everything is a component** (FBP node = ABM agent), self-contained with
+  local SQLite state; a **skill** is a component directive; an **LLM** is a
+  component of kind `model`.
+- **Posture:** deterministic control plane, local-first, fail-closed, no
+  unverified success, full auditability.
 
-## The bills loop (the core need this system serves)
+## Where we are (delivered)
 
-```
-inbox/ (json/csv/txt/PDF-text) or email --(intake)--> unverified BillDraft
-        --> human accept (intake_accept, grant-gated) --> bills/registry.json
-        --> calendar projection (bills_calendar) --> upsert / mark-paid (bills.maintain)
-```
+- **Convention layer** (SPEC-0001/0003/0004): `AGENTS.md` TOC, canonical skills
+  (8, auto-discovered), scaffold [`tools/new-skill.sh`](tools/new-skill.sh),
+  same-name component mapping (SPEC-0006), guarded by
+  [`tests/test_agent_conventions.py`](tests/test_agent_conventions.py).
+- **CBP target architecture:** SPEC-0002.
+- **Distribution spine** (SPEC-0007):
+  - **Phase 0** — spec; Law 5 amended (run-time local-first vs acquisition);
+    `KERNEL.md` note; `docs/agent/architecture.md`.
+  - **Phase 0.5a** — `component.v1` + `components.lock/v1` contracts;
+    content-addressed atomic cache; deterministic resolver; minisign/gpg
+    signature verification; offline directory source
+    (`fbp/cache.py`, `fbp/resolver.py`, `fbp/signing.py`).
+  - **Phase 1a** — deterministic bundle; offline git source + pinner; offline
+    pin→lock→resolve→verify→load→run with an allowlisted entry; replay proof
+    (`fbp/component_bundle.py`, `fbp/component_source.py`,
+    `fbp/component_runtime.py`). Example component
+    [`examples/components/counter/`](examples/components/counter) and demo
+    [`examples/component_distribution.py`](examples/component_distribution.py).
 
-- **Inbox files** (`.json`/`.csv`/`.txt`/PDF embedded text) and **email** become
-  **unverified** `BillDraft` proposals (Volleys 026/027/029).
-- **Human accept** (`intake_accept`) is the only path that writes drafts into the
-  registry; it never auto-accepts.
-- **Registry + calendar** (`bills_registry` agent) project a deterministic agenda
-  from the accepted registry.
-- **Maintenance** (`bills_registry_upsert` / `_mark_paid` / `_mark_status`)
-  keeps vendors/status correct without breaking calendar invariants (Volley 028).
-- Every stage is Manager-mediated, policy-bound, verified, and audited.
+## Validation (last full run)
 
-## What v0.29 includes (Volleys 001–029)
-- Deterministic `AgentManager`: register, select (name/capability), run,
-  summarise, replay.
-- Versioned contracts; capability registry; local tools (`to_upper`, `add`,
-  `bill_total`) + **MCP adapter** (`mcp_tools.py`) + **allowlisted workspace
-  tools** + **read-only email tools**.
-- Model path: stub by default + optional hardened real provider
-  (`providers/__init__.py`).
-- Composition: sequential / parallel / nested, Manager-orchestrated.
-- Governance: policy, hard envelopes, cooperative cancellation, per-step budgets.
-- Isolation: optional subprocess backend with silent-hang bounding + forced-kill
-  auditing.
-- Observability: trajectory summary, replay verification, read-only CPM.
-- **Bills specialty agent** (`agents/bills.py`, `contracts/bill.py`): structured
-  bills in, deterministic totals out, real verification (recompute; rejects
-  bad/missing data).
-- **Workspace specialty agent** (`agents/workspace.py`, `contracts/workspace.py`,
-  `control_plane/workspace.py`): local allowlisted workspace with mediated file
-  tools (list/read/write/mkdir) that reject any disallowed path fail-closed.
-- **Read-only email specialty agent** (`agents/email.py`, `contracts/email.py`,
-  `control_plane/email_tools.py`, `providers/email.py`): reads-only mediated
-  `email_list` / `email_fetch` tools, fake gateway for CI, optional real IMAP
-  backend off by default, secrets redacted. No send/delete/move.
-- **Bills-registry + calendar agent** (`agents/bills_registry.py`,
-  `contracts/bills_registry.py`, `control_plane/bills_registry.py`): a canonical
-  local bills registry (`bills/registry.json`, allowlisted) plus a deterministic
-  calendar/agenda projection (`bills.registry.v1` / `bills.calendar.v1`), no
-  model, recompute verification. Recurrence omitted (future).
-- **Dump-intake agent** (`agents/intake.py`, `contracts/intake.py`,
-  `control_plane/intake.py`): allowlisted `inbox/` drop zone, deterministic
-  inventory, **unverified** bill drafts, and an explicit grant-gated accept that
-  persists only human-approved rows into the registry. No silent financial
-  commits.
-- **PDF -> unverified draft (Volley 027)** (`control_plane/pdf_text.py` +
-  `Workspace.read_bytes`): dependency-free, offline embedded-text extraction
-  from simple PDFs (Flate or raw, `Tj`/`TJ`). Extracted vendor/amount/due date
-  are parsed only into an unverified `BillDraft`; a PDF with no usable embedded
-  text fails closed (no draft invented). No OCR, no cloud APIs, no network.
-- **Registry maintenance (Volley 028)** (`control_plane/bills_registry.py` +
-  `contracts/bills_registry.py`): governed, mediated `bills.registry`/
-  `bills.calendar`/`bills.maintain` operations on the same `bills_registry`
-  agent — `bills_registry_upsert` (insert or replace by id), `bills_registry_mark_paid`
-  (set `paid`, fail closed on missing id), and `bills_registry_mark_status`
-  (shared status path). Writes only the allowlisted registry path; never
-  implicitly accepts intake drafts; verifier recomputes the expected merge;
-  calendar stays correct after maintenance.
-- **Email → unverified draft (Volley 029)** (`control_plane/intake.py`): the
-  read-only `intake_email_draft` tool on the existing `intake` agent
-  (`intake.draft_from_email.v1`) parses a fetched email (subject + body) into
-  unverified `BillDraft` rows via the existing accept → registry → calendar path.
-  Weak/absent parse fails closed to no draft (no invented facts); read-only (no
-  send/delete); grant separate from `email_fetch` and `intake_accept`.
-- Operator CLI `agent-centric` (run/summarise/replay-verify) + **ACP adapter**
-  `agent-centric-acp` (Zed external agent).
+- `uv run pytest -p no:cacheprovider` → **1216 passed**.
+- `uv run ruff check .` → clean.
+- `uv run mypy src` → clean (**103** source files).
+- Convention guard → passes.
 
-## Public surface (deliberate, minimal)
-Top-level `agent_centric/__init__.py` exports `AgentManager`, core contracts,
-backends, stores, `summarise`/`replay`/`verify_replay`, `analyse_critical_path`,
-MCP adapter types, providers, and builder helpers. Sub-package `__init__.py`
-files define `__all__`; `py.typed` marks the package typed. **Additive changes
-only — prefer adapters/backends over changing Manager semantics.**
+## Next (candidate — not started)
 
-## What Zed ACP does today (thin adapter)
-- `src/agent_centric/acp.py` is a **thin ACP adapter** over the official
-  `agent-client-protocol` SDK (runtime dep `agent-client-protocol>=0.12.0`),
-  exposing Agent-centric as an External Agent in Zed.
-- It is **edge-transport only** — not full coding-agent parity: no diffs,
-  slash-commands, or nested subagents.
-- **Demo routing is fixed** (`reverse` default, `upper`, `counter`, stub
-  `model`); it does not yet route to the bills loop.
-- **Spawn path (absolute):** `uv run agent-centric-acp` from the repo root
-  (`$HOME/github/agent-centric`), configured in Zed under
-  `agent_servers` (see `README.md` → "Use from Zed (ACP)").
+- **Phase 1b:** extract `bills_registry` (proves the SQLite state descriptor and
+  both child modes: **contains** one child, **points to** another).
+- **Phase 0.5b:** automated signing service + append-only transparency log +
+  live self-hosted mirror (needs the Forgejo/Gitea instance).
+- **Phase 2:** registry component + shell component; boot from the lock.
+- **Phases 3–5:** directives/models; migration + hermetic CI; hardening drills.
 
-## Key invariants to never break
-- No unverified success; fail-closed everywhere; deterministic control plane;
-  full auditability; local-first.
-- **Model and MCP outputs are untrusted until verified.**
-- **Real providers are opt-in**; CI/stubs are the default (no network in CI).
-- **No unverified money/dates**: extracted PDF/email facts stay unverified until
-  a human accept — no silent registry writes, no unsupervised calendar from
-  PDFs/email.
-- **No auto-accept**: only the explicit `intake_accept` gate writes drafts into
-  the registry.
-- **Registry mutations are explicit, mediated, and verified** — upsert / status
-  updates write only the allowlisted registry path with integer cents and valid
-  ISO dates, and never implicitly accept intake drafts.
-- Migration/follow-up: if you change public types, respect the freeze note in
-  `KERNEL.md`.
+## How to work here (hard laws)
 
-## Explicit non-goals / do-not-build list
-- New agents, ACP features, refactors, or dependency bumps without explicit
-  direction.
-- Auto-accept / unsupervised organize-all (never auto-file or auto-commit money).
-- SMTP / send / delete / move email; email→draft stays read-only.
-- Recurrence engine, payments, delete-all, or a broad "edit any JSON" tool.
-- Cloud OCR, cloud APIs, or any network in CI.
-- Messaging fabric / A2A / MCP integration beyond the existing thin adapter.
-- Changing Manager orchestration, verification, policy, envelope, or accounting
-  semantics (prefer adapters/backends).
+- **Law 11 — no in-place edits, ever.** Replace whole files via
+  [`tools/safe-replace.sh`](tools/safe-replace.sh) `<file> < new-content`
+  (`opencode.json` denies `edit`/`write`/`patch`). See
+  [`docs/agent/components.md`](docs/agent/components.md) and the
+  `safe-file-editing` skill.
+- **Law 12 — test authority.** The agent may run any tests; report results
+  faithfully; the operator's run and CI remain the record of truth.
+- **Law 13 — commit and push continuously.** Pre-commit hooks and CI are the
+  guardrails; never `--no-verify`.
 
-## Architecture quick map
-- `src/agent_centric/contracts/` — versioned contracts (incl. `bill.py`,
-  `workspace.py`, `email.py`, `bills_registry.py`, `intake.py`).
-- `src/agent_centric/agents/` — thin interface + built-in agents (counter,
-  reverse, case_tool, model_agent, bills, workspace, email, bills_registry,
-  intake).
-- `src/agent_centric/control_plane/` — `manager.py`, `registry.py`, `tools.py`,
-  `verifier.py`, `trajectory_store.py`, `execution.py`, `worker.py`,
-  `summary.py`, `replay.py`, `critical_path.py`, `mcp_tools.py`,
-  `workspace.py`, `email_tools.py`, `bills_registry.py`, `intake.py`,
-  `pdf_text.py`.
-- `src/agent_centric/providers/` — stub / failing stub / optional real provider
-  + `email.py` (fake + optional real IMAP gateway).
-- `src/agent_centric/acp.py` — thin ACP adapter (uses official
-  `agent-client-protocol` SDK, runtime dep `agent-client-protocol>=0.12.0`).
-- `src/agent_centric/cli.py` + `__main__.py` — operator CLI.
-- `tests/` — invariant tests across every volley (428 total).
+See [`docs/agent/levels.md`](docs/agent/levels.md),
+[`docs/agent/verification.md`](docs/agent/verification.md), and
+[`docs/agent/committing.md`](docs/agent/committing.md).
 
-## Tooling / validation commands
-```sh
-uv sync --extra dev
-uv run pytest        # 428 passed (as of handoff)
-uv run ruff check .  # clean
-uv run mypy src      # clean, 54 source files
-```
-- Entry points: `agent-centric` (operator CLI), `agent-centric-acp` (ACP agent).
-  Both smoke-verified.
-- Quick manual checks: `uv run agent-centric run`;
-  `printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}\n' | timeout 15 uv run agent-centric-acp`.
+## Key files
 
-## Validation status (last full run)
-- `pytest` → **428 passed**; `ruff` clean; `mypy` clean (54 files).
+- `src/agent_centric/fbp/` — the active subsystem: `component_bundle.py`,
+  `component_source.py`, `component_runtime.py`, `cache.py`, `resolver.py`,
+  `signing.py`.
+- `src/agent_centric/contracts/` — versioned contracts, including
+  `component.py` and `components_lock.py`.
+- `specs/` — specs (SPEC-0002 target; SPEC-0007 distribution plan).
+- `examples/components/counter/` — example component source.
+- `tests/test_agent_conventions.py` — convention guard;
+  `tests/test_component_distribution.py` — the distribution slice.
 
-## Where we are / next steps
-- Kernel is **complete at v0.29** in code. Volley 026 (dump intake), Volley 027
-  (PDF drafts), Volley 028 (registry maintenance), and Volley 029 (email →
-  unverified draft) are implemented and validated. Volleys 022–029 are pushed;
-  nothing is unpushed.
-- **Known v1 limits** (documented, not bugs): ACP is edge-transport only (not
-  full coding-agent parity: no diffs/slash-commands/nested subagents);
-  `session/cancel` is per-session but mid-run Manager cancellation is not
-  pre-emptible; demo prompt routing is fixed (`reverse` default, `upper`,
-  `counter`, stub `model`). Read-only email v1 supports list/fetch only (no
-  send/delete/move). PDF intake v1 handles only simple embedded-text PDFs; no
-  OCR, no scanned-image PDFs, no auto-accept, no unsupervised calendar from
-  PDFs or email. Registry maintenance v1 has no delete-all, no recurrence engine,
-  no payments, and no broad "edit any JSON" tool. Email→draft v1 does not
-  auto-organize or auto-accept.
-- **Suggested next (only if needed):** ACP routes for the bills loop
-  (propose → accept → calendar → mark-paid) so the loop is reachable from Zed,
-  and/or extraction fixes driven by real data (e.g. more robust PDF/email
-  vendor/amount/date heuristics). Otherwise, exercise the full loop on real data
-  before adding features.
-- **Roadmap posture:** use first, enhance on demand. The planned sequence
-  **bills (022) -> workspace (023) -> read-only email (024) -> bills registry +
-  calendar (025) -> dump intake (026) -> PDF drafts (027) -> registry
-  maintenance (028) -> email → unverified draft (029)** is now implemented. Each
-  stays Manager-mediated, policy-bound, verified, and audited. Follow-up
-  (candidate, not started): recurrence, or auto-organize/auto-accept.
+## Non-goals (do not build without explicit direction)
 
-## Ground rules for the new thread
-- Mission-critical: **correctness first, deterministic control plane,
-  fail-closed, full auditability, additive-only.** Prefer docs/packaging/
-  adapters over new machinery.
-- Strict typing, linting, high test coverage. Commit each coherent unit and push
-  often (Law 13); pre-commit hooks and CI are the guardrails.
-- When in doubt, ask the lead before starting a volley; do not expand
-  composition or introduce messaging/a2a without explicit direction.
+See [`AGENTS.md`](AGENTS.md) → *Non-goals*. In short: no new agents/ACP/refactor/
+dependency bumps; no auto-accept or unsupervised money; no send/delete/move
+email; no cloud/network in CI; no changing Manager orchestration/verification/
+policy/envelope/accounting semantics (prefer adapters/backends); never bypass
+hooks or CI.
+
+## Historical documents
+
+[`STATUS.md`](STATUS.md), [`KERNEL.md`](KERNEL.md),
+[`docs/FBP_HANDOFF.md`](docs/FBP_HANDOFF.md),
+[`README_FBP.md`](README_FBP.md), and [`docs/DIRECTIVE.md`](docs/DIRECTIVE.md)
+describe past states and are not updated retroactively.

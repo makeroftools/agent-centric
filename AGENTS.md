@@ -11,7 +11,8 @@ it does not restate. The constitution is [`PRINCIPLES.md`](PRINCIPLES.md):
 2. [`.agentfactory.toml`](.agentfactory.toml) — the active operating level (mode).
 3. [`.agents/skills/`](.agents/skills) — on-demand Agent Skills, one concern each
    (canonical, industry-standard `SKILL.md`).
-4. [`KERNEL.md`](KERNEL.md), [`src/agent_centric/fbp/spec.md`](src/agent_centric/fbp/spec.md),
+4. [`KERNEL.md`](KERNEL.md) (historical v0 freeze),
+   [`src/agent_centric/fbp/spec.md`](src/agent_centric/fbp/spec.md),
    [`src/agent_centric/fbp/protocol.md`](src/agent_centric/fbp/protocol.md) — architecture contracts.
 5. [`specs/SPEC-0002-cbp-component-architecture.md`](specs/SPEC-0002-cbp-component-architecture.md)
    — the target CBP component architecture (MVP + roadmap).

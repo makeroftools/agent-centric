@@ -22,7 +22,7 @@ deterministic check can ever make a result count.
 ## 📦 Badges
 
 ![Python](https://img.shields.io/badge/python-3.13-blue)
-![Tests](https://img.shields.io/badge/tests-579%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-1216%20passed-brightgreen)
 ![Lint](https://img.shields.io/badge/ruff-passing-brightgreen)
 ![Types](https://img.shields.io/badge/mypy-clean-brightgreen)
 ![License](https://img.shields.io/badge/license-MPL--2.0-blue)
@@ -39,7 +39,7 @@ deterministic check can ever make a result count.
 - [The bills loop — the mission-critical arc](#receipt-the-bills-loop)
 - [Quick start](#rocket-quick-start)
 - [Use from Zed (ACP)](#electric_plug-use-from-zed-acp)
-- [The Manager-line (main branch)](#building_construction-the-manager-line-main)
+- [The Manager-line (frozen branch)](#-the-manager-line-frozen-branch)
 - [Operator path](#desktop_computer-operator-path)
 - [Correctness posture](#shield-correctness-posture)
 - [Layout](#open_file_folder-layout)
@@ -235,7 +235,7 @@ that map to deterministic demo tasks.
 
 ---
 
-## 🏗️ The Manager-line (main branch)
+## 🏗️ The Manager-line (frozen branch)
 
 The prior **Manager-driven** architecture — an `AgentManager` that mediates
 every tool/model call, policy, envelope, and verification — is preserved on
@@ -286,18 +286,18 @@ AGENTS.md              Agent entry point (table of contents)
 .agentfactory.toml     Active operating level (mode)
 opencode.json          Harness enforcement (Law 11: edit denied)
 PRINCIPLES.md          Non-negotiable governing rules
-KERNEL.md              v0 kernel freeze note
-STATUS.md              Volley history + correctness evidence
-README_FBP.md          The FBP deep-dive
-docs/agent/            Human convention map (skills index)
+KERNEL.md              v0 kernel freeze note (historical)
+STATUS.md              Volley history + correctness evidence (historical)
+HANDOFF.md             Current session-continuity one-pager
+docs/agent/            Human convention map (architecture, levels, testing, …)
 .agents/skills/        Canonical Agent Skills (on-demand agent layer)
 src/agent_centric/
-  fbp/                 The FBP subsystem (active)
-  contracts/           Versioned contracts
-  control_plane/       Manager control plane (agent-manager-version line)
-specs/                 Spec files (+ specs/holdout/ for the validator)
-tools/                 Sanctioned mutation primitives (safe-replace.sh)
-examples/              Demos
+  fbp/                 The FBP subsystem (active; + component distribution)
+  contracts/           Versioned contracts (incl. component.v1, components.lock/v1)
+  control_plane/       Legacy Manager control plane (frozen line; still present)
+specs/                 Spec files (SPEC-0002 CBP; SPEC-0007 distribution)
+tools/                 Sanctioned mutation primitives (safe-replace.sh, new-skill.sh)
+examples/              Runnable demos; examples/components/ = example components
 tests/                 Invariants across every volley
 ```
 
@@ -314,10 +314,12 @@ tests/                 Invariants across every volley
 | [`src/agent_centric/fbp/protocol.md`](src/agent_centric/fbp/protocol.md) | FBP wire contract. |
 | [`README_FBP.md`](README_FBP.md) | Story-led FBP deep-dive. |
 | [`PRINCIPLES.md`](PRINCIPLES.md) | Non-negotiable rules. |
-| [`KERNEL.md`](KERNEL.md) | v0 freeze note + versioning. |
-| [`STATUS.md`](STATUS.md) | Volley-by-volley history + correctness evidence. |
-| [`HANDOFF.md`](HANDOFF.md) | Session continuity one-pager (main). |
-| [`docs/FBP_HANDOFF.md`](docs/FBP_HANDOFF.md) | Session continuity one-pager (FBP). |
+| [`KERNEL.md`](KERNEL.md) | v0 freeze note + versioning (historical). |
+| [`STATUS.md`](STATUS.md) | Volley-by-volley history + correctness evidence (historical). |
+| [`HANDOFF.md`](HANDOFF.md) | Current session-continuity one-pager. |
+| [`specs/SPEC-0002-cbp-component-architecture.md`](specs/SPEC-0002-cbp-component-architecture.md) | Target CBP component architecture. |
+| [`specs/SPEC-0007-harness-shell-component-distribution.md`](specs/SPEC-0007-harness-shell-component-distribution.md) | Harness/shell split + component distribution plan. |
+| [`docs/FBP_HANDOFF.md`](docs/FBP_HANDOFF.md) | Session continuity one-pager (historical). |
 
 ---
 
