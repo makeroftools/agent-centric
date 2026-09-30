@@ -1,3 +1,7 @@
+> **Subsystem reference — for the current agent rules start at [`AGENTS.md`](AGENTS.md).**
+> This file documents the FBP subsystem; it is not a rule source. The laws are in
+> [`PRINCIPLES.md`](PRINCIPLES.md).
+
 # FBP — the Agent-Centric Flow-Based Subsystem
 
 > ## Network of Experts AI

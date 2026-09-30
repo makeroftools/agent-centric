@@ -25,5 +25,5 @@ threshold.
 ## Status
 
 No scenarios yet — the L3 validator that consumes them is not built
-(see [`docs/agent/verification.md`](../docs/agent/verification.md)). This file
+(see [`docs/agent/verification.md`](../../docs/agent/verification.md)). This file
 reserves the format and the boundary.

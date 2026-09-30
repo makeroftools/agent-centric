@@ -2,8 +2,9 @@
 
 Asserts that the agent convention layer is present and consistent: the factory
 policy, the canonical Agent Skills (`.agents/skills/<name>/SKILL.md`), the
-vendor pointers, the enforcement config, and the specs. Prose points; this test
-decides. It reads files and TOML/JSON only; it never touches ``$HOME``.
+vendor pointers, the enforcement config, the progressive-disclosure pages, and
+the specs. Prose points; this test decides. It reads files and TOML/JSON only;
+it never touches ``$HOME``.
 """
 
 from __future__ import annotations
@@ -28,10 +29,52 @@ _REQUIRED_SKILLS = {
     "home-path-safety",
     "cbp-architecture",
 }
+_REQUIRED_AGENT_DOCS = {
+    "README.md",
+    "levels.md",
+    "testing.md",
+    "verification.md",
+    "committing.md",
+}
+_ENTRY_POINTER_DOCS = (
+    "HANDOFF.md",
+    "STATUS.md",
+    "README_FBP.md",
+    "KERNEL.md",
+    "docs/DIRECTIVE.md",
+    "docs/FBP_HANDOFF.md",
+)
+_MD_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+_FENCED_RE = re.compile(r"```.*?```", re.DOTALL)
+_INLINE_CODE_RE = re.compile(r"`[^`]*`")
+_SKIP_DIRS = {
+    ".git",
+    ".venv",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "__pycache__",
+    "node_modules",
+}
 
 
 def _read(rel: str) -> str:
     return (REPO_ROOT / rel).read_text(encoding="utf-8")
+
+
+def _iter_markdown() -> list[Path]:
+    found = []
+    for path in REPO_ROOT.rglob("*.md"):
+        parts = path.relative_to(REPO_ROOT).parts
+        if any(part in _SKIP_DIRS for part in parts):
+            continue
+        found.append(path)
+    return sorted(found)
+
+
+def _strip_code(text: str) -> str:
+    """Remove fenced and inline code so example link syntax is not scanned."""
+    return _INLINE_CODE_RE.sub("", _FENCED_RE.sub("", text))
 
 
 def _parse_frontmatter(text: str) -> tuple[dict[str, object], str]:
@@ -137,11 +180,50 @@ class TestSkills:
         assert exposed >= _REQUIRED_SKILLS
 
 
+class TestProgressiveDisclosure:
+    def test_required_agent_docs_are_present(self) -> None:
+        for name in sorted(_REQUIRED_AGENT_DOCS):
+            assert (REPO_ROOT / "docs" / "agent" / name).is_file(), name
+
+    def test_map_links_every_agent_doc(self) -> None:
+        text = _read("docs/agent/README.md")
+        for name in sorted(_REQUIRED_AGENT_DOCS - {"README.md"}):
+            assert f"({name})" in text, f"map does not link {name}"
+
+    def test_relative_markdown_links_resolve(self) -> None:
+        broken: list[str] = []
+        for path in _iter_markdown():
+            text = _strip_code(path.read_text(encoding="utf-8"))
+            for match in _MD_LINK_RE.finditer(text):
+                target = match.group(1).strip()
+                if target.startswith(("http://", "https://", "#", "mailto:", "~")):
+                    continue
+                if ' "' in target:
+                    target = target.split(' "', 1)[0]
+                target = target.split("#", 1)[0].strip()
+                if not target:
+                    continue
+                if not (path.parent / target).resolve().exists():
+                    broken.append(f"{path.relative_to(REPO_ROOT)} -> {target}")
+        assert not broken, "broken relative links: " + "; ".join(broken)
+
+
+class TestStragglers:
+    def test_in_scope_docs_point_at_the_entry(self) -> None:
+        for rel in _ENTRY_POINTER_DOCS:
+            head = "\n".join(_read(rel).splitlines()[:12])
+            assert "AGENTS.md" in head, f"{rel} lacks an entry pointer to AGENTS.md"
+
+
 class TestEnforcement:
     def test_opencode_denies_in_place_edits(self) -> None:
         cfg = json.loads(_read("opencode.json"))
         assert cfg["$schema"] == "https://opencode.ai/config.json"
         assert cfg["permission"]["edit"] == "deny"
+
+    def test_opencode_loads_the_convention_map(self) -> None:
+        cfg = json.loads(_read("opencode.json"))
+        assert "docs/agent/README.md" in cfg["instructions"]
 
     def test_sanctioned_mutation_primitive_exists(self) -> None:
         assert (REPO_ROOT / "tools" / "safe-replace.sh").is_file()
@@ -167,3 +249,6 @@ class TestSpecs:
 
     def test_cbp_component_spec_is_recorded(self) -> None:
         assert (REPO_ROOT / "specs" / "SPEC-0002-cbp-component-architecture.md").is_file()
+
+    def test_convention_completion_spec_is_recorded(self) -> None:
+        assert (REPO_ROOT / "specs" / "SPEC-0003-agent-convention-completion.md").is_file()

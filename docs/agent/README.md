@@ -16,6 +16,18 @@ symlink, and opencode discovers them through the `skill` tool.
 | [`home-path-safety`](../../.agents/skills/home-path-safety/SKILL.md) | Any home path or username. |
 | [`cbp-architecture`](../../.agents/skills/cbp-architecture/SKILL.md) | The execution architecture. |
 
+## Pages (progressive disclosure)
+
+The always-loaded table of contents is [`AGENTS.md`](../../AGENTS.md); detail is
+revealed here, only as needed:
+
+| Page | What it covers |
+| --- | --- |
+| [`levels.md`](levels.md) | Operating levels — the active mode and its three axes. |
+| [`testing.md`](testing.md) | Test authority (Law 12). |
+| [`verification.md`](verification.md) | Verification gates and the holdout validator. |
+| [`committing.md`](committing.md) | Commit and push (Law 13). |
+
 ## The constitution
 
 [`PRINCIPLES.md`](../../PRINCIPLES.md) is supreme; [`AGENTS.md`](../../AGENTS.md)

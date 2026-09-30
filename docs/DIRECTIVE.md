@@ -1,5 +1,9 @@
 # DIRECTIVE — For the next agent (Lead Architect continuity)
 
+> **Historical — start at [`../AGENTS.md`](../AGENTS.md).** This directive is
+> superseded (SPEC-0001) and is kept for continuity; it is not updated
+> retroactively. The rename mandate in §3 is **obsolete — do not act on it.**
+
 > **Superseded in part (SPEC-0001).** Start at [`../AGENTS.md`](../AGENTS.md).
 > The active operating level is in [`../.agentfactory.toml`](../.agentfactory.toml).
 > As of the convention change, `main` is the FBP line; `agent-manager-version`
@@ -80,6 +84,10 @@ them. `cp` + `write_file` (to temp/new) + `rm` is the supported primitive set.
 ---
 
 ## 3. Pending work you must do next
+
+> **Obsolete — do not act.** The rename mandate below was never applied as
+> written and is contradicted by later history; superseded by
+> [`../AGENTS.md`](../AGENTS.md). Kept only as a record.
 
 ### 3a. PERFORM THE RENAME (user-approved, authoritative)
 

@@ -5,6 +5,7 @@
 > networks as out of scope. For the component architecture those stances are
 > superseded by [`specs/SPEC-0002-cbp-component-architecture.md`](specs/SPEC-0002-cbp-component-architecture.md)
 > and the amended Law 9. This note remains the historical freeze record.
+> **Entry point:** [`AGENTS.md`](AGENTS.md); laws: [`PRINCIPLES.md`](PRINCIPLES.md).
 
 **Authority:** Lead Architect
 **Classification:** Mission-Critical

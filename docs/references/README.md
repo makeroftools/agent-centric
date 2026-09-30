@@ -1,7 +1,7 @@
 # docs/references — external references
 
 Background reading kept for design context. These are **references, not
-normative contracts**; the contracts are [`PRINCIPLES.md`](../PRINCIPLES.md),
+normative contracts**; the contracts are [`PRINCIPLES.md`](../../PRINCIPLES.md),
 [`specs/`](../../specs/), and the architecture docs under
 [`docs/agent/`](../agent/README.md).
 

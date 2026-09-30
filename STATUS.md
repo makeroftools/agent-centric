@@ -1,3 +1,8 @@
+> **Historical — start at [`AGENTS.md`](AGENTS.md).** This document records a
+> past state and is not updated retroactively. Current rules live in
+> [`AGENTS.md`](AGENTS.md) and [`PRINCIPLES.md`](PRINCIPLES.md); the active mode
+> is in [`.agentfactory.toml`](.agentfactory.toml).
+
 # STATUS — Volley 001–029
 
 **Authority:** Lead Architect

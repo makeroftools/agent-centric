@@ -90,7 +90,7 @@ The portable seam: **network document → deterministic compiler → runtime bac
 
 A backend is admitted only when its determinism and verification are provable;
 until then it is **declared-gated** and fails closed, exactly like L3 in
-[`.agentfactory.toml`](../../.agentfactory.toml).
+[`.agentfactory.toml`](../.agentfactory.toml).
 
 ## 6. Contracts (proposed; added additively to `contracts/`)
 
@@ -140,7 +140,7 @@ Each step is its own spec-accepted change; no big-bang.
 
 ## 11. Constitutional changes
 
-- **Law 9 amended** to "Critical Path Is the Deterministic Scheduler": CPM remains a pure function of the declared network and never bypasses a verifier, but it **may drive** a composite's schedule. Applied in [`PRINCIPLES.md`](../../PRINCIPLES.md).
+- **Law 9 amended** to "Critical Path Is the Deterministic Scheduler": CPM remains a pure function of the declared network and never bypasses a verifier, but it **may drive** a composite's schedule. Applied in [`PRINCIPLES.md`](../PRINCIPLES.md).
 - **`KERNEL.md`** (the v0 Manager-line freeze, which declared FBP networks out of scope and CPM observational) is marked superseded for the CBP line.
 
 ## 12. Acceptance criteria and holdout
