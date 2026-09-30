@@ -1,0 +1,137 @@
+---
+id: SPEC-0009
+title: FBP/ABM conformance — ports, Information Packets, subnets, and composition
+type: feature
+target_repo: agent-centric
+target_branch: main
+status: draft
+owner: operator
+---
+
+# FBP/ABM conformance — ports, Information Packets, subnets, and composition
+
+**Operator direction (recorded).** Follow the **FBP** and **ABM** standards; be
+robust, correct, and mission-critical; deliver **both determinism and dynamism**.
+This spec states what that commits us to, where the current code is only
+*FBP-shaped*, and the additive path to real conformance.
+
+## Context
+
+- [`SPEC-0002`](SPEC-0002-cbp-component-architecture.md) already names the target:
+  a component network as a document (`network.v1`), ports + Information Packets
+  as MVP, a deterministic CPM scheduler, and models as recorded non-determinism.
+- [`SPEC-0007`](SPEC-0007-harness-shell-component-distribution.md) distributes
+  self-contained, independently versioned components.
+- [`SPEC-0008`](SPEC-0008-shell-design-interface-n8n.md) composes/generates a
+  design, then freezes it before execution.
+- **Gap (honest).** `cbp/network.py` currently wires an edge by reading the
+  *source component's `args` as its output record* (`network.py:159`) — there are
+  no ports, no IPs, and no bounded connections. `ChildRef` uses `embed`/`ref`,
+  which conflates **packaging** (where bytes live) with **composition** (how
+  processes are wired).
+- **Canonical FBP vocabulary** (J. Paul Morrison): processes; named **ports**;
+  **connections as bounded buffers**; **Information Packets** with lifetimes;
+  **IIPs**; **subnets** (a network used as a component) with **external ports**;
+  and asynchronism + multiple input ports + **back-pressure** as the classical
+  litmus test.
+
+## Decision
+
+### 1. Adopt FBP vocabulary precisely
+
+| FBP term | Our artifact |
+| --- | --- |
+| Process / component | a **component** (`component.v1`), self-contained package |
+| Port | a **named inport/outport** on a component |
+| Connection (bounded buffer) | an **edge** with a **capacity** in `network.v1` |
+| Information Packet (IP) | a typed value flowing along a connection |
+| IIP | an **initial IP** bound to an input port in the network document |
+| Subnet | a **composite** — a network used as a component, with **external ports** |
+| Back-pressure | a full connection suspends its producer (deterministically) |
+
+### 2. Composition, not absorption
+
+- A component at rest is a **self-contained package with no edges**; dependency
+  exists **only** in a network document. Dependency = edge; nothing else.
+- A **composite is a subnet**: its *body* is a persisted, content-addressed
+  network document (the "function body" is data), registered for posterity
+  (Law 10). The body may itself contain composites — composition is fractal.
+- Children are **referenced**, each its own pinned/signed package (SPEC-0007).
+  The `embed`/`ref` distinction is **packaging only** (`vendored` mirror vs
+  `pinned`); it never implies the parent owns or absorbs a child. This is an
+  additive re-framing; no silent rename.
+- **Cross-boundary flow uses only the composite's declared external ports.** An
+  interior connection is private; an outer edge that reaches past the boundary is
+  rejected fail-closed. This is what preserves encapsulation, reusability, and
+  each child's sovereignty.
+
+### 3. ABM: sovereignty is structural
+
+- An **agent** is a component that perceives and acts (SPEC-0002 §0).
+- The **parent is the children's shared context** (identity, grants, the network
+  document); a **child owns its own state**; siblings never write each other;
+  effects propagate **up as verified proposals**.
+- Composition adds a level of context; it never overrides a child's interior or
+  its state. That is the invariant that lets nesting be safe.
+
+### 4. Determinism and dynamism, reconciled
+
+- **Dynamism:** a network (or a component) may be generated at plan time by a
+  human, an agent, or a tool (SPEC-0008).
+- **Determinism:** whatever is generated is **frozen and content-hashed before it
+  executes**; the deterministic control plane then reproduces the same trajectory
+  for the same frozen document (Law 2).
+- **Async without losing determinism:** connections are bounded and back-pressure
+  is real, but the drain order is driven by the **deterministic CPM scheduler**
+  (deterministic IP ordering), not by wall-clock/OS-thread races. True OS-level
+  asynchronism stays **declared-gated** until determinism is proven.
+- **Non-determinism is never silent:** `model` components are recorded, pinned,
+  and confidence-scored (SPEC-0002 §4).
+
+## Scope
+
+- **In:** the FBP vocabulary above; ports + IPs + bounded connections in
+  `network.v1`; external ports on composites; composition-by-reference and the
+  packaging re-framing; the ABM sovereignty invariants; the determinism/dynamism
+  reconciliation; the boundary guard (no cross-boundary bypass).
+- **Out:** OS-thread/remote asynchronism as a run-time claim (gated); changing
+  Manager orchestration/verification/policy/envelope/accounting semantics;
+  adding a backend; changing `PRINCIPLES.md`; any silent (non-additive) contract
+  rename.
+
+## Acceptance criteria
+
+- [ ] `network.v1` exposes components with **named typed ports**; edges connect
+      **port → port**; a connection declares a **capacity**.
+- [ ] The compiler resolves a network to a **deterministic plan**; an identical
+      document yields an identical plan and content hash.
+- [ ] A composite declares **external ports**; a cross-boundary edge that does
+      not use them is **rejected fail-closed**.
+- [ ] A component at rest has **no edges**; dependency appears only in a network
+      document.
+- [ ] Bounded connections enforce capacity; a full connection applies
+      **deterministic back-pressure**; a deterministic deadlock is an explicit,
+      audited failure — never a hang.
+- [ ] IIPs parametrize input ports at network-definition time.
+- [ ] No component writes another's state; effects propagate as verified
+      proposals (test-enforced).
+- [ ] `model` components are recorded and confidence-scored.
+- [ ] The convention guard records this spec; no `src/` semantics change lands
+      before its acceptance criteria are implemented and green.
+
+## Risks / invariants
+
+- **Async vs determinism.** The main risk is trading Law 2 for FBP asynchrony;
+  the clamp is a deterministic scheduler over bounded buffers, with true async
+  gated.
+- **Back-pressure liveness.** A cyclic wait must fail closed (explicit failure),
+  not deadlock silently.
+- **Contract churn.** `component.v1`/`network.v1` are additive-only/versioned;
+  composition becomes first-class additively (or as a new version), never a
+  silent rename.
+- **Over-modeling.** Adopt only what is proven; every capability carries a status
+  and no claim exceeds the operator's suite.
+
+Respects Laws 1, 2, 3, 4, 5 (amended), 6, 7, 8, 9 (amended), 10, 11, 12, 13.
+This is target architecture: it changes no `src/` semantics on acceptance of the
+spec alone, and every implementation step is its own reviewed change.

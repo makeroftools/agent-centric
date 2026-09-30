@@ -326,6 +326,10 @@ class TestSpecs:
         spec = REPO_ROOT / "specs" / "SPEC-0008-shell-design-interface-n8n.md"
         assert spec.is_file()
 
+    def test_fbp_abm_conformance_spec_is_recorded(self) -> None:
+        spec = REPO_ROOT / "specs" / "SPEC-0009-fbp-abm-conformance.md"
+        assert spec.is_file()
+
 
 class TestNoStaleLabels:
     """Guard the FBP -> CBP cut-over and the branch retirements (no drift).

@@ -125,11 +125,11 @@ Run the fresh-session checklist below before acting.
 
 ## Validation (last full run)
 
-- `uv run pytest -o addopts="" -p no:cacheprovider` → **1293 passed**.
+- `uv run pytest -o addopts="" -p no:cacheprovider` → **1294 passed**.
 - `uv run ruff check .` → clean.
 - `uv run mypy src` → clean (**115** source files).
 - `uv run agent-centric cbp-check` → **8/8**, READY.
-- Convention guard → **38 passed**.
+- Convention guard → **39 passed**.
 
 ## Next (candidate — not started)
 
@@ -141,6 +141,10 @@ Run the fresh-session checklist below before acting.
   delivered.
 - **Phase 0.5b remainder:** the live self-hosted mirror (Forgejo/Gitea); the
   signing service and transparency log are delivered.
+- **FBP/ABM conformance (SPEC-0009, draft):** make ports + Information Packets
+  + bounded connections first-class, composites as subnets with external ports,
+  composition-by-reference (dependency = edge), and deterministic back-pressure.
+  Spec written; the current `network.py` is FBP-*shaped*, not conformant.
 - **Phases 3–5:** directives aggregated into skills + pinned model components;
   migration + hermetic CI; hardening drills.
 
@@ -171,7 +175,7 @@ See [`docs/agent/levels.md`](docs/agent/levels.md),
 - `src/agent_centric/contracts/` — versioned contracts, including `component.py`,
   `components_lock.py`, and `design.py` (`design.v1`).
 - `specs/` — specs (SPEC-0002 target; SPEC-0007 distribution plan;
-  SPEC-0008 shell design interface).
+  SPEC-0008 shell design interface; SPEC-0009 FBP/ABM conformance).
 - `examples/components/` — `counter` (atomic), `bills_registry` (composite:
   SQLite state + embedded `bills_rules` + referenced `agenda`), and the Phase 2
   `shell` (root composite → `registry`) + `registry` components.
