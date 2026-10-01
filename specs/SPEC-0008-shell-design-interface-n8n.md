@@ -148,7 +148,7 @@ workflow setting ⇄ envelope/grant — all validated against `design.v1`.
       and absence violations — proven by `tests/test_design.py`.
 - [x] An identical design compiles to the same `design_hash`; compilation is
       deterministic and offline.
-- [ ] `validate` also enforces envelope limits (with the runtime/pin phase).
+- [x] `validate` also enforces envelope limits (with the runtime/pin phase).
 - [x] Pinning resolves refs to commits and never floats at run time
       (`cbp/lockfile.py`; the lock stores commits + `tree_sha256` only).
 - [x] The n8n round-trip is stable (same canonical bytes) and tested with
@@ -181,6 +181,20 @@ workflow setting ⇄ envelope/grant — all validated against `design.v1`.
   unsupported nested `subnet`, an inconsistent connection graph, or a broken
   edge/IIP ordering refuses. n8n is never imported. Proven by
   `tests/test_n8n_adapter.py` and `examples/n8n_roundtrip.py`.
+
+## Progress
+
+- **Envelope limits delivered (Phase 1/3 remainder).** A `design.v1` may
+  declare a per-component hard resource **envelope** (`contracts/design.py`
+  `EnvelopeGrant`); `validate_design` enforces it deterministically and
+  fail-closed (the grant must name a real component, be unique, declare at
+  least one numeric bound, and construct a valid runtime `ResourceEnvelope` —
+  unknown/malformed/negative/empty bounds refuse). `pin_design` re-validates
+  and pins each validated grant into its signed lock entry, so the declared
+  hard bounds are immutable and signed. `Design` and `LockEntry` serialize the
+  envelope **additively** (omitted when empty, so prior design/lock hashes are
+  unchanged), and the n8n round-trip preserves envelopes in `meta.cbp`.
+  Proven by `tests/test_cbp_design_envelopes.py`.
 
 ## Risks / invariants
 

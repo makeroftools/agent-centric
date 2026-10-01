@@ -10,8 +10,8 @@ n8n is a **design-time authoring surface**; it never sits on the execution path
   edge's ``source_field`` / ``target_arg`` / ``capacity`` is carried on the
   target node's ``parameters.cbp.inputs``;
 - a network **IIP** is carried on the target node's ``parameters.cbp.iips``;
-- the design's ``id`` / ``title`` / ``components`` / ``metadata`` / ``schema``
-  ride in ``meta.cbp``.
+- the design's ``id`` / ``title`` / ``components`` / ``metadata`` / ``envelopes``
+  / ``schema`` ride in ``meta.cbp``.
 
 The round-trip is **lossless and stable**: ``from_n8n(to_n8n(design))`` has the
 same ``design_hash``, and ``to_n8n(from_n8n(workflow))`` reproduces the same
@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..contracts.design import Design, RequestedComponent
+from ..contracts.design import Design, EnvelopeGrant, RequestedComponent
 
 PROJECTION = "cbp.n8n.projection/v1"
 NODE_TYPE = "cbp.component"
@@ -149,22 +149,25 @@ def to_n8n(design: Design) -> dict[str, Any]:
             }
         )
 
+    meta_cbp: dict[str, Any] = {
+        "projection": PROJECTION,
+        "schema": design.schema,
+        "id": design.id,
+        "title": design.title,
+        "components": [c.to_dict() for c in design.components],
+        "metadata": dict(design.metadata),
+        "network_keys": [key for key in _NETWORK_KEYS if key in network],
+    }
+    # Additive: only present when the design declares envelope limits, so a
+    # design without envelopes keeps its exact prior workflow projection.
+    if design.envelopes:
+        meta_cbp["envelopes"] = [e.to_dict() for e in design.envelopes]
     return {
         "name": design.title or design.id,
         "nodes": nodes,
         "connections": connections,
         "settings": {},
-        "meta": {
-            _SCHEMA_KEY: {
-                "projection": PROJECTION,
-                "schema": design.schema,
-                "id": design.id,
-                "title": design.title,
-                "components": [c.to_dict() for c in design.components],
-                "metadata": dict(design.metadata),
-                "network_keys": [key for key in _NETWORK_KEYS if key in network],
-            }
-        },
+        "meta": {_SCHEMA_KEY: meta_cbp},
     }
 
 
@@ -270,6 +273,9 @@ def from_n8n(workflow: dict[str, Any]) -> Design:
     metadata = cbp.get("metadata", {})
     if not isinstance(metadata, dict):
         raise N8nAdapterError("meta.cbp.metadata must be an object")
+    raw_envelopes = cbp.get("envelopes", [])
+    if not isinstance(raw_envelopes, list):
+        raise N8nAdapterError("meta.cbp.envelopes must be a list")
     try:
         return Design(
             id=str(cbp.get("id", "")),
@@ -280,6 +286,10 @@ def from_n8n(workflow: dict[str, Any]) -> Design:
                 for c in raw_components
             ),
             metadata=dict(metadata),
+            envelopes=tuple(
+                EnvelopeGrant.from_dict(_as_dict(e, "envelope grant"))
+                for e in raw_envelopes
+            ),
             schema=str(cbp.get("schema", "")),
         )
     except (ValueError, KeyError, TypeError) as exc:

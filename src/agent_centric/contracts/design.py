@@ -48,6 +48,39 @@ class RequestedComponent:
 
 
 @dataclass(frozen=True)
+class EnvelopeGrant:
+    """A per-component hard resource envelope declared by a design (SPEC-0008 §4).
+
+    ``bounds`` is a JSON-ready ``ResourceEnvelope`` payload (``step_limit``,
+    ``size_cap``, ``latency_seconds``, ``child_limit``, ``extra``). The contract
+    stores only the declarative payload so it stays pure and additive; the
+    bounds are constructed and validated fail-closed as a runtime
+    ``ResourceEnvelope`` at design-validation time (``cbp.design``).
+    """
+
+    component: str
+    bounds: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.component:
+            raise ValueError("Envelope grant component must be non-empty.")
+        if not isinstance(self.bounds, dict):
+            raise ValueError("Envelope grant bounds must be a mapping.")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"component": self.component, "bounds": dict(self.bounds)}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> EnvelopeGrant:
+        if not isinstance(data, dict):
+            raise ValueError("Envelope grant must be an object.")
+        return cls(
+            component=str(data.get("component", "")),
+            bounds=dict(data.get("bounds") or {}),
+        )
+
+
+@dataclass(frozen=True)
 class Design:
     """An immutable ``design.v1`` document."""
 
@@ -56,6 +89,7 @@ class Design:
     title: str = ""
     components: tuple[RequestedComponent, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)
+    envelopes: tuple[EnvelopeGrant, ...] = ()
     schema: str = DESIGN_SCHEMA
 
     def __post_init__(self) -> None:
@@ -68,9 +102,12 @@ class Design:
         names = [c.name for c in self.components]
         if len(names) != len(set(names)):
             raise ValueError("Design requested component names must be unique.")
+        envelopes = [e.component for e in self.envelopes]
+        if len(envelopes) != len(set(envelopes)):
+            raise ValueError("Design envelope components must be unique.")
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data: dict[str, Any] = {
             "schema": self.schema,
             "id": self.id,
             "title": self.title,
@@ -78,6 +115,11 @@ class Design:
             "components": [c.to_dict() for c in self.components],
             "metadata": dict(self.metadata),
         }
+        # Additive: omit when empty so a design without envelopes keeps its
+        # exact prior canonical bytes (and thus its design_hash).
+        if self.envelopes:
+            data["envelopes"] = [e.to_dict() for e in self.envelopes]
+        return data
 
     def canonical_bytes(self) -> bytes:
         """Canonical, deterministic serialization used for hashing."""
@@ -105,6 +147,9 @@ class Design:
         metadata = data.get("metadata") or {}
         if not isinstance(metadata, dict):
             raise ValueError("Design metadata must be a mapping.")
+        raw_envelopes = data.get("envelopes", [])
+        if not isinstance(raw_envelopes, list):
+            raise ValueError("Design envelopes must be a list.")
         return cls(
             id=design_id,
             network=network,
@@ -113,5 +158,8 @@ class Design:
                 RequestedComponent.from_dict(c) for c in raw_components
             ),
             metadata=dict(metadata),
+            envelopes=tuple(
+                EnvelopeGrant.from_dict(e) for e in raw_envelopes
+            ),
             schema=schema,
         )

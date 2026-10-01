@@ -34,8 +34,9 @@ SPEC-0008 Phase 3), **signing-key rotation** with overlapping trust windows
 (`cbp/trust.py`, SPEC-0007 §6), and the **n8n authoring adapter**
 (`cbp/n8n_adapter.py`, SPEC-0008 Phase 2, lossless `design.v1` ⇄ n8n round-trip)
 are delivered, as is the **recorded, confidence-scored `model` component**
-boundary (`cbp/model_record.py`, SPEC-0009 slice 7). **Next: the umbrella
-`components.lock`** (needs the live mirror) and **envelope limits** (§Next).
+boundary (`cbp/model_record.py`, SPEC-0009 slice 7) and **design envelope
+limits** (SPEC-0008 §4, validated and pinned). **Next: the umbrella
+`components.lock`** (needs the live mirror; §Next).
 
 ## Verify everything (do this before acting)
 
@@ -46,7 +47,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 122 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1499 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1515 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -81,7 +82,7 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (122 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1499 passed** (~65 s).
+  convention + home-path guard passed; full suite **1515 passed** (~64 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -177,13 +178,13 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > **L1**; target L3 gated) -> `core/HANDOFF.md`, then the frozen plan
 > `core/specs/SPEC-0011` through `SPEC-0017`, and `conformance/AGENTS.md` +
 > `pro/AGENTS.md`. Confirm all three repos are on `main` and clean, then run the
-> verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1499
+> verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1515
 > passed**, shared suite **31/31** on Python + Rust, WASM suite **10/10**, network
 > suite **14/14**, appointed suite **8/8**). **Layers 0, 1a, 1b, 1c, signing, 2,
 > 3, and 4 are delivered**, along with the `design → pin → components.lock`
 > producer, signing-key rotation, the n8n authoring adapter, and the recorded,
 > confidence-scored `model` component boundary. The next steps are the umbrella
-> `components.lock` (needs the live mirror) and envelope limits.
+> `components.lock` (needs the live mirror).
 > Obey the hard laws: whole-file replacement
 > only via `tools/safe-replace.sh` (**never in-place edits**), commit and push
 > continuously, never `--no-verify`. Never act above L1 without the operator
@@ -360,8 +361,9 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   **key rotation** delivered, **live mirror open**; no committed umbrella
   `components.lock`.
 - **SPEC-0008** `draft` — `design.v1` + validate/compile, the Phase 3
-  `pin`/`record` wiring (`cbp/lockfile.py`), **and** the Phase 2 n8n adapter
-  (`cbp/n8n_adapter.py`) delivered; envelope limits open.
+  `pin`/`record` wiring (`cbp/lockfile.py`), the Phase 2 n8n adapter
+  (`cbp/n8n_adapter.py`), **and** design envelope limits (`cbp/design.py`
+  validate + `pin`) delivered.
 - **SPEC-0009** `draft` — **9/9** built: recorded, confidence-scored `model`
   components delivered (`cbp/model_record.py`); spec status understates it.
 - **SPEC-0010** `draft` — roadmap only.
@@ -376,9 +378,6 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   deterministic bundle, boot-from-lock (with lock-level signature + transparency
   log verification, fail-closed), **key rotation**, and the **`pin`/`record`**
   wiring.
-- **SPEC-0008 remainder** — enforce envelope limits at `validate` (with the
-  runtime/pin phase). (`design.v1` validate/compile, `pin`/`record`, and the n8n
-  round-trip are delivered.)
 - **Signing** — **key rotation delivered** (`cbp/trust.py`); optional threshold
   signing remains.
 - **SPEC-0017 frontier** — formal semantics/ontology; reduction + formal

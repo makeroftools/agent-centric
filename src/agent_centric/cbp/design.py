@@ -22,9 +22,20 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..contracts.design import Design
+from .envelopes import ResourceEnvelope
 from .network import ComponentNetwork, NetworkError, network_from_dict
 
 DEFAULT_MAX_COMPONENTS = 512
+
+# The recognised resource-envelope bound keys (the ``ResourceEnvelope``
+# surface). ``extra`` is a reserved free-form map for future bounds.
+_ENVELOPE_BOUND_KEYS = (
+    "step_limit",
+    "size_cap",
+    "latency_seconds",
+    "child_limit",
+)
+_ENVELOPE_EXTRA_KEY = "extra"
 
 
 class DesignError(ValueError):
@@ -57,8 +68,10 @@ def validate_design(
 
     Checks the schema (enforced by the contract), that the network parses and
     validates (edges, self-loops, acyclicity), that it is fully wired (no unknown
-    output fields), that it is non-empty and within the component ceiling, and
-    that requested refs are well-formed. Availability is **not** checked here.
+    output fields), that it is non-empty and within the component ceiling, that
+    requested refs are well-formed, and that every declared envelope limit is a
+    valid, non-empty, unique grant on a real component. Availability is **not**
+    checked here.
 
     Returns:
         A :class:`DesignReport`; ``ok`` is true only when ``errors`` is empty.
@@ -81,6 +94,39 @@ def validate_design(
     for requested in design.components:
         if not requested.name.strip():
             errors.append("requested component name is blank")
+
+    # Envelope limits (SPEC-0008 §4): a declared per-component hard resource
+    # envelope must reference a real component, be unique, declare at least one
+    # bound, and construct a valid runtime ``ResourceEnvelope``. Fail-closed.
+    component_set = set(component_ids)
+    seen_envelopes: set[str] = set()
+    for grant in design.envelopes:
+        comp = grant.component
+        label = f"envelope for {comp!r}"
+        if comp not in component_set:
+            errors.append(f"{label} references an unknown component")
+        if comp in seen_envelopes:
+            errors.append(f"duplicate {label}")
+        seen_envelopes.add(comp)
+        bounds = grant.bounds
+        unknown = sorted(
+            set(bounds) - {*_ENVELOPE_BOUND_KEYS, _ENVELOPE_EXTRA_KEY}
+        )
+        if unknown:
+            errors.append(f"{label} has unsupported bound key(s) {unknown}")
+            continue
+        if not any(bounds.get(key) is not None for key in _ENVELOPE_BOUND_KEYS):
+            errors.append(f"{label} declares no resource bounds")
+            continue
+        if _ENVELOPE_EXTRA_KEY in bounds and not isinstance(
+            bounds[_ENVELOPE_EXTRA_KEY], dict
+        ):
+            errors.append(f"{label}.extra must be a mapping")
+            continue
+        try:
+            ResourceEnvelope.from_payload(dict(bounds))
+        except (ValueError, TypeError) as exc:
+            errors.append(f"{label}: {exc}")
 
     try:
         network.validate()

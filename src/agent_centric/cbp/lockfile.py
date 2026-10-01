@@ -24,6 +24,8 @@ Invariants (fail-closed, deterministic, offline):
 - a component that ``implements`` an unpinned contract is refused;
 - a component without a signature is refused (a design cannot introduce unsigned
   code, SPEC-0008 §4); the signature is verified later, at resolve time;
+- a component's validated per-component envelope (SPEC-0008 §4) is pinned into
+  its lock entry, so the declared hard resource bounds are immutable and signed;
 - entries are emitted in deterministic (name-sorted) order, so pinning the same
   design twice yields an identical ``lock_hash``.
 """
@@ -100,6 +102,11 @@ def pin_design(
         raise PinError("design requests no components")
 
     requested = tuple(sorted(design.components, key=lambda c: c.name))
+    # Envelope limits were validated above; pin them alongside the component so
+    # the design's declared hard bounds become part of the signed lock.
+    envelopes_by_component = {
+        grant.component: dict(grant.bounds) for grant in design.envelopes
+    }
     names = [component.name for component in requested]
     if root not in set(names):
         raise PinError(f"lock root {root!r} is not among the requested components")
@@ -153,6 +160,7 @@ def pin_design(
                 implements=manifest.implements,
                 capabilities=tuple(capability.name for capability in manifest.capabilities),
                 signature=signature,
+                envelope=envelopes_by_component.get(name, {}),
             )
         )
 

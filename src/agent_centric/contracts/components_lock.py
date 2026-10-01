@@ -18,7 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 LOCK_SCHEMA = "components.lock/v1"
@@ -42,6 +42,9 @@ class LockEntry:
     implements: tuple[str, ...] = ()
     capabilities: tuple[str, ...] = ()
     signature: str = ""
+    # The per-component hard resource envelope the design declared (SPEC-0008
+    # §4), as a JSON-ready ``ResourceEnvelope`` payload. Empty = unbounded.
+    envelope: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -54,9 +57,11 @@ class LockEntry:
             raise LockError(f"{self.name}: tree_sha256 must be 64-hex.")
         if not self.implements:
             raise LockError(f"{self.name}: implements must be non-empty.")
+        if not isinstance(self.envelope, dict):
+            raise LockError(f"{self.name}: envelope must be a mapping.")
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data: dict[str, Any] = {
             "name": self.name,
             "repo_url": self.repo_url,
             "commit_sha": self.commit_sha,
@@ -65,6 +70,11 @@ class LockEntry:
             "capabilities": list(self.capabilities),
             "signature": self.signature,
         }
+        # Additive: omit when empty so an entry without an envelope keeps its
+        # exact prior canonical bytes (and thus its lock_hash contribution).
+        if self.envelope:
+            data["envelope"] = dict(self.envelope)
+        return data
 
 
 @dataclass(frozen=True)
@@ -130,6 +140,9 @@ class ComponentsLock:
         for raw in raw_entries:
             if not isinstance(raw, dict):
                 raise LockError("Each lock entry must be an object.")
+            raw_envelope = raw.get("envelope", {})
+            if not isinstance(raw_envelope, dict):
+                raise LockError("Lock entry envelope must be an object.")
             entries.append(
                 LockEntry(
                     name=str(raw.get("name", "")),
@@ -139,6 +152,7 @@ class ComponentsLock:
                     implements=tuple(str(x) for x in raw.get("implements", ())),
                     capabilities=tuple(str(x) for x in raw.get("capabilities", ())),
                     signature=str(raw.get("signature", "")),
+                    envelope=dict(raw_envelope),
                 )
             )
         return cls(root=root, entries=tuple(entries), harness_contracts=harness, schema=schema)
