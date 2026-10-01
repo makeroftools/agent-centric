@@ -43,6 +43,10 @@ DEFAULT_CONNECTION_CAPACITY = 1
 MAX_CONNECTION_CAPACITY = 1024
 _PORT_DIRECTIONS = ("in", "out")
 
+# A composite (subnet) may nest, but only finitely: a deeply nested (or cyclic)
+# subnet body is a fail-closed error, never an unbounded traversal (SPEC-0009).
+_MAX_SUBNET_DEPTH = 8
+
 
 class NetworkError(ValueError):
     """A component network is invalid (fail-closed)."""
@@ -61,6 +65,12 @@ class Component:
         ports: Declared named ports keyed by direction ("in"/"out"). When a
             direction is declared, every edge on that side must use a declared
             port name (fail-closed, SPEC-0009).
+        external: For a composite, the external-port map: port name ->
+            ``"inner_component.inner_port"``. A composite exposes **only** these
+            ports across its boundary (SPEC-0009).
+        subnet: For a composite, the nested network that is its body. Composition
+            is fractal; the boundary guard rejects any outer edge that would reach
+            past the declared external ports.
     """
 
     id: str
@@ -69,6 +79,8 @@ class Component:
     verifier: str | None = None
     child: str | None = None
     ports: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    external: dict[str, str] = field(default_factory=dict)
+    subnet: ComponentNetwork | None = None
 
 
 @dataclass(frozen=True)
@@ -124,6 +136,11 @@ class ComponentNetwork:
         """Add (or replace) a component by id. Returns self for chaining."""
         if not component.id:
             raise NetworkError("component id must be non-empty")
+        if "." in component.id:
+            raise NetworkError(
+                f"component id {component.id!r} must not contain '.'; cross-boundary "
+                "flow uses a composite's declared external ports (fail-closed)"
+            )
         for direction, names in component.ports.items():
             if direction not in _PORT_DIRECTIONS:
                 raise NetworkError(
@@ -149,13 +166,26 @@ class ComponentNetwork:
 
     # -- validation ---------------------------------------------------------
 
-    def validate(self) -> None:
+    def validate(self, _depth: int = 0) -> None:
         """Validate the network fail-closed.
 
         Raises ``NetworkError`` if any edge references a missing component or an
-        unknown output field, or if the graph contains a cycle (not a DAG).
+        unknown output field, if a cross-boundary edge bypasses a composite's
+        declared external ports, or if the graph contains a cycle (not a DAG).
+        Nested subnet bodies are validated recursively, bounded by depth.
         """
+        if _depth > _MAX_SUBNET_DEPTH:
+            raise NetworkError(
+                f"subnet nesting exceeds the depth limit {_MAX_SUBNET_DEPTH} "
+                "(fail-closed)"
+            )
         for edge in self._edges:
+            if "." in edge.source or "." in edge.target:
+                raise NetworkError(
+                    "dotted component references are not allowed; cross-boundary "
+                    "flow must use a composite's declared external ports "
+                    "(fail-closed)"
+                )
             if edge.source not in self._components:
                 raise NetworkError(f"edge source {edge.source!r} is not a component")
             if edge.target not in self._components:
@@ -207,6 +237,57 @@ class ComponentNetwork:
                     f"inport {edge.target}.{edge.target_arg} has both an IIP and an "
                     f"incoming connection from {edge.source!r} (fail-closed)"
                 )
+        for component in self.components():
+            subnet = component.subnet
+            if subnet is None:
+                if component.external:
+                    raise NetworkError(
+                        f"component {component.id!r} declares external ports without "
+                        "a subnet body (fail-closed)"
+                    )
+                continue
+            if _depth >= _MAX_SUBNET_DEPTH:
+                raise NetworkError(
+                    f"subnet nesting exceeds the depth limit {_MAX_SUBNET_DEPTH} at "
+                    f"component {component.id!r} (fail-closed)"
+                )
+            declared = set(component.ports.get("in", ())) | set(
+                component.ports.get("out", ())
+            )
+            mapped = set(component.external)
+            if mapped != declared:
+                raise NetworkError(
+                    f"component {component.id!r}: a composite's external ports must "
+                    "exactly match its declared ports "
+                    f"(missing={sorted(declared - mapped)}, "
+                    f"extra={sorted(mapped - declared)})"
+                )
+            inner = {
+                inner_component.id: inner_component
+                for inner_component in subnet.components()
+            }
+            for port in sorted(component.external):
+                ref = component.external[port]
+                if ref.count(".") != 1 or ref.startswith(".") or ref.endswith("."):
+                    raise NetworkError(
+                        f"component {component.id!r}: external port {port!r} must map "
+                        f"to an interior 'component.port' reference, got {ref!r}"
+                    )
+                inner_id, inner_port = ref.split(".")
+                if inner_id not in inner:
+                    raise NetworkError(
+                        f"component {component.id!r}: external port {port!r} maps to "
+                        f"unknown interior component {inner_id!r} (fail-closed)"
+                    )
+                inner_component = inner[inner_id]
+                side = "in" if port in component.ports.get("in", ()) else "out"
+                if inner_port not in inner_component.ports.get(side, ()):
+                    raise NetworkError(
+                        f"component {component.id!r}: external {side}-port {port!r} "
+                        f"maps to interior {ref!r}, which declares no matching "
+                        f"{side}-port (fail-closed)"
+                    )
+            subnet.validate(_depth + 1)
         self._check_acyclic()
 
     def _check_acyclic(self) -> None:
@@ -342,6 +423,8 @@ class ComponentNetwork:
                     "verifier": c.verifier,
                     "child": c.child,
                     "ports": {k: list(v) for k, v in sorted(c.ports.items())},
+                    "external": dict(sorted(c.external.items())),
+                    "subnet": c.subnet.to_dict() if c.subnet is not None else None,
                 }
                 for c in self.components()
             ],
@@ -373,12 +456,19 @@ class ComponentNetwork:
         return hashlib.sha256(payload).hexdigest()
 
 
-def network_from_dict(data: dict[str, Any]) -> ComponentNetwork:
+def network_from_dict(
+    data: dict[str, Any], *, _depth: int = 0
+) -> ComponentNetwork:
     """Reconstruct a ``ComponentNetwork`` from a ``to_dict()`` payload.
 
     Deterministic and fail-closed: unknown/malformed entries raise
-    ``NetworkError``.
+    ``NetworkError``. Nested subnet bodies are parsed recursively.
     """
+    if _depth > _MAX_SUBNET_DEPTH:
+        raise NetworkError(
+            f"subnet nesting exceeds the depth limit {_MAX_SUBNET_DEPTH} "
+            "(fail-closed)"
+        )
     net = ComponentNetwork()
     comps = data.get("components")
     if not isinstance(comps, list):
@@ -394,6 +484,18 @@ def network_from_dict(data: dict[str, Any]) -> ComponentNetwork:
             if not isinstance(names, list):
                 raise NetworkError("component port names must be a list")
             ports[str(direction)] = tuple(str(name) for name in names)
+        raw_external = c.get("external") or {}
+        if not isinstance(raw_external, dict):
+            raise NetworkError("component 'external' must be a mapping")
+        external = {str(k): str(v) for k, v in raw_external.items()}
+        raw_subnet = c.get("subnet")
+        if raw_subnet is not None and not isinstance(raw_subnet, dict):
+            raise NetworkError("component 'subnet' must be a mapping")
+        subnet = (
+            network_from_dict(raw_subnet, _depth=_depth + 1)
+            if isinstance(raw_subnet, dict)
+            else None
+        )
         net.add_component(
             Component(
                 id=c["id"],
@@ -402,6 +504,8 @@ def network_from_dict(data: dict[str, Any]) -> ComponentNetwork:
                 verifier=c.get("verifier"),
                 child=c.get("child"),
                 ports=ports,
+                external=external,
+                subnet=subnet,
             )
         )
     edges = data.get("edges")
