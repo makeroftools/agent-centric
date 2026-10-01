@@ -7,12 +7,11 @@
 
 **Prepared for a new model session.** Facts below are current as of the tip of
 `main`; `main` is the only branch and is pushed to `origin`. The most recent work
-is the SPEC-0009 FBP/ABM conformance slices (1–6: named ports, Information-Packet
-flow, typed ports, state sovereignty, a component at rest); see `git log -1` and
-*Where we are (delivered)*. The immediate next step is the **MVP planning
-session** — its settled decisions and open agenda are in
-*[`specs/SPEC-0011-minimum-viable-product.md`](specs/SPEC-0011-minimum-viable-product.md)*.
-Run the fresh-session checklist before acting.
+is the **MVP planning session** that froze the **full-version plan** and wrote
+specs **SPEC-0012–SPEC-0017** (component ABI, cross-runtime conformance, network
+trust, provenance/Assurance Labels, editions, parked frontier). The immediate next
+step is to **start implementation at Layer 0: freeze the component ABI and the
+conformance vectors**. Run the fresh-session checklist before acting.
 
 ## Read first (in order)
 
@@ -22,10 +21,17 @@ Run the fresh-session checklist before acting.
 4. [`.agents/skills/`](.agents/skills) — the on-demand Agent Skills.
 5. [`docs/agent/`](docs/agent/README.md) — progressive disclosure: architecture,
    levels, testing, verification, committing, components.
-6. [`specs/`](specs) — SPEC-0002 (CBP target), SPEC-0007 (harness/shell +
-   distribution), SPEC-0008 (shell design / n8n), SPEC-0009 (FBP/ABM
-   conformance), SPEC-0010 (extensibility), SPEC-0011 (MVP definition/roadmap,
-   **draft — the planning-session contract of record**).
+6. [`specs/`](specs) — the frozen plan of record:
+   - **SPEC-0011** (MVP definition; **accepted**) — the session outcome.
+   - **SPEC-0012** — Component ABI v1.
+   - **SPEC-0013** — cross-runtime realization + conformance vectors.
+   - **SPEC-0014** — network execution and trust.
+   - **SPEC-0015** — provenance, trust gates, Assurance Labels.
+   - **SPEC-0016** — editions, distribution, cloud.
+   - **SPEC-0017** — parked frontier workstreams.
+   - Plus SPEC-0002 (CBP target), SPEC-0007 (harness/shell + distribution),
+     SPEC-0008 (shell design / n8n), SPEC-0009 (FBP/ABM conformance),
+     SPEC-0010 (extensibility).
 
 > **Background (optional, non-normative).** The external **literature** that
 > informed the design (FBP, CPM, agent SDLC, dark factory) is indexed in
@@ -35,22 +41,18 @@ Run the fresh-session checklist before acting.
 
 ## Current git state
 
-- **Branch:** `main` — the CBP line. Working tree clean; in sync with
-  `origin/main`.
-- **Topology:** `main` is the only branch. The prior Manager line and the
-  pre-convention FBP line were retired as redundant (0 commits unique to them);
-  their history remains in `main`, and the Manager line's tip is marked by the
-  annotated tag `v0.29.0-milestone`. The convention guard forbids the legacy
-  `agent_centric.fbp` package and `fbp-*` gates from returning.
-- **Tag:** `v0.29.0-milestone` (historical kernel milestone).
+- **Branch:** `main` — the CBP line. In sync with `origin/main`.
+- **Topology:** `main` is the only branch. The previous lines were retired; the
+  Manager line's tip is marked by the annotated tag `v0.29.0-milestone`. The
+  convention guard forbids the legacy `agent_centric.fbp` package and `fbp-*`
+  gates from returning.
 - **Push policy:** commit and push continuously, no permission needed (Law 13);
   never bypass hooks (`--no-verify` is forbidden).
 - **Environment note (this machine).** Global `git` has `commit.gpgsign=true`
-  (SSH signing) and `~/.ssh/config` points `github.com` at
-  `~/.ssh/ssh-github.pub` (a *public* key). If the Bitwarden SSH agent is
-  unavailable, commits fail at signing (`Couldn't get agent socket`) and pushes
-  fail (`bad permissions`). Commit with a per-command `-c commit.gpgsign=false`
-  (never `--no-verify`) and push with
+  (SSH signing) and `~/.ssh/config` points `github.com` at a *public* key. If the
+  Bitwarden SSH agent is unavailable, commits fail at signing and pushes fail
+  (`bad permissions`). Commit with a per-command `-c commit.gpgsign=false` (never
+  `--no-verify`) and push with
   `git -c core.sshCommand="ssh -o IdentityAgent=$SSH_AUTH_SOCK -o IdentitiesOnly=no"`.
   Do **not** edit global config or keys.
 
@@ -69,202 +71,170 @@ Run the fresh-session checklist before acting.
 
 > Continue the mission-critical `agent-centric` system (CBP/ABM; deterministic,
 > local-first, fail-closed). Read `AGENTS.md` -> `PRINCIPLES.md` ->
-> `.agentfactory.toml` (active **L1**; target L3 gated) -> `HANDOFF.md`. Confirm
-> `main` and a clean tree, then run `uv run ruff check .`, `uv run mypy src`,
+> `.agentfactory.toml` (active **L1**; target L3 gated) -> `HANDOFF.md`, then the
+> frozen plan `specs/SPEC-0011` through `specs/SPEC-0017`. Confirm `main` and a
+> clean tree, then run `uv run ruff check .`, `uv run mypy src`,
 > `uv run agent-centric cbp-check`, and the suite
-> `uv run pytest -o addopts="" -p no:cacheprovider`. Continue from HANDOFF
-> **Next**. Obey the hard laws: whole-file replacement only via
-> `tools/safe-replace.sh` (never in-place edits), commit and push continuously,
-> never `--no-verify`. Never act above L1 without the operator changing
-> `.agentfactory.toml` first.
+> `uv run pytest -o addopts="" -p no:cacheprovider`. Begin **Layer 0** of the
+> full-version plan: freeze the component ABI (SPEC-0012) and the shared
+> conformance vectors (SPEC-0013). Obey the hard laws: whole-file replacement only
+> via `tools/safe-replace.sh` (never in-place edits), commit and push
+> continuously, never `--no-verify`. Never act above L1 without the operator
+> changing `.agentfactory.toml` first.
 
 ## What Agent-centric is
 
 - **Two layers (SPEC-0007).** `agent-centric` is the **harness** — boot +
   runtime + meta. It **executes** the CBP tree and is **not** a node. The tree's
   root is the **shell component**, an ordinary component.
-- **Everything is a component** (CBP node = ABM agent), self-contained with
-  local SQLite state; a **skill** is a component directive; an **LLM** is a
-  component of kind `model`.
+- **Everything is a component** (CBP node = ABM agent). In the full version a
+  component is an **abstract, blank object**: `init`/`run`/`kill` over a **ZeroMQ**
+  event loop, a **typed WIT contract**, and **two-level identity** (abstract =
+  contract hash; task = signed content hash).
 - **Posture:** deterministic control plane, local-first, fail-closed, no
   unverified success, full auditability.
+
+## The frozen plan (full version — SPEC-0011 accepted)
+
+The planning session fixed the target as the **full version**, not a crippled
+subset. The Core public repo is a **Python reflection** that helps build it.
+
+- **SPEC-0012 Component ABI v1.** `init(boot_config)` / `run(event_loop)` /
+  `kill()`. Transport **ZeroMQ**. All channels/ports and tasks are announced over
+  the **initial hard-coded channels**. Identity is **never the ports**; at rest a
+  component has **no edges**. Registry sources are open (git repo, directory,
+  binary, …).
+- **SPEC-0013 Cross-runtime realization + conformance vectors.** Two paths:
+  **translation/compilation** (canonically WASM) and **native-runtime invocation**
+  (language-server protocol; runtime **dialed up / JIT-provisioned**). **Equivalence
+  is proven by shared conformance vectors, never by Turing completeness**; a
+  runtime is **TCB** and is version-pinned, signed, and recorded.
+- **SPEC-0014 Network execution and trust.** The network is **orthogonal to
+  components**; static or **generated**; **execution only runs a content-addressed
+  network**; a generated network is **pinned before running**. Goal: deterministic
+  autonomy where cleanly/safely possible.
+- **SPEC-0015 Provenance, trust gates, Assurance Labels.** Classes: **static**
+  (launch), **appointed** (web/RAG; optional), **generated/compiled/translated**
+  (gated), **discovered** (internet index; gated). "Safe" is a **scoped,
+  evidence-backed label** (tiers **A0–A4**), never absolute; promotion past A0/A1
+  is human-gated until the L3 isolated validator exists.
+- **SPEC-0016 Editions, distribution, cloud.** **Core** (public Python reflection,
+  headless) / **Pro** (private, optimization/Rust) / **Enterprise** (private
+  components) / **cloud** (deployment adapter + manifest filtering). **Edition =
+  a manifest selecting components.** Invariant: **one verified semantics**; tiers
+  differ only in capacity/performance/deployment/governance/support/UI.
+- **SPEC-0017 Parked frontier.** Formal semantics/ontology/closed shapes;
+  reduction/analysis/formal verification (Z3/SMT → Assurance Labels); Universal
+  Function Index/dynamic discovery; isolated validator (L3); bounded RSI;
+  whitepaper (last).
+
+**Two-week execution layers (target; every layer fallbacked).**
+
+| Layer | Target | Fallback |
+| --- | --- | --- |
+| 0 | Freeze **ABI + conformance vectors** | must not slip |
+| 1 | **Rust host** runs signed **WASM** components | **Python host**, same ABI |
+| 2 | **Content-addressed network** + typed enforcement + replayable trajectory | static `network.v1` |
+| 3 | **Read-only web diagram** from the network document | static JSON/image |
+| 4 | **Appointed** components (allowlisted) | static-only |
+
+Launch provenances: **static**, **A0 sandboxed**. Gated: generated/translated/discovered.
+Language-server native-runtime invocation is Layer 4+ unless a launch-critical
+component cannot target WASM.
+
+**Process rule:** on complexity/blockage, **step back one or two specs to
+resurrect intent** before forcing a workaround.
+
+**Open design items (deferred with intent).** (1) State model: parent-held
+environmental state for children vs component-sovereign local state. (2) The
+blank-component → dynamic task load protocol (bind timing), hardened at Layer 2.
 
 ## Where we are (delivered)
 
 - **Convention layer** (SPEC-0001/0003/0004): `AGENTS.md` TOC, canonical skills
-  (8, auto-discovered), scaffold [`tools/new-skill.sh`](tools/new-skill.sh),
-  same-name component mapping (SPEC-0006), guarded by
-  [`tests/test_agent_conventions.py`](tests/test_agent_conventions.py).
-- **CBP target architecture:** SPEC-0002.
-- **Distribution spine** (SPEC-0007):
-  - **Phase 0** — spec; Law 5 amended (run-time local-first vs acquisition);
-    `docs/agent/architecture.md`.
-  - **Phase 0.5a** — `component.v1` + `components.lock/v1` contracts;
-    content-addressed atomic cache; deterministic resolver; minisign/gpg
-    signature verification; offline directory source
-    (`cbp/cache.py`, `cbp/resolver.py`, `cbp/signing.py`).
-  - **Phase 1a** — deterministic bundle; offline git source + pinner; offline
-    pin→lock→resolve→verify→load→run with an allowlisted entry; replay proof
-    (`cbp/component_bundle.py`, `cbp/component_source.py`,
-    `cbp/component_runtime.py`). Example component
-    [`examples/components/counter/`](examples/components/counter) and demo
-    [`examples/component_distribution.py`](examples/component_distribution.py).
-  - **Phase 1b** — real example composite `bills_registry`: a SQLite **state
-    descriptor** (`cbp/component_state.py`: path-safe, WAL, integrity-checked,
-    atomic); both child modes — **contains** the embedded `bills_rules`
-    component, **points-to** the referenced `agenda`; deterministic
-    dependency-ordered graph resolution (`cbp/component_graph.py`), with cycles
-    and absences failing closed. Demo
-    [`examples/component_graph.py`](examples/component_graph.py); example
-    [`examples/components/bills_registry/`](examples/components/bills_registry).
-  - **Rebrand (operator-directed, early Phase 3 cut-over).** The active subsystem
-    moved `agent_centric.fbp` → **`agent_centric.cbp`**; classes `Fbp*` → `Cbp*`;
-    CLI `fbp-check`/`fbp-web`/… → `cbp-*`; tests `tests/test_cbp_*`; examples
-    `examples/cbp_*.py`; docs `docs/cbp.md`. The acronym `FBP` now survives only
-    as the **heritage credit** (SPEC-0002 §10, `docs/references/`).
-  - **Anti-drift guard** — `tests/test_agent_conventions.py::TestNoStaleLabels`
-    asserts the legacy `agent_centric.fbp` package and the retired `fbp-*` gates
-    cannot return.
-  - **Phase 2 (MVP) — boot from lock** (`cbp/component_boot.py`): resolve the
-    graph children-first, gate on `lock_hash`, cross-check manifest↔lock
-    conformance, materialize per-component namespaced SQLite state, and resolve
-    allowlisted entries, failing closed at every step; example `shell` (root
-    composite → `registry`) and `registry` components; demo
-    `examples/component_boot.py`.
-  - **Phase 2 (MVP) — process-isolated execution** (`cbp/component_process.py`,
-    private `_component_runner.py`): a verified bundle's own entry runs in a child
-    process (one JSON request/response, `python -I`, minimal env, hard timeout,
-    output bound); opt-in via `boot_from_lock(..., allow_subprocess=True)` and
-    fail-closed. Process isolation, **not** an OS sandbox — the signature +
-    content hash remain the trust anchor. The committed umbrella
-    `components.lock` still needs the live mirror.
-  - **Phase 0.5b (MVP) — signing + transparency** (`cbp/signing_service.py`,
-    `cbp/transparency.py`): machine-performed release signing with `gpg`/`minisign`
-    (no private key in-process) and an append-only, hash-chained transparency log
-    (tamper + truncation detection, signatures re-verified on read); demo
-    `examples/release_signing.py`. The **live self-hosted mirror** remains.
-  - **Shell design (SPEC-0008, Phase 1 MVP)** (`contracts/design.py`,
-    `cbp/design.py`): a content-hashed `design.v1` (a `network.v1` + requested
-    refs) with deterministic, fail-closed `validate_design`/`compile_design`
-    (schema/cycle/edge/absence gates); demo `examples/design_compile.py`. The
-    n8n adapter and the pin/record wiring remain.
-  - **FBP/ABM conformance (SPEC-0009)** (`cbp/network.py`, `cbp/flow.py`):
-    slice 1 — named **ports** + per-connection **capacity**, fail-closed
-    validation, deterministic `content_hash()`, port-aware compilation. slice 2 —
-    deterministic **Information-Packet flow**: verified outputs route
-    outport→inport over `BoundedConnection`s (FIFO, capacity); overflow is
-    back-pressure and an empty receive is a deadlock, both fail closed; `args`
-    supply IIPs. slice 3 — first-class per-port **IIP documents**, the composite
-    **external-ports boundary guard** (nested subnet body + external map;
-    depth-bounded; fail-closed), and **repeated-activation streaming**
-    (`cbp/stream.py`: a full connection suspends the producer; a consumer
-    re-activates per IP; deadlocks and runaway sources fail closed). Tests:
-    `tests/test_cbp_ports.py`, `tests/test_cbp_flow.py`, `tests/test_cbp_iips.py`,
-    `tests/test_cbp_composite.py`, `tests/test_cbp_stream.py`. slice 4 —
-    named **typed ports** (`port_types`, reusing the hand-off type vocabulary):
-    edge type compatibility and IIP values validate fail-closed, and both flow
-    engines enforce the declared type per IP at run time; an untyped port is
-    the wildcard `"any"` and serializes unchanged
-    (`tests/test_cbp_typed_ports.py`). slice 5 — component **state
-    sovereignty**: `StateScope` binds a component to one namespace under the
-    state root and refuses any escaping path, and boot materializes all
-    declared state through it, so siblings can never write each other
-    (`tests/test_component_sovereignty.py`). slice 6 — a component **at rest
-    has no edges**: a `component.v1` manifest carrying `edges`/`wires`/
-    `connections` is rejected fail-closed, so dependency appears only in a
-    network document (`tests/test_component_at_rest.py`).
-- **Docs / presentation:** README showcase (SVG hero banner + mark, live badges,
-  Mermaid diagrams); historical docs superseded by active docs were removed
-  (`KERNEL.md`, `README_CBP.md`, `docs/CBP_HANDOFF.md`, `docs/DIRECTIVE.md`);
-  `STATUS.md` retained as the volley history.
+  (auto-discovered), scaffold `tools/new-skill.sh`, same-name component mapping,
+  guarded by `tests/test_agent_conventions.py`.
+- **Distribution spine** (SPEC-0007): `component.v1` + `components.lock/v1`
+  contracts; content-addressed cache; deterministic resolver; minisign/gpg
+  verification; offline directory + git sources; deterministic bundle; boot from
+  lock; process isolation; signing service + transparency log.
+- **Shell design** (SPEC-0008): `design.v1` + `validate_design`/`compile_design`.
+- **FBP/ABM conformance** (SPEC-0009): named/typed ports, Information-Packet
+  flow with fail-closed back-pressure and deadlock, per-port IIP documents,
+  composite external-ports boundary guard, repeated-activation streaming,
+  per-component state sovereignty, a component at rest has no edges. **8/9**
+  built; the remaining item is recorded/confidence-scored `model` components.
+- **Docs / presentation:** README showcase; historical docs removed; `STATUS.md`
+  retained as volley history.
 
-## Validation (last full run)
+## Validation (docs-only commit)
 
-- `uv run pytest -o addopts="" -p no:cacheprovider` → **1400 passed**.
-  (10 distribution/boot tests spawn temporary `git` repos and need the
-  operator's global `commit.gpgsign` agent; with it unavailable they fail for
-  the environment, not the change — they pass under `GIT_CONFIG_GLOBAL=/dev/null`.)
 - `uv run ruff check .` → clean.
 - `uv run mypy src` → clean (**117** source files).
 - `uv run agent-centric cbp-check` → **8/8**, READY.
 - Convention guard → **39 passed**.
+- The full suite was **not** re-run for the docs-only spec commit; the last full
+  run on record was **1400 passed** (10 distribution tests need the operator's
+  global `commit.gpgsign` agent and pass under `GIT_CONFIG_GLOBAL=/dev/null`).
 
-## Spec status audit (facts; no edits made)
+## Spec status audit
 
-Spec `status` is `draft | accepted | implemented` (`specs/README.md`); `accepted`
-means the **design is approved**, not built. The front-matter is not wrong, but it
-understates SPEC-0009 and leaves the `implemented` specs' boxes un-ticked.
+Spec `status` is `draft | accepted | implemented`; `accepted` means the **design
+is approved**, not built.
 
+- **SPEC-0011** `accepted` — MVP definition frozen; checkboxes for testable
+  acceptance and the status-record correction remain.
+- **SPEC-0012–0017** `draft` — the frozen full-version plan; nothing built.
 - **SPEC-0002** `accepted` — Phase 1 not built (**0/6**): `review.v1` absent; no
-  `Agent`→`Component` adapter; `_REGISTRY` (`cbp/agent.py:81`) and
-  `_child_class_for` (`cbp/agent.py:974`) remain; no holdout scenarios; no
-  response `confidence`/Review; no `inproc`-only backend.
+  `Agent`→`Component` adapter; `_REGISTRY`/`_child_class_for` remain; no holdout
+  scenarios; no response `confidence`/Review; no `inproc`-only backend.
 - **SPEC-0003 / 0004 / 0006** `implemented` — criteria met by the convention
-  guard; checkboxes are un-ticked (doc-only correction).
-- **SPEC-0007** `accepted` — Phases 0, 0.5a, 1a, 1b, 2 delivered; 0.5b signing
+  guard; some checkboxes are un-ticked (doc-only correction).
+- **SPEC-0007** `accepted` — Phases 0/0.5a/1a/1b/2 delivered; 0.5b signing
   delivered, **live mirror open**; no committed umbrella `components.lock`.
 - **SPEC-0008** `draft` — `design.v1` + validate/compile delivered; n8n adapter,
-  design→commit pinning, and envelope limits open.
-- **SPEC-0009** `draft` — **8/9 built** (slices 1–6); only
-  recorded/confidence-scored `model` components open. Status understates it.
-- **SPEC-0010** `draft` — roadmap only; nothing built.
-
-## Planning the MVP (open)
-
-The immediate next step is a **planning session** to fix the MVP definition and
-roadmap. Its settled decisions and open agenda live in
-[`specs/SPEC-0011-minimum-viable-product.md`](specs/SPEC-0011-minimum-viable-product.md).
-Do not implement until the session reaches shared understanding.
+  design→commit pinning, envelope limits open.
+- **SPEC-0009** `draft` — **8/9** built; only recorded/confidence-scored `model`
+  components open. Status understates it.
+- **SPEC-0010** `draft` — roadmap only.
 
 ## Next (candidate — not started)
 
-- **Immediate:** run the **MVP planning session**; resolve the open questions in
-  SPEC-0011 and freeze its acceptance criteria before starting any MVP build.
-
-- **Phase 2 remainder:** commit the umbrella `components.lock` (blocked on the
-  Phase 0.5b mirror — no real pinned remotes yet).
-- **Shell design (SPEC-0008) remainder:** the n8n adapter (import/export +
-  canonical round-trip, fixture-tested) and the pin/record wiring
-  (design → signed lock → boot). Phase 1 (`design.v1` + validate/compile) is
-  delivered.
-- **Phase 0.5b remainder:** the live self-hosted mirror (Forgejo/Gitea); the
-  signing service and transparency log are delivered.
-- **FBP/ABM conformance (SPEC-0009):** slices 1–6 delivered (named ports +
-  bounded connections; deterministic IP flow with fail-closed back-pressure and
-  deadlock; first-class per-port IIP documents; the composite external-ports
-  boundary guard; repeated-activation streaming with producer suspension; named
-  typed ports enforced statically and at run time; per-component state
-  sovereignty via `StateScope`; a component at rest has no edges). Remaining
-  acceptance item: recorded/confidence-scored `model` components.
-- **Extensibility (SPEC-0010, draft):** knowledge graphs (ontology as a versioned
-  contract over a component-owned semantic graph; closed shapes for gates;
-  pinned entailment closure) and bounded RSI (propose → review → sign → lock;
-  verification off-limits until the isolated validator exists).
-- **Phases 3–5:** directives aggregated into skills + pinned model components;
-  migration + hermetic CI; hardening drills.
+- **Immediate: Layer 0** — freeze the **component ABI** (SPEC-0012) and the
+  **shared conformance vectors** (SPEC-0013). Everything else depends on these.
+- **Layer 1** — Rust host running signed WASM components (fallback: Python host,
+  same ABI).
+- **Layer 2** — content-addressed network execution, typed-contract enforcement,
+  replayable trajectory.
+- **Layer 3** — read-only web diagram from the network document.
+- **Distribution remainder:** wire the **lock-level signature into
+  `boot_from_lock`** and add the **`design/network → pin → components.lock`
+  producer**; commit the umbrella `components.lock` (still needs the live mirror).
+- **SPEC-0008 remainder:** n8n adapter (import/export + canonical round-trip,
+  fixture-tested) and pin/record wiring.
+- **SPEC-0009 remainder:** recorded/confidence-scored `model` components.
+- **SPEC-0017 frontier:** formal semantics/ontology/closed shapes; reduction +
+  formal verification (Z3/SMT); Universal Function Index; isolated validator (L3);
+  bounded RSI; whitepaper (last).
 
 ## Open threads (blockers & honest gaps)
 
-- **Live self-hosted mirror** (Forgejo/Gitea) — needed for Phase 0.5b and for a
-  committed umbrella `components.lock`; there are no real pinned remotes yet, so
-  the lock stays generated, not committed.
-- **SPEC-0008 remainder:** the n8n adapter (import/export + canonical round-trip,
-  fixture-tested) and the pin/record wiring (design -> signed lock -> boot).
-- **SPEC-0009 remainder:** slices 1–6 are delivered (through named typed ports,
-  per-component state sovereignty, and a component at rest having no edges).
-  Remaining acceptance item: recorded/confidence-scored `model` components.
-- **SPEC-0010:** knowledge graphs and bounded RSI are target/roadmap; the isolated
-  holdout validator (L3) is required before any self-improvement of verification.
+- **Live self-hosted mirror** (Forgejo/Gitea) — needed for a committed umbrella
+  `components.lock`; there are no real pinned remotes yet.
+- **Integration spine** — the individual offline primitives exist, but
+  `design/network → pin → signed lock → boot → run typed flow → replay` is not yet
+  wired end-to-end; the lock-level signature is not consumed at boot.
+- **`review.v1` / `confidence`** — absent; parked under the formal-semantics
+  session (SPEC-0017). Launch ships a minimal deterministic scorer + a
+  deterministic formalizer at the model boundary.
 - **Honest FBP note:** non-port networks still run on the legacy args model;
   port-declared networks use `run_flow`. Both are deterministic.
 
 ## How to work here (hard laws)
 
 - **Law 11 — no in-place edits, ever.** Replace whole files via
-  [`tools/safe-replace.sh`](tools/safe-replace.sh) `<file> < new-content`
-  (`opencode.json` denies `edit`/`write`/`patch`). See
-  [`docs/agent/components.md`](docs/agent/components.md) and the
-  `safe-file-editing` skill.
+  [`tools/safe-replace.sh`](tools/safe-replace.sh) (`opencode.json` denies
+  `edit`/`write`/`patch`). See the `safe-file-editing` skill.
 - **Law 12 — test authority.** The agent may run any tests; report results
   faithfully; the operator's run and CI remain the record of truth.
 - **Law 13 — commit and push continuously.** Pre-commit hooks and CI are the
@@ -276,28 +246,16 @@ See [`docs/agent/levels.md`](docs/agent/levels.md),
 
 ## Key files
 
-- `src/agent_centric/cbp/` — the active subsystem: `component_bundle.py`,
+- `src/agent_centric/cbp/` — the active subsystem (`component_bundle.py`,
   `component_source.py`, `component_runtime.py`, `component_state.py`,
-  `component_graph.py`, `component_boot.py`, `component_process.py`
-  (+ private `_component_runner.py`), `bills_component.py`, `shell_component.py`,
-  `registry_component.py`, `signing_service.py`, `transparency.py`, `design.py`,
-  `network.py`, `flow.py`, `cache.py`, `resolver.py`, `signing.py`.
-- `src/agent_centric/contracts/` — versioned contracts, including `component.py`,
-  `components_lock.py`, and `design.py` (`design.v1`).
-- `specs/` — specs (SPEC-0002 target; SPEC-0007 distribution plan;
-  SPEC-0008 shell design interface; SPEC-0009 FBP/ABM conformance;
-  SPEC-0010 extensibility).
-- `examples/components/` — `counter` (atomic), `bills_registry` (composite:
-  SQLite state + embedded `bills_rules` + referenced `agenda`), and the Phase 2
-  `shell` (root composite → `registry`) + `registry` components.
-- `tests/test_agent_conventions.py` — convention + anti-drift guard;
-  `tests/test_component_distribution.py`, `tests/test_component_state.py`,
-  `tests/test_component_sovereignty.py`, `tests/test_component_at_rest.py`,
-  `tests/test_component_graph.py`,
-  `tests/test_component_boot.py`, `tests/test_component_process.py`,
-  `tests/test_release_signing.py`, `tests/test_design.py`,
-  `tests/test_cbp_ports.py`, `tests/test_cbp_typed_ports.py`, and
-  `tests/test_cbp_flow.py` — the distribution + design + FBP-conformance slice.
+  `component_graph.py`, `component_boot.py`, `component_process.py`,
+  `signing_service.py`, `transparency.py`, `design.py`, `network.py`, `flow.py`,
+  `cache.py`, `resolver.py`, `signing.py`).
+- `src/agent_centric/contracts/` — versioned contracts, incl. `component.py`,
+  `components_lock.py`, `design.py`.
+- `specs/SPEC-0011`–`SPEC-0017` — the frozen full-version plan of record.
+- `examples/components/` — `counter`, `bills_registry`, `shell` + `registry`.
+- `tests/test_agent_conventions.py` — convention + anti-drift guard.
 
 ## Non-goals (do not build without explicit direction)
 
@@ -305,7 +263,7 @@ See [`AGENTS.md`](AGENTS.md) → *Non-goals*. In short: no new agents/ACP/refact
 dependency bumps; no auto-accept or unsupervised money; no send/delete/move
 email; no cloud/network in CI; no changing Manager orchestration/verification/
 policy/envelope/accounting semantics (prefer adapters/backends); never bypass
-hooks or CI.
+hooks or CI; discovery/generation is never auto-trusted (SPEC-0015 gates).
 
 ## Historical documents
 
