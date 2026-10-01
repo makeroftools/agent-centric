@@ -15,13 +15,14 @@ git repo); the work lives in three sibling repos:
 | [`../conformance/`](../conformance/AGENTS.md) | public | The shared contract: WIT ABI + conformance vectors + certifier. |
 | [`../pro/`](../pro/AGENTS.md) | private | The Rust host (optimization edition). |
 
-The most recent session delivered **Layers 0, 1a, 1b, and 1c** of the
-full-version plan (`SPEC-0011`): the frozen component ABI (`component-abi.v1`)
-and v1 conformance vectors; a **Rust host certified cross-runtime-identical** to
-the Python reference host (shared suite **31/31**); and **content-addressed WASM
-execution** (WASM suite **8/8**), including a full **`component-abi.v1` WASM
-guest** that announces its channels/tasks and exchanges Information Packets over
-the host-mediated transport. **Next is artifact signing/provenance** (§Next).
+The most recent session delivered **Layers 0, 1a, 1b, and 1c, plus artifact
+signing**, of the full-version plan (`SPEC-0011`): the frozen component ABI
+(`component-abi.v1`) and v1 conformance vectors; a **Rust host certified
+cross-runtime-identical** to the Python reference host (shared suite **31/31**);
+**content-addressed, signed WASM execution** (WASM suite **10/10**), including a
+full **`component-abi.v1` WASM guest** that announces its channels/tasks and
+exchanges Information Packets over the host-mediated transport, and locked-down
+refusal of unsigned/bad-signature artifacts. **Next is Layer 2** (§Next).
 
 ## Verify everything (do this before acting)
 
@@ -42,8 +43,8 @@ python3 certifier/certify.py --host-cmd "python3 certifier/reference_host.py"  #
 
 # pro (Rust host) ---------------------------------------------------------
 cd ../pro
-./scripts/certify.sh                                  # builds + certifies BOTH suites (31/31 + 8/8)
-cargo test --release                                  # codec tests: 4 passed
+./scripts/certify.sh                                  # builds + certifies BOTH suites (31/31 + 10/10) + unit tests
+cargo test --release --features wasm                  # codec + artifact-signature tests: 5 passed
 ```
 
 Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
@@ -58,8 +59,8 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
   convention + home-path guard passed; full suite **1400 passed** (~63 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
-  execution suite **8/8** on the Rust host (a narrow task fixture plus a full
-  `component-abi.v1` guest).
+  execution suite **10/10** on the Rust host (a narrow task fixture, a full
+  `component-abi.v1` guest, and detached Ed25519 artifact-signing accept/refuse).
 - ABI content address: `component-abi.v1` **revision 3**, `source_sha256`
   `d8e0325d53789d1af631bae7638a5b8947606a2da00698d40452471316a3386e`
   (see `../conformance/contracts/ABI.lock.v1.json`, which also hashes
@@ -73,8 +74,9 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 ## Pinned toolchain / TCB
 
 - Rust **1.97.0** (`pro/rust-toolchain.toml`); `serde_json` **1.0.151**,
-  `sha2` **0.10.9**, `wasmtime` **49.0.1** (optional, feature `wasm`), pinned in
-  `pro/Cargo.lock`.
+  `sha2` **0.10.9**, `wasmtime` **49.0.1** (optional, feature `wasm`),
+  `ed25519-dalek` **2.2.0** (optional, feature `wasm`, artifact signing), pinned
+  in `pro/Cargo.lock`.
 - ABI resolver `wasm-tools` **1.260.0** (in `ABI.lock.v1.json`); guest builder
   `cargo-component` **0.21.1** (fixture uses `wit-bindgen-rt` 0.44.0).
 - `pro` deps and the fixture are reproducible: `Cargo.lock` is **committed** in
@@ -132,9 +134,9 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > `core/specs/SPEC-0011` through `SPEC-0017`, and `conformance/AGENTS.md` +
 > `pro/AGENTS.md`. Confirm all three repos are on `main` and clean, then run the
 > verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1400
-> passed**, shared suite **31/31** on Python + Rust, WASM suite **8/8**).
-> **Layers 0, 1a, 1b, 1c are delivered**; the next step is **artifact
-> signing/provenance**, then Layer 2. Obey the hard laws: whole-file replacement
+> passed**, shared suite **31/31** on Python + Rust, WASM suite **10/10**).
+> **Layers 0, 1a, 1b, 1c and signing are delivered**; the next step is **Layer 2**.
+> Obey the hard laws: whole-file replacement
 > only via `tools/safe-replace.sh` (**never in-place edits**), commit and push
 > continuously, never `--no-verify`. Never act above L1 without the operator
 > changing `.agentfactory.toml` first.
@@ -189,7 +191,7 @@ subset. The Core public repo is a **Python reflection** that helps build it.
 | Layer | Target | Fallback | Status |
 | --- | --- | --- | --- |
 | 0 | Freeze **ABI + conformance vectors** | must not slip | **done** |
-| 1 | **Rust host** runs signed **WASM** components | **Python host**, same ABI | **1a/1b/1c done**; signing pending |
+| 1 | **Rust host** runs signed **WASM** components | **Python host**, same ABI | **1a/1b/1c + signing done** |
 | 2 | **Content-addressed network** + typed enforcement + replayable trajectory | static `network.v1` | not started |
 | 3 | **Read-only web diagram** from the network document | static JSON/image | not started |
 | 4 | **Appointed** components (allowlisted) | static-only | not started |
@@ -228,7 +230,11 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   `../conformance/artifacts/abi-identity.wasm`) that announces its channels/task
   over the control channel and exchanges Information Packets via the host
   `transport`; the host enforces announcements, `ready`, endpoint addressing,
-  declared types, canonical encodings, and the envelope. WASM suite **8/8**.
+  declared types, canonical encodings, and the envelope. **Signing**: every
+  artifact must carry a detached **Ed25519** signature over its exact bytes that
+  verifies against the host trust root (carried in
+  `../conformance/vectors/wasm.lock.v1.json`, never fixture data); unsigned or
+  bad-signature artifacts are refused before execution. WASM suite **10/10**.
 - **Convention layer (SPEC-0001/0003/0004)** — `AGENTS.md` TOC, canonical skills
   (auto-discovered), `tools/new-skill.sh`, same-name component mapping, guarded by
   `tests/test_agent_conventions.py`.
@@ -251,9 +257,10 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 - **SPEC-0011** `accepted` — MVP definition frozen; testable acceptance +
   status-record correction remain.
-- **SPEC-0012 / SPEC-0013** `accepted` — **Layers 0/1a/1b/1c delivered** (ABI
-  rev 3, vectors, certifier, Rust host 31/31, content-addressed WASM 8/8
-  including a full `component-abi.v1` guest). Artifact **signing** is open.
+- **SPEC-0012 / SPEC-0013** `accepted` — **Layers 0/1a/1b/1c + signing
+  delivered** (ABI rev 3, vectors, certifier, Rust host 31/31, content-addressed
+  WASM 10/10 including a full `component-abi.v1` guest and Ed25519 artifact
+  signing).
 - **SPEC-0014–0017** `draft` — frozen full-version plan; nothing built.
 - **SPEC-0002** `accepted` — Phase 1 not built (**0/6**): `review.v1` absent; no
   `Agent`→`Component` adapter; `_REGISTRY`/`_child_class_for` remain; no holdout
@@ -270,13 +277,11 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 ## Next
 
-- **Immediate: artifact signing/provenance.** Ed25519/minisign verification over
-  content addressing (SPEC-0015): the host refuses an unsigned or bad-signature
-  artifact; vectors for accept/refuse. (Layer 1c is delivered: a full
-  `component-abi.v1` WASM guest runs on the Rust host, WASM suite 8/8; it
-  consumed the ABI, so `component-abi.v1` is now additive-only.)
-- **Layer 2** — content-addressed network execution, typed-contract enforcement,
-  replayable trajectory.
+- **Immediate: Layer 2** — content-addressed network execution, typed-contract
+  enforcement, replayable trajectory (static `network.v1` fallback).
+- **Signing remainder** — wire the trust root into a signed lock-level artifact
+  and the transparency log; key rotation. (Layer 1c signing is delivered: Ed25519
+  over content addressing, accept/refuse vectors.)
 - **Distribution remainder** — wire the lock-level signature into
   `boot_from_lock`; add the `design/network → pin → components.lock` producer;
   commit the umbrella `components.lock` (needs the live mirror).
