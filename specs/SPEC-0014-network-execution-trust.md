@@ -4,7 +4,7 @@ title: Network execution and trust — static or generated wiring, pinned before
 type: feature
 target_repo: agent-centric
 target_branch: main
-status: draft
+status: implemented
 owner: operator
 ---
 
@@ -62,9 +62,9 @@ never permitted in *execution* of a claimed-verified result.
 
 ## Acceptance criteria
 
-- [ ] A network may be static or generated, and both execute only after the
+- [x] A network may be static or generated, and both execute only after the
       network is content-addressed.
-- [ ] A generated network is pinned and recorded **before** execution; replay
+- [x] A generated network is pinned and recorded **before** execution; replay
       reproduces identical wiring (planner re-run or pinned plan).
 - [x] Every edge, static or dynamic, is contract-checked at instantiation and
       fails closed on mismatch.
@@ -73,17 +73,21 @@ never permitted in *execution* of a claimed-verified result.
 
 ## Progress
 
-- **Layer 2 (static `network.v1`) delivered.** `conformance/contracts/network-v1.md`
+- **Layer 2 delivered (`network.v1` revision 2).** `conformance/contracts/network-v1.md`
   freezes the document, the pin rule (canonical-JSON content address computed with
-  `content_hash` removed), typed enforcement at instantiation, and the trajectory.
-  The executable contract is `vectors/network-{fixtures,suite,lock}.v1.json`
-  (9 cases: identity chain, fan-in, msgpack, replay determinism, and
-  type-mismatch/cycle/not-pinned/pin-mismatch/unknown-fixture refusals). It is
-  implemented by the Python reference host and the Rust host and passes **9/9** on
-  both (`certifier/certify.py`), proving cross-runtime equivalence.
-- **Open (generated mode).** A deterministic planner component and the
-  propose-then-pin path are not built; the pinned-before-run invariant and the
-  typed/replayable execution they require are.
+  `content_hash` removed), typed enforcement at instantiation, the replayable
+  trajectory, and generated-network provenance. The executable contract is
+  `vectors/network-{fixtures,suite,lock}.v1.json` (14 cases: identity chain,
+  fan-in, msgpack, replay determinism, static refusals, and the generated suite —
+  `generated-chain`, `generated-replay`, `generated-plan-mismatch`,
+  `generated-unpinned`, `generated-unknown-planner`). It is implemented by the
+  Python reference host and the Rust host and passes **14/14** on both
+  (`certifier/certify.py`), proving cross-runtime equivalence.
+- **Deterministic replay.** A `planner`-provenanced network is re-verified before
+  execution: the host re-runs the deterministic planner on the pinned inputs,
+  rebuilds the wiring, and requires its pin to equal `content_hash`. A tampered
+  wiring with a self-consistent recomputed pin is still caught (`plan-mismatch`).
+  An autonomous proposer's plan is simply a pinned document — the pin disposes.
 
 ## Risks / invariants
 
