@@ -118,6 +118,23 @@ class TestTaskBinding:
         )
         assert TaskBinding.from_dict(task.to_dict()) == task
 
+    def test_digest_round_trips(self) -> None:
+        task = TaskBinding(name="apply", target="apply-service.sh", digest="a" * 64)
+        assert task.to_dict()["digest"] == "a" * 64
+        assert TaskBinding.from_dict(task.to_dict()) == task
+
+    def test_digest_must_be_sha256_or_empty(self) -> None:
+        TaskBinding(name="x", target="y", digest="")
+        with pytest.raises(ValueError):
+            TaskBinding(name="x", target="y", digest="short")
+
+    def test_empty_digest_is_omitted_from_canonical_bytes(self) -> None:
+        # Additive-only: an unpinned task serializes exactly as before, so a
+        # manifest without task pins keeps its service_hash.
+        assert "digest" not in TaskBinding(name="apply", target="a.sh").to_dict()
+        for task in _service().to_dict()["tasks"]:
+            assert "digest" not in task
+
 
 class TestSecretRef:
     def test_reference_only(self) -> None:

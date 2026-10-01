@@ -144,6 +144,11 @@ class TaskBinding:
     idempotency: a task that is **not** idempotent must be explicitly ``gated``
     (``validate_service`` refuses otherwise), because nothing non-idempotent may
     be applied unattended.
+
+    ``digest`` optionally **content-pins** the task: the 64-hex sha256 of the
+    script/callable bytes. The pull/apply agent re-hashes the task on disk and
+    refuses to run it on a mismatch (verify-then-apply). It is omitted from the
+    canonical bytes when empty, so this field is strictly additive.
     """
 
     name: str
@@ -153,6 +158,7 @@ class TaskBinding:
     idempotent: bool = True
     gated: bool = False
     args: tuple[str, ...] = ()
+    digest: str = ""
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -163,9 +169,11 @@ class TaskBinding:
             raise ValueError("TaskBinding target must be a single addressable name.")
         if self.kind not in TaskKind.all():
             raise ValueError(f"Unsupported task kind: {self.kind!r}")
+        if self.digest and not _SHA256_RE.match(self.digest):
+            raise ValueError(f"TaskBinding digest must be 64-hex sha256: {self.digest!r}")
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data: dict[str, Any] = {
             "name": self.name,
             "target": self.target,
             "kind": self.kind,
@@ -174,6 +182,11 @@ class TaskBinding:
             "gated": self.gated,
             "args": list(self.args),
         }
+        # Omitted when empty so the canonical bytes (and thus service_hash) of a
+        # manifest that does not pin a task are unchanged (additive-only).
+        if self.digest:
+            data["digest"] = self.digest
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> TaskBinding:
@@ -185,6 +198,7 @@ class TaskBinding:
             idempotent=bool(data.get("idempotent", True)),
             gated=bool(data.get("gated", False)),
             args=tuple(str(x) for x in data.get("args", ())),
+            digest=str(data.get("digest", "")),
         )
 
 
