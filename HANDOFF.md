@@ -149,14 +149,18 @@ before acting.
     re-activates per IP; deadlocks and runaway sources fail closed). Tests:
     `tests/test_cbp_ports.py`, `tests/test_cbp_flow.py`, `tests/test_cbp_iips.py`,
     `tests/test_cbp_composite.py`, `tests/test_cbp_stream.py`.
+- **Docs / presentation:** README showcase (SVG hero banner + mark, live badges,
+  Mermaid diagrams); historical docs superseded by active docs were removed
+  (`KERNEL.md`, `README_CBP.md`, `docs/CBP_HANDOFF.md`, `docs/DIRECTIVE.md`);
+  `STATUS.md` retained as the volley history.
 
 ## Validation (last full run)
 
-- `uv run pytest -o addopts="" -p no:cacheprovider` → **1368 passed**.
+- `uv run pytest -o addopts="" -p no:cacheprovider` → **1367 passed**.
 - `uv run ruff check .` → clean.
-- `uv run mypy src` → clean (**116** source files).
+- `uv run mypy src` → clean (**117** source files).
 - `uv run agent-centric cbp-check` → **8/8**, READY.
-- Convention guard → **40 passed**.
+- Convention guard → **39 passed**.
 
 ## Next (candidate — not started)
 
