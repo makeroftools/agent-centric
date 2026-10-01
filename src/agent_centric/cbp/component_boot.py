@@ -50,6 +50,7 @@ from .component_runtime import AllowlistedEntryResolver, EntryNotAllowed
 from .component_state import StateScope
 from .resolver import ComponentSource, ResolveError, Resolver
 from .signing import SignatureError, SignatureVerifier
+from .transparency import TransparencyError, TransparencyLog
 
 
 class BootError(ResolveError):
@@ -112,6 +113,8 @@ def boot_from_lock(
     process_timeout: float = DEFAULT_TIMEOUT_SECONDS,
     lock_signature: str | None = None,
     lock_verifier: SignatureVerifier | None = None,
+    transparency: TransparencyLog | None = None,
+    expected_transparency_head: str | None = None,
 ) -> BootedTree:
     """Resolve, verify, and instantiate the tree pinned by ``lock`` (fail-closed).
 
@@ -131,6 +134,11 @@ def boot_from_lock(
             MUST verify against ``lock_verifier`` or boot refuses (fail-closed).
         lock_verifier: The verifier for ``lock_signature``. Supplying it without a
             signature refuses (a configured trust root demands a signed lock).
+        transparency: An optional transparency log. When given, the whole chain is
+            verified with ``lock_verifier`` and the lock MUST appear as a signed
+            record — an unpublished lock refuses (fail-closed, Law 10).
+        expected_transparency_head: When given, the log's computed head must equal
+            it (detects truncation or rewrite).
 
     Returns:
         A :class:`BootedTree` with components ordered children-first and the
@@ -143,8 +151,15 @@ def boot_from_lock(
     """
     lock_hash = lock.lock_hash()
     lock_verified = False
-    if lock_signature is not None or lock_verifier is not None:
+    if lock_signature is not None:
         _verify_lock_signature(lock_hash, lock_signature, lock_verifier)
+        lock_verified = True
+    elif lock_verifier is not None and transparency is None:
+        raise BootError("a lock verifier is configured but the lock is unsigned")
+    if transparency is not None:
+        _verify_transparency(
+            transparency, lock_hash, lock_verifier, expected_transparency_head
+        )
         lock_verified = True
     if expected_lock_hash is not None and lock_hash != expected_lock_hash:
         raise BootError(
@@ -214,6 +229,29 @@ def _verify_lock_signature(
         verifier.verify(lock_hash.encode("utf-8"), signature.encode("utf-8"))
     except SignatureError as exc:
         raise BootError(f"lock signature verification failed: {exc}") from exc
+
+
+def _verify_transparency(
+    transparency: TransparencyLog,
+    lock_hash: str,
+    verifier: SignatureVerifier | None,
+    expected_head: str | None,
+) -> None:
+    """Verify the transparency log and require the lock to be published in it.
+
+    Fail-closed: no verifier refuses; a broken chain, bad signature, or head
+    mismatch refuses; and a lock absent from the log refuses.
+    """
+    if verifier is None:
+        raise BootError(
+            "a transparency log was provided but no lock verifier is configured"
+        )
+    try:
+        entries = transparency.verify(verifier, expected_head=expected_head)
+    except TransparencyError as exc:
+        raise BootError(f"transparency log verification failed: {exc}") from exc
+    if not any(entry.lock_hash == lock_hash for entry in entries):
+        raise BootError("lock is not published in the transparency log")
 
 
 def _check_conformance(node: ResolvedNode, supported: frozenset[str]) -> None:

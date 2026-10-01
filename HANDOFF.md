@@ -298,9 +298,10 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 - **Immediate: Layer 4** — **appointed** components (allowlisted; static-only
   fallback), then the signing/distribution remainders below.
-- **Signing remainder** — key rotation; wire the transparency-log head into
-  boot (the lock-level signature itself is now verified at boot). (Layer 1c
-  signing is delivered: Ed25519 over content addressing, accept/refuse vectors.)
+- **Signing remainder** — key rotation. (**Done:** the lock-level signature and
+  the transparency log — chain, signatures, and head — are verified at boot; an
+  unpublished lock refuses. Layer 1c signing is delivered: Ed25519 over content
+  addressing, accept/refuse vectors.)
 - **Distribution remainder** — the lock-level signature is consumed at boot
   (**done**); add the `design/network → pin → components.lock` producer; commit
   the umbrella `components.lock` (needs the live mirror).
@@ -317,8 +318,10 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **Integration spine** — the offline primitives exist; the **lock-level
   signature is now consumed at boot** (`boot_from_lock` verifies a detached
   signature over `lock_hash` before resolving anything, and records
-  `lock_verified`, fail-closed). Remaining: the `design/network → pin → signed
-  lock` producer and the end-to-end `run typed flow → replay` wiring.
+  `lock_verified`, fail-closed). Boot may also require the lock to be published
+  in a **serving transparency log** (chain + signatures + head verified; an
+  unpublished lock refuses). Remaining: the `design/network → pin → signed lock`
+  producer and the end-to-end `run typed flow → replay` wiring.
 - **`review.v1` / `confidence`** — absent; parked under SPEC-0017. Launch ships a
   minimal deterministic scorer + formalizer at the model boundary.
 - **Honest FBP note** — non-port networks still run on the legacy args model;

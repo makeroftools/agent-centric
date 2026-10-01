@@ -22,6 +22,8 @@ from agent_centric.cbp.registry_component import catalog_snapshot
 from agent_centric.cbp.resolver import ResolveError
 from agent_centric.cbp.shell_component import plan_delegation
 from agent_centric.cbp.signing import SignatureError
+from agent_centric.cbp.signing_service import sign_lock
+from agent_centric.cbp.transparency import TransparencyLog
 from agent_centric.contracts.component import (
     ChildRef,
     ComponentKind,
@@ -48,6 +50,10 @@ class _Acceptor:
 
 class _HashSigner:
     """Deterministic lock signer: signature = sha256(b'lock:' + payload)."""
+
+    @property
+    def key_id(self) -> str:
+        return "lock-test-key"
 
     def sign(self, payload: bytes) -> bytes:
         return hashlib.sha256(b"lock:" + payload).hexdigest().encode()
@@ -104,6 +110,9 @@ def _boot(
     lock_signature: str | None = None,
     lock_signer: _HashSigner | None = None,
     lock_verifier: _HashVerifier | None = None,
+    transparency: TransparencyLog | None = None,
+    expected_transparency_head: str | None = None,
+    publish_signer: _HashSigner | None = None,
 ) -> BootedTree:
     payload_files = payloads or {}
     bundles = {
@@ -124,6 +133,9 @@ def _boot(
     lock = ComponentsLock(root=root, entries=entries, harness_contracts=contracts)
     if lock_signer is not None:
         lock_signature = lock_signer.sign(lock.lock_hash().encode("utf-8")).decode("utf-8")
+    if publish_signer is not None and transparency is not None:
+        signed = sign_lock(lock, publish_signer)
+        transparency.append(signed.lock_hash, signed.key_id, signed.signature)
     return boot_from_lock(
         lock,
         source=_MemorySource(bundles),
@@ -136,6 +148,8 @@ def _boot(
         process_timeout=process_timeout,
         lock_signature=lock_signature,
         lock_verifier=lock_verifier,
+        transparency=transparency,
+        expected_transparency_head=expected_transparency_head,
     )
 
 
@@ -436,3 +450,47 @@ class TestLockSignature:
         wrong = _HashSigner().sign(b"some-other-lock").decode("utf-8")
         with pytest.raises(BootError):
             self._solo(tmp_path, lock_signature=wrong, lock_verifier=_HashVerifier())
+
+
+class TestTransparencyAtBoot:
+    """A boot may require the lock to be published in a verified log (Law 10)."""
+
+    def _solo(self, tmp_path: Path, **kwargs: object) -> BootedTree:
+        return _boot(
+            tmp_path,
+            "counter",
+            {"counter": _manifest("counter")},
+            allowlist=frozenset({_REGISTRY_ENTRY}),
+            **kwargs,  # type: ignore[arg-type]
+        )
+
+    def test_published_lock_boots(self, tmp_path: Path) -> None:
+        log = TransparencyLog(tmp_path / "log.jsonl")
+        tree = self._solo(
+            tmp_path,
+            transparency=log,
+            publish_signer=_HashSigner(),
+            lock_verifier=_HashVerifier(),
+        )
+        assert tree.lock_verified is True
+
+    def test_unpublished_lock_fails_closed(self, tmp_path: Path) -> None:
+        log = TransparencyLog(tmp_path / "log.jsonl")  # empty log
+        with pytest.raises(BootError):
+            self._solo(tmp_path, transparency=log, lock_verifier=_HashVerifier())
+
+    def test_transparency_without_verifier_fails_closed(self, tmp_path: Path) -> None:
+        log = TransparencyLog(tmp_path / "log.jsonl")
+        with pytest.raises(BootError):
+            self._solo(tmp_path, transparency=log, publish_signer=_HashSigner())
+
+    def test_expected_head_mismatch_fails_closed(self, tmp_path: Path) -> None:
+        log = TransparencyLog(tmp_path / "log.jsonl")
+        with pytest.raises(BootError):
+            self._solo(
+                tmp_path,
+                transparency=log,
+                publish_signer=_HashSigner(),
+                lock_verifier=_HashVerifier(),
+                expected_transparency_head="0" * 64,
+            )
