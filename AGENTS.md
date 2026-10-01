@@ -88,6 +88,13 @@ uv run agent-centric cbp-check        # deterministic readiness gate
 Run the test suite as the active level permits (the agent may run any tests); see
 [`.agents/skills/test-authority/SKILL.md`](.agents/skills/test-authority/SKILL.md).
 
+**Workspace IDE hygiene (Zed/basedpyright).** Zed launches basedpyright with cwd
+= the workspace root (`cbp/`), where it reads only the root `pyrightconfig.json`.
+The canonical config and `check-pyright.sh` live in
+[`tools/workspace/`](tools/workspace/README.md); run the check as part of every
+verification and keep the tray at **0 errors, 0 warnings, 0 notes** (fix causes,
+never suppress a real diagnostic).
+
 ## Branches
 
 `main` is the CBP line (history of the former `clean` branch).

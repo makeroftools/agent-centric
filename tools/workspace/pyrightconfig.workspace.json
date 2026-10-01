@@ -1,0 +1,45 @@
+// Workspace-root config for Zed's basedpyright (launched with cwd = cbp/).
+// basedpyright only reads the workspace-root config here, so this mirrors the
+// three repos' per-repo settings (core/src, conformance/certifier, infra/*).
+{
+  "include": [
+    "core/src",
+    "conformance/certifier",
+    "infra/agent",
+    "infra/tests",
+    "infra/tools"
+  ],
+  "exclude": [
+    "archive",
+    "old",
+    "scripts",
+    "cbp-rust",
+    "**/node_modules",
+    "**/.venv",
+    "**/__pycache__",
+    "**/.mypy_cache",
+    "**/.pytest_cache",
+    "**/.ruff_cache",
+    "core/tests",
+    "core/examples",
+    "core/specs",
+    "conformance/vectors",
+    "conformance/artifacts",
+    "infra/state",
+    "infra/publish",
+    "infra/hosts",
+    "infra/services"
+  ],
+  "venvPath": "core",
+  "venv": ".venv",
+  "extraPaths": [
+    "core/src",
+    "infra/agent",
+    "conformance/certifier"
+  ],
+  "pythonVersion": "3.13",
+  "typeCheckingMode": "basic",
+  "reportImplicitRelativeImport": "none",
+  "reportMissingTypeStubs": false,
+  "reportMissingImports": "error"
+}

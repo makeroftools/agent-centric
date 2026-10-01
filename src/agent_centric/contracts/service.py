@@ -397,15 +397,20 @@ class ServiceReport:
 
 
 def validate_service(
-    service: Service, *, required_tasks: tuple[str, ...] = (ServiceTask.APPLY, ServiceTask.HEALTH)
+    service: Service,
+    *,
+    required_tasks: tuple[str, ...] = (ServiceTask.APPLY, ServiceTask.HEALTH),
+    require_task_digests: bool = False,
 ) -> ServiceReport:
     """Validate a service manifest deterministically and fail-closed.
 
     Checks that the canonical task roles are bound, that every task is idempotent
     or explicitly gated, that no two tasks share a name, that the health
     descriptor references a declared health task, and that every reference is
-    pinned (the contract already enforces digests). It never raises on content —
-    a caller (the agent) surfaces the report and refuses to apply on ``not ok``.
+    pinned (the contract already enforces digests). When ``require_task_digests``
+    is set, every **mutating** task must also carry a content ``digest`` (the
+    pull/apply agent sets this true). It never raises on content — a caller (the
+    agent) surfaces the report and refuses on ``not ok``.
 
     Returns:
         A :class:`ServiceReport`; ``ok`` is true only when ``errors`` is empty.
@@ -427,6 +432,10 @@ def validate_service(
         if not task.idempotent and not task.gated:
             errors.append(
                 f"task {task.name!r} is not idempotent and is not explicitly gated"
+            )
+        if require_task_digests and task.mutating and not task.digest:
+            errors.append(
+                f"mutating task {task.name!r} declares no content digest"
             )
 
     if service.health is not None:

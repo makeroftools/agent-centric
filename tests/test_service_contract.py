@@ -259,3 +259,24 @@ class TestValidateService:
         report = validate_service(service)
         assert report.ok is False
         assert any("undeclared task" in error for error in report.errors)
+
+    def test_require_task_digests_refuses_unpinned_mutating_tasks(self) -> None:
+        report = validate_service(_service(), require_task_digests=True)
+        assert report.ok is False
+        assert any("content digest" in error for error in report.errors)
+
+    def test_require_task_digests_allows_pinned_mutating_tasks(self) -> None:
+        tasks = tuple(
+            TaskBinding(
+                name=task.name,
+                target=task.target,
+                mutating=task.mutating,
+                gated=task.gated,
+                digest="a" * 64 if task.mutating else "",
+            )
+            for task in _tasks()
+        )
+        assert validate_service(_service(tasks=tasks), require_task_digests=True).ok is True
+
+    def test_task_digests_are_optional_by_default(self) -> None:
+        assert validate_service(_service()).ok is True
