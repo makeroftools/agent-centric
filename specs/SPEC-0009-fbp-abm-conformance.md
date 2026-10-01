@@ -122,11 +122,21 @@ This spec states what that commits us to, where the current code is only
   per element, and a full bounded connection deterministically **suspends** the
   producer until a consumer drains it, with deadlocks and runaway sources failing
   closed.
+- **Slice 4 (delivered).** Named **typed ports** (`cbp/network.py`): a
+  component may declare a value type per named port (`port_types`, reusing the
+  hand-off type vocabulary: `str`/`int`/`float`/`bool`/`dict`/`list`/`null`/
+  `any`). Edge type compatibility and IIP values are validated fail-closed at
+  `validate()`, and both flow engines (`cbp/flow.py`, `cbp/stream.py`) enforce
+  the declared type on every Information Packet at run time. An absent type is
+  the wildcard `"any"`, so untyped networks are byte-for-byte unchanged
+  (serialization and content hash preserved). Tests:
+  `tests/test_cbp_typed_ports.py`.
 
 ## Acceptance criteria
 
-- [ ] `network.v1` exposes components with **named typed ports**; edges connect
-      **port → port**; a connection declares a **capacity**.
+- [x] `network.v1` exposes components with **named typed ports**; edges connect
+      **port → port**; a connection declares a **capacity**
+      (`cbp/network.py` `port_types`, `tests/test_cbp_typed_ports.py`).
 - [x] The compiler resolves a network to a **deterministic plan**; an identical
       document yields an identical plan and content hash (`content_hash()`).
 - [x] A composite declares **external ports**; a cross-boundary edge that does

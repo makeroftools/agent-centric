@@ -29,6 +29,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..contracts.handoff import is_known_type, types_compatible, value_matches_type
+
 # Hard default ceiling on the number of components a component network may
 # execute. A network larger than this fails closed before any work, so an edge
 # transport (ACP/MCP) or a UI cannot drive unbounded sequential runs through
@@ -65,6 +67,11 @@ class Component:
         ports: Declared named ports keyed by direction ("in"/"out"). When a
             direction is declared, every edge on that side must use a declared
             port name (fail-closed, SPEC-0009).
+        port_types: Optional value types for declared ports, keyed by direction
+            ("in"/"out") then port name. A typed port constrains the value
+            that may flow: edge type compatibility and IIP values are validated
+            fail-closed, and the flow engines enforce the type at run time
+            (SPEC-0009). An absent type is the untyped wildcard ``"any"``.
         external: For a composite, the external-port map: port name ->
             ``"inner_component.inner_port"``. A composite exposes **only** these
             ports across its boundary (SPEC-0009).
@@ -83,6 +90,7 @@ class Component:
     verifier: str | None = None
     child: str | None = None
     ports: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    port_types: dict[str, dict[str, str]] = field(default_factory=dict)
     stream: tuple[str, ...] = ()
     external: dict[str, str] = field(default_factory=dict)
     subnet: ComponentNetwork | None = None
@@ -156,6 +164,30 @@ class ComponentNetwork:
                     f"component {component.id!r}: {direction} ports must be unique "
                     "and non-empty"
                 )
+        for direction, typed in component.port_types.items():
+            if direction not in _PORT_DIRECTIONS:
+                raise NetworkError(
+                    f"component {component.id!r}: unknown port direction "
+                    f"{direction!r} in port_types"
+                )
+            declared = component.ports.get(direction, ())
+            for name, type_name in typed.items():
+                if not name:
+                    raise NetworkError(
+                        f"component {component.id!r}: typed port name must be "
+                        "non-empty"
+                    )
+                if name not in declared:
+                    raise NetworkError(
+                        f"component {component.id!r}: port type declared for "
+                        f"{name!r}, which is not a declared {direction}-port "
+                        "(fail-closed)"
+                    )
+                if not is_known_type(type_name):
+                    raise NetworkError(
+                        f"component {component.id!r}: port {name!r} has unknown "
+                        f"type {type_name!r} (fail-closed)"
+                    )
         self._components[component.id] = component
         return self
 
@@ -219,6 +251,16 @@ class ComponentNetwork:
                     f"{edge.target}.{edge.target_arg}: target {edge.target!r} "
                     f"declares no in-port {edge.target_arg!r}"
                 )
+            source_type = source.port_types.get("out", {}).get(
+                edge.source_field, "any"
+            )
+            target_type = target.port_types.get("in", {}).get(edge.target_arg, "any")
+            if not types_compatible(source_type, target_type):
+                raise NetworkError(
+                    f"edge {edge.source}.{edge.source_field} -> "
+                    f"{edge.target}.{edge.target_arg}: incompatible port types "
+                    f"{source_type!r} -> {target_type!r} (fail-closed)"
+                )
         seen_iips: set[tuple[str, str]] = set()
         for iip in self._iips:
             if iip.component not in self._components:
@@ -235,6 +277,14 @@ class ComponentNetwork:
             if iip.port not in in_ports:
                 raise NetworkError(
                     f"IIP target {iip.component!r} declares no in-port {iip.port!r}"
+                )
+            iip_type = self._components[iip.component].port_types.get(
+                "in", {}
+            ).get(iip.port, "any")
+            if not value_matches_type(iip.value, iip_type):
+                raise NetworkError(
+                    f"IIP for {iip.component}.{iip.port}: value does not match "
+                    f"the declared in-port type {iip_type!r} (fail-closed)"
                 )
         for edge in self._edges:
             if (edge.target, edge.target_arg) in seen_iips:
@@ -434,6 +484,16 @@ class ComponentNetwork:
                     "verifier": c.verifier,
                     "child": c.child,
                     "ports": {k: list(v) for k, v in sorted(c.ports.items())},
+                    **(
+                        {
+                            "port_types": {
+                                k: dict(sorted(v.items()))
+                                for k, v in sorted(c.port_types.items())
+                            }
+                        }
+                        if c.port_types
+                        else {}
+                    ),
                     "stream": list(c.stream),
                     "external": dict(sorted(c.external.items())),
                     "subnet": c.subnet.to_dict() if c.subnet is not None else None,
@@ -496,6 +556,16 @@ def network_from_dict(
             if not isinstance(names, list):
                 raise NetworkError("component port names must be a list")
             ports[str(direction)] = tuple(str(name) for name in names)
+        raw_port_types = c.get("port_types") or {}
+        if not isinstance(raw_port_types, dict):
+            raise NetworkError("component 'port_types' must be a mapping")
+        port_types: dict[str, dict[str, str]] = {}
+        for direction, typed in raw_port_types.items():
+            if not isinstance(typed, dict):
+                raise NetworkError("component 'port_types' entries must be mappings")
+            port_types[str(direction)] = {
+                str(name): str(type_name) for name, type_name in typed.items()
+            }
         raw_external = c.get("external") or {}
         if not isinstance(raw_external, dict):
             raise NetworkError("component 'external' must be a mapping")
@@ -516,6 +586,7 @@ def network_from_dict(
                 verifier=c.get("verifier"),
                 child=c.get("child"),
                 ports=ports,
+                port_types=port_types,
                 stream=tuple(str(s) for s in (c.get("stream") or [])),
                 external=external,
                 subnet=subnet,

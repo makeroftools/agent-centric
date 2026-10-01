@@ -27,6 +27,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from ..contracts.handoff import value_matches_type
 from .network import (
     _DEFAULT_STEP_LIMIT,
     MAX_CONNECTION_CAPACITY,
@@ -37,6 +38,23 @@ from .network import (
 
 class FlowError(NetworkError):
     """Information-Packet flow failed (fail-closed: overflow, deadlock, wiring)."""
+
+
+def effective_port_type(source_type: str, target_type: str) -> str:
+    """The concrete type a connection enforces: the specific side of ``"any"``."""
+    return target_type if source_type == "any" else source_type
+
+
+def check_ip(
+    value: Any, source_type: str, target_type: str, where: str
+) -> None:
+    """Fail closed if an IP violates the connection's declared port type."""
+    required = effective_port_type(source_type, target_type)
+    if not value_matches_type(value, required):
+        raise FlowError(
+            f"{where}: value does not match declared port type {required!r} "
+            "(fail-closed)"
+        )
 
 
 @dataclass(frozen=True)
@@ -232,6 +250,17 @@ def run_flow(
         for connection in sorted(outgoing.get(cid, []), key=lambda c: c.source_port):
             try:
                 value = _extract_output(response.value, connection.source_port, out_ports, cid)
+                source_type = component.port_types.get("out", {}).get(
+                    connection.source_port, "any"
+                )
+                target_type = components[connection.target].port_types.get(
+                    "in", {}
+                ).get(connection.target_port, "any")
+                check_ip(
+                    value, source_type, target_type,
+                    f"connection {cid}.{connection.source_port} -> "
+                    f"{connection.target}.{connection.target_port}",
+                )
                 connection.send(value)
             except FlowError as exc:
                 return {

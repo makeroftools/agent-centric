@@ -32,6 +32,31 @@ _TYPE_CHECKERS: dict[str, Any] = {
 }
 
 
+def is_known_type(type_name: str) -> bool:
+    """Return True if ``type_name`` is a known value type."""
+    return type_name in _TYPE_CHECKERS
+
+
+def types_compatible(source: str, target: str) -> bool:
+    """Return True if a source out-port type may feed a target in-port type.
+
+    Compatible when the types are equal or either is the wildcard ``"any"``.
+    Unknown type names are never compatible (fail-closed).
+    """
+    if source not in _TYPE_CHECKERS or target not in _TYPE_CHECKERS:
+        return False
+    return source == target or source == "any" or target == "any"
+
+
+def value_matches_type(value: Any, type_name: str) -> bool:
+    """Return True if ``value`` satisfies the declared ``type_name``.
+
+    An unknown type name matches nothing (fail-closed).
+    """
+    checker = _TYPE_CHECKERS.get(type_name)
+    return checker is not None and bool(checker(value))
+
+
 def is_valid_schema(schema: Any) -> bool:
     """Return True if ``schema`` is a well-formed hand-off schema."""
     if isinstance(schema, str):

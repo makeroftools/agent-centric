@@ -35,7 +35,13 @@ from collections import deque
 from collections.abc import Iterator
 from typing import Any
 
-from .flow import BoundedConnection, FlowError, _extract_output
+from ..contracts.handoff import value_matches_type
+from .flow import (
+    BoundedConnection,
+    FlowError,
+    _extract_output,
+    effective_port_type,
+)
 from .network import (
     _DEFAULT_STEP_LIMIT,
     MAX_CONNECTION_CAPACITY,
@@ -55,12 +61,12 @@ class _Emitter:
     """
 
     def __init__(
-        self, streams: list[tuple[list[BoundedConnection], Iterator[Any]]]
+        self, streams: list[tuple[list[tuple[BoundedConnection, str]], Iterator[Any]]]
     ) -> None:
-        self._streams: deque[tuple[list[BoundedConnection], Iterator[Any]]] = deque(
-            streams
-        )
-        self._pending: tuple[Any, deque[BoundedConnection]] | None = None
+        self._streams: deque[
+            tuple[list[tuple[BoundedConnection, str]], Iterator[Any]]
+        ] = deque(streams)
+        self._pending: tuple[Any, deque[tuple[BoundedConnection, str]]] | None = None
 
     @property
     def is_empty(self) -> bool:
@@ -76,9 +82,16 @@ class _Emitter:
             if self._pending is not None:
                 value, pending = self._pending
                 while pending:
-                    connection = pending[0]
+                    connection, required = pending[0]
                     if connection.is_full:
                         return "blocked"
+                    if not value_matches_type(value, required):
+                        raise FlowError(
+                            f"connection {connection.source}."
+                            f"{connection.source_port} -> {connection.target}."
+                            f"{connection.target_port}: value does not match "
+                            f"declared port type {required!r} (fail-closed)"
+                        )
                     connection.send(value)
                     pending.popleft()
                 self._pending = None
@@ -99,15 +112,29 @@ def _build_emitter(
     output: Any,
     component: Component,
     outgoing: dict[str, dict[str, list[BoundedConnection]]],
+    components: dict[str, Component],
 ) -> _Emitter:
     """Build the emitter for one activation's verified output (fail-closed)."""
     stream_ports = set(component.stream)
-    streams: list[tuple[list[BoundedConnection], Iterator[Any]]] = []
+    streams: list[tuple[list[tuple[BoundedConnection, str]], Iterator[Any]]] = []
     for port in sorted(outgoing.get(cid, {})):
         connections = sorted(
             outgoing[cid][port], key=lambda c: (c.target, c.target_port)
         )
         value = _extract_output(output, port, component.ports.get("out", ()), cid)
+        source_type = component.port_types.get("out", {}).get(port, "any")
+        outbound: list[tuple[BoundedConnection, str]] = [
+            (
+                connection,
+                effective_port_type(
+                    source_type,
+                    components[connection.target].port_types.get("in", {}).get(
+                        connection.target_port, "any"
+                    ),
+                ),
+            )
+            for connection in connections
+        ]
         if port in stream_ports:
             try:
                 iterator: Iterator[Any] = iter(value)
@@ -118,7 +145,7 @@ def _build_emitter(
                 ) from exc
         else:
             iterator = iter((value,))
-        streams.append((connections, iterator))
+        streams.append((outbound, iterator))
     return _Emitter(streams)
 
 
@@ -266,7 +293,9 @@ def run_stream(
                     "failed": result,
                 }
             try:
-                emitter = _build_emitter(cid, response.value, component, outgoing)
+                emitter = _build_emitter(
+                    cid, response.value, component, outgoing, components
+                )
             except FlowError as exc:
                 return fail(str(exc))
             if not emitter.is_empty:
@@ -289,7 +318,10 @@ def run_stream(
 
         stepped = False
         for cid in sorted(emitters, key=lambda c: (topo_index[c], c)):
-            status = emitters[cid].step()
+            try:
+                status = emitters[cid].step()
+            except FlowError as exc:
+                return fail(str(exc))
             if status == "blocked":
                 continue
             if status == "done":

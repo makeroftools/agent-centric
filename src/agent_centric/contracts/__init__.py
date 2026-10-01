@@ -29,7 +29,14 @@ from .component import (
 from .components_lock import LOCK_SCHEMA, ComponentsLock, LockEntry, LockError
 from .critical_path import CpmMetric, CpmVersion, CriticalPathResult, CriticalPathStage
 from .email import EmailList, EmailMessage, EmailVersion, MessageSummary
-from .handoff import HandoffSchema, is_valid_schema, validate_handoff
+from .handoff import (
+    HandoffSchema,
+    is_known_type,
+    is_valid_schema,
+    types_compatible,
+    validate_handoff,
+    value_matches_type,
+)
 from .intake import (
     AcceptResult,
     BillDraft,
@@ -98,8 +105,11 @@ __all__ = [
     "CriticalPathResult",
     "CriticalPathStage",
     "HandoffSchema",
+    "is_known_type",
     "is_valid_schema",
+    "types_compatible",
     "validate_handoff",
+    "value_matches_type",
     "ModelProvider",
     "ModelProviderError",
     "ModelProviderVersion",

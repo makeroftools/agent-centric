@@ -148,7 +148,12 @@ before acting.
     (`cbp/stream.py`: a full connection suspends the producer; a consumer
     re-activates per IP; deadlocks and runaway sources fail closed). Tests:
     `tests/test_cbp_ports.py`, `tests/test_cbp_flow.py`, `tests/test_cbp_iips.py`,
-    `tests/test_cbp_composite.py`, `tests/test_cbp_stream.py`.
+    `tests/test_cbp_composite.py`, `tests/test_cbp_stream.py`. slice 4 —
+    named **typed ports** (`port_types`, reusing the hand-off type vocabulary):
+    edge type compatibility and IIP values validate fail-closed, and both flow
+    engines enforce the declared type per IP at run time; an untyped port is
+    the wildcard `"any"` and serializes unchanged
+    (`tests/test_cbp_typed_ports.py`).
 - **Docs / presentation:** README showcase (SVG hero banner + mark, live badges,
   Mermaid diagrams); historical docs superseded by active docs were removed
   (`KERNEL.md`, `README_CBP.md`, `docs/CBP_HANDOFF.md`, `docs/DIRECTIVE.md`);
@@ -156,7 +161,10 @@ before acting.
 
 ## Validation (last full run)
 
-- `uv run pytest -o addopts="" -p no:cacheprovider` → **1367 passed**.
+- `uv run pytest -o addopts="" -p no:cacheprovider` → **1388 passed**.
+  (10 distribution/boot tests spawn temporary `git` repos and need the
+  operator's global `commit.gpgsign` agent; with it unavailable they fail for
+  the environment, not the change — they pass under `GIT_CONFIG_GLOBAL=/dev/null`.)
 - `uv run ruff check .` → clean.
 - `uv run mypy src` → clean (**117** source files).
 - `uv run agent-centric cbp-check` → **8/8**, READY.
@@ -172,12 +180,13 @@ before acting.
   delivered.
 - **Phase 0.5b remainder:** the live self-hosted mirror (Forgejo/Gitea); the
   signing service and transparency log are delivered.
-- **FBP/ABM conformance (SPEC-0009):** slices 1–3 delivered (named ports +
+- **FBP/ABM conformance (SPEC-0009):** slices 1–4 delivered (named ports +
   bounded connections; deterministic IP flow with fail-closed back-pressure and
   deadlock; first-class per-port IIP documents; the composite external-ports
-  boundary guard; repeated-activation streaming with producer suspension).
-  Remaining acceptance items: named *typed* ports; a test-enforced "no component
-  writes another's state"; and recorded/confidence-scored `model` components.
+  boundary guard; repeated-activation streaming with producer suspension; named
+  typed ports enforced statically and at run time). Remaining acceptance items:
+  a test-enforced "no component writes another's state"; and
+  recorded/confidence-scored `model` components.
 - **Extensibility (SPEC-0010, draft):** knowledge graphs (ontology as a versioned
   contract over a component-owned semantic graph; closed shapes for gates;
   pinned entailment closure) and bounded RSI (propose → review → sign → lock;
@@ -192,10 +201,10 @@ before acting.
   the lock stays generated, not committed.
 - **SPEC-0008 remainder:** the n8n adapter (import/export + canonical round-trip,
   fixture-tested) and the pin/record wiring (design -> signed lock -> boot).
-- **SPEC-0009 remainder:** slice 3 is delivered (IIP documents, composite
-  external-ports boundary guard, repeated-activation streaming). Remaining
-  acceptance items: named *typed* ports; a test-enforced state-sovereignty
-  guarantee; and recorded/confidence-scored `model` components.
+- **SPEC-0009 remainder:** slices 1–4 are delivered (through named typed ports,
+  enforced statically and at run time). Remaining acceptance items: a
+  test-enforced state-sovereignty guarantee; and recorded/confidence-scored
+  `model` components.
 - **SPEC-0010:** knowledge graphs and bounded RSI are target/roadmap; the isolated
   holdout validator (L3) is required before any self-improvement of verification.
 - **Honest FBP note:** non-port networks still run on the legacy args model;
