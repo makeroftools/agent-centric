@@ -136,7 +136,7 @@ workflow setting ⇄ envelope/grant — all validated against `design.v1`.
 | --- | --- | --- |
 | 0 | **delivered** | this spec; the wrapper/interface model; the compose-freeze-execute boundary and non-goals |
 | 1 | MVP | `design.v1` contract (`contracts/design.py`) + deterministic, fail-closed `validate`/`compile` (`cbp/design.py`); demo `examples/design_compile.py`; `tests/test_design.py` |
-| 2 | roadmap | n8n adapter import/export + canonical round-trip; fixture tests |
+| 2 | **delivered** | n8n adapter import/export + canonical round-trip (`cbp/n8n_adapter.py`); fixture tests `tests/test_n8n_adapter.py` + demo `examples/n8n_roundtrip.py` |
 | 3 | **delivered** | `pin`/`record` wiring: `cbp/lockfile.py` (`pin_design` + `ComponentPin`) resolves a design's requested refs to immutable commits and content-addressed bundles at pin time (deterministic, offline, fail-closed) and builds the lock; `record_release` signs + appends it; `tests/test_lockfile.py` + demo `examples/design_pin.py` |
 | 4 | declared-gated | live self-hosted n8n integration (needs operator infra) |
 
@@ -151,7 +151,7 @@ workflow setting ⇄ envelope/grant — all validated against `design.v1`.
 - [ ] `validate` also enforces envelope limits (with the runtime/pin phase).
 - [x] Pinning resolves refs to commits and never floats at run time
       (`cbp/lockfile.py`; the lock stores commits + `tree_sha256` only).
-- [ ] The n8n round-trip is stable (same canonical bytes) and tested with
+- [x] The n8n round-trip is stable (same canonical bytes) and tested with
       fixtures only — no network in CI.
 - [x] No execution path imports n8n; a design cannot introduce unsigned code
       (pinning refuses an unsigned component).
@@ -169,6 +169,18 @@ workflow setting ⇄ envelope/grant — all validated against `design.v1`.
   appends it to the transparency log; `boot_from_lock` boots the resulting tree.
   Proven by `tests/test_lockfile.py` (pin → record → boot end to end) and
   `examples/design_pin.py`.
+
+## Progress
+
+- **Phase 2 delivered.** `cbp/n8n_adapter.py` translates a `design.v1` ⇄ an n8n
+  workflow projection: nodes ⇄ components, connections ⇄ edges, edge/IIP
+  metadata on the target node, and design identity/metadata in `meta.cbp`. The
+  round-trip is lossless and stable (`from_n8n(to_n8n(d))` keeps `design_hash`;
+  `to_n8n(from_n8n(w))` reproduces the same bytes) and strictly fail-closed:
+  a non-projection workflow, an unknown node type or component/edge/IIP key, an
+  unsupported nested `subnet`, an inconsistent connection graph, or a broken
+  edge/IIP ordering refuses. n8n is never imported. Proven by
+  `tests/test_n8n_adapter.py` and `examples/n8n_roundtrip.py`.
 
 ## Risks / invariants
 

@@ -38,9 +38,9 @@ signing/distribution remainders** (§Next).
 cd core
 uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
-uv run mypy src                                       # -> 120 files, clean
+uv run mypy src                                       # -> 121 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1458 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1477 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -74,8 +74,8 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
   commit hash written in prose — it drifts. Read the live tips instead:**
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`.
-- Core gates: `ruff` clean; `mypy` clean (120 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1458 passed** (~63 s).
+- Core gates: `ruff` clean; `mypy` clean (121 files); `cbp-check` **READY (8/8)**;
+  convention + home-path guard passed; full suite **1477 passed** (~63 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -171,7 +171,7 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > **L1**; target L3 gated) -> `core/HANDOFF.md`, then the frozen plan
 > `core/specs/SPEC-0011` through `SPEC-0017`, and `conformance/AGENTS.md` +
 > `pro/AGENTS.md`. Confirm all three repos are on `main` and clean, then run the
-> verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1458
+> verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1477
 > passed**, shared suite **31/31** on Python + Rust, WASM suite **10/10**, network
 > suite **14/14**, appointed suite **8/8**). **Layers 0, 1a, 1b, 1c, signing, 2,
 > 3, and 4 are delivered**; the next steps are the signing/distribution
@@ -311,6 +311,12 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   explicit-time and fail-closed; every release records its `key_id`, and the
   transparency log verifies against the rotated ring. Proven by
   `tests/test_trust.py` + demo `examples/key_rotation.py`.
+- **n8n authoring adapter (SPEC-0008 Phase 2)** — `cbp/n8n_adapter.py` projects a
+  `design.v1` ⇄ an n8n workflow (**nodes** ⇄ components, **connections** ⇄ edges;
+  edge/IIP metadata on the target node). The round-trip is lossless and stable
+  (same `design_hash`; re-export reproduces the same canonical bytes) and
+  fail-closed on any unsupported/inconsistent input. Proven by
+  `tests/test_n8n_adapter.py` + demo `examples/n8n_roundtrip.py`.
 - **FBP/ABM conformance (SPEC-0009)** — named/typed ports, Information-Packet
   flow with fail-closed back-pressure/deadlock, per-port IIPs, composite
   external-ports boundary guard, repeated-activation streaming, per-component
@@ -345,9 +351,9 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **SPEC-0007** `accepted` — Phases 0/0.5a/1a/1b/2 delivered; 0.5b signing and
   **key rotation** delivered, **live mirror open**; no committed umbrella
   `components.lock`.
-- **SPEC-0008** `draft` — `design.v1` + validate/compile **and** the Phase 3
-  `pin`/`record` wiring (`cbp/lockfile.py`) delivered; n8n adapter and envelope
-  limits open.
+- **SPEC-0008** `draft` — `design.v1` + validate/compile, the Phase 3
+  `pin`/`record` wiring (`cbp/lockfile.py`), **and** the Phase 2 n8n adapter
+  (`cbp/n8n_adapter.py`) delivered; envelope limits open.
 - **SPEC-0009** `draft` — **8/9** built; only recorded/confidence-scored `model`
   components open. Status understates it.
 - **SPEC-0010** `draft` — roadmap only.
@@ -368,7 +374,8 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   (**done**) and the `design → pin → components.lock` producer is delivered
   (`cbp/lockfile.py`, SPEC-0008 Phase 3); remaining: commit the umbrella
   `components.lock` (needs the live mirror).
-- **SPEC-0008 remainder** — n8n adapter (import/export + canonical round-trip).
+- **SPEC-0008 remainder** — envelope limits enforced at validate (with the
+  runtime/pin phase).
 - **SPEC-0009 remainder** — recorded/confidence-scored `model` components.
 - **SPEC-0017 frontier** — formal semantics/ontology; reduction + formal
   verification; Universal Function Index; isolated validator (L3); bounded RSI;
@@ -429,7 +436,7 @@ yourself reaching for an in-place tool, stop and use `safe-replace`.
   `component_source.py`, `component_runtime.py`, `component_state.py`,
   `component_graph.py`, `component_boot.py`, `component_process.py`,
   `signing_service.py`, `transparency.py`, `trust.py`, `design.py`,
-  `lockfile.py`, `network.py`, `flow.py`,
+  `lockfile.py`, `n8n_adapter.py`, `network.py`, `flow.py`,
   `cache.py`, `resolver.py`, `signing.py`, `agent.py`); `src/agent_centric/contracts/`
   (`component.py`, `components_lock.py`, `design.py`); `specs/SPEC-0011`–`0017`;
   `examples/components/`; `tests/test_agent_conventions.py`.
