@@ -15,11 +15,13 @@ git repo); the work lives in three sibling repos:
 | [`../conformance/`](../conformance/AGENTS.md) | public | The shared contract: WIT ABI + conformance vectors + certifier. |
 | [`../pro/`](../pro/AGENTS.md) | private | The Rust host (optimization edition). |
 
-The most recent session delivered **Layers 0, 1a, and 1b** of the full-version
-plan (`SPEC-0011`): the frozen component ABI (`component-abi.v1`) and v1
-conformance vectors; a **Rust host certified cross-runtime-identical** to the
-Python reference host (shared suite **31/31**); and **content-addressed WASM
-execution** (WASM suite **4/4**). **Next is Layer 1c** (§Next).
+The most recent session delivered **Layers 0, 1a, 1b, and 1c** of the
+full-version plan (`SPEC-0011`): the frozen component ABI (`component-abi.v1`)
+and v1 conformance vectors; a **Rust host certified cross-runtime-identical** to
+the Python reference host (shared suite **31/31**); and **content-addressed WASM
+execution** (WASM suite **8/8**), including a full **`component-abi.v1` WASM
+guest** that announces its channels/tasks and exchanges Information Packets over
+the host-mediated transport. **Next is artifact signing/provenance** (§Next).
 
 ## Verify everything (do this before acting)
 
@@ -40,7 +42,7 @@ python3 certifier/certify.py --host-cmd "python3 certifier/reference_host.py"  #
 
 # pro (Rust host) ---------------------------------------------------------
 cd ../pro
-./scripts/certify.sh                                  # builds + certifies BOTH suites
+./scripts/certify.sh                                  # builds + certifies BOTH suites (31/31 + 8/8)
 cargo test --release                                  # codec tests: 4 passed
 ```
 
@@ -49,20 +51,24 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 
 ## Verified state (tips)
 
-- Tips at verification time — `core` **9660632** · `conformance` **1185f48** ·
-  `pro` **9d4dd30** — all clean, all pushed to `origin/main`. **These advance as
+- Tips at verification time — `core` **e931a0d** · `conformance` **77e6684** ·
+  `pro` **0546245** — all clean, all pushed to `origin/main`. **These advance as
   work continues: re-run the verification block rather than trusting the hashes.**
 - Core gates: `ruff` clean; `mypy` clean (117 files); `cbp-check` **READY**;
   convention + home-path guard passed; full suite **1400 passed** (~63 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
-  execution suite **4/4** on the Rust host.
-- ABI content address: `component-abi.v1`, `source_sha256`
-  `dc14bc473a02e0a150d1c8ad4d4706cead796a5f69bc94dbfe7b58a266c9ea6e`
+  execution suite **8/8** on the Rust host (a narrow task fixture plus a full
+  `component-abi.v1` guest).
+- ABI content address: `component-abi.v1` **revision 3**, `source_sha256`
+  `d8e0325d53789d1af631bae7638a5b8947606a2da00698d40452471316a3386e`
   (see `../conformance/contracts/ABI.lock.v1.json`, which also hashes
-  `ABI.md` via `abi_md_sha256`).
-- WASM fixture artifact: `../conformance/artifacts/identity.wasm`,
-  sha256 `7f798bfd0268fc18cfc19f631de883d010f2cb2514930602a06f4c19f161246e`.
+  `ABI.md` via `abi_md_sha256`). Revision 3 adds the additive data-plane
+  transport (`transport.send-on` / `receive-on`).
+- WASM fixture artifacts: `../conformance/artifacts/identity.wasm` (task world),
+  sha256 `7f798bfd0268fc18cfc19f631de883d010f2cb2514930602a06f4c19f161246e`; and
+  `../conformance/artifacts/abi-identity.wasm` (`component-abi.v1` guest),
+  sha256 `8ee5c8a4a68310c0be0a5b5fa9f9c4dabeb086f133df32be4aa5d9506033a157`.
 
 ## Pinned toolchain / TCB
 
@@ -126,12 +132,12 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > `core/specs/SPEC-0011` through `SPEC-0017`, and `conformance/AGENTS.md` +
 > `pro/AGENTS.md`. Confirm all three repos are on `main` and clean, then run the
 > verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1400
-> passed**, shared suite **31/31** on Python + Rust, WASM suite **4/4**).
-> **Layers 0, 1a, 1b are delivered**; the next step is **Layer 1c** — a full
-> `component-abi.v1` WASM guest — then artifact signing. Obey the hard laws:
-> whole-file replacement only via `tools/safe-replace.sh` (**never in-place
-> edits**), commit and push continuously, never `--no-verify`. Never act above L1
-> without the operator changing `.agentfactory.toml` first.
+> passed**, shared suite **31/31** on Python + Rust, WASM suite **8/8**).
+> **Layers 0, 1a, 1b, 1c are delivered**; the next step is **artifact
+> signing/provenance**, then Layer 2. Obey the hard laws: whole-file replacement
+> only via `tools/safe-replace.sh` (**never in-place edits**), commit and push
+> continuously, never `--no-verify`. Never act above L1 without the operator
+> changing `.agentfactory.toml` first.
 
 ## What Agent-centric is
 
@@ -183,7 +189,7 @@ subset. The Core public repo is a **Python reflection** that helps build it.
 | Layer | Target | Fallback | Status |
 | --- | --- | --- | --- |
 | 0 | Freeze **ABI + conformance vectors** | must not slip | **done** |
-| 1 | **Rust host** runs signed **WASM** components | **Python host**, same ABI | **1a/1b done**; signing pending |
+| 1 | **Rust host** runs signed **WASM** components | **Python host**, same ABI | **1a/1b/1c done**; signing pending |
 | 2 | **Content-addressed network** + typed enforcement + replayable trajectory | static `network.v1` | not started |
 | 3 | **Read-only web diagram** from the network document | static JSON/image | not started |
 | 4 | **Appointed** components (allowlisted) | static-only | not started |
@@ -214,11 +220,15 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   identical to the Python reference host. **Cross-runtime equivalence is proven.**
   Codecs: canonical JSON + pinned canonical MessagePack, strict
   re-encode-and-compare decoding.
-- **WASM execution (Layer 1b)** — `../pro/` (feature `wasm`, pinned `wasmtime`):
-  content-address an artifact, refuse a tampered one, compile it as a **WASM
-  component**, drive `init`/`run`/`kill`. Guest fixture source
-  `../pro/fixtures/identity/`; artifact `../conformance/artifacts/identity.wasm`;
-  WASM suite **4/4**.
+- **WASM execution (Layers 1b/1c)** — `../pro/` (feature `wasm`, pinned
+  `wasmtime`): content-address an artifact, refuse a tampered one, compile it as
+  a **WASM component**, drive `init`/`run`/`kill`. **1b**: narrow task fixture
+  (`../pro/fixtures/identity/` → `../conformance/artifacts/identity.wasm`).
+  **1c**: a full **`component-abi.v1` guest** (`../pro/fixtures/abi-identity/` →
+  `../conformance/artifacts/abi-identity.wasm`) that announces its channels/task
+  over the control channel and exchanges Information Packets via the host
+  `transport`; the host enforces announcements, `ready`, endpoint addressing,
+  declared types, canonical encodings, and the envelope. WASM suite **8/8**.
 - **Convention layer (SPEC-0001/0003/0004)** — `AGENTS.md` TOC, canonical skills
   (auto-discovered), `tools/new-skill.sh`, same-name component mapping, guarded by
   `tests/test_agent_conventions.py`.
@@ -241,9 +251,9 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 - **SPEC-0011** `accepted` — MVP definition frozen; testable acceptance +
   status-record correction remain.
-- **SPEC-0012 / SPEC-0013** `accepted` — **Layers 0/1a/1b delivered** (ABI,
-  vectors, certifier, Rust host 31/31, content-addressed WASM 4/4). A full
-  `component-abi.v1` WASM guest and artifact **signing** are open.
+- **SPEC-0012 / SPEC-0013** `accepted` — **Layers 0/1a/1b/1c delivered** (ABI
+  rev 3, vectors, certifier, Rust host 31/31, content-addressed WASM 8/8
+  including a full `component-abi.v1` guest). Artifact **signing** is open.
 - **SPEC-0014–0017** `draft` — frozen full-version plan; nothing built.
 - **SPEC-0002** `accepted` — Phase 1 not built (**0/6**): `review.v1` absent; no
   `Agent`→`Component` adapter; `_REGISTRY`/`_child_class_for` remain; no holdout
@@ -260,16 +270,11 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 ## Next
 
-- **Immediate: Layer 1c — a full `component-abi.v1` WASM guest.** A WASM
-  component that implements the real ABI world: `init(boot_config)`,
-  `run(event_loop)`, `kill()`; announces its channels/tasks over the initial
-  hard-coded channels via the imported `transport`; exchanges Information Packets
-  (decoding/encoding under the session encoding). The host provides the
-  `transport`/`capabilities` imports. Then extend the WASM suite to cover it.
-  (Layer 1b currently proves a narrow pure-task fixture world, not the ABI.)
-- **Artifact signing/provenance.** Ed25519/minisign verification over content
-  addressing (SPEC-0015): the host refuses an unsigned or bad-signature artifact;
-  vectors for accept/refuse.
+- **Immediate: artifact signing/provenance.** Ed25519/minisign verification over
+  content addressing (SPEC-0015): the host refuses an unsigned or bad-signature
+  artifact; vectors for accept/refuse. (Layer 1c is delivered: a full
+  `component-abi.v1` WASM guest runs on the Rust host, WASM suite 8/8; it
+  consumed the ABI, so `component-abi.v1` is now additive-only.)
 - **Layer 2** — content-addressed network execution, typed-contract enforcement,
   replayable trajectory.
 - **Distribution remainder** — wire the lock-level signature into
@@ -292,10 +297,12 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   minimal deterministic scorer + formalizer at the model boundary.
 - **Honest FBP note** — non-port networks still run on the legacy args model;
   port-declared networks use `run_flow`. Both are deterministic.
-- **The ABI is pre-consumption.** `component-abi.v1` is frozen but no real
-  `component-abi.v1` guest exists yet (Layer 1c); revisions so far were
-  pre-consumption corrections (encoding split, float policy). Once a guest
-  consumes it, changes are additive-only (`component-abi.v2` for anything else).
+- **The ABI is now consumed.** `component-abi.v1` (revision 3) is implemented
+  by a real `component-abi.v1` WASM guest (Layer 1c), so changes are
+  **additive-only** from here (`component-abi.v2` for anything else). The one
+  pre-consumption correction made at consumption was the data-plane transport
+  (`transport.send-on` / `receive-on`), which the frozen `send`/`receive`
+  (control channel only) could not express.
 
 ## How to work here (hard laws)
 
@@ -318,6 +325,10 @@ yourself reaching for an in-place tool, stop and use `safe-replace`.
 
 ## Key files
 
+- **conformance (1c)** — `artifacts/abi-identity.wasm`;
+  `vectors/wasm-{fixtures,suite,lock}.v1.json` (8 cases).
+- **pro (1c)** — `fixtures/abi-identity/` (WIT-referencing `component-abi.v1`
+  guest); `src/wasm.rs` (ABI bindgen + host mediator).
 - **core** — `src/agent_centric/cbp/` (`component_bundle.py`,
   `component_source.py`, `component_runtime.py`, `component_state.py`,
   `component_graph.py`, `component_boot.py`, `component_process.py`,
