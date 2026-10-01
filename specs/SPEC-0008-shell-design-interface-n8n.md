@@ -137,7 +137,7 @@ workflow setting ⇄ envelope/grant — all validated against `design.v1`.
 | 0 | **delivered** | this spec; the wrapper/interface model; the compose-freeze-execute boundary and non-goals |
 | 1 | MVP | `design.v1` contract (`contracts/design.py`) + deterministic, fail-closed `validate`/`compile` (`cbp/design.py`); demo `examples/design_compile.py`; `tests/test_design.py` |
 | 2 | roadmap | n8n adapter import/export + canonical round-trip; fixture tests |
-| 3 | roadmap | `pin`/`record` wiring: design → signed lock → boot |
+| 3 | **delivered** | `pin`/`record` wiring: `cbp/lockfile.py` (`pin_design` + `ComponentPin`) resolves a design's requested refs to immutable commits and content-addressed bundles at pin time (deterministic, offline, fail-closed) and builds the lock; `record_release` signs + appends it; `tests/test_lockfile.py` + demo `examples/design_pin.py` |
 | 4 | declared-gated | live self-hosted n8n integration (needs operator infra) |
 
 ## Acceptance criteria
@@ -149,11 +149,26 @@ workflow setting ⇄ envelope/grant — all validated against `design.v1`.
 - [x] An identical design compiles to the same `design_hash`; compilation is
       deterministic and offline.
 - [ ] `validate` also enforces envelope limits (with the runtime/pin phase).
-- [ ] Pinning resolves refs to commits and never floats at run time.
+- [x] Pinning resolves refs to commits and never floats at run time
+      (`cbp/lockfile.py`; the lock stores commits + `tree_sha256` only).
 - [ ] The n8n round-trip is stable (same canonical bytes) and tested with
       fixtures only — no network in CI.
-- [ ] No execution path imports n8n; a design cannot introduce unsigned code.
+- [x] No execution path imports n8n; a design cannot introduce unsigned code
+      (pinning refuses an unsigned component).
 - [x] The convention guard asserts this spec is recorded.
+
+## Progress
+
+- **Phase 3 delivered.** `cbp/lockfile.py` implements the design `pin` step:
+  requested refs are resolved to immutable commits and content-addressed bundles
+  **at pin time** (the SPEC-0007 tag rule), from an offline source per
+  component. Pinning is deterministic (name-sorted entries; the same design
+  yields the same `lock_hash`) and fail-closed: an invalid design, an unnamed
+  identity, an unsigned component, an unpinned contract, or an unresolvable ref
+  all refuse before a lock is produced. `record_release` signs the lock and
+  appends it to the transparency log; `boot_from_lock` boots the resulting tree.
+  Proven by `tests/test_lockfile.py` (pin → record → boot end to end) and
+  `examples/design_pin.py`.
 
 ## Risks / invariants
 
