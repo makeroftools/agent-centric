@@ -112,10 +112,13 @@ This spec states what that commits us to, where the current code is only
   **deadlock** — both fail closed, never hang; `args` act as **IIPs** for unwired
   inports. Port-declared networks auto-route through `run_flow` from `run_network`.
   Tests: `tests/test_cbp_flow.py`.
-- **Slice 3 (next).** Repeated-activation streaming (where back-pressure suspends
-  a producer), first-class per-port IIP documents, and the composite
-  **external-ports boundary guard** (needs the nested subnet body on the
-  component contract).
+- **Slice 3 (in progress).** First-class per-port **IIP documents** delivered:
+  `network.v1` carries explicit `iips` bound to named inports, content-hashed with
+  the network, validated fail-closed (duplicate / undeclared inport / unknown
+  target / IIP-plus-incoming-connection), and routed by `run_flow`. Tests:
+  `tests/test_cbp_iips.py`. Remaining: repeated-activation streaming (where
+  back-pressure suspends a producer) and the composite **external-ports boundary
+  guard** (needs the nested subnet body on the component contract).
 
 ## Acceptance criteria
 
@@ -130,8 +133,9 @@ This spec states what that commits us to, where the current code is only
 - [x] Bounded connections enforce capacity; a full connection applies
       **deterministic back-pressure**; a deterministic deadlock is an explicit,
       audited failure — never a hang (`cbp/flow.py`, `tests/test_cbp_flow.py`).
-- [x] IIPs parametrize input ports at network-definition time (component
-      `args`; first-class per-port IIP documents are slice 3).
+- [x] IIPs parametrize input ports at network-definition time: first-class
+      per-port IIP documents (`network.v1` `iips`, `tests/test_cbp_iips.py`), with
+      component `args` as the fallback template.
 - [ ] No component writes another's state; effects propagate as verified
       proposals (test-enforced).
 - [ ] `model` components are recorded and confidence-scored.
