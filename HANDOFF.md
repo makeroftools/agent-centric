@@ -4,8 +4,9 @@
 > contents; [`PRINCIPLES.md`](PRINCIPLES.md) is the constitution. This file is
 > the **current** session-continuity one-pager: it points, it does not restate.
 
-**Prepared for a new model session. Every claim below was verified at the tips in
-§"Verified state".** The workspace root is `cbp/` (a plain directory, **not** a
+**Prepared for a new model session. Every claim below was verified with the
+commands in §"Verify everything" — that block is authoritative; commit hashes in
+prose drift as work continues.** The workspace root is `cbp/` (a plain directory, **not** a
 git repo); the work lives in three sibling repos:
 
 | repo | visibility | role |
@@ -48,8 +49,9 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 
 ## Verified state (tips)
 
-- `core` **9660632** · `conformance` **1185f48** · `pro` **9d4dd30** — all clean,
-  all pushed to `origin/main`.
+- Tips at verification time — `core` **9660632** · `conformance` **1185f48** ·
+  `pro` **9d4dd30** — all clean, all pushed to `origin/main`. **These advance as
+  work continues: re-run the verification block rather than trusting the hashes.**
 - Core gates: `ruff` clean; `mypy` clean (117 files); `cbp-check` **READY**;
   convention + home-path guard passed; full suite **1400 passed** (~63 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
