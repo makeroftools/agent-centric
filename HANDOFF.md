@@ -28,8 +28,13 @@ hosts), plus **Layer 3** (a deterministic, content-addressed read-only network
 diagram) and **Layer 4** (**`appointed.v1`** — allowlisted appointed sources,
 admitted only through a host-configured source allowlist and a detached Ed25519
 signature, contained with zero capabilities (A0), recorded as a scoped Assurance
-Label — appointed suite **8/8** on both hosts). **Next are the
-signing/distribution remainders** (§Next).
+Label — appointed suite **8/8** on both hosts). The distribution spine is also
+advanced: the **`design → pin → components.lock` producer** (`cbp/lockfile.py`,
+SPEC-0008 Phase 3), **signing-key rotation** with overlapping trust windows
+(`cbp/trust.py`, SPEC-0007 §6), and the **n8n authoring adapter**
+(`cbp/n8n_adapter.py`, SPEC-0008 Phase 2, lossless `design.v1` ⇄ n8n round-trip)
+are delivered. **Next: the umbrella `components.lock`** (needs the live mirror),
+**envelope limits**, and **`model` components** (§Next).
 
 ## Verify everything (do this before acting)
 
@@ -174,8 +179,10 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1477
 > passed**, shared suite **31/31** on Python + Rust, WASM suite **10/10**, network
 > suite **14/14**, appointed suite **8/8**). **Layers 0, 1a, 1b, 1c, signing, 2,
-> 3, and 4 are delivered**; the next steps are the signing/distribution
-> remainders.
+> 3, and 4 are delivered**, along with the `design → pin → components.lock`
+> producer, signing-key rotation, and the n8n authoring adapter. The next steps
+> are the umbrella `components.lock` (needs the live mirror), envelope limits, and
+> `model` components.
 > Obey the hard laws: whole-file replacement
 > only via `tools/safe-replace.sh` (**never in-place edits**), commit and push
 > continuously, never `--no-verify`. Never act above L1 without the operator
@@ -360,23 +367,21 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 ## Next
 
-- **Immediate: the remainders below.** **Layer 4 is delivered** — `appointed.v1`
-  (allowlisted appointment, A0 containment, recorded label; **8/8**
-  cross-runtime).
-- **Signing remainder — key rotation delivered.** `cbp/trust.py` implements
-  overlapping trust windows: a retired key keeps verifying while only the current
-  key signs, every release records its `key_id`, and the transparency log
-  verifies against the rotated ring. (Also done: the lock-level signature and the
-  transparency log — chain, signatures, and head — are verified at boot; an
-  unpublished lock refuses. Layer 1c signing is delivered: Ed25519 over content
-  addressing, accept/refuse vectors.)
-- **Distribution remainder** — the lock-level signature is consumed at boot
-  (**done**) and the `design → pin → components.lock` producer is delivered
-  (`cbp/lockfile.py`, SPEC-0008 Phase 3); remaining: commit the umbrella
-  `components.lock` (needs the live mirror).
-- **SPEC-0008 remainder** — envelope limits enforced at validate (with the
-  runtime/pin phase).
-- **SPEC-0009 remainder** — recorded/confidence-scored `model` components.
+- **Immediate: commit the umbrella `components.lock`.** The distribution spine's
+  `design → pin → components.lock` producer is delivered (SPEC-0008 Phase 3), but
+  the umbrella lock needs a **live self-hosted mirror** (blocked — see Open
+  threads). Everything else on the spine is done: content-addressed cache,
+  deterministic resolver, minisign/gpg verification, git/directory sources,
+  deterministic bundle, boot-from-lock (with lock-level signature + transparency
+  log verification, fail-closed), **key rotation**, and the **`pin`/`record`**
+  wiring.
+- **SPEC-0008 remainder** — enforce envelope limits at `validate` (with the
+  runtime/pin phase). (`design.v1` validate/compile, `pin`/`record`, and the n8n
+  round-trip are delivered.)
+- **SPEC-0009 remainder** — recorded/confidence-scored `model` components (the
+  last of 9).
+- **Signing** — **key rotation delivered** (`cbp/trust.py`); optional threshold
+  signing remains.
 - **SPEC-0017 frontier** — formal semantics/ontology; reduction + formal
   verification; Universal Function Index; isolated validator (L3); bounded RSI;
   whitepaper last.
