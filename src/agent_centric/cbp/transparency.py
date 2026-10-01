@@ -158,10 +158,22 @@ class TransparencyLog:
         The existing chain is validated first, so a corrupt or tampered log is
         never extended. The write is ``fsync``\\ ed.
 
+        **Idempotent:** re-appending the record that is already the head is a
+        no-op returning that record, so a retried release never duplicates
+        evidence (Law 10: evidence is written once).
+
         Raises:
             TransparencyError: If the log is corrupt or the record is invalid.
         """
         entries = self.read()
+        if entries:
+            head = entries[-1]
+            if (
+                head.lock_hash == lock_hash
+                and head.key_id == key_id
+                and head.signature == signature
+            ):
+                return head
         entry = TransparencyEntry(
             seq=len(entries),
             prev=entries[-1].entry_hash() if entries else GENESIS,

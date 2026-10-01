@@ -494,3 +494,30 @@ class TestTransparencyAtBoot:
                 lock_verifier=_HashVerifier(),
                 expected_transparency_head="0" * 64,
             )
+
+
+class TestIdempotence:
+    """Booting the same lock twice is idempotent: identical tree, no side effects."""
+
+    def test_boot_is_idempotent(self, tmp_path: Path) -> None:
+        def boot() -> BootedTree:
+            return _boot(
+                tmp_path,
+                "counter",
+                {
+                    "counter": _manifest(
+                        "counter",
+                        state=StateDescriptor(kind="sqlite", path="state/counter.db"),
+                    )
+                },
+                allowlist=frozenset({_REGISTRY_ENTRY}),
+            )
+
+        first = boot()
+        second = boot()
+        assert first.lock_hash == second.lock_hash
+        assert [c.name for c in first.components] == [c.name for c in second.components]
+        assert [c.digest for c in first.components] == [c.digest for c in second.components]
+        assert [c.state_path for c in first.components] == [
+            c.state_path for c in second.components
+        ]

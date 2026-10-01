@@ -109,6 +109,14 @@ class TestTransparencyLog:
         with pytest.raises(TransparencyError):
             log.verify(_HashVerifier())
 
+    def test_append_is_idempotent_for_the_head(self, tmp_path: Path) -> None:
+        log = TransparencyLog(tmp_path / "transparency.jsonl")
+        signed = sign_lock(_lock("a"), _HashSigner())
+        first = log.append(signed.lock_hash, signed.key_id, signed.signature)
+        again = log.append(signed.lock_hash, signed.key_id, signed.signature)
+        assert first == again
+        assert len(log.read()) == 1
+
     def test_truncation_is_detected_via_expected_head(self, tmp_path: Path) -> None:
         path = tmp_path / "transparency.jsonl"
         log = TransparencyLog(path)

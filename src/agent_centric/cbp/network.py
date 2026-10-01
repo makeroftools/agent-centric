@@ -54,6 +54,16 @@ class NetworkError(ValueError):
     """A component network is invalid (fail-closed)."""
 
 
+def canonical_json_bytes(payload: Any) -> bytes:
+    """The canonical JSON bytes of ``payload`` (sorted keys, tight separators).
+
+    UTF-8 with non-ASCII escaped, so the content address is byte-identical
+    across locales/platforms. Shared by the network document and its diagram
+    projection, so both content-address the same way (one canonicalization).
+    """
+    return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
 @dataclass(frozen=True)
 class Component:
     """A single component (node) in the network.
@@ -522,10 +532,7 @@ class ComponentNetwork:
         Canonical and insertion-independent: the same graph always hashes the
         same. This is the value a composite freezes and registers (SPEC-0009).
         """
-        payload = json.dumps(
-            self.to_dict(), sort_keys=True, separators=(",", ":")
-        ).encode("utf-8")
-        return hashlib.sha256(payload).hexdigest()
+        return hashlib.sha256(canonical_json_bytes(self.to_dict())).hexdigest()
 
 
 def network_from_dict(

@@ -257,7 +257,9 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   content-addressed cache; deterministic resolver; minisign/gpg verification;
   offline directory + git sources; deterministic bundle; boot from lock (with
   lock-level signature verification, fail-closed); process isolation; signing
-  service + transparency log.
+  service + transparency log. Boot is **idempotent** (booting the same lock twice
+  yields an identical tree) and the transparency-log append is **idempotent for
+  its head** (a retried release never duplicates evidence).
 - **Shell design (SPEC-0008)** — `design.v1` + `validate_design`/`compile_design`.
 - **FBP/ABM conformance (SPEC-0009)** — named/typed ports, Information-Packet
   flow with fail-closed back-pressure/deadlock, per-port IIPs, composite

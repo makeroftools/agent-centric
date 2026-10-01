@@ -22,11 +22,10 @@ and a report can attach.
 from __future__ import annotations
 
 import hashlib
-import json
 from typing import Any
 from xml.sax.saxutils import escape, quoteattr
 
-from .network import ComponentNetwork
+from .network import ComponentNetwork, NetworkError, canonical_json_bytes
 
 # Layout constants (deterministic; changing them changes every diagram, so they
 # are part of the projection and are recorded in the diagram's content hash).
@@ -36,21 +35,21 @@ RANK_GAP = 232
 ROW_GAP = 100
 MARGIN = 40
 
-
-def _canonical(payload: dict[str, Any]) -> bytes:
-    return json.dumps(
-        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    ).encode("utf-8")
+# Fail-closed ceiling on the diagram size: a network larger than this is refused
+# before any layout work, so a projection cannot be driven into unbounded memory.
+MAX_DIAGRAM_NODES = 512
 
 
 def _ranks(network: ComponentNetwork) -> dict[str, int]:
-    """Longest-path rank per component (roots are rank 0). Deterministic."""
+    """Longest-path rank per component (roots are rank 0). O(V + E), deterministic."""
     order = network.topological_order()
     rank: dict[str, int] = {cid: 0 for cid in order}
+    adjacency: dict[str, list[str]] = {cid: [] for cid in order}
+    for edge in network.edges():
+        adjacency[edge.source].append(edge.target)
     for cid in order:
-        for edge in network.edges():
-            if edge.source == cid:
-                rank[edge.target] = max(rank[edge.target], rank[cid] + 1)
+        for target in adjacency[cid]:
+            rank[target] = max(rank[target], rank[cid] + 1)
     return rank
 
 
@@ -118,6 +117,12 @@ def build_diagram(network: ComponentNetwork) -> dict[str, Any]:
     IIP, …) is rejected by ``validate`` before any diagram is produced.
     """
     network.validate()
+    component_count = len(network.components())
+    if component_count > MAX_DIAGRAM_NODES:
+        raise NetworkError(
+            f"network has {component_count} components, exceeding the diagram "
+            f"limit {MAX_DIAGRAM_NODES} (fail-closed)"
+        )
     nodes, columns, rows = _layout(network)
     positions = {node["id"]: node for node in nodes}
     body: dict[str, Any] = {
@@ -133,14 +138,14 @@ def build_diagram(network: ComponentNetwork) -> dict[str, Any]:
         ],
     }
     diagram = dict(body)
-    diagram["content_hash"] = hashlib.sha256(_canonical(body)).hexdigest()
+    diagram["content_hash"] = hashlib.sha256(canonical_json_bytes(body)).hexdigest()
     return diagram
 
 
 def diagram_content_hash(diagram: dict[str, Any]) -> str:
     """Recompute the diagram's content hash (canonical body, minus ``content_hash``)."""
     body = {k: v for k, v in diagram.items() if k != "content_hash"}
-    return hashlib.sha256(_canonical(body)).hexdigest()
+    return hashlib.sha256(canonical_json_bytes(body)).hexdigest()
 
 
 def _svg_size(diagram: dict[str, Any]) -> tuple[int, int]:

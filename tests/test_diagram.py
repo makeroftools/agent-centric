@@ -12,6 +12,7 @@ import json
 import pytest
 
 from agent_centric.cbp.diagram import (
+    MAX_DIAGRAM_NODES,
     build_diagram,
     diagram_content_hash,
     render_html,
@@ -95,6 +96,14 @@ class TestFailClosed:
         net = ComponentNetwork()
         net.add_component(_stage("b", "double"))
         net.add_edge(Edge(source="ghost", source_field="y", target="b", target_arg="x"))
+        with pytest.raises(NetworkError):
+            build_diagram(net)
+
+
+    def test_oversized_network_is_rejected(self) -> None:
+        net = ComponentNetwork()
+        for i in range(MAX_DIAGRAM_NODES + 1):
+            net.add_component(Component(id=f"n{i:05d}", task="double"))
         with pytest.raises(NetworkError):
             build_diagram(net)
 
