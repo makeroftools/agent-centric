@@ -9,12 +9,13 @@
 `main`; `main` is the only branch and is pushed to `origin`. The most recent work
 is the **MVP planning session** that froze the **full-version plan** and wrote
 specs **SPEC-0012–SPEC-0017** (component ABI, cross-runtime conformance, network
-trust, provenance/Assurance Labels, editions, parked frontier). **Layers 0 and
-1a are delivered**: the component ABI (`component-abi.v1`) and the v1
-conformance vectors are frozen in `../conformance/`, and the certifier passes
+trust, provenance/Assurance Labels, editions, parked frontier). **Layers 0, 1a,
+and 1b are delivered**: the component ABI (`component-abi.v1`) and the v1
+conformance vectors are frozen in `../conformance/`; the certifier passes
 **31/31** on both the Python reference host and the Rust host (`../pro/`,
-`cbp-host`). The next step is **Layer 1b** (signed WASM component execution over
-the same ABI). Run the fresh-session checklist before acting.
+`cbp-host`), and the Rust host executes **content-addressed WASM components**
+(WASM suite **4/4**). The next step is **Layer 1c** (a full `component-abi.v1`
+WASM guest). Run the fresh-session checklist before acting.
 
 ## Read first (in order)
 
@@ -78,9 +79,9 @@ the same ABI). Run the fresh-session checklist before acting.
 > frozen plan `specs/SPEC-0011` through `specs/SPEC-0017`. Confirm `main` and a
 > clean tree, run `uv sync --extra dev` once, then run `uv run ruff check .`, `uv run mypy src`,
 > `uv run agent-centric cbp-check`, and the suite
-> `uv run pytest -o addopts="" -p no:cacheprovider`. **Layers 0 and 1a are
-> delivered** (frozen ABI + v1 vectors; Python and Rust hosts certified 31/31);
-> begin **Layer 1b**: signed WASM component execution over the same ABI. Obey the hard laws: whole-file replacement only
+> `uv run pytest -o addopts="" -p no:cacheprovider`. **Layers 0, 1a, and 1b
+> are delivered** (frozen ABI + v1 vectors; Python and Rust hosts certified 31/31;
+> the Rust host executes content-addressed WASM, 4/4). Obey the hard laws: whole-file replacement only
 > via `tools/safe-replace.sh` (never in-place edits), commit and push
 > continuously, never `--no-verify`. Never act above L1 without the operator
 > changing `.agentfactory.toml` first.
@@ -161,6 +162,10 @@ blank-component → dynamic task load protocol (bind timing), hardened at Layer 
 - **Rust host (Layer 1a):** `../pro/` builds `cbp-host`, which implements the ABI
   and the `cbp.conformance-host.v1` protocol and passes the vectors **31/31** —
   the same as the Python reference host. Cross-runtime equivalence is proven.
+- **WASM execution (Layer 1b):** `../pro/` executes a real **content-addressed
+  WASM component** (feature `wasm`, pinned `wasmtime`), refusing a tampered
+  artifact; the WASM suite (`../conformance/vectors/wasm-suite.v1.json`) passes
+  **4/4**.
 - **Convention layer** (SPEC-0001/0003/0004): `AGENTS.md` TOC, canonical skills
   (auto-discovered), scaffold `tools/new-skill.sh`, same-name component mapping,
   guarded by `tests/test_agent_conventions.py`.
@@ -194,10 +199,10 @@ is approved**, not built.
 
 - **SPEC-0011** `accepted` — MVP definition frozen; checkboxes for testable
   acceptance and the status-record correction remain.
-- **SPEC-0012 / SPEC-0013** `accepted` — **Layers 0 and 1a delivered**: the frozen
-  ABI (`contracts/`) and the vectors + certifier (`vectors/`, `certifier/`), plus
-  the Rust host (`../pro/`) certified 31/31. WIT-generated WASM components and a
-  signed runtime (Layer 1b) are open.
+- **SPEC-0012 / SPEC-0013** `accepted` — **Layers 0/1a/1b delivered**: the frozen
+  ABI (`contracts/`), the vectors + certifier (`vectors/`, `certifier/`), the
+  Rust host (`../pro/`) certified 31/31, and content-addressed WASM execution
+  (WASM suite 4/4). A full `component-abi.v1` WASM guest and signing are open.
 - **SPEC-0014–0017** `draft` — the frozen full-version plan; nothing built.
 - **SPEC-0002** `accepted` — Phase 1 not built (**0/6**): `review.v1` absent; no
   `Agent`→`Component` adapter; `_REGISTRY`/`_child_class_for` remain; no holdout
@@ -214,9 +219,10 @@ is approved**, not built.
 
 ## Next (candidate — not started)
 
-- **Immediate: Layer 1b** — **signed WASM component execution** over the frozen ABI,
-  with a pinned `wasmtime` as the TCB runtime, certified by the same vectors.
-  (Layers 0 and 1a are done: the Rust and Python hosts pass 31/31.)
+- **Immediate: Layer 1c** — a full `component-abi.v1` **WASM guest** (channel/task
+  announcements and Information Packets over the transport), so any-language ABI
+  components run on the host; then artifact signing/provenance. (Layers 0/1a/1b
+  are done.)
 - **Layer 2** — content-addressed network execution, typed-contract enforcement,
   replayable trajectory.
 - **Layer 3** — read-only web diagram from the network document.

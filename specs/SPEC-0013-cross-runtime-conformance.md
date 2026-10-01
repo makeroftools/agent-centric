@@ -107,7 +107,12 @@ A dialed-up foreign runtime is **part of the TCB**. Therefore:
   and pinned-canonical `msgpack` bytes, cross-encoding equivalence, and strict
   rejection of non-canonical input. The Rust host (`../pro`, `cbp-host`) passes
   the same suite **31/31**, so cross-runtime equivalence (Python reflection vs
-  Rust core) is now proven. Signing the runtime is Layer 1b.
+  Rust core) is now proven. Layer 1b added content-addressed WASM execution
+  (`../pro`, feature `wasm`): after verifying an artifact's bytes against the
+  declared sha256 (refusing a tampered artifact), the host compiles it as a WASM
+  component and drives `init`/`run`/`kill`; the WASM suite
+  (`conformance/vectors/wasm-suite.v1.json`) passes **4/4**. A full
+  `component-abi.v1` WASM guest and artifact signing are open (Layer 1c).
 
 ## Risks / invariants
 
