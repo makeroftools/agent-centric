@@ -217,11 +217,17 @@ A0 sandbox backend** and a `component.v1 ⇄ sandbox-package` adapter. They are
 
 ## Acceptance criteria
 
+> **Phase 1 status (authored, locally verified; nothing provisioned).** The
+> callable/task model and the additive `service.v1` contract are delivered and
+> tested (additive contract + offline suite in the private `infra/` repo);
+> provisioning/enrollment, OpenBao-backed secrets, the end-to-end release, and
+> the live DR drill remain operator-gated.
+
 - [ ] The layered model, the **bootstrap set**, and its **graduation** to managed
       components are stated and testable.
-- [ ] Every operational task is a **named, idempotent, fail-closed callable or
+- [x] Every operational task is a **named, idempotent, fail-closed callable or
       executable script**; a non-idempotent task is explicitly gated.
-- [ ] `service.v1` is defined (additive) as a signed, content-addressed
+- [x] `service.v1` is defined (additive) as a signed, content-addressed
       host-state manifest with **no floating references**, and is verified before
       apply.
 - [ ] A host is provisioned from a **pinned** host definition and reaches

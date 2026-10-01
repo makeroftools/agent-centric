@@ -282,6 +282,20 @@ class TestEnforcement:
         for token in ("ruff", "mypy", "cbp-check", "pytest"):
             assert token in ci, f"CI does not run {token}"
 
+    def test_component_ci_stays_hermetic(self) -> None:
+        # SPEC-0018 §11: the component CI is network-free (no secrets, cloning,
+        # containers, or Nix). The private infra CI is a separate pipeline.
+        ci = _read(".github/workflows/gates.yml")
+        for token in ("secrets.", "git clone", "docker", "nix "):
+            assert token not in ci, f"component CI must stay hermetic; found {token!r}"
+
+    def test_spec_narrows_the_ci_non_goal(self) -> None:
+        spec = _read(
+            "specs/SPEC-0018-service-host-provisioning-and-continuous-deployment.md"
+        )
+        assert "component CI stays hermetic" in spec
+        assert "has its own CI that may use the network" in spec
+
     def test_version_control_law_and_hooks_are_enforced(self) -> None:
         assert "COMMIT AND PUSH CONTINUOUSLY" in _read("PRINCIPLES.md")
         hooks = _read(".pre-commit-config.yaml")

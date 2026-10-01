@@ -103,7 +103,9 @@ forbids their return.
 - New agents, ACP features, refactors, or dependency bumps.
 - Auto-accept / unsupervised filing or committing of money.
 - SMTP / send / delete / move email; email→draft stays read-only.
-- Cloud OCR, cloud APIs, or any network in CI.
+- Cloud OCR, cloud APIs, or any network in the **component** CI. (SPEC-0018 §11
+  narrows this: the private `infra/` repo has its own CI that may use the network
+  — lint/plan → build → sign → publish — and never runs in this repo's gates.)
 - Changing Manager orchestration, verification, policy, envelope, or accounting
   semantics (prefer adapters/backends over core changes).
 - Bypassing pre-commit hooks or CI (never `--no-verify`); fix the cause instead.
