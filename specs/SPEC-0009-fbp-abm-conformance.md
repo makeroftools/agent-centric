@@ -131,6 +131,13 @@ This spec states what that commits us to, where the current code is only
   the wildcard `"any"`, so untyped networks are byte-for-byte unchanged
   (serialization and content hash preserved). Tests:
   `tests/test_cbp_typed_ports.py`.
+- **Slice 5 (delivered).** **Component state sovereignty**
+  (`cbp/component_state.py`): a `StateScope` binds a component to exactly one
+  namespace under the shared state root and refuses any descriptor or path
+  that escapes it, fail-closed. Boot materializes every declared state through
+  its scope, so two components can never resolve to the same file — a child
+  owns its own state and siblings never write each other. Tests:
+  `tests/test_component_sovereignty.py`.
 
 ## Acceptance criteria
 
@@ -150,8 +157,10 @@ This spec states what that commits us to, where the current code is only
 - [x] IIPs parametrize input ports at network-definition time: first-class
       per-port IIP documents (`network.v1` `iips`, `tests/test_cbp_iips.py`), with
       component `args` as the fallback template.
-- [ ] No component writes another's state; effects propagate as verified
-      proposals (test-enforced).
+- [x] No component writes another's state; effects propagate as verified
+      proposals (test-enforced) — `StateScope` mediates per-component
+      namespaced state and boot wires through it
+      (`tests/test_component_sovereignty.py`).
 - [ ] `model` components are recorded and confidence-scored.
 - [ ] The convention guard records this spec; no `src/` semantics change lands
       before its acceptance criteria are implemented and green.

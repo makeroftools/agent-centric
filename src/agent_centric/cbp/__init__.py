@@ -104,6 +104,8 @@ from .component_source import (
 )
 from .component_state import (
     StateError,
+    StateScope,
+    StateSovereigntyError,
     check_integrity,
     connect_state,
     materialize_state,
@@ -502,6 +504,8 @@ __all__ = [
     "ResolvedChild",
     "ResolvedNode",
     "StateError",
+    "StateScope",
+    "StateSovereigntyError",
     "check_integrity",
     "connect_state",
     "materialize_state",

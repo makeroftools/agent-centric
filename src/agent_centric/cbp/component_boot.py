@@ -45,7 +45,7 @@ from .cache import ContentAddressedCache
 from .component_graph import ComponentGraphResolver, ResolvedNode
 from .component_process import DEFAULT_TIMEOUT_SECONDS, run_component
 from .component_runtime import AllowlistedEntryResolver, EntryNotAllowed
-from .component_state import materialize_state
+from .component_state import StateScope
 from .resolver import ComponentSource, ResolveError, Resolver
 from .signing import SignatureVerifier
 
@@ -154,7 +154,7 @@ def boot_from_lock(
         _check_conformance(node, supported)
         manifest = node.manifest
         state_file = (
-            materialize_state(manifest.state, Path(state_root) / node.name)
+            StateScope(Path(state_root), node.name).materialize(manifest.state)
             if manifest.state is not None
             else None
         )

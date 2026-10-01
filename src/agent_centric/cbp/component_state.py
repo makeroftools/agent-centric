@@ -30,6 +30,7 @@ from __future__ import annotations
 import contextlib
 import os
 import sqlite3
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from ..contracts.component import StateDescriptor
@@ -37,6 +38,10 @@ from ..contracts.component import StateDescriptor
 
 class StateError(Exception):
     """A component's state could not be materialized or verified (fail-closed)."""
+
+
+class StateSovereigntyError(StateError):
+    """A component attempted to reach state outside its own namespace."""
 
 
 def state_path(descriptor: StateDescriptor, root: str | Path) -> Path:
@@ -142,6 +147,68 @@ def connect_state(
     conn = sqlite3.connect(target)
     conn.execute("PRAGMA journal_mode=WAL")
     return conn
+
+
+@dataclass(frozen=True)
+class StateScope:
+    """A component's exclusive, namespaced view of the shared state root.
+
+    Each component owns exactly one namespace (``root/<owner>``). The scope is
+    the sanctioned way to reach a component's state: it binds the owner once and
+    refuses any descriptor or path that would escape that namespace, fail-closed.
+    Two distinct owners can therefore never resolve to the same state file — the
+    structural form of the ABM sovereignty invariant (a child owns its own state;
+    siblings never write each other; effects propagate as verified proposals).
+    """
+
+    root: Path
+    owner: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "root", Path(self.root))
+        if (
+            not self.owner
+            or self.owner in (".", "..")
+            or "/" in self.owner
+            or "\\" in self.owner
+            or PurePosixPath(self.owner).is_absolute()
+        ):
+            raise StateSovereigntyError(
+                f"unsafe component owner {self.owner!r} for a state scope"
+            )
+
+    @property
+    def namespace(self) -> Path:
+        """The directory owned exclusively by this component."""
+        return self.root / self.owner
+
+    def owns(self, path: str | Path) -> bool:
+        """True iff ``path`` resolves inside this scope's namespace."""
+        target = Path(path).resolve()
+        namespace = self.namespace.resolve()
+        return target == namespace or namespace in target.parents
+
+    def assert_owns(self, path: str | Path) -> None:
+        """Refuse a path outside this scope's namespace (fail-closed)."""
+        if not self.owns(path):
+            raise StateSovereigntyError(
+                f"component {self.owner!r} may not reach state {path!r} "
+                "outside its own namespace (fail-closed)"
+            )
+
+    def path(self, descriptor: StateDescriptor) -> Path:
+        """Resolve the component's own state file under its namespace."""
+        return state_path(descriptor, self.namespace)
+
+    def materialize(self, descriptor: StateDescriptor) -> Path:
+        """Materialize the component's own state (atomic, verified)."""
+        return materialize_state(descriptor, self.namespace)
+
+    def connect(
+        self, descriptor: StateDescriptor, *, read_only: bool = False
+    ) -> sqlite3.Connection:
+        """Open only this component's own state connection."""
+        return connect_state(descriptor, self.namespace, read_only=read_only)
 
 
 def _fsync_dir(path: Path) -> None:
