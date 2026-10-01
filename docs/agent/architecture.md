@@ -121,6 +121,17 @@ out-of-process adapter and never enters the local-first run path.
 
 See [`specs/SPEC-0008-shell-design-interface-n8n.md`](../../specs/SPEC-0008-shell-design-interface-n8n.md).
 
+## Extensibility (SPEC-0010, draft)
+
+Three graphs stay distinct: the **process graph** (`network.v1`, execution), the
+**semantic graph** (knowledge), and the **design graph** (`design.v1`). An
+ontology is a versioned contract over a component-owned semantic graph;
+open-world inference may aid, but gates accept only **closed shapes over a pinned
+entailment closure**. Recursive self-improvement is **bounded**: it proposes;
+review + signature + lock promote; it may not touch verification.
+
+See [`specs/SPEC-0010-extensibility-knowledge-graphs-rsi.md`](../../specs/SPEC-0010-extensibility-knowledge-graphs-rsi.md).
+
 ## Boundaries (non-negotiable)
 
 - **Run time is local-first**; distribution happens only at **acquisition time**,

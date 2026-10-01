@@ -330,6 +330,10 @@ class TestSpecs:
         spec = REPO_ROOT / "specs" / "SPEC-0009-fbp-abm-conformance.md"
         assert spec.is_file()
 
+    def test_extensibility_spec_is_recorded(self) -> None:
+        spec = REPO_ROOT / "specs" / "SPEC-0010-extensibility-knowledge-graphs-rsi.md"
+        assert spec.is_file()
+
 
 class TestNoStaleLabels:
     """Guard the FBP -> CBP cut-over and the branch retirements (no drift).
