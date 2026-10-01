@@ -367,17 +367,25 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **SPEC-0009** `draft` — **9/9** built: recorded, confidence-scored `model`
   components delivered (`cbp/model_record.py`); spec status understates it.
 - **SPEC-0010** `draft` — roadmap only.
+- **SPEC-0018** `draft` — service-host provisioning + continuous deployment
+  (verify-then-apply; self-hosted Gitea first). Public origin-agnostic spec in
+  `specs/SPEC-0018-service-host-provisioning-and-continuous-deployment.md`; the
+  private instantiation lives in the new `../infra/` repo
+  (`makeroftools/cbp-infra`). Phase 0 only; nothing provisioned yet.
 
 ## Next
 
-- **Immediate: commit the umbrella `components.lock`.** The distribution spine's
-  `design → pin → components.lock` producer is delivered (SPEC-0008 Phase 3), but
-  the umbrella lock needs a **live self-hosted mirror** (blocked — see Open
-  threads). Everything else on the spine is done: content-addressed cache,
-  deterministic resolver, minisign/gpg verification, git/directory sources,
-  deterministic bundle, boot-from-lock (with lock-level signature + transparency
-  log verification, fail-closed), **key rotation**, and the **`pin`/`record`**
-  wiring.
+- **Commit the umbrella `components.lock`.** The `design → pin → components.lock`
+  producer is delivered (SPEC-0008 Phase 3). Per SPEC-0011/0016 the **Core**
+  umbrella lock is **offline directory + local signing** and does **not** need the
+  live mirror; commit a public lock only if every origin is public. Everything
+  else on the spine is done: content-addressed cache, deterministic resolver,
+  minisign/gpg verification, git/directory sources, deterministic bundle,
+  boot-from-lock (with lock-level signature + transparency log verification,
+  fail-closed), **key rotation**, and the **`pin`/`record`** wiring.
+- **SPEC-0018 (draft): service-host provisioning + CD** — public spec in
+  `specs/`; private instantiation in `../infra/`. Phase 1: bootstrap the intranet
+  host (native Gitea + OpenBao + pull/apply agent) under verify-then-apply.
 - **Signing** — **key rotation delivered** (`cbp/trust.py`); optional threshold
   signing remains.
 - **SPEC-0017 frontier** — formal semantics/ontology; reduction + formal
@@ -386,8 +394,9 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 ## Open threads (blockers & honest gaps)
 
-- **Live self-hosted mirror** (Forgejo/Gitea) — needed for a committed umbrella
-  `components.lock`; no real pinned remotes yet.
+- **Live self-hosted mirror** (Gitea) — no real pinned remotes yet. Now tracked by
+  **SPEC-0018** (`specs/`) + the private `../infra/` repo; Core's umbrella lock
+  is offline-signed (SPEC-0011) and no longer depends on it.
 - **Integration spine** — the offline primitives exist; the **lock-level
   signature is now consumed at boot** (`boot_from_lock` verifies a detached
   signature over `lock_hash` before resolving anything, and records
