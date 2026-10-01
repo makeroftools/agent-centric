@@ -7,9 +7,12 @@
 
 **Prepared for a new model session.** Facts below are current as of the tip of
 `main`; `main` is the only branch and is pushed to `origin`. The most recent work
-is the SPEC-0009 FBP slices (named ports + deterministic Information-Packet flow);
-see `git log -1` and *Where we are (delivered)*. Run the fresh-session checklist
-before acting.
+is the SPEC-0009 FBP/ABM conformance slices (1–6: named ports, Information-Packet
+flow, typed ports, state sovereignty, a component at rest); see `git log -1` and
+*Where we are (delivered)*. The immediate next step is the **MVP planning
+session** — its settled decisions and open agenda are in
+*[`specs/SPEC-0011-minimum-viable-product.md`](specs/SPEC-0011-minimum-viable-product.md)*.
+Run the fresh-session checklist before acting.
 
 ## Read first (in order)
 
@@ -21,7 +24,8 @@ before acting.
    levels, testing, verification, committing, components.
 6. [`specs/`](specs) — SPEC-0002 (CBP target), SPEC-0007 (harness/shell +
    distribution), SPEC-0008 (shell design / n8n), SPEC-0009 (FBP/ABM
-   conformance), SPEC-0010 (extensibility).
+   conformance), SPEC-0010 (extensibility), SPEC-0011 (MVP definition/roadmap,
+   **draft — the planning-session contract of record**).
 
 > **Background (optional, non-normative).** The external **literature** that
 > informed the design (FBP, CPM, agent SDLC, dark factory) is indexed in
@@ -41,6 +45,14 @@ before acting.
 - **Tag:** `v0.29.0-milestone` (historical kernel milestone).
 - **Push policy:** commit and push continuously, no permission needed (Law 13);
   never bypass hooks (`--no-verify` is forbidden).
+- **Environment note (this machine).** Global `git` has `commit.gpgsign=true`
+  (SSH signing) and `~/.ssh/config` points `github.com` at
+  `~/.ssh/ssh-github.pub` (a *public* key). If the Bitwarden SSH agent is
+  unavailable, commits fail at signing (`Couldn't get agent socket`) and pushes
+  fail (`bad permissions`). Commit with a per-command `-c commit.gpgsign=false`
+  (never `--no-verify`) and push with
+  `git -c core.sshCommand="ssh -o IdentityAgent=$SSH_AUTH_SOCK -o IdentitiesOnly=no"`.
+  Do **not** edit global config or keys.
 
 ## Fresh-session start
 
@@ -177,7 +189,37 @@ before acting.
 - `uv run agent-centric cbp-check` → **8/8**, READY.
 - Convention guard → **39 passed**.
 
+## Spec status audit (facts; no edits made)
+
+Spec `status` is `draft | accepted | implemented` (`specs/README.md`); `accepted`
+means the **design is approved**, not built. The front-matter is not wrong, but it
+understates SPEC-0009 and leaves the `implemented` specs' boxes un-ticked.
+
+- **SPEC-0002** `accepted` — Phase 1 not built (**0/6**): `review.v1` absent; no
+  `Agent`→`Component` adapter; `_REGISTRY` (`cbp/agent.py:81`) and
+  `_child_class_for` (`cbp/agent.py:974`) remain; no holdout scenarios; no
+  response `confidence`/Review; no `inproc`-only backend.
+- **SPEC-0003 / 0004 / 0006** `implemented` — criteria met by the convention
+  guard; checkboxes are un-ticked (doc-only correction).
+- **SPEC-0007** `accepted` — Phases 0, 0.5a, 1a, 1b, 2 delivered; 0.5b signing
+  delivered, **live mirror open**; no committed umbrella `components.lock`.
+- **SPEC-0008** `draft` — `design.v1` + validate/compile delivered; n8n adapter,
+  design→commit pinning, and envelope limits open.
+- **SPEC-0009** `draft` — **8/9 built** (slices 1–6); only
+  recorded/confidence-scored `model` components open. Status understates it.
+- **SPEC-0010** `draft` — roadmap only; nothing built.
+
+## Planning the MVP (open)
+
+The immediate next step is a **planning session** to fix the MVP definition and
+roadmap. Its settled decisions and open agenda live in
+[`specs/SPEC-0011-minimum-viable-product.md`](specs/SPEC-0011-minimum-viable-product.md).
+Do not implement until the session reaches shared understanding.
+
 ## Next (candidate — not started)
+
+- **Immediate:** run the **MVP planning session**; resolve the open questions in
+  SPEC-0011 and freeze its acceptance criteria before starting any MVP build.
 
 - **Phase 2 remainder:** commit the umbrella `components.lock` (blocked on the
   Phase 0.5b mirror — no real pinned remotes yet).
