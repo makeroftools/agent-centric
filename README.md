@@ -1,54 +1,51 @@
-# 🧭 Agent-centric
+<div align="center">
 
-**A deterministic system for governed, verifiable agents — where the topology is
-the governance.**
+<a href="https://github.com/makeroftools/agent-centric">
+  <img src="docs/assets/banner.svg" alt="Agent-centric — a deterministic platform for governed, verifiable agents" width="100%">
+</a>
 
-Agent-centric is **a deterministic platform first and foremost.** It is an
-abstract, general-purpose agent system: a local-first core built around one
-idea — an **Agent** is simultaneously a worker to its parent and a manager to
-its children, and together they form a rooted, recursive **tree**. Work flows
-**down** as directives; verified responses and responsibility bubble **up**.
-The platform *uses* — but never fully trusts — non-deterministic tools; only a
-deterministic check can ever make a result count.
+# Agent-centric
 
-> **Branches.** `main` is the active **CBP line** (a rooted, deterministic
-> tree of agents). The prior **Manager-line** (a central `AgentManager`) is
-> frozen in history (tag `v0.29.0-milestone`). Coding agents start at
-> [`AGENTS.md`](AGENTS.md); the
-> active operating level lives in [`.agentfactory.toml`](.agentfactory.toml).
+**A deterministic platform for governed, verifiable agents — where the topology _is_ the governance.**
 
----
+[![CI](https://github.com/makeroftools/agent-centric/actions/workflows/gates.yml/badge.svg)](https://github.com/makeroftools/agent-centric/actions/workflows/gates.yml)
+[![Python](https://img.shields.io/badge/python-3.13%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+![Ruff](https://img.shields.io/badge/lint-ruff-261230)
+![mypy](https://img.shields.io/badge/types-mypy%20strict-2A6DB2)
+[![Tests](https://img.shields.io/badge/tests-1338%20passing-3fb950)](https://github.com/makeroftools/agent-centric/actions/workflows/gates.yml)
+![cbp-check](https://img.shields.io/badge/cbp--check-8%2F8%20READY-38bdf8)
+[![License](https://img.shields.io/badge/license-MPL--2.0-blue)](LICENSE)
+![Mode](https://img.shields.io/badge/mode-L1%20assisted-a78bfa)
+![Control plane](https://img.shields.io/badge/control%20plane-deterministic-38bdf8)
+![Fail-closed](https://img.shields.io/badge/failure-explicit%20%26%20audited-ef4444)
 
-## 📦 Badges
+**Deterministic · Local-first · Fail-closed · Fully auditable · No unverified success**
 
-![Python](https://img.shields.io/badge/python-3.13-blue)
-![Tests](https://img.shields.io/badge/tests-1216%20passed-brightgreen)
-![Lint](https://img.shields.io/badge/ruff-passing-brightgreen)
-![Types](https://img.shields.io/badge/mypy-clean-brightgreen)
-![License](https://img.shields.io/badge/license-MPL--2.0-blue)
-![Status](https://img.shields.io/badge/status-active-important)
+</div>
 
 ---
 
-## 🗺️ Table of contents
+## Table of contents
 
-- [Why it exists](#star2-why-it-exists)
-- [How to think about it (conceptual)](#thinking-how-to-think-about-it)
-- [How it compares to other agent harnesses](#balance_scale-how-it-compares-to-other-agent-harnesses)
-- [The CBP subsystem](#zap-the-cbp-subsystem)
-- [The bills loop — the mission-critical arc](#receipt-the-bills-loop)
-- [Quick start](#rocket-quick-start)
-- [Use from Zed (ACP)](#electric_plug-use-from-zed-acp)
-- [The Manager-line (frozen branch)](#-the-manager-line-frozen-branch)
-- [Operator path](#desktop_computer-operator-path)
-- [Correctness posture](#shield-correctness-posture)
-- [Layout](#open_file_folder-layout)
-- [References](#book-references)
-- [License](#scroll-license)
+- [Why it exists](#why-it-exists)
+- [How to think about it](#how-to-think-about-it)
+- [Architecture](#architecture)
+- [How it compares to other agent harnesses](#how-it-compares-to-other-agent-harnesses)
+- [The CBP subsystem](#the-cbp-subsystem)
+- [The bills loop](#the-bills-loop)
+- [Quick start](#quick-start)
+- [Use from Zed (ACP)](#use-from-zed-acp)
+- [Operator path](#operator-path)
+- [Correctness posture](#correctness-posture)
+- [Layout](#layout)
+- [Roadmap](#roadmap)
+- [Development](#development)
+- [References](#references)
+- [License](#license)
 
 ---
 
-## ⭐ Why it exists
+## Why it exists
 
 Autonomous agents are only useful if you can **trust what they did**. Agent-centric
 treats *correctness under autonomy* as the core problem:
@@ -71,9 +68,14 @@ against a deterministic rule before it counts. Determinism is a feature of the
 The non-negotiable rules that govern every decision in this repository live in
 [`PRINCIPLES.md`](PRINCIPLES.md).
 
+> **What this is / is not.** This is an **abstract, general-purpose** agent
+> system. It is *not* a trading system. The mission-critical posture —
+> correctness, determinism, verification, audit, fail-closed — applies to the
+> system itself, not to any particular domain.
+
 ---
 
-## 💭 How to think about it
+## How to think about it
 
 Most agent frameworks give you a **flat pool of agents** and a **central
 orchestrator** that decides who runs when. Agent-centric turns that upside down:
@@ -96,18 +98,80 @@ flowchart TD
 ```
 
 The result is a **recursive verification hierarchy**: every node is governed by its
-parent, and trust is re-established at every hop on the way up. A child that
-claims `verified` but returns a value its parent can't confirm is **demoted to an
-explicit, audited failure** — never a silent win.
+parent, and trust is re-established at every hop on the way up.
 
-This is what makes the system mission-appropriate: it can be trusted to carry
-**money and schedule** through a pipeline where a human is in the loop **only
-where there is genuine non-determinism** — not as a permanent checkpoint —
-because the correctness spine holds at every level of the tree.
+```mermaid
+sequenceDiagram
+    participant P as Parent (governs)
+    participant C as Child (works)
+    P->>C: directive + context (rules, verifier, grants)
+    C->>C: run, isolated
+    C-->>P: value + self-claim "verified"
+    P->>P: re-derive and re-verify the payload
+    alt confirmed
+        P-->>P: accept; responsibility passes up
+    else mismatch
+        P-->>P: explicit, audited failure (no silent win)
+    end
+```
+
+A child that claims `verified` but returns a value its parent can't confirm is
+**demoted to an explicit, audited failure** — never a silent win. This is what
+makes the system mission-appropriate: it can be trusted to carry **money and
+schedule** through a pipeline where a human is in the loop **only where there is
+genuine non-determinism** — not as a permanent checkpoint.
 
 ---
 
-## ⚖️ How it compares to other agent harnesses
+## Architecture
+
+[`agent-centric`](specs/SPEC-0007-harness-shell-component-distribution.md) is split
+into **two layers**, cleanly:
+
+- **The harness** — boot, runtime, and meta. It *executes* the CBP tree and
+  **is not a node**.
+- **The shell component** — the tree's root. It is an **ordinary component**, not
+  special-cased.
+
+Everything is a **component** (a CBP node = an ABM agent): self-contained, with
+local SQLite state, versioned by a `component.v1` contract. A **skill** is a
+component directive; an **LLM** is a component of kind `model`.
+
+```mermaid
+flowchart TB
+    subgraph Harness["agent-centric — the harness"]
+        direction LR
+        Boot["boot from signed lock"]
+        Proc["process-isolated run"]
+        Sign["signing + transparency log"]
+    end
+
+    subgraph Tree["the CBP tree — components all the way down"]
+        Shell["shell (root composite)"]
+        Reg["registry"]
+        Rules["bills_rules"]
+        Agenda["agenda"]
+    end
+
+    Harness -->|"resolve · verify · materialize"| Shell
+    Shell -->|"contains"| Reg
+    Reg -->|"contains"| Rules
+    Reg -->|"points-to"| Agenda
+```
+
+| Guarantee | How it holds |
+| --- | --- |
+| **Composition, not absorption** | A component at rest has **no edges**; dependency appears only in a network document. |
+| **Pinned & signed** | Components are fetched at acquisition time, pinned to an immutable commit + content hash, signature-verified, and cached offline. |
+| **Subnets** | A composite is a network used as a component, exposing only declared **external ports**. |
+| **Sovereignty** | A child owns its state; siblings never write each other; effects propagate up as verified proposals. |
+
+Deep dives: [`docs/agent/architecture.md`](docs/agent/architecture.md),
+[`specs/SPEC-0002-cbp-component-architecture.md`](specs/SPEC-0002-cbp-component-architecture.md).
+
+---
+
+## How it compares to other agent harnesses
 
 | Dimension | **Agent-centric (CBP)** | Classic manager / orchestrator | LangChain / semantic-OMRE | Autogen-ish multi-agent |
 | --- | --- | --- | --- | --- |
@@ -118,15 +182,15 @@ because the correctness spine holds at every level of the tree.
 | **Underlying graph** | Rooted tree (recursive, deterministic) | Manager-drawn composition | Directed graph | Ad-hoc graph |
 
 The table is deliberately honest: it describes *aspirations* vs. today's concrete
-capabilities. The CBP column lists what is **implemented and tested**; the
-others are representative sketches.
+capabilities. The CBP column lists what is **implemented and tested**; the others
+are representative sketches.
 
 ---
 
-## ⚡ The CBP subsystem
+## The CBP subsystem
 
-The **CBP subsystem** is a rooted, recursive **tree of agents** with
-**no central manager**. It is run through a synchronous, easy-UX `CbpDriver`.
+The **CBP subsystem** is a rooted, recursive **tree of agents** with **no central
+manager**. It is run through a synchronous, easy-UX `CbpDriver`.
 
 | Capability | What it guarantees |
 | --- | --- |
@@ -153,15 +217,15 @@ Deep dive: [`docs/cbp.md`](docs/cbp.md).
 
 ---
 
-## 🧾 The bills loop — determinize, then decide
+## The bills loop
 
 Money and schedule. The governing rule is: **we never rely on a non-deterministic
 output directly.** Anything that looks non-deterministic — parsing free-form
-prose, email, or a PDF — is treated as a *hint*, not an answer. We analyze it
-and **turn it into a deterministic method to every degree it physically can be**
-(a fixed parser, a stable rule, a recomputable transform). Only the small,
-genuinely irreducible residue — the judgment a deterministic procedure genuinely
-cannot reach — goes to the human to review:
+prose, email, or a PDF — is treated as a *hint*, not an answer. We analyze it and
+**turn it into a deterministic method to every degree it physically can be** (a
+fixed parser, a stable rule, a recomputable transform). Only the small, genuinely
+irreducible residue — the judgment a deterministic procedure genuinely cannot
+reach — goes to the human to review:
 
 ```mermaid
 flowchart LR
@@ -185,7 +249,7 @@ works to make that residue as small as it possibly can be.
 
 ---
 
-## 🚀 Quick start
+## Quick start
 
 Requires Python **≥ 3.13** and [uv](https://docs.astral.sh/uv/).
 
@@ -193,7 +257,7 @@ Requires Python **≥ 3.13** and [uv](https://docs.astral.sh/uv/).
 uv sync --extra dev
 uv run pytest
 uv run ruff check .
-uv run mypy
+uv run mypy src
 ```
 
 Run the CBP demo or the operator CLI:
@@ -208,13 +272,11 @@ never reads credentials, and exits non-zero on any failure.
 
 ---
 
-## 🔌 Use from Zed (ACP)
+## Use from Zed (ACP)
 
 Agent-centric can appear as an **External Agent** in Zed via the Agent Client
-Protocol (ACP). Every prompt routes through the tree/Manager; no ACP path can
-produce a verified success that bypasses the verification spine.
-
-### Configure the agent server
+Protocol (ACP). Every prompt routes through the tree; no ACP path can produce a
+verified success that bypasses the verification spine.
 
 Add to Zed's `settings.json` (Zed → Settings → Agents):
 
@@ -235,16 +297,7 @@ that map to deterministic demo tasks.
 
 ---
 
-## 🏗️ The Manager-line (frozen branch)
-
-The prior **Manager-driven** architecture — an `AgentManager` that mediates
-every tool/model call, policy, envelope, and verification — is preserved in
-history (tag `v0.29.0-milestone`). It shares the same "no unverified
-success, fail-closed, full audit, deterministic" posture and remains intact
-as the frozen Manager line.
-
-
-## 💻 Operator path
+## Operator path
 
 `agent-centric` is a local, fail-closed operator CLI.
 
@@ -255,31 +308,34 @@ as the frozen Manager line.
 | `replay-verify <id>` | Re-run the demo task and verify equivalence. |
 | `cbp` | Drive the CBP demo (`--transport inproc|tcp|ipc`, `--ledger <path>`). |
 | `cbp-summary <path>` | Operator readout of a durable CBP ledger. |
-| `cbp-replay <path>` | Re-verify an CBP ledger in a fresh process. |
+| `cbp-replay <path>` | Re-verify a CBP ledger in a fresh process. |
+| `cbp-check` | The deterministic readiness gate (also a CI gate). |
 
 Example:
 
 ```sh
 uv run agent-centric cbp --ledger ses.db      # record a session durably
 uv run agent-centric cbp-summary ses.db       # observe it
-uv run agent-centric cbp-replay ses.db        # re-verify 18/18 runs
+uv run agent-centric cbp-replay ses.db        # re-verify every run
 ```
 
 ---
 
-## 🛡 Correctness posture
+## Correctness posture
 
 - **Model and tool outputs are untrusted until verified.**
 - **Verification is real**, re-derived from the payload — never a stub.
 - **Failure is first-class**: verification, policy, envelope, tool denial, child
   crash — all explicit, audited.
-- **Real providers are opt-in**; CI default is the deterministic stub (no
+- **Real providers are opt-in**; the CI default is the deterministic stub (no
   network, no credentials).
 - **Replay is read-only** and deterministic.
+- **Acquisition is bounded**: pinned, signed, verified, and offline-capable —
+  it never weakens the local-first run-time guarantee.
 
 ---
 
-## 📂 Layout
+## Layout
 
 ```
 AGENTS.md              Agent entry point (table of contents)
@@ -289,40 +345,113 @@ PRINCIPLES.md          Non-negotiable governing rules
 KERNEL.md              v0 kernel freeze note (historical)
 STATUS.md              Volley history + correctness evidence (historical)
 HANDOFF.md             Current session-continuity one-pager
-docs/agent/            Human convention map (architecture, levels, testing, …)
+docs/                  Design/handoff docs
+  agent/               Human convention map (architecture, levels, testing, …)
+  assets/              Banner + mark (SVG)
+  cbp.md               CBP easy-UX driver companion
 .agents/skills/        Canonical Agent Skills (on-demand agent layer)
 src/agent_centric/
-  cbp/                 The CBP subsystem (active; + component distribution)
-  contracts/           Versioned contracts (incl. component.v1, components.lock/v1)
-  control_plane/       Legacy Manager control plane (frozen line; still present)
-specs/                 Spec files (SPEC-0002 CBP; SPEC-0007 distribution)
+  cbp/                 The CBP subsystem (active; ports, IPs, distribution)
+  contracts/           Versioned contracts (component.v1, components.lock/v1, …)
+  control_plane/       Legacy Manager control plane (frozen line)
+specs/                 Specs (SPEC-0002 CBP; SPEC-0007 distribution; …)
 tools/                 Sanctioned mutation primitives (safe-replace.sh, new-skill.sh)
 examples/              Runnable demos; examples/components/ = example components
 tests/                 Invariants across every volley
 ```
 
-## 📚 References
+---
+
+## Roadmap
+
+The target architecture is specified, not hand-waved. Status is honest — no claim
+exceeds the suite.
+
+| Spec | Theme | Status |
+| --- | --- | --- |
+| [SPEC-0002](specs/SPEC-0002-cbp-component-architecture.md) | CBP component architecture | Target; MVP delivered |
+| [SPEC-0007](specs/SPEC-0007-harness-shell-component-distribution.md) | Harness/shell split + component distribution | Phases 0–2 delivered; live mirror pending |
+| [SPEC-0008](specs/SPEC-0008-shell-design-interface-n8n.md) | Shell design interface + n8n authoring | Phase 1 delivered; n8n adapter pending |
+| [SPEC-0009](specs/SPEC-0009-fbp-abm-conformance.md) | FBP/ABM conformance — ports, IPs, subnets | Slices 1–3a delivered; streaming + external-ports guard pending |
+| [SPEC-0010](specs/SPEC-0010-extensibility-knowledge-graphs-rsi.md) | Extensibility — knowledge graphs + bounded RSI | Draft / roadmap |
+
+<details>
+<summary><strong>What is already implemented &amp; tested</strong></summary>
+
+- Convention layer: `AGENTS.md` TOC, canonical skills, scaffold, same-name
+  component mapping — guarded by a convention test.
+- Distribution spine: `component.v1` + `components.lock/v1`, content-addressed
+  atomic cache, deterministic resolver, signature verification, offline directory
+  and git sources.
+- Composite components with SQLite state (path-safe, WAL, integrity-checked,
+  atomic), deterministic dependency-ordered graph resolution.
+- Boot-from-lock, process-isolated execution, release signing, and an
+  append-only hash-chained transparency log.
+- `design.v1` authoring (validate + compile) and first-class `network.v1`
+  **ports**, **bounded connections**, **Information-Packet flow**, and
+  **per-port IIP documents**.
+
+</details>
+
+---
+
+## Development
+
+Static gates and the invariant suite run offline with the deterministic stub:
+
+```bash
+uv sync --extra dev
+uv run ruff check .            # lint
+uv run mypy src                # strict types
+uv run agent-centric cbp-check # deterministic readiness gate
+uv run pytest -p no:cacheprovider
+```
+
+Working in this repository:
+
+- Start at [`AGENTS.md`](AGENTS.md); the constitution is [`PRINCIPLES.md`](PRINCIPLES.md).
+- The active operating level is [`.agentfactory.toml`](.agentfactory.toml)
+  (currently **L1 — assisted**; a human reviews every change).
+- File changes are **whole-file atomic replacements** only, via
+  [`tools/safe-replace.sh`](tools/safe-replace.sh) — never in-place edits.
+- Commit and push continuously; pre-commit hooks and CI are the guardrails
+  (never `--no-verify`).
+
+---
+
+## References
 
 | Doc | What it's for |
 | --- | --- |
 | [`AGENTS.md`](AGENTS.md) | Agent entry point; points to every rule. |
+| [`PRINCIPLES.md`](PRINCIPLES.md) | Non-negotiable rules. |
+| [`HANDOFF.md`](HANDOFF.md) | Current session-continuity one-pager. |
 | [`.agents/skills/`](.agents/skills) | Canonical Agent Skills (on-demand agent convention layer). |
 | [`docs/agent/`](docs/agent/README.md) | Human map of the convention layer. |
+| [`docs/agent/architecture.md`](docs/agent/architecture.md) | The two-layer harness/shell architecture. |
 | [`.agentfactory.toml`](.agentfactory.toml) | Active operating level (mode). |
 | [`docs/cbp.md`](docs/cbp.md) | CBP easy-UX driver companion. |
 | [`src/agent_centric/cbp/spec.md`](src/agent_centric/cbp/spec.md) | CBP architecture spec. |
 | [`src/agent_centric/cbp/protocol.md`](src/agent_centric/cbp/protocol.md) | CBP wire contract. |
-| [`README_CBP.md`](README_CBP.md) | Story-led FBP-era deep-dive (historical). |
-| [`PRINCIPLES.md`](PRINCIPLES.md) | Non-negotiable rules. |
-| [`KERNEL.md`](KERNEL.md) | v0 freeze note + versioning (historical). |
-| [`STATUS.md`](STATUS.md) | Volley-by-volley history + correctness evidence (historical). |
-| [`HANDOFF.md`](HANDOFF.md) | Current session-continuity one-pager. |
 | [`specs/SPEC-0002-cbp-component-architecture.md`](specs/SPEC-0002-cbp-component-architecture.md) | Target CBP component architecture. |
 | [`specs/SPEC-0007-harness-shell-component-distribution.md`](specs/SPEC-0007-harness-shell-component-distribution.md) | Harness/shell split + component distribution plan. |
+| [`KERNEL.md`](KERNEL.md) | v0 freeze note + versioning (historical). |
+| [`STATUS.md`](STATUS.md) | Volley-by-volley history + correctness evidence (historical). |
+| [`README_CBP.md`](README_CBP.md) | Story-led FBP-era deep-dive (historical). |
 | [`docs/CBP_HANDOFF.md`](docs/CBP_HANDOFF.md) | Session continuity one-pager (historical). |
 
 ---
 
-## 📄 License
+## License
 
 [Mozilla Public License 2.0](LICENSE).
+
+<div align="center">
+
+<img src="docs/assets/icon.svg" width="40" alt="Agent-centric mark">
+
+**Agent-centric — correctness under autonomy.**
+
+Governed by [AGENTS.md](AGENTS.md) · Bound by [PRINCIPLES.md](PRINCIPLES.md) · Mode in [`.agentfactory.toml`](.agentfactory.toml)
+
+</div>
