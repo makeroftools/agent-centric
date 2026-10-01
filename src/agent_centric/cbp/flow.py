@@ -9,8 +9,9 @@ Packets** along **bounded connections**:
 - a connection is a **bounded buffer**: a send to a full buffer is
   **back-pressure**, and a receive from an empty buffer is a deterministic
   **deadlock** — both are explicit, fail-closed outcomes, never a hang;
-- an inport with no incoming wire takes its value from the component's ``args``
-  (its **IIP**, initial Information Packet).
+- an inport with no incoming wire takes its value from a first-class, per-port
+  **IIP** bound in the network document, or from the component's ``args``
+  template as a fallback.
 
 Determinism: the schedule is fixed by the document, packets are FIFO, and there is
 no wall-clock concurrency, so identical input yields an identical trajectory.
@@ -124,7 +125,8 @@ def run_flow(
     """Execute a port-declared network as deterministic Information-Packet flow.
 
     Each component runs once, in topological order. Its inports are filled from
-    incoming connections (or its ``args`` IIPs); its verified output is routed to
+    incoming connections; an unwired inport takes its first-class **IIP** (or its
+    ``args`` template as a fallback). Its verified output is routed to
     consumers' inports over bounded connections. Any overflow, deadlock, missing
     outport field, or unverified step fails closed with ``ok=False`` — never a
     partial or silent success.
@@ -186,10 +188,17 @@ def run_flow(
         incoming.setdefault(edge.target, []).append(connection)
         outgoing.setdefault(edge.source, []).append(connection)
 
+    # First-class per-port IIPs (SPEC-0009): an explicit value bound to an inport.
+    # Validation forbids an IIP on a port that also has an incoming connection.
+    iips_by_component: dict[str, dict[str, Any]] = {}
+    for iip in network.iips():
+        iips_by_component.setdefault(iip.component, {})[iip.port] = iip.value
+
     results: list[dict[str, Any]] = []
     for idx, cid in enumerate(order):
         component = components[cid]
-        args = dict(component.args)  # IIPs / template
+        args = dict(component.args)  # template
+        args.update(iips_by_component.get(cid, {}))  # explicit per-port IIPs
         for connection in sorted(incoming.get(cid, []), key=lambda c: c.target_port):
             if connection.is_empty:
                 return {

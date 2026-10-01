@@ -90,6 +90,21 @@ class Edge:
     capacity: int = DEFAULT_CONNECTION_CAPACITY
 
 
+@dataclass(frozen=True)
+class IIP:
+    """An Initial Information Packet bound to a component inport (SPEC-0009).
+
+    An IIP supplies a value to one **named inport** at network-definition time;
+    it is the first-class, explicit alternative to an implicit ``args`` template.
+    An inport may carry either an IIP or an incoming connection, never both
+    (fail-closed).
+    """
+
+    component: str
+    port: str
+    value: Any
+
+
 class ComponentNetwork:
     """A validated, compilable directed acyclic graph of components.
 
@@ -101,6 +116,7 @@ class ComponentNetwork:
     def __init__(self) -> None:
         self._components: dict[str, Component] = {}
         self._edges: list[Edge] = []
+        self._iips: list[IIP] = []
 
     # -- construction -------------------------------------------------------
 
@@ -124,6 +140,11 @@ class ComponentNetwork:
     def add_edge(self, edge: Edge) -> ComponentNetwork:
         """Add a data-flow edge. Returns self for chaining."""
         self._edges.append(edge)
+        return self
+
+    def add_iip(self, iip: IIP) -> ComponentNetwork:
+        """Bind an Initial Information Packet to an inport. Returns self."""
+        self._iips.append(iip)
         return self
 
     # -- validation ---------------------------------------------------------
@@ -162,6 +183,29 @@ class ComponentNetwork:
                     f"edge {edge.source}.{edge.source_field} -> "
                     f"{edge.target}.{edge.target_arg}: target {edge.target!r} "
                     f"declares no in-port {edge.target_arg!r}"
+                )
+        seen_iips: set[tuple[str, str]] = set()
+        for iip in self._iips:
+            if iip.component not in self._components:
+                raise NetworkError(f"IIP target {iip.component!r} is not a component")
+            if not iip.port:
+                raise NetworkError("IIP port must be non-empty")
+            key = (iip.component, iip.port)
+            if key in seen_iips:
+                raise NetworkError(
+                    f"IIP for {iip.component}.{iip.port} is declared more than once"
+                )
+            seen_iips.add(key)
+            in_ports = self._components[iip.component].ports.get("in", ())
+            if iip.port not in in_ports:
+                raise NetworkError(
+                    f"IIP target {iip.component!r} declares no in-port {iip.port!r}"
+                )
+        for edge in self._edges:
+            if (edge.target, edge.target_arg) in seen_iips:
+                raise NetworkError(
+                    f"inport {edge.target}.{edge.target_arg} has both an IIP and an "
+                    f"incoming connection from {edge.source!r} (fail-closed)"
                 )
         self._check_acyclic()
 
@@ -284,6 +328,9 @@ class ComponentNetwork:
     def edges(self) -> tuple[Edge, ...]:
         return tuple(self._edges)
 
+    def iips(self) -> tuple[IIP, ...]:
+        return tuple(self._iips)
+
     def to_dict(self) -> dict[str, Any]:
         """A JSON-ready, deterministic serialization (for the visual editor)."""
         return {
@@ -307,6 +354,10 @@ class ComponentNetwork:
                     "capacity": e.capacity,
                 }
                 for e in self.edges()
+            ],
+            "iips": [
+                {"component": i.component, "port": i.port, "value": i.value}
+                for i in sorted(self._iips, key=lambda i: (i.component, i.port))
             ],
         }
 
@@ -373,6 +424,20 @@ def network_from_dict(data: dict[str, Any]) -> ComponentNetwork:
                     capacity=capacity,
                 )
             )
+    iips = data.get("iips")
+    if iips is not None:
+        if not isinstance(iips, list):
+            raise NetworkError("'iips' must be a list")
+        for i in iips:
+            if not isinstance(i, dict):
+                raise NetworkError("each IIP must be a dict")
+            net.add_iip(
+                IIP(
+                    component=str(i.get("component", "")),
+                    port=str(i.get("port", "")),
+                    value=i.get("value"),
+                )
+            )
     return net
 
 
@@ -400,7 +465,7 @@ def run_network(
     """
     # A port-declared network runs on the first-class Information-Packet flow
     # engine (SPEC-0009); the legacy args model below is unchanged.
-    if any(component.ports for component in network.components()):
+    if network.iips() or any(component.ports for component in network.components()):
         from .flow import run_flow
 
         return run_flow(driver, network, step_limit=step_limit)
