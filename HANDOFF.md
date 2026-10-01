@@ -255,8 +255,9 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   `tests/test_agent_conventions.py`.
 - **Distribution spine (SPEC-0007)** — `component.v1` + `components.lock/v1`;
   content-addressed cache; deterministic resolver; minisign/gpg verification;
-  offline directory + git sources; deterministic bundle; boot from lock; process
-  isolation; signing service + transparency log.
+  offline directory + git sources; deterministic bundle; boot from lock (with
+  lock-level signature verification, fail-closed); process isolation; signing
+  service + transparency log.
 - **Shell design (SPEC-0008)** — `design.v1` + `validate_design`/`compile_design`.
 - **FBP/ABM conformance (SPEC-0009)** — named/typed ports, Information-Packet
   flow with fail-closed back-pressure/deadlock, per-port IIPs, composite
@@ -297,12 +298,12 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 - **Immediate: Layer 4** — **appointed** components (allowlisted; static-only
   fallback), then the signing/distribution remainders below.
-- **Signing remainder** — wire the trust root into a signed lock-level artifact
-  and the transparency log; key rotation. (Layer 1c signing is delivered: Ed25519
-  over content addressing, accept/refuse vectors.)
-- **Distribution remainder** — wire the lock-level signature into
-  `boot_from_lock`; add the `design/network → pin → components.lock` producer;
-  commit the umbrella `components.lock` (needs the live mirror).
+- **Signing remainder** — key rotation; wire the transparency-log head into
+  boot (the lock-level signature itself is now verified at boot). (Layer 1c
+  signing is delivered: Ed25519 over content addressing, accept/refuse vectors.)
+- **Distribution remainder** — the lock-level signature is consumed at boot
+  (**done**); add the `design/network → pin → components.lock` producer; commit
+  the umbrella `components.lock` (needs the live mirror).
 - **SPEC-0008 remainder** — n8n adapter (import/export + canonical round-trip).
 - **SPEC-0009 remainder** — recorded/confidence-scored `model` components.
 - **SPEC-0017 frontier** — formal semantics/ontology; reduction + formal
@@ -313,9 +314,11 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 - **Live self-hosted mirror** (Forgejo/Gitea) — needed for a committed umbrella
   `components.lock`; no real pinned remotes yet.
-- **Integration spine** — the offline primitives exist, but `design/network →
-  pin → signed lock → boot → run typed flow → replay` is not wired end-to-end;
-  the lock-level signature is not consumed at boot.
+- **Integration spine** — the offline primitives exist; the **lock-level
+  signature is now consumed at boot** (`boot_from_lock` verifies a detached
+  signature over `lock_hash` before resolving anything, and records
+  `lock_verified`, fail-closed). Remaining: the `design/network → pin → signed
+  lock` producer and the end-to-end `run typed flow → replay` wiring.
 - **`review.v1` / `confidence`** — absent; parked under SPEC-0017. Launch ships a
   minimal deterministic scorer + formalizer at the model boundary.
 - **Honest FBP note** — non-port networks still run on the legacy args model;

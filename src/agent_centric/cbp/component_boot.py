@@ -4,7 +4,9 @@
 ``components.lock`` to a runnable tree:
 
 1. the lock's content address is checked (``lock_hash``) — an optional expected
-   hash turns lock drift into an explicit failure;
+   hash turns lock drift into an explicit failure; when a lock-level detached
+   signature and verifier are supplied, the signature over the content address is
+   verified **before** anything else (fail-closed, SPEC-0007 §6);
 2. the whole component graph is resolved (children first, deterministic) and
    every pin is verified (hash + signature + declared harness contracts);
 3. each verified manifest is cross-checked against its lock entry and the
@@ -47,7 +49,7 @@ from .component_process import DEFAULT_TIMEOUT_SECONDS, run_component
 from .component_runtime import AllowlistedEntryResolver, EntryNotAllowed
 from .component_state import StateScope
 from .resolver import ComponentSource, ResolveError, Resolver
-from .signing import SignatureVerifier
+from .signing import SignatureError, SignatureVerifier
 
 
 class BootError(ResolveError):
@@ -77,6 +79,7 @@ class BootedTree:
     lock_hash: str
     root: str
     components: tuple[BootedComponent, ...]
+    lock_verified: bool = False
 
     @property
     def by_name(self) -> dict[str, BootedComponent]:
@@ -107,6 +110,8 @@ def boot_from_lock(
     expected_lock_hash: str | None = None,
     allow_subprocess: bool = False,
     process_timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    lock_signature: str | None = None,
+    lock_verifier: SignatureVerifier | None = None,
 ) -> BootedTree:
     """Resolve, verify, and instantiate the tree pinned by ``lock`` (fail-closed).
 
@@ -121,6 +126,11 @@ def boot_from_lock(
         allow_subprocess: Permit non-allowlisted Python entries to run
             process-isolated from their verified bundle (default ``False``).
         process_timeout: The child-process wall-clock limit, in seconds.
+        lock_signature: An optional detached signature over the lock's content
+            address (e.g. from :func:`signing_service.sign_lock`). When given, it
+            MUST verify against ``lock_verifier`` or boot refuses (fail-closed).
+        lock_verifier: The verifier for ``lock_signature``. Supplying it without a
+            signature refuses (a configured trust root demands a signed lock).
 
     Returns:
         A :class:`BootedTree` with components ordered children-first and the
@@ -132,6 +142,10 @@ def boot_from_lock(
         StateError: On an unsafe or corrupt component state path.
     """
     lock_hash = lock.lock_hash()
+    lock_verified = False
+    if lock_signature is not None or lock_verifier is not None:
+        _verify_lock_signature(lock_hash, lock_signature, lock_verifier)
+        lock_verified = True
     if expected_lock_hash is not None and lock_hash != expected_lock_hash:
         raise BootError(
             f"lock hash mismatch: expected {expected_lock_hash}, got {lock_hash}"
@@ -173,7 +187,33 @@ def boot_from_lock(
                 state_path=state_file,
             )
         )
-    return BootedTree(lock_hash=lock_hash, root=lock.root, components=tuple(components))
+    return BootedTree(
+        lock_hash=lock_hash,
+        root=lock.root,
+        components=tuple(components),
+        lock_verified=lock_verified,
+    )
+
+
+def _verify_lock_signature(
+    lock_hash: str, signature: str | None, verifier: SignatureVerifier | None
+) -> None:
+    """Verify a detached signature over the lock content address (fail-closed).
+
+    Fail-closed in every direction: a signature without a configured verifier,
+    a verifier without a signature, or a signature that does not verify all
+    refuse boot before any artifact is resolved.
+    """
+    if verifier is None:
+        raise BootError(
+            "a lock signature was provided but no lock verifier is configured"
+        )
+    if not signature:
+        raise BootError("a lock verifier is configured but the lock is unsigned")
+    try:
+        verifier.verify(lock_hash.encode("utf-8"), signature.encode("utf-8"))
+    except SignatureError as exc:
+        raise BootError(f"lock signature verification failed: {exc}") from exc
 
 
 def _check_conformance(node: ResolvedNode, supported: frozenset[str]) -> None:

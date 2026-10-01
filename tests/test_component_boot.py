@@ -7,6 +7,7 @@ from local git and boots the tree.
 
 from __future__ import annotations
 
+import hashlib
 import shutil
 import subprocess
 from pathlib import Path
@@ -43,6 +44,21 @@ class _Acceptor:
     def verify(self, payload: bytes, signature: bytes) -> None:
         if signature != b"good":
             raise SignatureError("bad signature")
+
+
+class _HashSigner:
+    """Deterministic lock signer: signature = sha256(b'lock:' + payload)."""
+
+    def sign(self, payload: bytes) -> bytes:
+        return hashlib.sha256(b"lock:" + payload).hexdigest().encode()
+
+
+class _HashVerifier:
+    """Deterministic lock verifier matching :class:`_HashSigner`."""
+
+    def verify(self, payload: bytes, signature: bytes) -> None:
+        if signature != hashlib.sha256(b"lock:" + payload).hexdigest().encode():
+            raise SignatureError("bad lock signature")
 
 
 class _MemorySource:
@@ -85,6 +101,9 @@ def _boot(
     payloads: dict[str, dict[str, bytes]] | None = None,
     allow_subprocess: bool = False,
     process_timeout: float = 30.0,
+    lock_signature: str | None = None,
+    lock_signer: _HashSigner | None = None,
+    lock_verifier: _HashVerifier | None = None,
 ) -> BootedTree:
     payload_files = payloads or {}
     bundles = {
@@ -103,6 +122,8 @@ def _boot(
         for name, bundle in sorted(bundles.items())
     )
     lock = ComponentsLock(root=root, entries=entries, harness_contracts=contracts)
+    if lock_signer is not None:
+        lock_signature = lock_signer.sign(lock.lock_hash().encode("utf-8")).decode("utf-8")
     return boot_from_lock(
         lock,
         source=_MemorySource(bundles),
@@ -113,6 +134,8 @@ def _boot(
         expected_lock_hash=expected_lock_hash,
         allow_subprocess=allow_subprocess,
         process_timeout=process_timeout,
+        lock_signature=lock_signature,
+        lock_verifier=lock_verifier,
     )
 
 
@@ -373,3 +396,43 @@ class TestExampleShellBoot:
         out = capsys.readouterr().out
         assert "booted order (children first): ['registry', 'shell']" in out
         assert "replay_ok=True" in out
+
+
+class TestLockSignature:
+    """The lock-level signature is consumed (verified) at boot (fail-closed)."""
+
+    def _solo(self, tmp_path: Path, **kwargs: object) -> BootedTree:
+        return _boot(
+            tmp_path,
+            "counter",
+            {"counter": _manifest("counter")},
+            allowlist=frozenset({_REGISTRY_ENTRY}),
+            **kwargs,  # type: ignore[arg-type]
+        )
+
+    def test_signed_lock_boots_and_records_verification(self, tmp_path: Path) -> None:
+        tree = self._solo(
+            tmp_path, lock_signer=_HashSigner(), lock_verifier=_HashVerifier()
+        )
+        assert tree.lock_verified is True
+
+    def test_unsigned_boot_is_not_marked_verified(self, tmp_path: Path) -> None:
+        assert self._solo(tmp_path).lock_verified is False
+
+    def test_bad_signature_fails_closed(self, tmp_path: Path) -> None:
+        with pytest.raises(BootError):
+            self._solo(tmp_path, lock_signature="deadbeef", lock_verifier=_HashVerifier())
+
+    def test_signature_without_verifier_fails_closed(self, tmp_path: Path) -> None:
+        with pytest.raises(BootError):
+            self._solo(tmp_path, lock_signature="deadbeef")
+
+    def test_verifier_without_signature_fails_closed(self, tmp_path: Path) -> None:
+        with pytest.raises(BootError):
+            self._solo(tmp_path, lock_verifier=_HashVerifier())
+
+    def test_signature_is_bound_to_the_content_address(self, tmp_path: Path) -> None:
+        # A signature over a different payload must not verify against this lock.
+        wrong = _HashSigner().sign(b"some-other-lock").decode("utf-8")
+        with pytest.raises(BootError):
+            self._solo(tmp_path, lock_signature=wrong, lock_verifier=_HashVerifier())
