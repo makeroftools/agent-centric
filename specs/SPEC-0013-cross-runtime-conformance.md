@@ -91,8 +91,9 @@ A dialed-up foreign runtime is **part of the TCB**. Therefore:
       (certification), and its version is pinned, signed, and recorded.
 - [ ] Translation output is treated as an untrusted generated artifact until it
       passes the suite.
-- [ ] The suite certifies cross-runtime equivalence (e.g. Python reflection vs
-      Rust core) without appealing to Turing completeness.
+- [x] The suite certifies cross-runtime equivalence (e.g. Python reflection vs
+      Rust core) without appealing to Turing completeness (`pro/cbp-host` passes
+      the same 31/31 vectors).
 
 ## Progress
 
@@ -102,10 +103,11 @@ A dialed-up foreign runtime is **part of the TCB**. Therefore:
   five categories (semantics, lifecycle, transport, determinism, capability).
   `conformance/certifier/` runs it against a host over the
   `cbp.conformance-host.v1` protocol and records the pinned runtime identity; the
-  reference host passes 29/29. An `encoding` category proves canonical `json`
+  reference host passes 31/31. An `encoding` category proves canonical `json`
   and pinned-canonical `msgpack` bytes, cross-encoding equivalence, and strict
-  rejection of non-canonical input. Certifying a non-reference runtime (Python
-  reflection vs Rust core) and signing the runtime are Layer 1.
+  rejection of non-canonical input. The Rust host (`../pro`, `cbp-host`) passes
+  the same suite **31/31**, so cross-runtime equivalence (Python reflection vs
+  Rust core) is now proven. Signing the runtime is Layer 1b.
 
 ## Risks / invariants
 
