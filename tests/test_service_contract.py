@@ -39,11 +39,11 @@ def _tasks() -> tuple[TaskBinding, ...]:
 
 def _service(**overrides: object) -> Service:
     base: dict[str, object] = {
-        "id": "dev-01-bootstrap",
-        "host": "dev-01",
+        "id": "host-01-bootstrap",
+        "host": "host-01",
         "refs": ServiceRefs(host_definition=PinnedRef(ref="c" * 40, digest=_DIGEST)),
         "tasks": _tasks(),
-        "secrets": (SecretRef(name="gitea-admin", path="secret/dev-01/gitea/admin"),),
+        "secrets": (SecretRef(name="gitea-admin", path="secret/host-01/gitea/admin"),),
         "health": ServiceHealth(task=ServiceTask.HEALTH, timeout_seconds=30, path="/healthz"),
         "metadata": {"stage": "bootstrap", "phase": 1},
     }
@@ -121,7 +121,7 @@ class TestTaskBinding:
 
 class TestSecretRef:
     def test_reference_only(self) -> None:
-        ref = SecretRef(name="gitea-admin", path="secret/dev-01/gitea/admin", key="token")
+        ref = SecretRef(name="gitea-admin", path="secret/host-01/gitea/admin", key="token")
         assert SecretRef.from_dict(ref.to_dict()) == ref
 
     def test_value_fields_are_rejected(self) -> None:
@@ -187,7 +187,7 @@ class TestService:
         assert len(first) == 64 and first == first.lower()
 
     def test_hash_changes_with_content(self) -> None:
-        assert _service().service_hash() != _service(host="dev-02").service_hash()
+        assert _service().service_hash() != _service(host="host-02").service_hash()
 
     def test_round_trips(self) -> None:
         service = _service()

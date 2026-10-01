@@ -370,11 +370,11 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **SPEC-0018** `draft` — service-host provisioning + continuous deployment
   (verify-then-apply; self-hosted Gitea first). Public origin-agnostic spec in
   `specs/SPEC-0018-service-host-provisioning-and-continuous-deployment.md`; the
-  private instantiation lives in the new `../infra/` repo
-  (`makeroftools/cbp-infra`). Additive public **`service.v1`** contract
-  delivered (`contracts/service.py`, 33 tests); Phase 1 infra **authored**
-  (deterministic tasks, pull/apply agent, pinned `hosts/dev-01` + `service.v1`
-  instance, enrollment runbook, infra CI, DR drill) — **nothing provisioned**.
+  private instantiation lives in a separate **private companion repo**. Additive
+  public **`service.v1`** contract delivered (`contracts/service.py`, 33 tests);
+  Phase 1 infra **authored** (deterministic tasks, pull/apply agent, a pinned
+  host definition + `service.v1` instance, enrollment runbook, infra CI, DR
+  drill) — **nothing provisioned**.
 
 ## Next
 
@@ -387,10 +387,10 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   boot-from-lock (with lock-level signature + transparency log verification,
   fail-closed), **key rotation**, and the **`pin`/`record`** wiring.
 - **SPEC-0018 (draft): service-host provisioning + CD** — public spec in
-  `specs/`; private instantiation in `../infra/`. Phase 1: bootstrap the intranet
-  host (native Gitea + OpenBao + pull/apply agent) under verify-then-apply. The
-  private `infra/HANDOFF.md` holds the Phase-1 mission brief and a paste-in
-  kickoff prompt for a new session.
+  `specs/`; the instantiation lives in a **private companion repo**. Phase 1:
+  bootstrap the intranet host (native Gitea + OpenBao + pull/apply agent) under
+  verify-then-apply. The private mission brief holds the Phase-1 plan and a
+  paste-in kickoff prompt for a new session.
 - **Signing** — **key rotation delivered** (`cbp/trust.py`); optional threshold
   signing remains.
 - **SPEC-0017 frontier** — formal semantics/ontology; reduction + formal
@@ -400,8 +400,8 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 ## Open threads (blockers & honest gaps)
 
 - **Live self-hosted mirror** (Gitea) — no real pinned remotes yet. Now tracked by
-  **SPEC-0018** (`specs/`) + the private `../infra/` repo; Core's umbrella lock
-  is offline-signed (SPEC-0011) and no longer depends on it.
+  **SPEC-0018** (`specs/`) + a **private companion repo**; Core's umbrella lock is
+  offline-signed (SPEC-0011) and no longer depends on it.
 - **Integration spine** — the offline primitives exist; the **lock-level
   signature is now consumed at boot** (`boot_from_lock` verifies a detached
   signature over `lock_hash` before resolving anything, and records
