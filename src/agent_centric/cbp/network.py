@@ -71,6 +71,10 @@ class Component:
         subnet: For a composite, the nested network that is its body. Composition
             is fractal; the boundary guard rejects any outer edge that would reach
             past the declared external ports.
+        stream: Declared out-ports that carry a **stream** (repeated activation):
+            the verified output for each such port is an iterable and every element
+            is sent as a separate Information Packet, with back-pressure suspending
+            the producer (SPEC-0009). Empty means one IP per activation.
     """
 
     id: str
@@ -79,6 +83,7 @@ class Component:
     verifier: str | None = None
     child: str | None = None
     ports: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    stream: tuple[str, ...] = ()
     external: dict[str, str] = field(default_factory=dict)
     subnet: ComponentNetwork | None = None
 
@@ -238,6 +243,12 @@ class ComponentNetwork:
                     f"incoming connection from {edge.source!r} (fail-closed)"
                 )
         for component in self.components():
+            for stream_port in component.stream:
+                if stream_port not in component.ports.get("out", ()):
+                    raise NetworkError(
+                        f"component {component.id!r}: stream out-port {stream_port!r} "
+                        "is not a declared out-port (fail-closed)"
+                    )
             subnet = component.subnet
             if subnet is None:
                 if component.external:
@@ -423,6 +434,7 @@ class ComponentNetwork:
                     "verifier": c.verifier,
                     "child": c.child,
                     "ports": {k: list(v) for k, v in sorted(c.ports.items())},
+                    "stream": list(c.stream),
                     "external": dict(sorted(c.external.items())),
                     "subnet": c.subnet.to_dict() if c.subnet is not None else None,
                 }
@@ -504,6 +516,7 @@ def network_from_dict(
                 verifier=c.get("verifier"),
                 child=c.get("child"),
                 ports=ports,
+                stream=tuple(str(s) for s in (c.get("stream") or [])),
                 external=external,
                 subnet=subnet,
             )
@@ -569,6 +582,11 @@ def run_network(
     """
     # A port-declared network runs on the first-class Information-Packet flow
     # engine (SPEC-0009); the legacy args model below is unchanged.
+    if any(component.stream for component in network.components()):
+        from .stream import run_stream
+
+        return run_stream(driver, network, step_limit=step_limit)
+
     if network.iips() or any(component.ports for component in network.components()):
         from .flow import run_flow
 
