@@ -57,6 +57,20 @@ from .pipeline import PipelineVersion, SequentialComposition, StageSpec
 from .policy import Policy, PolicyDecision, PolicyVersion
 from .replay import ReplayDiff, ReplayResult, ReplayVersion
 from .result import Failure, FailureReason, VerifiedResult, VerifiedResultVersion
+from .service import (
+    SERVICE_SCHEMA,
+    PinnedRef,
+    SecretRef,
+    Service,
+    ServiceHealth,
+    ServiceRefs,
+    ServiceReport,
+    ServiceTask,
+    ServiceVersion,
+    TaskBinding,
+    TaskKind,
+    validate_service,
+)
 from .summary import (
     ModelSummary,
     PolicySummary,
@@ -140,6 +154,18 @@ __all__ = [
     "ReplayResult",
     "ReplayDiff",
     "ReplayVersion",
+    "SERVICE_SCHEMA",
+    "PinnedRef",
+    "SecretRef",
+    "Service",
+    "ServiceHealth",
+    "ServiceRefs",
+    "ServiceReport",
+    "ServiceTask",
+    "ServiceVersion",
+    "TaskBinding",
+    "TaskKind",
+    "validate_service",
     "TrajectorySummary",
     "SummaryVersion",
     "RunState",
