@@ -139,6 +139,13 @@ trusted at resolve time; the lock stores commits only.
   detectable.
 - **Rotation:** scheduled and on suspicion, with overlapping trust windows; key
   IDs recorded in the log. An optional second signer enables threshold signing.
+  **Rotation (delivered).** `cbp/trust.py` implements the overlapping trust
+  windows: a retired key keeps *verifying* over the overlap while only the
+  current key *signs*; key selection is fail-closed (none or an ambiguous set
+  refuses) and uses an explicit, recorded instant (never a wall-clock read);
+  `TrustStore` is a verifier (for the resolver and `boot_from_lock`) and
+  `log_verifiers()` drives transparency-log verification across rotated keys.
+  Threshold signing remains open.
 - **Three clamp points** (`cbp/spec.md` §3c): registry write, consumption, and
   execution are each explicitly gated.
 

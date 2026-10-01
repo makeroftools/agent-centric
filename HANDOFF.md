@@ -38,9 +38,9 @@ signing/distribution remainders** (§Next).
 cd core
 uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
-uv run mypy src                                       # -> 119 files, clean
+uv run mypy src                                       # -> 120 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1438 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1458 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -74,8 +74,8 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
   commit hash written in prose — it drifts. Read the live tips instead:**
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`.
-- Core gates: `ruff` clean; `mypy` clean (119 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1438 passed** (~63 s).
+- Core gates: `ruff` clean; `mypy` clean (120 files); `cbp-check` **READY (8/8)**;
+  convention + home-path guard passed; full suite **1458 passed** (~63 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -171,7 +171,7 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > **L1**; target L3 gated) -> `core/HANDOFF.md`, then the frozen plan
 > `core/specs/SPEC-0011` through `SPEC-0017`, and `conformance/AGENTS.md` +
 > `pro/AGENTS.md`. Confirm all three repos are on `main` and clean, then run the
-> verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1438
+> verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1458
 > passed**, shared suite **31/31** on Python + Rust, WASM suite **10/10**, network
 > suite **14/14**, appointed suite **8/8**). **Layers 0, 1a, 1b, 1c, signing, 2,
 > 3, and 4 are delivered**; the next steps are the signing/distribution
@@ -305,6 +305,12 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   contract, or unresolvable ref all refuse); `record_release` signs + appends the
   lock and `boot_from_lock` boots the tree. Proven by `tests/test_lockfile.py` +
   demo `examples/design_pin.py`.
+- **Signing-key rotation (SPEC-0007 §6)** — `cbp/trust.py` implements overlapping
+  trust windows (`TrustStore`/`TrustWindow`): a retired key keeps **verifying**
+  while only the current key **signs**; key selection and verification are
+  explicit-time and fail-closed; every release records its `key_id`, and the
+  transparency log verifies against the rotated ring. Proven by
+  `tests/test_trust.py` + demo `examples/key_rotation.py`.
 - **FBP/ABM conformance (SPEC-0009)** — named/typed ports, Information-Packet
   flow with fail-closed back-pressure/deadlock, per-port IIPs, composite
   external-ports boundary guard, repeated-activation streaming, per-component
@@ -336,8 +342,9 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   scenarios; no response `confidence`/Review; no `inproc`-only backend.
 - **SPEC-0003/0004/0006** `implemented` — criteria met by the convention guard;
   some checkboxes un-ticked (doc-only correction).
-- **SPEC-0007** `accepted` — Phases 0/0.5a/1a/1b/2 delivered; 0.5b signing
-  delivered, **live mirror open**; no committed umbrella `components.lock`.
+- **SPEC-0007** `accepted` — Phases 0/0.5a/1a/1b/2 delivered; 0.5b signing and
+  **key rotation** delivered, **live mirror open**; no committed umbrella
+  `components.lock`.
 - **SPEC-0008** `draft` — `design.v1` + validate/compile **and** the Phase 3
   `pin`/`record` wiring (`cbp/lockfile.py`) delivered; n8n adapter and envelope
   limits open.
@@ -350,8 +357,11 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **Immediate: the remainders below.** **Layer 4 is delivered** — `appointed.v1`
   (allowlisted appointment, A0 containment, recorded label; **8/8**
   cross-runtime).
-- **Signing remainder** — key rotation. (**Done:** the lock-level signature and
-  the transparency log — chain, signatures, and head — are verified at boot; an
+- **Signing remainder — key rotation delivered.** `cbp/trust.py` implements
+  overlapping trust windows: a retired key keeps verifying while only the current
+  key signs, every release records its `key_id`, and the transparency log
+  verifies against the rotated ring. (Also done: the lock-level signature and the
+  transparency log — chain, signatures, and head — are verified at boot; an
   unpublished lock refuses. Layer 1c signing is delivered: Ed25519 over content
   addressing, accept/refuse vectors.)
 - **Distribution remainder** — the lock-level signature is consumed at boot
@@ -418,8 +428,8 @@ yourself reaching for an in-place tool, stop and use `safe-replace`.
 - **core** — `src/agent_centric/cbp/` (`component_bundle.py`,
   `component_source.py`, `component_runtime.py`, `component_state.py`,
   `component_graph.py`, `component_boot.py`, `component_process.py`,
-  `signing_service.py`, `transparency.py`, `design.py`, `lockfile.py`,
-  `network.py`, `flow.py`,
+  `signing_service.py`, `transparency.py`, `trust.py`, `design.py`,
+  `lockfile.py`, `network.py`, `flow.py`,
   `cache.py`, `resolver.py`, `signing.py`, `agent.py`); `src/agent_centric/contracts/`
   (`component.py`, `components_lock.py`, `design.py`); `specs/SPEC-0011`–`0017`;
   `examples/components/`; `tests/test_agent_conventions.py`.
