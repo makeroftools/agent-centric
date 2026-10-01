@@ -385,7 +385,9 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   fail-closed), **key rotation**, and the **`pin`/`record`** wiring.
 - **SPEC-0018 (draft): service-host provisioning + CD** — public spec in
   `specs/`; private instantiation in `../infra/`. Phase 1: bootstrap the intranet
-  host (native Gitea + OpenBao + pull/apply agent) under verify-then-apply.
+  host (native Gitea + OpenBao + pull/apply agent) under verify-then-apply. The
+  private `infra/HANDOFF.md` holds the Phase-1 mission brief and a paste-in
+  kickoff prompt for a new session.
 - **Signing** — **key rotation delivered** (`cbp/trust.py`); optional threshold
   signing remains.
 - **SPEC-0017 frontier** — formal semantics/ontology; reduction + formal
