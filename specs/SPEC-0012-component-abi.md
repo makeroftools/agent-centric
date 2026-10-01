@@ -74,6 +74,18 @@ sources — a **git repo, a directory, a binary, …** — anything content-addr
 Source kind does not change identity: the resolved artifact is always
 content-hashed and signed.
 
+### Wire encodings
+
+The ABI splits the frame by plane. The **control plane** (channel/task
+announcements and lifecycle directives/acks/responses) is always **canonical
+JSON** — small, stable, human-auditable. The **data plane** (Information
+Packets) is rendered under **one host-granted session encoding**: `json`
+(mandatory baseline) or `msgpack` (a pinned canonical profile). MessagePack has
+no standardized canonical form, so the profile is frozen in
+`conformance/contracts/ABI.md` §2b; equivalence between encodings is proven by
+the conformance vectors, never assumed. CBOR (RFC 8949 §4.2 deterministic) is
+the preferred future standardized binary encoding and may be added additively.
+
 ### Goals
 
 **Autonomy and flexibility.** The ABI is deliberately minimal so that a host can

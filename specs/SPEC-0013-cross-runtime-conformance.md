@@ -85,7 +85,8 @@ A dialed-up foreign runtime is **part of the TCB**. Therefore:
       SPEC-0012 ABI.
 - [x] A language-agnostic conformance-vector suite exists, versioned and
       content-addressed, covering semantics, lifecycle, transport, determinism,
-      and capability bounds.
+      capability bounds, and the data-plane encodings (`json` / canonical
+      `msgpack`).
 - [ ] Any runtime that executes a trusted component has passed the suite
       (certification), and its version is pinned, signed, and recorded.
 - [ ] Translation output is treated as an untrusted generated artifact until it
@@ -101,7 +102,9 @@ A dialed-up foreign runtime is **part of the TCB**. Therefore:
   five categories (semantics, lifecycle, transport, determinism, capability).
   `conformance/certifier/` runs it against a host over the
   `cbp.conformance-host.v1` protocol and records the pinned runtime identity; the
-  reference host passes 17/17. Certifying a non-reference runtime (Python
+  reference host passes 29/29. An `encoding` category proves canonical `json`
+  and pinned-canonical `msgpack` bytes, cross-encoding equivalence, and strict
+  rejection of non-canonical input. Certifying a non-reference runtime (Python
   reflection vs Rust core) and signing the runtime are Layer 1.
 
 ## Risks / invariants
