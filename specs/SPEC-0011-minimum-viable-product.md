@@ -4,7 +4,7 @@ title: Minimum Viable Product — definition and roadmap
 type: feature
 target_repo: agent-centric
 target_branch: main
-status: draft
+status: accepted
 owner: operator
 ---
 
@@ -12,58 +12,60 @@ owner: operator
 
 ## Context
 
-"Minimum Viable Product" is used with **three different meanings** across the
-specs and there is no single milestone of record:
+"Minimum Viable Product" was used with **three different meanings** across the
+specs and there was no single milestone of record:
 
-- **SPEC-0002 §7** MVP = Phase 1 of the CBP component architecture (contracts,
-  the `Agent`→`Component` adapter, globals removed, CPM/replay holdout,
-  `confidence` + Review, `inproc`-only). **0/6** acceptance items are built.
-- **SPEC-0007** MVP = the distribution spine (boot-from-lock + process isolation
-  + signing). Mostly delivered; the **live self-hosted mirror** and a committed
-  umbrella `components.lock` are open.
-- **SPEC-0009** MVP = FBP/ABM conformance. **8/9** items built (slices 1–6); only
-  recorded/confidence-scored `model` components are open.
+- **SPEC-0002 §7** MVP = Phase 1 of the CBP component architecture. **0/6**
+  acceptance items built.
+- **SPEC-0007** MVP = the distribution spine. Mostly delivered; the live mirror
+  and a committed umbrella `components.lock` remain open.
+- **SPEC-0009** MVP = FBP/ABM conformance. **8/9** built; recorded/confidence-
+  scored `model` components remain open.
 
-Spec `status` is `draft | accepted | implemented` (`specs/README.md`); `accepted`
-means the **design is approved**, not built. So SPEC-0002 is honestly `accepted`
-with unchecked boxes, while SPEC-0009 — **8/9 built** — is understated as
-`draft`.
+This spec was the **contract of record** for the MVP, to be fixed in a dedicated
+planning session. That session has now run; its outcome is recorded below.
 
-This spec is the **contract of record** for the MVP. Its definition is **TBD**:
-it is to be fixed in a dedicated planning session that grills the operator. The
-settled parts and the open questions are below.
+## Decision (planning session outcome)
 
-## Decision
+**MVP means Minimum Viable Product, literally**, but the session fixed the target
+as the **full version**, not a crippled subset: the intention is to make the
+product live, with the Core public repo as a *reflection* that helps build it.
 
-**MVP means Minimum Viable Product, literally.** Its scope is fixed by deciding,
-together, what is *viable* (the outcome and its judge) and what is *minimum* (by
-exclusion).
+**Settled.**
 
-**Settled (planning pass).**
-
-- **The demo that proves it.** Author a `network.v1` document → boot a shell from
-  a **signed lock** → execute **typed-port** dataflow → every edge **verified** →
-  **replay** yields an identical trajectory; a `model` component in the graph is
+- **"Viable" and the judge.** A **clean-checkout, offline, deterministic,
+  end-to-end demonstration** reproducible by an independent operator/CI, whose run
+  is the record (Law 12). The demo: author a network, boot a shell from a
+  **signed lock**, execute **typed-port dataflow**, verify **every edge**, and
+  **replay** an identical trajectory; a `model` component in the graph is
   **recorded and confidence-scored**.
-- **Session outputs.** (1) correct the status record; (2) this spec; (3) refresh
-  `HANDOFF.md`.
-- **Evidence bar.** Parked to the planning session (suite vs holdout/L3).
+- **Distribution element.** Signed lock via the **offline directory source** with
+  **real local signing (minisign/gpg)**; the **lock-level signature is verified
+  at boot**, and a **`design/network → pin → components.lock` producer** is added.
+  The live self-hosted mirror is deferred (post-MVP).
+- **"Minimum" by exclusion.** Out of the launch: SPEC-0002 items 2-3 (the
+  `Agent`→`Component` adapter; removal of `_REGISTRY`/`_child_class_for`),
+  SPEC-0002 item 6 (`inproc`-only), SPEC-0008 (n8n, pinning, envelope limits),
+  SPEC-0010 (all), and `skill.v1`.
+- **Editions.** Fixed in **SPEC-0016**: Core (public Python reflection) / Pro
+  (private, optimization) / Enterprise (private, components) / cloud (deployment
+  adapter over one semantics). Tiers differ only in capacity, performance,
+  deployment, governance, support, and UI — never in correctness.
+- **The new frozen architecture** is captured in the sibling specs:
+  **SPEC-0012** (Component ABI), **SPEC-0013** (cross-runtime + conformance
+  vectors), **SPEC-0014** (network execution and trust), **SPEC-0015**
+  (provenance, trust gates, Assurance Labels), **SPEC-0017** (parked frontier
+  workstreams).
 
-**Open questions (the planning session's agenda).**
+**Open questions, now resolved.**
 
-1. **"Viable"** — to do what, and judged by whom? (the demo on a clean offline
-   checkout; a second operator reproducing it; or a real user task.)
-2. **Distribution element of the demo (⚠ contradiction).** The demo says "signed
-   lock", but the committed umbrella `components.lock` is blocked on the **live
-   mirror**, which does not exist. Choose: a signed lock via the delivered
-   **offline directory source**; the live mirror; or drop distribution from the
-   demo.
-3. **"Minimum" by exclusion** — confirm OUT of MVP: SPEC-0002 items 2–3 (the
-   `Agent`→`Component` adapter; removal of the `_REGISTRY` global and the
-   `_child_class_for` map), SPEC-0002 item 6 (`inproc`-only), SPEC-0008 (n8n,
-   pinning, envelope limits), SPEC-0010 (all), `skill.v1`.
-4. **`review.v1` + `confidence` semantics** — the design-heavy core the demo
-   drags in (also SPEC-0002 item 5 and SPEC-0009's last item).
+1. **"Viable"** — decided: clean-checkout offline reproducibility (above).
+2. **Distribution contradiction** — decided: offline directory source + real
+   local signing; live mirror deferred.
+3. **"Minimum" by exclusion** — decided (above).
+4. **`review.v1` + `confidence`** — parked to a dedicated formal-semantics
+   session (**SPEC-0017**); the launch ships a minimal deterministic scorer and a
+   deterministic formalizer at the model boundary.
 
 ## Scope
 
@@ -74,15 +76,15 @@ exclusion).
 
 ## Acceptance criteria
 
-- [ ] The MVP is defined: *viable* (outcome + judge) and *minimum* (the explicit
-      OUT list) are both fixed.
-- [ ] The MVP demo (above) is frozen as the acceptance scenario, with its
-      distribution element resolved (open question 2).
+- [x] The MVP is defined: *viable* (outcome + judge) and *minimum* (explicit OUT
+      list) are both fixed.
+- [x] The MVP demo is frozen as the acceptance scenario, with its distribution
+      element resolved.
 - [ ] Every MVP capability has a deterministic test; the operator's run and CI
       are the record (Law 12).
 - [ ] The spec status record is corrected (SPEC-0009 understated; the
       `implemented` specs' checkboxes un-ticked).
-- [ ] This spec moves `draft` → `accepted` once the definition is fixed.
+- [x] This spec moves `draft` → `accepted` once the definition is fixed.
 
 ## Risks / invariants
 
@@ -91,5 +93,5 @@ exclusion).
 - **Additive-only.** MVP advances by adding the new CBP spine; the legacy path
   stays untouched unless a step proves equivalence (SPEC-0002 §13).
 - **No MVP hostage to L3.** The isolated holdout validator is a separate,
-  declared-gated program; the evidence bar is decided in the planning session.
-- Respects Laws 1–13; changes no `src/` semantics on its own.
+  declared-gated program (SPEC-0017); the evidence bar is the operator/CI run.
+- Respects Laws 1-13; changes no `src/` semantics on its own.
