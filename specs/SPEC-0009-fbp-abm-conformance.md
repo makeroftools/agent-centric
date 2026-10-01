@@ -112,13 +112,16 @@ This spec states what that commits us to, where the current code is only
   **deadlock** — both fail closed, never hang; `args` act as **IIPs** for unwired
   inports. Port-declared networks auto-route through `run_flow` from `run_network`.
   Tests: `tests/test_cbp_flow.py`.
-- **Slice 3 (in progress).** Delivered: first-class per-port **IIP documents**
-  (`tests/test_cbp_iips.py`) and the composite **external-ports boundary guard**
-  (`tests/test_cbp_composite.py`) — a composite carries a nested subnet body and
-  an external-port map; a cross-boundary edge that bypasses those ports (a dotted
-  reference, an undeclared port, a mismatched interior port, or over-deep nesting)
-  is rejected fail-closed. Remaining: repeated-activation streaming (where
-  back-pressure suspends a producer).
+- **Slice 3 (delivered).** First-class per-port **IIP documents**
+  (`tests/test_cbp_iips.py`); the composite **external-ports boundary guard**
+  (`tests/test_cbp_composite.py`) — a nested subnet body plus an external-port
+  map, rejecting a bypass (a dotted reference, an undeclared port, a mismatched
+  interior port, or over-deep nesting) fail-closed; and **repeated-activation
+  streaming** (`cbp/stream.py`, `tests/test_cbp_stream.py`) — a component
+  re-activates once per input IP, a streaming out-port's iterable yields one IP
+  per element, and a full bounded connection deterministically **suspends** the
+  producer until a consumer drains it, with deadlocks and runaway sources failing
+  closed.
 
 ## Acceptance criteria
 
