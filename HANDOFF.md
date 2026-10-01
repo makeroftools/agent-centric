@@ -142,14 +142,15 @@ before acting.
     deterministic **Information-Packet flow**: verified outputs route
     outport→inport over `BoundedConnection`s (FIFO, capacity); overflow is
     back-pressure and an empty receive is a deadlock, both fail closed; `args`
-    supply IIPs. slice 3 — first-class per-port **IIP documents** (`network.v1`
-    `iips`, content-hashed and fail-closed). Tests: `tests/test_cbp_ports.py`,
-    `tests/test_cbp_flow.py`, `tests/test_cbp_iips.py`. Remaining: streaming and
-    the composite external-ports boundary guard.
+    supply IIPs. slice 3 — first-class per-port **IIP documents** and the
+    composite **external-ports boundary guard** (nested subnet body + external
+    map; depth-bounded; fail-closed). Tests: `tests/test_cbp_ports.py`,
+    `tests/test_cbp_flow.py`, `tests/test_cbp_iips.py`,
+    `tests/test_cbp_composite.py`. Remaining: repeated-activation streaming.
 
 ## Validation (last full run)
 
-- `uv run pytest -o addopts="" -p no:cacheprovider` → **1338 passed**.
+- `uv run pytest -o addopts="" -p no:cacheprovider` → **1355 passed**.
 - `uv run ruff check .` → clean.
 - `uv run mypy src` → clean (**116** source files).
 - `uv run agent-centric cbp-check` → **8/8**, READY.
@@ -165,10 +166,10 @@ before acting.
   delivered.
 - **Phase 0.5b remainder:** the live self-hosted mirror (Forgejo/Gitea); the
   signing service and transparency log are delivered.
-- **FBP/ABM conformance (SPEC-0009):** slices 1–3a delivered (ports + bounded
+- **FBP/ABM conformance (SPEC-0009):** slices 1–3b delivered (ports + bounded
   connections; deterministic IP flow with fail-closed back-pressure/deadlock;
-  first-class per-port IIP documents). Slice 3 remainder: repeated-activation
-  streaming and the composite external-ports boundary guard.
+  first-class per-port IIP documents; the composite external-ports boundary
+  guard). Slice 3 remainder: repeated-activation streaming.
 - **Extensibility (SPEC-0010, draft):** knowledge graphs (ontology as a versioned
   contract over a component-owned semantic graph; closed shapes for gates;
   pinned entailment closure) and bounded RSI (propose → review → sign → lock;
@@ -184,9 +185,9 @@ before acting.
 - **SPEC-0008 remainder:** the n8n adapter (import/export + canonical round-trip,
   fixture-tested) and the pin/record wiring (design -> signed lock -> boot).
 - **SPEC-0009 slice 3 remainder:** repeated-activation streaming (where
-  back-pressure suspends a producer) and the composite **external-ports boundary
-  guard** (needs a nested subnet body on the component contract). First-class
-  per-port IIP documents are delivered (`tests/test_cbp_iips.py`).
+  back-pressure suspends a producer). First-class per-port IIP documents
+  (`tests/test_cbp_iips.py`) and the composite external-ports boundary guard
+  (`tests/test_cbp_composite.py`) are delivered.
 - **SPEC-0010:** knowledge graphs and bounded RSI are target/roadmap; the isolated
   holdout validator (L3) is required before any self-improvement of verification.
 - **Honest FBP note:** non-port networks still run on the legacy args model;

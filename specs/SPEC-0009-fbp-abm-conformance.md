@@ -112,13 +112,13 @@ This spec states what that commits us to, where the current code is only
   **deadlock** — both fail closed, never hang; `args` act as **IIPs** for unwired
   inports. Port-declared networks auto-route through `run_flow` from `run_network`.
   Tests: `tests/test_cbp_flow.py`.
-- **Slice 3 (in progress).** First-class per-port **IIP documents** delivered:
-  `network.v1` carries explicit `iips` bound to named inports, content-hashed with
-  the network, validated fail-closed (duplicate / undeclared inport / unknown
-  target / IIP-plus-incoming-connection), and routed by `run_flow`. Tests:
-  `tests/test_cbp_iips.py`. Remaining: repeated-activation streaming (where
-  back-pressure suspends a producer) and the composite **external-ports boundary
-  guard** (needs the nested subnet body on the component contract).
+- **Slice 3 (in progress).** Delivered: first-class per-port **IIP documents**
+  (`tests/test_cbp_iips.py`) and the composite **external-ports boundary guard**
+  (`tests/test_cbp_composite.py`) — a composite carries a nested subnet body and
+  an external-port map; a cross-boundary edge that bypasses those ports (a dotted
+  reference, an undeclared port, a mismatched interior port, or over-deep nesting)
+  is rejected fail-closed. Remaining: repeated-activation streaming (where
+  back-pressure suspends a producer).
 
 ## Acceptance criteria
 
@@ -126,8 +126,9 @@ This spec states what that commits us to, where the current code is only
       **port → port**; a connection declares a **capacity**.
 - [x] The compiler resolves a network to a **deterministic plan**; an identical
       document yields an identical plan and content hash (`content_hash()`).
-- [ ] A composite declares **external ports**; a cross-boundary edge that does
-      not use them is **rejected fail-closed**.
+- [x] A composite declares **external ports**; a cross-boundary edge that does
+      not use them is **rejected fail-closed** (nested subnet body + external
+      map; `tests/test_cbp_composite.py`).
 - [ ] A component at rest has **no edges**; dependency appears only in a network
       document.
 - [x] Bounded connections enforce capacity; a full connection applies
