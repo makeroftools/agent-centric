@@ -20,6 +20,11 @@ from typing import Any
 from .capability import Capability
 
 _COMMIT_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
+
+# Dependency (an edge/connection) exists ONLY in a network document
+# (SPEC-0009 §2): a component at rest is a self-contained package with no
+# edges. A manifest that tries to smuggle one is rejected fail-closed.
+_FORBIDDEN_EDGE_KEYS = ("edges", "wires", "connections")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -242,6 +247,13 @@ class ComponentManifest:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ComponentManifest:
+        smuggled = sorted(k for k in _FORBIDDEN_EDGE_KEYS if k in data)
+        if smuggled:
+            raise ValueError(
+                "A component at rest declares no edges; remove "
+                f"{smuggled} (dependency belongs in a network document, "
+                "SPEC-0009)."
+            )
         state_raw = data.get("state")
         prov_raw = data.get("provenance")
         return cls(

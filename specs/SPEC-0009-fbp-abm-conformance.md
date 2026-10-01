@@ -138,6 +138,11 @@ This spec states what that commits us to, where the current code is only
   its scope, so two components can never resolve to the same file — a child
   owns its own state and siblings never write each other. Tests:
   `tests/test_component_sovereignty.py`.
+- **Slice 6 (delivered).** **A component at rest has no edges**
+  (`contracts/component.py`): a `component.v1` manifest is a self-contained
+  package; a manifest that tries to carry an edge (`edges`/`wires`/
+  `connections`) is rejected fail-closed, and dependency appears only when a
+  network document adds an edge. Tests: `tests/test_component_at_rest.py`.
 
 ## Acceptance criteria
 
@@ -149,8 +154,9 @@ This spec states what that commits us to, where the current code is only
 - [x] A composite declares **external ports**; a cross-boundary edge that does
       not use them is **rejected fail-closed** (nested subnet body + external
       map; `tests/test_cbp_composite.py`).
-- [ ] A component at rest has **no edges**; dependency appears only in a network
-      document.
+- [x] A component at rest has **no edges**; dependency appears only in a network
+      document (`contracts/component.py` manifest guard,
+      `tests/test_component_at_rest.py`).
 - [x] Bounded connections enforce capacity; a full connection applies
       **deterministic back-pressure**; a deterministic deadlock is an explicit,
       audited failure — never a hang (`cbp/flow.py`, `tests/test_cbp_flow.py`).
@@ -162,8 +168,9 @@ This spec states what that commits us to, where the current code is only
       namespaced state and boot wires through it
       (`tests/test_component_sovereignty.py`).
 - [ ] `model` components are recorded and confidence-scored.
-- [ ] The convention guard records this spec; no `src/` semantics change lands
-      before its acceptance criteria are implemented and green.
+- [x] The convention guard records this spec
+      (`tests/test_agent_conventions.py::TestSpecs`); no `src/` semantics change
+      lands before its acceptance criteria are implemented and green.
 
 ## Risks / invariants
 

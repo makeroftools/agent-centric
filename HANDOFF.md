@@ -157,7 +157,10 @@ before acting.
     sovereignty**: `StateScope` binds a component to one namespace under the
     state root and refuses any escaping path, and boot materializes all
     declared state through it, so siblings can never write each other
-    (`tests/test_component_sovereignty.py`).
+    (`tests/test_component_sovereignty.py`). slice 6 — a component **at rest
+    has no edges**: a `component.v1` manifest carrying `edges`/`wires`/
+    `connections` is rejected fail-closed, so dependency appears only in a
+    network document (`tests/test_component_at_rest.py`).
 - **Docs / presentation:** README showcase (SVG hero banner + mark, live badges,
   Mermaid diagrams); historical docs superseded by active docs were removed
   (`KERNEL.md`, `README_CBP.md`, `docs/CBP_HANDOFF.md`, `docs/DIRECTIVE.md`);
@@ -165,7 +168,7 @@ before acting.
 
 ## Validation (last full run)
 
-- `uv run pytest -o addopts="" -p no:cacheprovider` → **1395 passed**.
+- `uv run pytest -o addopts="" -p no:cacheprovider` → **1400 passed**.
   (10 distribution/boot tests spawn temporary `git` repos and need the
   operator's global `commit.gpgsign` agent; with it unavailable they fail for
   the environment, not the change — they pass under `GIT_CONFIG_GLOBAL=/dev/null`.)
@@ -184,14 +187,13 @@ before acting.
   delivered.
 - **Phase 0.5b remainder:** the live self-hosted mirror (Forgejo/Gitea); the
   signing service and transparency log are delivered.
-- **FBP/ABM conformance (SPEC-0009):** slices 1–5 delivered (named ports +
+- **FBP/ABM conformance (SPEC-0009):** slices 1–6 delivered (named ports +
   bounded connections; deterministic IP flow with fail-closed back-pressure and
   deadlock; first-class per-port IIP documents; the composite external-ports
   boundary guard; repeated-activation streaming with producer suspension; named
   typed ports enforced statically and at run time; per-component state
-  sovereignty via `StateScope`). Remaining acceptance items: a component at
-  rest having no edges (dependency only in a network document); and
-  recorded/confidence-scored `model` components.
+  sovereignty via `StateScope`; a component at rest has no edges). Remaining
+  acceptance item: recorded/confidence-scored `model` components.
 - **Extensibility (SPEC-0010, draft):** knowledge graphs (ontology as a versioned
   contract over a component-owned semantic graph; closed shapes for gates;
   pinned entailment closure) and bounded RSI (propose → review → sign → lock;
@@ -206,9 +208,9 @@ before acting.
   the lock stays generated, not committed.
 - **SPEC-0008 remainder:** the n8n adapter (import/export + canonical round-trip,
   fixture-tested) and the pin/record wiring (design -> signed lock -> boot).
-- **SPEC-0009 remainder:** slices 1–5 are delivered (through named typed ports
-  and per-component state sovereignty). Remaining acceptance items: a component
-  at rest having no edges; and recorded/confidence-scored `model` components.
+- **SPEC-0009 remainder:** slices 1–6 are delivered (through named typed ports,
+  per-component state sovereignty, and a component at rest having no edges).
+  Remaining acceptance item: recorded/confidence-scored `model` components.
 - **SPEC-0010:** knowledge graphs and bounded RSI are target/roadmap; the isolated
   holdout validator (L3) is required before any self-improvement of verification.
 - **Honest FBP note:** non-port networks still run on the legacy args model;
@@ -248,7 +250,8 @@ See [`docs/agent/levels.md`](docs/agent/levels.md),
   `shell` (root composite → `registry`) + `registry` components.
 - `tests/test_agent_conventions.py` — convention + anti-drift guard;
   `tests/test_component_distribution.py`, `tests/test_component_state.py`,
-  `tests/test_component_sovereignty.py`, `tests/test_component_graph.py`,
+  `tests/test_component_sovereignty.py`, `tests/test_component_at_rest.py`,
+  `tests/test_component_graph.py`,
   `tests/test_component_boot.py`, `tests/test_component_process.py`,
   `tests/test_release_signing.py`, `tests/test_design.py`,
   `tests/test_cbp_ports.py`, `tests/test_cbp_typed_ports.py`, and
