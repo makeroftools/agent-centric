@@ -24,13 +24,11 @@ same trajectory and the same outcome. Nondeterminism is confined to the
 agent's own computation and is recorded, never relied upon by the control
 plane.
 
-## 2a. Abstract System — Not a Trading System
+## 2a. Abstract System
 
-This is an **abstract, general-purpose agent system**. It is not a trading
-system, and trading / automated-trading concerns are **non-relevant** to this
-project. The mission-critical posture (correctness, determinism, verification,
-audit, fail-closed) applies to the abstract system itself, not to any
-particular domain. Do not frame this project as a trading system.
+This is an **abstract, general-purpose agent system**. The mission-critical
+posture (correctness, determinism, verification, audit, fail-closed) applies to
+the abstract system itself, not to any particular domain.
 
 ## 3. Agent-Centric Design
 

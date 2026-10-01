@@ -32,8 +32,8 @@ conceptual foundation everything below hangs from.
 A rooted, recursive **tree of agents**. There is no central `AgentManager`;
 the topology *is* the governance.
 
-This is an **abstract, general-purpose agent system** — not a trading system.
-Trading / automated-trading concerns are **non-relevant** to this project.
+This is an **abstract, general-purpose agent system**; the mission-critical
+posture applies to the system itself, not to any particular domain.
 
 - **Root = the shell.** The shell is an agent (not an external orchestrator). It
   bootstraps the tree and is the origin of work and the final owner of
@@ -229,7 +229,6 @@ deterministic, and fully tested before layering on transport and UI.
 
 ## 5. Non-goals
 
-- Not a trading system; trading concerns are non-relevant.
 - No unverified money/dates; no auto-accept.
 - No silent registry writes.
 - No network in CI.

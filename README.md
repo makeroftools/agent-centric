@@ -68,10 +68,9 @@ against a deterministic rule before it counts. Determinism is a feature of the
 The non-negotiable rules that govern every decision in this repository live in
 [`PRINCIPLES.md`](PRINCIPLES.md).
 
-> **What this is / is not.** This is an **abstract, general-purpose** agent
-> system. It is *not* a trading system. The mission-critical posture —
-> correctness, determinism, verification, audit, fail-closed — applies to the
-> system itself, not to any particular domain.
+> **Scope.** This is an **abstract, general-purpose** agent system. The
+> mission-critical posture — correctness, determinism, verification, audit,
+> fail-closed — applies to the system itself, not to any particular domain.
 
 ---
 

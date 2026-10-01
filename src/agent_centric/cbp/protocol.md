@@ -12,8 +12,8 @@ This document is the **crux of the system**: the standard "language" that every
 agent speaks. It is a versioned, enforced contract. Messages that do not conform
 are rejected — never silently accepted.
 
-This is an **abstract, general-purpose agent system** — not a trading system.
-Trading / automated-trading concerns are **non-relevant** to this project.
+This is an **abstract, general-purpose agent system**; the mission-critical
+posture applies to the system itself, not to any particular domain.
 
 ## 1. Transport
 
