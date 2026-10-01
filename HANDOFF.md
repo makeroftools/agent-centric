@@ -15,17 +15,17 @@ git repo); the work lives in three sibling repos:
 | [`../conformance/`](../conformance/AGENTS.md) | public | The shared contract: WIT ABI + conformance vectors + certifier. |
 | [`../pro/`](../pro/AGENTS.md) | private | The Rust host (optimization edition). |
 
-The most recent session delivered **Layers 0, 1a, 1b, 1c, signing, and **Layer 2**
-network.v1**, of the full-version plan (`SPEC-0011`): the frozen component ABI
-(`component-abi.v1`) and v1 conformance vectors; a **Rust host certified
-cross-runtime-identical** to the Python reference host (shared suite **31/31**);
-**content-addressed, signed WASM execution** (WASM suite **10/10**), including a
-full **`component-abi.v1` WASM guest** that announces its channels/tasks and
-exchanges Information Packets over the host-mediated transport, and locked-down
-refusal of unsigned/bad-signature artifacts. **Layer 2 `network.v1` is
-delivered** (static + deterministic-planner: pinned before it runs, typed at
-instantiation, replayable; network suite **14/14** on both hosts). **Next is
-Layer 3** (§Next).
+Delivered so far, of the full-version plan (`SPEC-0011`): **Layers 0, 1a, 1b,
+1c, signing, and Layer 2** (the frozen `component-abi.v1` and v1 conformance
+vectors; a **Rust host certified cross-runtime-identical** to the Python
+reference host — shared suite **31/31**; **content-addressed, signed WASM
+execution** — WASM suite **10/10**, including a full **`component-abi.v1` WASM
+guest** that announces its channels/tasks and exchanges Information Packets over
+the host-mediated transport, with locked-down refusal of unsigned/bad-signature
+artifacts; **`network.v1`** — static + deterministic-planner, pinned before it
+runs, typed at instantiation, replayable — network suite **14/14** on both
+hosts), plus **Layer 3** (a deterministic, content-addressed read-only network
+diagram). **Next is Layer 4** (§Next).
 
 ## Verify everything (do this before acting)
 
@@ -34,19 +34,24 @@ Layer 3** (§Next).
 cd core
 uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
-uv run mypy src                                       # -> 117 files, clean
+uv run mypy src                                       # -> 118 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1400 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1427 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
 python3 certifier/certify.py                          # Python reference: 31/31
 python3 certifier/certify.py --host-cmd "python3 certifier/reference_host.py"  # ext protocol: 31/31
+python3 certifier/certify.py \
+  --suite vectors/network-suite.v1.json \
+  --fixtures vectors/network-fixtures.v1.json \
+  --lock vectors/network.lock.v1.json \
+  --contract-lock contracts/ABI.lock.v1.json          # network.v1: 14/14
 #   (the WASM suite is certified by the Rust host, below)
 
 # pro (Rust host) ---------------------------------------------------------
 cd ../pro
-./scripts/certify.sh                                  # builds + certifies BOTH suites (31/31 + 10/10) + unit tests
+./scripts/certify.sh                                  # builds + certifies ALL THREE suites (31/31 + 10/10 + 14/14) + unit tests
 cargo test --release --features wasm                  # codec + artifact-signature tests: 5 passed
 ```
 
@@ -55,11 +60,12 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 
 ## Verified state (tips)
 
-- Tips at verification time — `core` **e931a0d** · `conformance` **77e6684** ·
-  `pro` **0546245** — all clean, all pushed to `origin/main`. **These advance as
-  work continues: re-run the verification block rather than trusting the hashes.**
-- Core gates: `ruff` clean; `mypy` clean (117 files); `cbp-check` **READY**;
-  convention + home-path guard passed; full suite **1400 passed** (~63 s).
+- All three repos are on `main` and pushed to `origin/main`. **Never trust a
+  commit hash written in prose — it drifts. Read the live tips instead:**
+  `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
+  `git -C ../pro log -1 --oneline`.
+- Core gates: `ruff` clean; `mypy` clean (118 files); `cbp-check` **READY (8/8)**;
+  convention + home-path guard passed; full suite **1427 passed** (~63 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -148,9 +154,10 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > **L1**; target L3 gated) -> `core/HANDOFF.md`, then the frozen plan
 > `core/specs/SPEC-0011` through `SPEC-0017`, and `conformance/AGENTS.md` +
 > `pro/AGENTS.md`. Confirm all three repos are on `main` and clean, then run the
-> verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1400
-> passed**, shared suite **31/31** on Python + Rust, WASM suite **10/10**).
-> **Layers 0, 1a, 1b, 1c and signing are delivered**; the next step is **Layer 2**.
+> verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1427
+> passed**, shared suite **31/31** on Python + Rust, WASM suite **10/10**, network
+> suite **14/14**). **Layers 0, 1a, 1b, 1c, signing, 2, and 3 are delivered**;
+> the next step is **Layer 4**.
 > Obey the hard laws: whole-file replacement
 > only via `tools/safe-replace.sh` (**never in-place edits**), commit and push
 > continuously, never `--no-verify`. Never act above L1 without the operator
@@ -250,6 +257,12 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   verifies against the host trust root (carried in
   `../conformance/vectors/wasm.lock.v1.json`, never fixture data); unsigned or
   bad-signature artifacts are refused before execution. WASM suite **10/10**.
+- **Network + diagram (Layers 2/3)** — `../conformance/`: `contracts/network-v1.md`
+  (revision 2) and `vectors/network-{fixtures,suite,lock}.v1.json` (**14 cases**;
+  static + deterministic-planner, pinned before running, typed at instantiation,
+  replayable), implemented by the Python reference host and the Rust host
+  (`../pro/src/network.rs`). `core`: `cbp/diagram.py` projects a validated network
+  into a deterministic, content-addressed read-only diagram (JSON + SVG).
 - **Convention layer (SPEC-0001/0003/0004)** — `AGENTS.md` TOC, canonical skills
   (auto-discovered), `tools/new-skill.sh`, same-name component mapping, guarded by
   `tests/test_agent_conventions.py`.
@@ -347,17 +360,20 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **Law 13 — commit and push continuously.** Hooks and CI are the guardrails;
   never `--no-verify`.
 
-**Process risk (observed — guard against it).** During this build the authoring
-agent made **three Law-11 slips** (twice `sed -i`, once Python `write_text`).
-Each was caught and the whole file re-emitted via `tools/safe-replace.sh`, so
-committed content is byte-complete — but the *method* was wrong. A new session
-must not mutate a file any way other than a whole-file `cp` replace. If you catch
+**Process risk (observed — guard against it).** Law-11 slips have occurred here.
+An early session made **three** (twice `sed -i`, once Python `write_text`); a
+later hardening session made **two more `write_text` slips** — a patch script
+wrote docs and tests directly instead of piping through `safe-replace`. Each was
+caught and the whole file re-emitted via `tools/safe-replace.sh`, so committed
+content is byte-complete — but the *method* was wrong. **The patch script is the
+trap:** even a "read → transform → write" script must write to a temp and go
+through `safe-replace`; never call `Path.write_text` on a repo file. If you catch
 yourself reaching for an in-place tool, stop and use `safe-replace`.
 
 ## Key files
 
 - **conformance (1c)** — `artifacts/abi-identity.wasm`;
-  `vectors/wasm-{fixtures,suite,lock}.v1.json` (8 cases).
+  `vectors/wasm-{fixtures,suite,lock}.v1.json` (10 cases).
 - **pro (1c)** — `fixtures/abi-identity/` (WIT-referencing `component-abi.v1`
   guest); `src/wasm.rs` (ABI bindgen + host mediator).
 - **core** — `src/agent_centric/cbp/` (`component_bundle.py`,
@@ -370,7 +386,7 @@ yourself reaching for an in-place tool, stop and use `safe-replace`.
 - **conformance** — `contracts/component-abi-v1.wit`, `contracts/ABI.md`,
   `contracts/ABI.lock.v1.json`, `contracts/network-v1.md`;
   `vectors/{fixtures,suite,vectors.lock}.v1.json`;
-  `vectors/network-{fixtures,suite,lock}.v1.json` (network.v1, 9 cases);
+  `vectors/network-{fixtures,suite,lock}.v1.json` (network.v1, 14 cases);
   `vectors/wasm-{fixtures,suite,lock}.v1.json`; `artifacts/identity.wasm`;
   `certifier/{certify.py,reference_host.py,PROTOCOL.md}`.
 - **pro** — `src/{main.rs,host.rs,codec.rs,wasm.rs,network.rs}`; `fixtures/identity/`
