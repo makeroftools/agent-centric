@@ -47,7 +47,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 123 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1552 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1555 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -82,7 +82,7 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (123 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1552 passed** (~63 s).
+  convention + home-path guard passed; full suite **1555 passed** (~63 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -178,7 +178,7 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > **L1**; target L3 gated) -> `core/HANDOFF.md`, then the frozen plan
 > `core/specs/SPEC-0011` through `SPEC-0017`, and `conformance/AGENTS.md` +
 > `pro/AGENTS.md`. Confirm all three repos are on `main` and clean, then run the
-> verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1552
+> verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1555
 > passed**, shared suite **31/31** on Python + Rust, WASM suite **10/10**, network
 > suite **14/14**, appointed suite **8/8**). **Layers 0, 1a, 1b, 1c, signing, 2,
 > 3, and 4 are delivered**, along with the `design → pin → components.lock`
@@ -371,7 +371,7 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   (verify-then-apply; self-hosted Gitea first). Public origin-agnostic spec in
   `specs/SPEC-0018-service-host-provisioning-and-continuous-deployment.md`; the
   private instantiation lives in a separate **private companion repo**. Additive
-  public **`service.v1`** contract delivered (`contracts/service.py`, 33 tests);
+  public **`service.v1`** contract delivered (`contracts/service.py`, 36 tests, incl. additive task-content pins);
   Phase 1 infra **authored** (deterministic tasks, pull/apply agent, a pinned
   host definition + `service.v1` instance, enrollment runbook, infra CI, DR
   drill) — **nothing provisioned**.
