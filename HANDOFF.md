@@ -6,8 +6,10 @@
 > restate.
 
 **Prepared for a new model session.** Facts below are current as of the tip of
-`main` (see `git log -1`); `main` is the only branch and is pushed to `origin`.
-Run the fresh-session checklist below before acting.
+`main`; `main` is the only branch and is pushed to `origin`. The most recent work
+is the SPEC-0009 FBP slices (named ports + deterministic Information-Packet flow);
+see `git log -1` and *Where we are (delivered)*. Run the fresh-session checklist
+before acting.
 
 ## Read first (in order)
 
@@ -17,10 +19,9 @@ Run the fresh-session checklist below before acting.
 4. [`.agents/skills/`](.agents/skills) — the on-demand Agent Skills.
 5. [`docs/agent/`](docs/agent/README.md) — progressive disclosure: architecture,
    levels, testing, verification, committing, components.
-6. [`specs/SPEC-0002-cbp-component-architecture.md`](specs/SPEC-0002-cbp-component-architecture.md)
-   (CBP target) and
-   [`specs/SPEC-0007-harness-shell-component-distribution.md`](specs/SPEC-0007-harness-shell-component-distribution.md)
-   (harness/shell + distribution).
+6. [`specs/`](specs) — SPEC-0002 (CBP target), SPEC-0007 (harness/shell +
+   distribution), SPEC-0008 (shell design / n8n), SPEC-0009 (FBP/ABM
+   conformance), SPEC-0010 (extensibility).
 
 > **Background (optional, non-normative).** The external **literature** that
 > informed the design (FBP, CPM, agent SDLC, dark factory) is indexed in
@@ -51,6 +52,19 @@ Run the fresh-session checklist below before acting.
 4. Run the test suite as the level permits (Law 12); the operator/CI is the record.
 5. Continue from **Next** below. Never act above the active level without the
    operator changing `.agentfactory.toml` first.
+
+### Kickoff prompt (paste into a new session)
+
+> Continue the mission-critical `agent-centric` system (CBP/ABM; deterministic,
+> local-first, fail-closed). Read `AGENTS.md` -> `PRINCIPLES.md` ->
+> `.agentfactory.toml` (active **L1**; target L3 gated) -> `HANDOFF.md`. Confirm
+> `main` and a clean tree, then run `uv run ruff check .`, `uv run mypy src`,
+> `uv run agent-centric cbp-check`, and the suite
+> `uv run pytest -o addopts="" -p no:cacheprovider`. Continue from HANDOFF
+> **Next**. Obey the hard laws: whole-file replacement only via
+> `tools/safe-replace.sh` (never in-place edits), commit and push continuously,
+> never `--no-verify`. Never act above L1 without the operator changing
+> `.agentfactory.toml` first.
 
 ## What Agent-centric is
 
@@ -159,6 +173,22 @@ Run the fresh-session checklist below before acting.
   verification off-limits until the isolated validator exists).
 - **Phases 3–5:** directives aggregated into skills + pinned model components;
   migration + hermetic CI; hardening drills.
+
+## Open threads (blockers & honest gaps)
+
+- **Live self-hosted mirror** (Forgejo/Gitea) — needed for Phase 0.5b and for a
+  committed umbrella `components.lock`; there are no real pinned remotes yet, so
+  the lock stays generated, not committed.
+- **SPEC-0008 remainder:** the n8n adapter (import/export + canonical round-trip,
+  fixture-tested) and the pin/record wiring (design -> signed lock -> boot).
+- **SPEC-0009 slice 3:** repeated-activation streaming (where back-pressure
+  suspends a producer), first-class per-port IIP documents, and the composite
+  **external-ports boundary guard** (needs a nested subnet body on the component
+  contract).
+- **SPEC-0010:** knowledge graphs and bounded RSI are target/roadmap; the isolated
+  holdout validator (L3) is required before any self-improvement of verification.
+- **Honest FBP note:** non-port networks still run on the legacy args model;
+  port-declared networks use `run_flow`. Both are deterministic.
 
 ## How to work here (hard laws)
 
