@@ -199,6 +199,19 @@ from .model_catalog import (
     min_tier_for,
     resolve_base,
 )
+from .model_record import (
+    MAX_MODEL_CONFIDENCE,
+    MODEL_RECORD_SCHEMA,
+    PROVIDER_EXTERNAL,
+    PROVIDER_KINDS,
+    PROVIDER_STUB,
+    ModelConfidence,
+    ModelRecord,
+    ModelRecordError,
+    ModelRecordLog,
+    is_content_hash,
+    score_model_confidence,
+)
 from .network import (
     DEFAULT_CONNECTION_CAPACITY,
     MAX_CONNECTION_CAPACITY,
@@ -615,6 +628,18 @@ __all__ = [
     # Model agent (an LLM as an ordinary first-class agent)
     "ModelAgent",
     "TASK_MODEL",
+    # Deterministic model boundary (record + confidence score; SPEC-0009 §4)
+    "MODEL_RECORD_SCHEMA",
+    "MAX_MODEL_CONFIDENCE",
+    "PROVIDER_STUB",
+    "PROVIDER_EXTERNAL",
+    "PROVIDER_KINDS",
+    "ModelConfidence",
+    "ModelRecord",
+    "ModelRecordLog",
+    "ModelRecordError",
+    "is_content_hash",
+    "score_model_confidence",
     # Bills loop (real end-to-end CBP graph)
     "BillsAgent",
     "TASK_ACCEPT_DETERMINISTIC",

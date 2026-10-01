@@ -143,6 +143,17 @@ This spec states what that commits us to, where the current code is only
   package; a manifest that tries to carry an edge (`edges`/`wires`/
   `connections`) is rejected fail-closed, and dependency appears only when a
   network document adds an edge. Tests: `tests/test_component_at_rest.py`.
+- **Slice 7 (delivered).** **Recorded, confidence-scored `model` components**
+  (`cbp/model_record.py`): every model call is captured as an immutable,
+  content-addressed `ModelRecord` (provider kind, prompt/output sha256, a
+  deterministic scoped confidence in `[0, MAX_MODEL_CONFIDENCE]`, and its
+  reason) and appended to an **idempotent** `ModelRecordLog` (re-recording the
+  same call is a no-op, never a duplicate). `ModelAgent` records and scores
+  each call and carries the confidence and the record's content address on the
+  response (verified end-to-end through the relay and the wire codec); a
+  parent verifier still demotes a model output it does not accept, so a record
+  is evidence, never a verified success on its own. Tests:
+  `tests/test_cbp_model_record.py`, `tests/test_cbp_model_confidence.py`.
 
 ## Acceptance criteria
 
@@ -167,7 +178,7 @@ This spec states what that commits us to, where the current code is only
       proposals (test-enforced) — `StateScope` mediates per-component
       namespaced state and boot wires through it
       (`tests/test_component_sovereignty.py`).
-- [ ] `model` components are recorded and confidence-scored.
+- [x] `model` components are recorded and confidence-scored.
 - [x] The convention guard records this spec
       (`tests/test_agent_conventions.py::TestSpecs`); no `src/` semantics change
       lands before its acceptance criteria are implemented and green.

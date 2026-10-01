@@ -33,8 +33,9 @@ advanced: the **`design → pin → components.lock` producer** (`cbp/lockfile.p
 SPEC-0008 Phase 3), **signing-key rotation** with overlapping trust windows
 (`cbp/trust.py`, SPEC-0007 §6), and the **n8n authoring adapter**
 (`cbp/n8n_adapter.py`, SPEC-0008 Phase 2, lossless `design.v1` ⇄ n8n round-trip)
-are delivered. **Next: the umbrella `components.lock`** (needs the live mirror),
-**envelope limits**, and **`model` components** (§Next).
+are delivered, as is the **recorded, confidence-scored `model` component**
+boundary (`cbp/model_record.py`, SPEC-0009 slice 7). **Next: the umbrella
+`components.lock`** (needs the live mirror) and **envelope limits** (§Next).
 
 ## Verify everything (do this before acting)
 
@@ -43,9 +44,9 @@ are delivered. **Next: the umbrella `components.lock`** (needs the live mirror),
 cd core
 uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
-uv run mypy src                                       # -> 121 files, clean
+uv run mypy src                                       # -> 122 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1477 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1499 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -79,8 +80,8 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
   commit hash written in prose — it drifts. Read the live tips instead:**
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`.
-- Core gates: `ruff` clean; `mypy` clean (121 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1477 passed** (~63 s).
+- Core gates: `ruff` clean; `mypy` clean (122 files); `cbp-check` **READY (8/8)**;
+  convention + home-path guard passed; full suite **1499 passed** (~65 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -176,13 +177,13 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > **L1**; target L3 gated) -> `core/HANDOFF.md`, then the frozen plan
 > `core/specs/SPEC-0011` through `SPEC-0017`, and `conformance/AGENTS.md` +
 > `pro/AGENTS.md`. Confirm all three repos are on `main` and clean, then run the
-> verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1477
+> verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1499
 > passed**, shared suite **31/31** on Python + Rust, WASM suite **10/10**, network
 > suite **14/14**, appointed suite **8/8**). **Layers 0, 1a, 1b, 1c, signing, 2,
 > 3, and 4 are delivered**, along with the `design → pin → components.lock`
-> producer, signing-key rotation, and the n8n authoring adapter. The next steps
-> are the umbrella `components.lock` (needs the live mirror), envelope limits, and
-> `model` components.
+> producer, signing-key rotation, the n8n authoring adapter, and the recorded,
+> confidence-scored `model` component boundary. The next steps are the umbrella
+> `components.lock` (needs the live mirror) and envelope limits.
 > Obey the hard laws: whole-file replacement
 > only via `tools/safe-replace.sh` (**never in-place edits**), commit and push
 > continuously, never `--no-verify`. Never act above L1 without the operator
@@ -327,8 +328,8 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **FBP/ABM conformance (SPEC-0009)** — named/typed ports, Information-Packet
   flow with fail-closed back-pressure/deadlock, per-port IIPs, composite
   external-ports boundary guard, repeated-activation streaming, per-component
-  state sovereignty, a component at rest has no edges. **8/9** built; only
-  recorded/confidence-scored `model` components open.
+  state sovereignty, a component at rest has no edges, and recorded,
+  confidence-scored `model` components (`cbp/model_record.py`). **9/9** built.
 - **Docs / presentation** — README showcase; historical docs removed; `STATUS.md`
   retained as volley history.
 
@@ -361,8 +362,8 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **SPEC-0008** `draft` — `design.v1` + validate/compile, the Phase 3
   `pin`/`record` wiring (`cbp/lockfile.py`), **and** the Phase 2 n8n adapter
   (`cbp/n8n_adapter.py`) delivered; envelope limits open.
-- **SPEC-0009** `draft` — **8/9** built; only recorded/confidence-scored `model`
-  components open. Status understates it.
+- **SPEC-0009** `draft` — **9/9** built: recorded, confidence-scored `model`
+  components delivered (`cbp/model_record.py`); spec status understates it.
 - **SPEC-0010** `draft` — roadmap only.
 
 ## Next
@@ -378,8 +379,6 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **SPEC-0008 remainder** — enforce envelope limits at `validate` (with the
   runtime/pin phase). (`design.v1` validate/compile, `pin`/`record`, and the n8n
   round-trip are delivered.)
-- **SPEC-0009 remainder** — recorded/confidence-scored `model` components (the
-  last of 9).
 - **Signing** — **key rotation delivered** (`cbp/trust.py`); optional threshold
   signing remains.
 - **SPEC-0017 frontier** — formal semantics/ontology; reduction + formal

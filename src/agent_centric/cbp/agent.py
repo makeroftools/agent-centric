@@ -295,6 +295,8 @@ class Agent:
             "source": msg.source,
             "sources": msg.sources,
             "protocol": msg.protocol,
+            "confidence": msg.confidence,
+            "model_record": msg.model_record,
         }
 
     async def _recv(self) -> Directive:
@@ -1155,6 +1157,8 @@ class Agent:
             error=payload.get("error"),
             source=payload.get("source", ""),
             sources=payload.get("sources"),
+            confidence=payload.get("confidence"),
+            model_record=payload.get("model_record"),
         )
         try:
             validate_response(msg)

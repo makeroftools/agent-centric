@@ -14,6 +14,10 @@ Determinism is preserved by construction:
   non-deterministic model unless a provider is explicitly wired.
 - Every response carries ``sources`` (the model id) so a non-deterministic
   result is auditable with citations.
+- Every call is **recorded** (content-addressed, append-only, idempotent) and
+  **confidence-scored** by the deterministic model boundary
+  (``cbp.model_record``, SPEC-0009 §4). A record never promotes the output to a
+  verified success: the parent still re-verifies the value.
 - A real provider is an opt-in hook (``ModelProvider``); enabling one does not
   relax the correctness spine — the parent still re-verifies the output.
 """
@@ -28,6 +32,12 @@ from .message import (
     RESPONSE_RESULT,
     Directive,
     Response,
+)
+from .model_record import (
+    PROVIDER_EXTERNAL,
+    PROVIDER_STUB,
+    ModelRecord,
+    ModelRecordLog,
 )
 
 # The run-task this agent serves.
@@ -70,12 +80,14 @@ class ModelAgent(Agent):
         _model_id: The model identity attached to responses as a source.
         _provider: An optional pluggable backend; defaults to the deterministic
             stub.
+        _model_records: An append-only, idempotent log of this agent's calls.
     """
 
     def __init__(self, config: Any, *, model_id: str = _STUB_MODEL_ID) -> None:
         super().__init__(config)
         self._model_id = model_id
         self._provider: ModelProvider | None = None
+        self._model_records = ModelRecordLog()
 
     def _handle(self, directive: Directive) -> Response:
         if directive.kind == DIRECTIVE_RUN:
@@ -103,6 +115,14 @@ class ModelAgent(Agent):
         if model_id:
             self._model_id = model_id
 
+    def model_records(self) -> tuple[ModelRecord, ...]:
+        """Every model call this agent has recorded, by content address.
+
+        Read-only and deterministic (append-only log, idempotent by record
+        hash). A model output is evidence, never a verified success on its own.
+        """
+        return self._model_records.entries()
+
     @staticmethod
     def _invoke_provider(provider: Any, prompt: str, kwargs: dict[str, Any]) -> str:
         """Call a provider supporting either ``.complete`` or ``__call__``.
@@ -119,11 +139,15 @@ class ModelAgent(Agent):
         return str(text)
 
     def _op_model(self, directive: Directive) -> Response:
-        """Serve a model completion, attaching the model id as a source.
+        """Serve a model completion, recording and confidence-scoring it.
 
         The output is a normal child value: it bubbles up and is re-verified by
-        the parent's verifier. ``sources`` records the model id so the result is
-        auditable with citations.
+        the parent's verifier. The call is recorded at the deterministic model
+        boundary as a content-addressed ``ModelRecord`` (idempotent by record
+        hash) and scored with a scoped reproducibility confidence; both the
+        confidence and the record's content address are carried on the response
+        so the upward path and the audit can cite them. ``sources`` records the
+        model id (and the record) so the result is auditable with citations.
         """
         args = directive.payload.get("args")
         args = args if isinstance(args, dict) else {}
@@ -135,13 +159,35 @@ class ModelAgent(Agent):
             output = self._invoke_provider(
                 provider, prompt, {k: v for k, v in args.items() if k != "prompt"}
             )
+            provider_kind = PROVIDER_EXTERNAL
+            deterministic = False
         else:
             output = _stub_complete(prompt)
+            provider_kind = PROVIDER_STUB
+            deterministic = True
+        record = ModelRecord.build(
+            model_id=self._model_id,
+            provider_kind=provider_kind,
+            deterministic=deterministic,
+            prompt=prompt,
+            output=output,
+        )
+        self._model_records.record(record)
         return Response(
             correlation_id=directive.correlation_id,
             kind=RESPONSE_RESULT,
             value=output,
             verified=True,
             node=self.identity,
-            sources=[{"kind": "model", "id": self._model_id}],
+            sources=[
+                {"kind": "model", "id": self._model_id},
+                {
+                    "kind": "model-record",
+                    "id": record.record_hash(),
+                    "confidence": record.confidence,
+                    "deterministic": record.deterministic,
+                },
+            ],
+            confidence=record.confidence,
+            model_record=record.record_hash(),
         )

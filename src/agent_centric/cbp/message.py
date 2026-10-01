@@ -23,6 +23,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .model_record import MAX_MODEL_CONFIDENCE, is_content_hash
+
 # The protocol version every agent speaks.
 PROTOCOL_VERSION = "directive-response/v1"
 
@@ -117,6 +119,10 @@ class Response:
         error: A human-readable error message on failure, else None.
         source: The source location (URL) of the callable that produced this
             response, for chain audit. Empty when not applicable.
+        confidence: The deterministic model-boundary confidence in
+            [0.0, MAX_MODEL_CONFIDENCE], or None for a non-model response.
+        model_record: The content address of the model record for a model
+            response, or None. It is the write-once evidence of the call.
         protocol: The protocol version this response speaks.
     """
 
@@ -129,6 +135,8 @@ class Response:
     source: str = ""
     sources: list[dict[str, Any]] | None = None
     protocol: str = PROTOCOL_VERSION
+    confidence: float | None = None
+    model_record: str | None = None
 
 
 class ProtocolError(ValueError):
@@ -185,3 +193,16 @@ def validate_response(msg: Response) -> None:
         raise ProtocolError("an 'error' response must not be verified")
     if not isinstance(msg.source, str):
         raise ProtocolError("response source must be a string")
+    if msg.confidence is not None:
+        if isinstance(msg.confidence, bool) or not isinstance(
+            msg.confidence, (int, float)
+        ):
+            raise ProtocolError("response confidence must be numeric")
+        if not (0.0 <= float(msg.confidence) <= MAX_MODEL_CONFIDENCE):
+            raise ProtocolError(
+                f"response confidence must be in [0.0, {MAX_MODEL_CONFIDENCE}]"
+            )
+    if msg.model_record is not None and not is_content_hash(msg.model_record):
+        raise ProtocolError(
+            "response model_record must be a 64-character lowercase hex digest"
+        )

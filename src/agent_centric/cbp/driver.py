@@ -57,6 +57,7 @@ from .message import (
     RESPONSE_OK,
     Response,
 )
+from .model_record import ModelRecord
 
 # A task is a registered callable; a verifier is a pure predicate.
 Task = Callable[..., Any]
@@ -826,6 +827,23 @@ class CbpDriver:
             node=self._root.identity,
             error=f"cannot configure provider on child {child!r}: {message}",
         )
+
+    def model_records(self, child: str) -> tuple[ModelRecord, ...]:
+        """Return the recorded model calls for a spawned ``model`` child.
+
+        Read-only and deterministic: every call the child has served, ordered
+        by content address (an append-only, idempotent log). A model record is
+        evidence — it never promotes the output to a verified success.
+
+        Raises:
+            ValueError: If ``child`` is not a spawned model agent (fail-closed).
+        """
+        from .model_agent import ModelAgent
+
+        child_agent = self._root.children.get(child)
+        if not isinstance(child_agent, ModelAgent):
+            raise ValueError(f"child {child!r} is not a model agent")
+        return child_agent.model_records()
 
     # -- execution ---------------------------------------------------------
 

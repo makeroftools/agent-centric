@@ -1184,10 +1184,19 @@ def _cmd_cbp_check(
         else:
             _check("replay:local", False, "no local run recorded")
 
-        # 8. model spine (deterministic stub)
+        # 8. model spine (deterministic stub): recorded + confidence-scored
         driver.spawn("model", kind="model")
         model_resp = driver.run("model", {"prompt": "hi"}, child="model")
-        _check("model-stub", model_resp.verified is True)
+        model_records = driver.model_records("model")
+        _check(
+            "model-stub",
+            model_resp.verified is True
+            and isinstance(model_resp.confidence, float)
+            and model_resp.model_record is not None
+            and len(model_records) == 1
+            and model_records[0].record_hash() == model_resp.model_record,
+            f"confidence={model_resp.confidence!r}",
+        )
 
     failed = [r for r in results if not r[1]]
     ok_total = len(results) - len(failed)
