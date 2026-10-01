@@ -19,8 +19,9 @@ It composes the existing primitives:
 Invariants (fail-closed, deterministic, offline):
 
 - an invalid design is refused before any ref is resolved;
-- every requested component must have a configured source and pin to a manifest
-  whose **name matches** the request (identity is not the ref);
+- every requested component must have a configured source (a git repo or an
+  offline directory) and pin to a manifest whose **name matches** the request
+  (identity is not the ref);
 - a component that ``implements`` an unpinned contract is refused;
 - a component without a signature is refused (a design cannot introduce unsigned
   code, SPEC-0008 §4); the signature is verified later, at resolve time;
@@ -38,7 +39,12 @@ from pathlib import Path
 
 from ..contracts.components_lock import ComponentsLock, LockEntry
 from ..contracts.design import Design
-from .component_bundle import load_manifest
+from .component_bundle import (
+    BundleError,
+    build_bundle_from_dir,
+    bundle_sha256,
+    load_manifest,
+)
 from .component_source import GitError, pin_from_git
 from .design import validate_design
 
@@ -70,9 +76,30 @@ class ComponentPin:
             raise PinError("ComponentPin repo_url must be non-empty.")
 
 
+@dataclass(frozen=True)
+class DirectoryPin:
+    """An offline, signed **directory** source for one requested component.
+
+    The component directory (``component.json`` + payload) is canonicalized to a
+    bundle (:func:`~agent_centric.cbp.component_bundle.build_bundle_from_dir`);
+    its sha256 is the ``tree_sha256``. A directory is already immutable content,
+    so ``commit_sha`` is set to that same content address (there is no VCS
+    commit); ``repo_url`` is an informational ``dir://`` label. The requested ref
+    is ignored at pin time. An empty signature is refused.
+    """
+
+    path: Path
+    repo_url: str
+    signature: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.repo_url:
+            raise PinError("DirectoryPin repo_url must be non-empty.")
+
+
 def pin_design(
     design: Design,
-    sources: Mapping[str, ComponentPin],
+    sources: Mapping[str, ComponentPin | DirectoryPin],
     *,
     root: str,
     harness_contracts: tuple[str, ...] = DEFAULT_HARNESS_CONTRACTS,
@@ -82,7 +109,7 @@ def pin_design(
     Args:
         design: The untrusted ``design.v1`` to pin.
         sources: A mapping of component name to its offline, signed
-            :class:`ComponentPin`.
+            :class:`ComponentPin` (git) or :class:`DirectoryPin` (directory).
         root: The shell component name; it must be one of the requested
             components and is the lock's root.
         harness_contracts: The contract versions the harness supports; a
@@ -118,17 +145,35 @@ def pin_design(
         source = sources.get(name)
         if source is None:
             raise PinError(f"no source configured for requested component {name!r}")
-        repo = Path(source.repo)
-        if not repo.is_dir():
-            raise PinError(f"{name}: source repository {repo} does not exist")
-        try:
-            pinned = pin_from_git(repo, component.requested)
-        except GitError as exc:
-            raise PinError(
-                f"{name}: cannot resolve {component.requested!r}: {exc}"
-            ) from exc
 
-        manifest = load_manifest(pinned.bundle)
+        if isinstance(source, DirectoryPin):
+            directory = Path(source.path)
+            if not directory.is_dir():
+                raise PinError(f"{name}: source directory {directory} does not exist")
+            try:
+                bundle = build_bundle_from_dir(directory)
+            except BundleError as exc:
+                raise PinError(f"{name}: cannot bundle {directory}: {exc}") from exc
+            # A directory has no VCS commit; the content address is the pin.
+            commit_sha = bundle_sha256(bundle)
+            tree_sha256 = commit_sha
+            from_directory = True
+        else:
+            repo = Path(source.repo)
+            if not repo.is_dir():
+                raise PinError(f"{name}: source repository {repo} does not exist")
+            try:
+                pinned = pin_from_git(repo, component.requested)
+            except GitError as exc:
+                raise PinError(
+                    f"{name}: cannot resolve {component.requested!r}: {exc}"
+                ) from exc
+            bundle = pinned.bundle
+            commit_sha = pinned.commit_sha
+            tree_sha256 = pinned.tree_sha256
+            from_directory = False
+
+        manifest = load_manifest(bundle)
         if manifest.name != name:
             raise PinError(
                 f"{name}: pinned manifest is named {manifest.name!r} (identity mismatch)"
@@ -138,13 +183,17 @@ def pin_design(
                 raise PinError(f"{name}: implements unpinned contract {contract!r}")
 
         provenance = manifest.provenance
-        if provenance is not None and (
-            provenance.commit_sha != pinned.commit_sha
-            or provenance.tree_sha256 != pinned.tree_sha256
-        ):
-            raise PinError(
-                f"{name}: manifest provenance does not match the pinned commit/tree"
-            )
+        if provenance is not None:
+            if provenance.tree_sha256 != tree_sha256:
+                raise PinError(
+                    f"{name}: manifest provenance tree does not match the pinned tree"
+                )
+            # A git-pinned manifest must also match the resolved commit; a
+            # directory pin has no commit, only the content address.
+            if not from_directory and provenance.commit_sha != commit_sha:
+                raise PinError(
+                    f"{name}: manifest provenance does not match the pinned commit"
+                )
         signature = source.signature or (provenance.signature if provenance else "")
         if not signature:
             raise PinError(
@@ -155,8 +204,8 @@ def pin_design(
             LockEntry(
                 name=name,
                 repo_url=source.repo_url,
-                commit_sha=pinned.commit_sha,
-                tree_sha256=pinned.tree_sha256,
+                commit_sha=commit_sha,
+                tree_sha256=tree_sha256,
                 implements=manifest.implements,
                 capabilities=tuple(capability.name for capability in manifest.capabilities),
                 signature=signature,

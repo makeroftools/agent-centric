@@ -1,0 +1,35 @@
+{
+  "schema": "design.v1",
+  "id": "cbp-core-umbrella",
+  "title": "Core umbrella: shell -> registry (offline directory source)",
+  "network": {
+    "components": [
+      {
+        "id": "shell",
+        "task": "plan",
+        "args": {}
+      },
+      {
+        "id": "registry",
+        "task": "catalog",
+        "args": {}
+      }
+    ],
+    "edges": []
+  },
+  "components": [
+    {
+      "name": "shell",
+      "requested": "core"
+    },
+    {
+      "name": "registry",
+      "requested": "core"
+    }
+  ],
+  "metadata": {
+    "stage": "umbrella",
+    "source": "offline-directory",
+    "note": "SPEC-0011: offline directory source + local signing; the lock is test-signed offline and re-signed by the operator key"
+  }
+}

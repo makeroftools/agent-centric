@@ -1,0 +1,35 @@
+{
+  "entries": [
+    {
+      "capabilities": [
+        "registry"
+      ],
+      "commit_sha": "aba3612ada4c2cf118366fa9e795c61d2e8c24aaa61e802ad584c033f8e33e3a",
+      "implements": [
+        "component.v1"
+      ],
+      "name": "registry",
+      "repo_url": "dir://examples/components/registry",
+      "signature": "97051278dc851eb676756f0ed4e4bb04defe798c8f609b82b373f1a628acdcd7",
+      "tree_sha256": "aba3612ada4c2cf118366fa9e795c61d2e8c24aaa61e802ad584c033f8e33e3a"
+    },
+    {
+      "capabilities": [
+        "shell"
+      ],
+      "commit_sha": "178374c0a439b9192ea7472e62e94006ee4bd2b01bdf29796f2a96b15357a573",
+      "implements": [
+        "component.v1"
+      ],
+      "name": "shell",
+      "repo_url": "dir://examples/components/shell",
+      "signature": "b2653779487128ea1c71018f328ac7ccdc7f0a725d94c9424ad67b538bdb1a75",
+      "tree_sha256": "178374c0a439b9192ea7472e62e94006ee4bd2b01bdf29796f2a96b15357a573"
+    }
+  ],
+  "harness_contracts": [
+    "component.v1"
+  ],
+  "root": "shell",
+  "schema": "components.lock/v1"
+}

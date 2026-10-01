@@ -35,8 +35,8 @@ SPEC-0008 Phase 3), **signing-key rotation** with overlapping trust windows
 (`cbp/n8n_adapter.py`, SPEC-0008 Phase 2, lossless `design.v1` ⇄ n8n round-trip)
 are delivered, as is the **recorded, confidence-scored `model` component**
 boundary (`cbp/model_record.py`, SPEC-0009 slice 7) and **design envelope
-limits** (SPEC-0008 §4, validated and pinned). **Next: the umbrella
-`components.lock`** (needs the live mirror; §Next).
+limits** (SPEC-0008 §4, validated and pinned) and the **offline umbrella
+`components.lock`** generator (test-signed offline; operator signing remains).
 
 ## Verify everything (do this before acting)
 
@@ -47,7 +47,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 123 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1555 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1567 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -82,7 +82,7 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (123 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1555 passed** (~63 s).
+  convention + home-path guard passed; full suite **1567 passed** (~63 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -178,13 +178,13 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > **L1**; target L3 gated) -> `core/HANDOFF.md`, then the frozen plan
 > `core/specs/SPEC-0011` through `SPEC-0017`, and `conformance/AGENTS.md` +
 > `pro/AGENTS.md`. Confirm all three repos are on `main` and clean, then run the
-> verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1555
+> verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1567
 > passed**, shared suite **31/31** on Python + Rust, WASM suite **10/10**, network
 > suite **14/14**, appointed suite **8/8**). **Layers 0, 1a, 1b, 1c, signing, 2,
 > 3, and 4 are delivered**, along with the `design → pin → components.lock`
 > producer, signing-key rotation, the n8n authoring adapter, and the recorded,
-> confidence-scored `model` component boundary. The next steps are the umbrella
-> `components.lock` (needs the live mirror).
+> confidence-scored `model` component boundary. The offline umbrella
+> `components.lock` is committed (test-signed; operator signing remains).
 > Obey the hard laws: whole-file replacement
 > only via `tools/safe-replace.sh` (**never in-place edits**), commit and push
 > continuously, never `--no-verify`. Never act above L1 without the operator
@@ -306,6 +306,15 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   service + transparency log. Boot is **idempotent** (booting the same lock twice
   yields an identical tree) and the transparency-log append is **idempotent for
   its head** (a retried release never duplicates evidence).
+- **Offline umbrella `components.lock` (SPEC-0011 / SPEC-0007 Phase 2)** —
+  `designs/core.v1.json` (shell → registry) is pinned by an **offline directory
+  source** through the additive `DirectoryPin` path in `cbp/lockfile.py`; the
+  canonical bundles (`artifacts/components/*.tar`), the lock (`components.lock`),
+  and its detached signature are committed, and `tools/umbrella-lock.sh`
+  regenerates and verifies them deterministically. The committed lock is
+  **test-signed offline**; the operator re-signs with the real key (key gate).
+  Boot verifies the lock signature and every component signature from a
+  `DirectorySource` (12 tests).
 - **Shell design (SPEC-0008)** — `design.v1` + `validate_design`/`compile_design`.
 - **Design → pin → lock (SPEC-0008 Phase 3)** — `cbp/lockfile.py` (`pin_design` +
   `ComponentPin`) resolves a design's requested refs to immutable commits and
@@ -358,8 +367,9 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **SPEC-0003/0004/0006** `implemented` — criteria met by the convention guard;
   some checkboxes un-ticked (doc-only correction).
 - **SPEC-0007** `accepted` — Phases 0/0.5a/1a/1b/2 delivered; 0.5b signing and
-  **key rotation** delivered, **live mirror open**; no committed umbrella
-  `components.lock`.
+  **key rotation** delivered; the **offline umbrella `components.lock`** is
+  committed (test-signed offline; operator re-signs with the real key);
+  **live mirror open**.
 - **SPEC-0008** `draft` — `design.v1` + validate/compile, the Phase 3
   `pin`/`record` wiring (`cbp/lockfile.py`), the Phase 2 n8n adapter
   (`cbp/n8n_adapter.py`), **and** design envelope limits (`cbp/design.py`
@@ -378,14 +388,17 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 ## Next
 
-- **Commit the umbrella `components.lock`.** The `design → pin → components.lock`
-  producer is delivered (SPEC-0008 Phase 3). Per SPEC-0011/0016 the **Core**
-  umbrella lock is **offline directory + local signing** and does **not** need the
-  live mirror; commit a public lock only if every origin is public. Everything
-  else on the spine is done: content-addressed cache, deterministic resolver,
-  minisign/gpg verification, git/directory sources, deterministic bundle,
-  boot-from-lock (with lock-level signature + transparency log verification,
-  fail-closed), **key rotation**, and the **`pin`/`record`** wiring.
+- **Umbrella `components.lock` — delivered offline; operator signing remains.**
+  The `design → pin → components.lock` producer and the additive offline
+  **directory-pin** path are delivered; `designs/core.v1.json`, the canonical
+  bundles, the lock, and its detached signature are committed and regenerated
+  deterministically by `tools/umbrella-lock.sh`. The committed lock is
+  **test-signed offline**; the operator re-signs it with the real, out-of-process
+  key and installs the public trust root (key gate). Everything else on the spine
+  is done: content-addressed cache, deterministic resolver, minisign/gpg
+  verification, git/directory sources, deterministic bundle, boot-from-lock (with
+  lock-level signature + transparency log verification, fail-closed), **key
+  rotation**, and the **`pin`/`record`** wiring.
 - **SPEC-0018 (draft): service-host provisioning + CD** — public spec in
   `specs/`; the instantiation lives in a **private companion repo**. Phase 1:
   bootstrap the intranet host (native Gitea + OpenBao + pull/apply agent) under
