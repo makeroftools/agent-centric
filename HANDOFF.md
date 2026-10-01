@@ -61,7 +61,7 @@ conformance vectors**. Run the fresh-session checklist before acting.
 1. Read [`AGENTS.md`](AGENTS.md) → [`PRINCIPLES.md`](PRINCIPLES.md) →
    [`.agentfactory.toml`](.agentfactory.toml) (active mode **L1**; target L3, gated).
 2. Confirm the tree: `git branch --show-current` → `main`; `git status` clean.
-3. Baseline gates (fast, offline): `uv run ruff check .`, `uv run mypy src`,
+3. Baseline gates (after a one-time `uv sync --extra dev`): `uv run ruff check .`, `uv run mypy src`,
    `uv run agent-centric cbp-check`.
 4. Run the test suite as the level permits (Law 12); the operator/CI is the record.
 5. Continue from **Next** below. Never act above the active level without the
@@ -73,7 +73,7 @@ conformance vectors**. Run the fresh-session checklist before acting.
 > local-first, fail-closed). Read `AGENTS.md` -> `PRINCIPLES.md` ->
 > `.agentfactory.toml` (active **L1**; target L3 gated) -> `HANDOFF.md`, then the
 > frozen plan `specs/SPEC-0011` through `specs/SPEC-0017`. Confirm `main` and a
-> clean tree, then run `uv run ruff check .`, `uv run mypy src`,
+> clean tree, run `uv sync --extra dev` once, then run `uv run ruff check .`, `uv run mypy src`,
 > `uv run agent-centric cbp-check`, and the suite
 > `uv run pytest -o addopts="" -p no:cacheprovider`. Begin **Layer 0** of the
 > full-version plan: freeze the component ABI (SPEC-0012) and the shared
