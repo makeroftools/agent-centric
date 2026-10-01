@@ -148,6 +148,12 @@ from .experts import (
     domain_from_dict,
     select_expert,
 )
+from .flow import (
+    BoundedConnection,
+    FlowError,
+    InformationPacket,
+    run_flow,
+)
 from .intake import draft_from_email, draft_from_file
 from .ledger import DirectiveLedger
 from .message import (
@@ -407,6 +413,10 @@ __all__ = [
     "ComponentNetwork",
     "Edge",
     "NetworkError",
+    "BoundedConnection",
+    "InformationPacket",
+    "FlowError",
+    "run_flow",
     "DEFAULT_CONNECTION_CAPACITY",
     "MAX_CONNECTION_CAPACITY",
     "network_from_dict",

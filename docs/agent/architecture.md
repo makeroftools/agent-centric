@@ -121,6 +121,16 @@ out-of-process adapter and never enters the local-first run path.
 
 See [`specs/SPEC-0008-shell-design-interface-n8n.md`](../../specs/SPEC-0008-shell-design-interface-n8n.md).
 
+## FBP execution (SPEC-0009)
+
+`network.v1` is port-aware: components declare named ports and edges are bounded
+connections. A port-declared network runs as deterministic **Information-Packet
+flow** (`cbp/flow.py`): verified outputs route outport→inport over bounded
+buffers; overflow is **back-pressure** and an empty receive is a **deadlock** —
+both fail closed, never hang. `args` supply IIPs for unwired inports, and
+`ComponentNetwork.content_hash()` freezes the document. The legacy args model is
+unchanged.
+
 ## Extensibility (SPEC-0010, draft)
 
 Three graphs stay distinct: the **process graph** (`network.v1`, execution), the

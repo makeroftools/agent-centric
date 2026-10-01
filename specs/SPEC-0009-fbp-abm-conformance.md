@@ -106,9 +106,16 @@ This spec states what that commits us to, where the current code is only
   deterministic `content_hash()`, and port-aware compilation (port edges compile
   to `wires`; the legacy args-based model is unchanged). Tests:
   `tests/test_cbp_ports.py`.
-- **Slice 2 (next).** Execution: Information Packet flow along wires, bounded
-  buffers with deterministic back-pressure, per-port IIPs, and the composite
-  **external-ports boundary guard** (needs the nested subnet body).
+- **Slice 2 (delivered).** Deterministic Information-Packet flow (`cbp/flow.py`):
+  a verified output routes outport→inport over `BoundedConnection`s (FIFO,
+  capacity); a full buffer is **back-pressure** and an empty receive is a
+  **deadlock** — both fail closed, never hang; `args` act as **IIPs** for unwired
+  inports. Port-declared networks auto-route through `run_flow` from `run_network`.
+  Tests: `tests/test_cbp_flow.py`.
+- **Slice 3 (next).** Repeated-activation streaming (where back-pressure suspends
+  a producer), first-class per-port IIP documents, and the composite
+  **external-ports boundary guard** (needs the nested subnet body on the
+  component contract).
 
 ## Acceptance criteria
 
@@ -120,10 +127,11 @@ This spec states what that commits us to, where the current code is only
       not use them is **rejected fail-closed**.
 - [ ] A component at rest has **no edges**; dependency appears only in a network
       document.
-- [ ] Bounded connections enforce capacity; a full connection applies
+- [x] Bounded connections enforce capacity; a full connection applies
       **deterministic back-pressure**; a deterministic deadlock is an explicit,
-      audited failure — never a hang.
-- [ ] IIPs parametrize input ports at network-definition time.
+      audited failure — never a hang (`cbp/flow.py`, `tests/test_cbp_flow.py`).
+- [x] IIPs parametrize input ports at network-definition time (component
+      `args`; first-class per-port IIP documents are slice 3).
 - [ ] No component writes another's state; effects propagate as verified
       proposals (test-enforced).
 - [ ] `model` components are recorded and confidence-scored.

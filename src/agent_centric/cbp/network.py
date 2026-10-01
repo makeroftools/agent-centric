@@ -247,6 +247,11 @@ class ComponentNetwork:
             steps.append(step)
         return steps
 
+    def topological_order(self) -> list[str]:
+        """The deterministic topological order of component ids (validated)."""
+        self.validate()
+        return self._topological_order()
+
     def _topological_order(self) -> list[str]:
         """Return component ids in a deterministic topological order.
 
@@ -393,6 +398,13 @@ def run_network(
     ``{"step", "task", "verified", "value", "error", "id"}`` (``id`` is the
     component id, so the editor can map results back to nodes).
     """
+    # A port-declared network runs on the first-class Information-Packet flow
+    # engine (SPEC-0009); the legacy args model below is unchanged.
+    if any(component.ports for component in network.components()):
+        from .flow import run_flow
+
+        return run_flow(driver, network, step_limit=step_limit)
+
     try:
         network.validate()
         order = network._topological_order()

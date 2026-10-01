@@ -122,18 +122,20 @@ Run the fresh-session checklist below before acting.
     refs) with deterministic, fail-closed `validate_design`/`compile_design`
     (schema/cycle/edge/absence gates); demo `examples/design_compile.py`. The
     n8n adapter and the pin/record wiring remain.
-  - **FBP/ABM conformance, slice 1 (SPEC-0009)** (`cbp/network.py`): `network.v1`
-    now carries named **ports** and a **capacity** per connection, with
-    fail-closed port/capacity validation, a deterministic `content_hash()`, and
-    port-aware compilation (port edges compile to `wires`; the legacy args model
-    is untouched). Tests: `tests/test_cbp_ports.py`. Slice 2 (IP flow + bounded
-    back-pressure + the external-ports boundary guard) remains.
+  - **FBP/ABM conformance (SPEC-0009)** (`cbp/network.py`, `cbp/flow.py`):
+    slice 1 — named **ports** + per-connection **capacity**, fail-closed
+    validation, deterministic `content_hash()`, port-aware compilation. slice 2 —
+    deterministic **Information-Packet flow**: verified outputs route
+    outport→inport over `BoundedConnection`s (FIFO, capacity); overflow is
+    back-pressure and an empty receive is a deadlock, both fail closed; `args`
+    supply IIPs. Tests: `tests/test_cbp_ports.py`, `tests/test_cbp_flow.py`.
+    Slice 3 (streaming, per-port IIP docs, external-ports boundary guard) remains.
 
 ## Validation (last full run)
 
-- `uv run pytest -o addopts="" -p no:cacheprovider` → **1313 passed**.
+- `uv run pytest -o addopts="" -p no:cacheprovider` → **1324 passed**.
 - `uv run ruff check .` → clean.
-- `uv run mypy src` → clean (**115** source files).
+- `uv run mypy src` → clean (**116** source files).
 - `uv run agent-centric cbp-check` → **8/8**, READY.
 - Convention guard → **40 passed**.
 
@@ -147,10 +149,10 @@ Run the fresh-session checklist below before acting.
   delivered.
 - **Phase 0.5b remainder:** the live self-hosted mirror (Forgejo/Gitea); the
   signing service and transparency log are delivered.
-- **FBP/ABM conformance (SPEC-0009):** slice 1 (named ports + bounded capacity +
-  deterministic content hash) is delivered; slice 2 is execution — Information
-  Packet flow along wires, deterministic back-pressure, per-port IIPs, and the
-  composite external-ports boundary guard.
+- **FBP/ABM conformance (SPEC-0009):** slices 1–2 delivered (ports + bounded
+  connections; deterministic IP flow with fail-closed back-pressure/deadlock).
+  Slice 3 remains: repeated-activation streaming, first-class per-port IIP
+  documents, and the composite external-ports boundary guard.
 - **Extensibility (SPEC-0010, draft):** knowledge graphs (ontology as a versioned
   contract over a component-owned semantic graph; closed shapes for gates;
   pinned entailment closure) and bounded RSI (propose → review → sign → lock;
@@ -181,7 +183,7 @@ See [`docs/agent/levels.md`](docs/agent/levels.md),
   `component_graph.py`, `component_boot.py`, `component_process.py`
   (+ private `_component_runner.py`), `bills_component.py`, `shell_component.py`,
   `registry_component.py`, `signing_service.py`, `transparency.py`, `design.py`,
-  `network.py`, `cache.py`, `resolver.py`, `signing.py`.
+  `network.py`, `flow.py`, `cache.py`, `resolver.py`, `signing.py`.
 - `src/agent_centric/contracts/` — versioned contracts, including `component.py`,
   `components_lock.py`, and `design.py` (`design.v1`).
 - `specs/` — specs (SPEC-0002 target; SPEC-0007 distribution plan;
@@ -194,8 +196,8 @@ See [`docs/agent/levels.md`](docs/agent/levels.md),
   `tests/test_component_distribution.py`, `tests/test_component_state.py`,
   `tests/test_component_graph.py`, `tests/test_component_boot.py`,
   `tests/test_component_process.py`, `tests/test_release_signing.py`,
-  `tests/test_design.py`, and `tests/test_cbp_ports.py` — the distribution +
-  design + FBP-conformance slice.
+  `tests/test_design.py`, `tests/test_cbp_ports.py`, and `tests/test_cbp_flow.py`
+  — the distribution + design + FBP-conformance slice.
 
 ## Non-goals (do not build without explicit direction)
 
