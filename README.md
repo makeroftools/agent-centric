@@ -341,7 +341,6 @@ AGENTS.md              Agent entry point (table of contents)
 .agentfactory.toml     Active operating level (mode)
 opencode.json          Harness enforcement (Law 11: edit denied)
 PRINCIPLES.md          Non-negotiable governing rules
-KERNEL.md              v0 kernel freeze note (historical)
 STATUS.md              Volley history + correctness evidence (historical)
 HANDOFF.md             Current session-continuity one-pager
 docs/                  Design/handoff docs
@@ -434,10 +433,7 @@ Working in this repository:
 | [`src/agent_centric/cbp/protocol.md`](src/agent_centric/cbp/protocol.md) | CBP wire contract. |
 | [`specs/SPEC-0002-cbp-component-architecture.md`](specs/SPEC-0002-cbp-component-architecture.md) | Target CBP component architecture. |
 | [`specs/SPEC-0007-harness-shell-component-distribution.md`](specs/SPEC-0007-harness-shell-component-distribution.md) | Harness/shell split + component distribution plan. |
-| [`KERNEL.md`](KERNEL.md) | v0 freeze note + versioning (historical). |
 | [`STATUS.md`](STATUS.md) | Volley-by-volley history + correctness evidence (historical). |
-| [`README_CBP.md`](README_CBP.md) | Story-led FBP-era deep-dive (historical). |
-| [`docs/CBP_HANDOFF.md`](docs/CBP_HANDOFF.md) | Session continuity one-pager (historical). |
 
 ---
 

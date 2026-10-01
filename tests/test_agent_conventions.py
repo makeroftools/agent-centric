@@ -47,10 +47,6 @@ _REQUIRED_AGENT_DOCS = {
 _ENTRY_POINTER_DOCS = (
     "HANDOFF.md",
     "STATUS.md",
-    "README_CBP.md",
-    "KERNEL.md",
-    "docs/DIRECTIVE.md",
-    "docs/CBP_HANDOFF.md",
 )
 _MD_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 _FENCED_RE = re.compile(r"```.*?```", re.DOTALL)
@@ -255,9 +251,6 @@ class TestDistributionBoundary:
         law = _read("PRINCIPLES.md")
         assert "SPEC-0007" in law
         assert "Acquisition is separate and bounded" in law
-
-    def test_kernel_marks_distribution_superseded_for_components(self) -> None:
-        assert "SPEC-0007" in _read("KERNEL.md")
 
     def test_architecture_page_describes_the_two_layers(self) -> None:
         text = _read("docs/agent/architecture.md")

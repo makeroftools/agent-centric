@@ -11,8 +11,7 @@ it does not restate. The constitution is [`PRINCIPLES.md`](PRINCIPLES.md):
 2. [`.agentfactory.toml`](.agentfactory.toml) — the active operating level (mode).
 3. [`.agents/skills/`](.agents/skills) — on-demand Agent Skills, one concern each
    (canonical, industry-standard `SKILL.md`).
-4. [`KERNEL.md`](KERNEL.md) (historical v0 freeze),
-   [`src/agent_centric/cbp/spec.md`](src/agent_centric/cbp/spec.md),
+4. [`src/agent_centric/cbp/spec.md`](src/agent_centric/cbp/spec.md),
    [`src/agent_centric/cbp/protocol.md`](src/agent_centric/cbp/protocol.md) — architecture contracts.
 5. [`specs/SPEC-0002-cbp-component-architecture.md`](specs/SPEC-0002-cbp-component-architecture.md)
    — the target CBP component architecture (MVP + roadmap).
@@ -93,8 +92,8 @@ Run the test suite as the active level permits (the agent may run any tests); se
 
 `main` is the CBP line (history of the former `clean` branch).
 The prior Manager line is frozen in history, marked by tag `v0.29.0-milestone`.
-Historical documents (e.g. `STATUS.md`, `docs/CBP_HANDOFF.md`) describe past
-states and are not updated retroactively. The legacy `agent_centric.fbp`
+`STATUS.md` records the volley-by-volley history and is not updated
+retroactively. The legacy `agent_centric.fbp`
 package and the retired `fbp-*` gates/branches are gone; `main` is the only
 branch, and the convention guard (`tests/test_agent_conventions.py`)
 forbids their return.

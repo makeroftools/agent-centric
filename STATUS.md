@@ -1,7 +1,8 @@
 > **Historical — start at [`AGENTS.md`](AGENTS.md).** This document records a
 > past state and is not updated retroactively. Current rules live in
 > [`AGENTS.md`](AGENTS.md) and [`PRINCIPLES.md`](PRINCIPLES.md); the active mode
-> is in [`.agentfactory.toml`](.agentfactory.toml).
+> is in [`.agentfactory.toml`](.agentfactory.toml). Some companion notes it cites
+> (e.g. `KERNEL.md`) have since been removed; git history retains them.
 
 # STATUS — Volley 001–029
 
@@ -10,8 +11,7 @@
 **Updated:** 2026-08-09
 
 > **Session continuity:** new sessions should read [`HANDOFF.md`](HANDOFF.md)
-> first (authoritative one-pager), then [`KERNEL.md`](KERNEL.md) and
-> [`README.md`](README.md).
+> first (authoritative one-pager), then [`README.md`](README.md).
 
 ## Adherence to the Overriding Correctness Directive
 

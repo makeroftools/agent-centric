@@ -86,7 +86,7 @@ before acting.
 - **CBP target architecture:** SPEC-0002.
 - **Distribution spine** (SPEC-0007):
   - **Phase 0** — spec; Law 5 amended (run-time local-first vs acquisition);
-    `KERNEL.md` note; `docs/agent/architecture.md`.
+    `docs/agent/architecture.md`.
   - **Phase 0.5a** — `component.v1` + `components.lock/v1` contracts;
     content-addressed atomic cache; deterministic resolver; minisign/gpg
     signature verification; offline directory source
@@ -246,7 +246,5 @@ hooks or CI.
 
 ## Historical documents
 
-[`STATUS.md`](STATUS.md), [`KERNEL.md`](KERNEL.md),
-[`docs/CBP_HANDOFF.md`](docs/CBP_HANDOFF.md),
-[`README_CBP.md`](README_CBP.md), and [`docs/DIRECTIVE.md`](docs/DIRECTIVE.md)
-describe past states and are not updated retroactively.
+[`STATUS.md`](STATUS.md) records the volley-by-volley history and is not updated
+retroactively.
