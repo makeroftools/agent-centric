@@ -80,6 +80,21 @@ Rules:
       claim is accepted.
 - [ ] License and provenance are recorded for every non-static artifact.
 
+## Progress
+
+- **Appointed launch slice delivered (Layer 4).**
+  `../conformance/contracts/appointed-v1.md` (revision 1) freezes the appointed
+  provenance class and its **ordered, fail-closed trust gate**: an appointed
+  component is admitted only through a host-configured **source allowlist** and a
+  detached **Ed25519** signature over its exact bytes, runs **contained with zero
+  capabilities** (the A0 tier), and records a scoped, evidence-backed **Assurance
+  Label** (property, tier, source, license, artifact hash). Admission is
+  idempotent. Implemented by the Python reference host and the Rust host;
+  `../conformance/vectors/appointed-{fixtures,suite,lock}.v1.json` (**8 cases**)
+  pass **8/8** on both (cross-runtime equivalence).
+- **Out of scope here:** tiers A1–A4, `review.v1` promotion, and the
+  generated/compiled/translated/discovered gates (SPEC-0017).
+
 ## Risks / invariants
 
 - Respects Laws 1, 2, 5, 8, 11; fail-closed; no unverified success.

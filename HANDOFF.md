@@ -25,7 +25,11 @@ the host-mediated transport, with locked-down refusal of unsigned/bad-signature
 artifacts; **`network.v1`** — static + deterministic-planner, pinned before it
 runs, typed at instantiation, replayable — network suite **14/14** on both
 hosts), plus **Layer 3** (a deterministic, content-addressed read-only network
-diagram). **Next is Layer 4** (§Next).
+diagram) and **Layer 4** (**`appointed.v1`** — allowlisted appointed sources,
+admitted only through a host-configured source allowlist and a detached Ed25519
+signature, contained with zero capabilities (A0), recorded as a scoped Assurance
+Label — appointed suite **8/8** on both hosts). **Next are the
+signing/distribution remainders** (§Next).
 
 ## Verify everything (do this before acting)
 
@@ -47,12 +51,18 @@ python3 certifier/certify.py \
   --fixtures vectors/network-fixtures.v1.json \
   --lock vectors/network.lock.v1.json \
   --contract-lock contracts/ABI.lock.v1.json          # network.v1: 14/14
+python3 certifier/certify.py \
+  --suite vectors/appointed-suite.v1.json \
+  --fixtures vectors/appointed-fixtures.v1.json \
+  --lock vectors/appointed.lock.v1.json \
+  --contract-lock contracts/ABI.lock.v1.json \
+  --artifacts-dir artifacts                           # appointed.v1: 8/8
 #   (the WASM suite is certified by the Rust host, below)
 
 # pro (Rust host) ---------------------------------------------------------
 cd ../pro
-./scripts/certify.sh                                  # builds + certifies ALL THREE suites (31/31 + 10/10 + 14/14) + unit tests
-cargo test --release --features wasm                  # codec + artifact-signature tests: 5 passed
+./scripts/certify.sh                                  # builds + certifies ALL FOUR suites (31/31 + 10/10 + 14/14 + 8/8) + unit tests
+cargo test --release --features wasm                  # codec + artifact-signature + appointed tests: 6 passed
 ```
 
 Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
@@ -82,6 +92,13 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
   into a deterministic, content-addressed `cbp.diagram.v1` document (longest-path
   ranks; nodes/edges sorted) and renders it to XML-escaped, read-only SVG/HTML.
   Served read-only at `/network/diagram/<name>`. Pure and offline (**14 tests**).
+- Appointed (**Layer 4**): `appointed.v1` freezes the allowlisted-appointment
+  trust gate — a component from a named external origin is admitted only through
+  a host-configured **source allowlist** and a detached **Ed25519** signature over
+  its exact bytes, runs contained with zero capabilities (**A0**), and records a
+  scoped Assurance Label (property, tier, evidence). The ordered, fail-closed gate
+  is implemented by the Python reference host and the Rust host and passes **8/8**
+  cross-runtime; `appointed.lock.v1.json` carries the allowlist trust root.
 - ABI content address: `component-abi.v1` **revision 3**, `source_sha256`
   `d8e0325d53789d1af631bae7638a5b8947606a2da00698d40452471316a3386e`
   (see `../conformance/contracts/ABI.lock.v1.json`, which also hashes
@@ -156,8 +173,9 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > `pro/AGENTS.md`. Confirm all three repos are on `main` and clean, then run the
 > verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1427
 > passed**, shared suite **31/31** on Python + Rust, WASM suite **10/10**, network
-> suite **14/14**). **Layers 0, 1a, 1b, 1c, signing, 2, and 3 are delivered**;
-> the next step is **Layer 4**.
+> suite **14/14**, appointed suite **8/8**). **Layers 0, 1a, 1b, 1c, signing, 2,
+> 3, and 4 are delivered**; the next steps are the signing/distribution
+> remainders.
 > Obey the hard laws: whole-file replacement
 > only via `tools/safe-replace.sh` (**never in-place edits**), commit and push
 > continuously, never `--no-verify`. Never act above L1 without the operator
@@ -216,7 +234,7 @@ subset. The Core public repo is a **Python reflection** that helps build it.
 | 1 | **Rust host** runs signed **WASM** components | **Python host**, same ABI | **1a/1b/1c + signing done** |
 | 2 | **Content-addressed network** + typed enforcement + replayable trajectory | static `network.v1` | **done (static + generated planner)** |
 | 3 | **Read-only web diagram** from the network document | static JSON/image | **done (json + svg + read-only route)** |
-| 4 | **Appointed** components (allowlisted) | static-only | not started |
+| 4 | **Appointed** components (allowlisted) | static-only | **done (allowlist + A0 gate)** |
 
 Launch provenances: static, A0 sandboxed. Gated: generated/translated/discovered.
 
@@ -263,6 +281,12 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   replayable), implemented by the Python reference host and the Rust host
   (`../pro/src/network.rs`). `core`: `cbp/diagram.py` projects a validated network
   into a deterministic, content-addressed read-only diagram (JSON + SVG).
+- **Appointed (Layer 4)** — `../conformance/contracts/appointed-v1.md` (revision
+  1) and `vectors/appointed-{fixtures,suite,lock}.v1.json` (**8 cases**):
+  allowlisted appointed sources, an ordered fail-closed gate, A0 containment, and
+  a recorded Assurance Label. Implemented by the Python reference host
+  (`certifier/reference_host.py`, pure-stdlib RFC 8032 verifier) and the Rust host
+  (`../pro/src/appointed.rs`); **8/8** on both.
 - **Convention layer (SPEC-0001/0003/0004)** — `AGENTS.md` TOC, canonical skills
   (auto-discovered), `tools/new-skill.sh`, same-name component mapping, guarded by
   `tests/test_agent_conventions.py`.
@@ -295,7 +319,11 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **SPEC-0014** `implemented` — `network.v1` (static + deterministic-planner)
   delivered: pinned before running, typed at instantiation, replayable; suite
   **14/14** cross-runtime. (Autonomy proposes / the pin disposes is the pin rule.)
-- **SPEC-0015–0017** `draft` — frozen full-version plan; nothing built.
+- **SPEC-0015** `draft` — **appointed launch slice delivered** (Layer 4:
+  `appointed.v1` source allowlist + ordered A0 gate, **8/8** cross-runtime); tiers
+  A1–A4, `review.v1` promotion, and the generated/discovered gates remain
+  (SPEC-0017).
+- **SPEC-0016 / SPEC-0017** `draft` — frozen; nothing built.
 - **SPEC-0002** `accepted` — Phase 1 not built (**0/6**): `review.v1` absent; no
   `Agent`→`Component` adapter; `_REGISTRY`/`_child_class_for` remain; no holdout
   scenarios; no response `confidence`/Review; no `inproc`-only backend.
@@ -311,8 +339,9 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 ## Next
 
-- **Immediate: Layer 4** — **appointed** components (allowlisted; static-only
-  fallback), then the signing/distribution remainders below.
+- **Immediate: the remainders below.** **Layer 4 is delivered** — `appointed.v1`
+  (allowlisted appointment, A0 containment, recorded label; **8/8**
+  cross-runtime).
 - **Signing remainder** — key rotation. (**Done:** the lock-level signature and
   the transparency log — chain, signatures, and head — are verified at boot; an
   unpublished lock refuses. Layer 1c signing is delivered: Ed25519 over content
@@ -384,12 +413,14 @@ yourself reaching for an in-place tool, stop and use `safe-replace`.
   (`component.py`, `components_lock.py`, `design.py`); `specs/SPEC-0011`–`0017`;
   `examples/components/`; `tests/test_agent_conventions.py`.
 - **conformance** — `contracts/component-abi-v1.wit`, `contracts/ABI.md`,
-  `contracts/ABI.lock.v1.json`, `contracts/network-v1.md`;
+  `contracts/ABI.lock.v1.json`, `contracts/network-v1.md`,
+  `contracts/appointed-v1.md`;
   `vectors/{fixtures,suite,vectors.lock}.v1.json`;
   `vectors/network-{fixtures,suite,lock}.v1.json` (network.v1, 14 cases);
+  `vectors/appointed-{fixtures,suite,lock}.v1.json` (appointed.v1, 8 cases);
   `vectors/wasm-{fixtures,suite,lock}.v1.json`; `artifacts/identity.wasm`;
   `certifier/{certify.py,reference_host.py,PROTOCOL.md}`.
-- **pro** — `src/{main.rs,host.rs,codec.rs,wasm.rs,network.rs}`; `fixtures/identity/`
+- **pro** — `src/{main.rs,host.rs,codec.rs,wasm.rs,network.rs,appointed.rs}`; `fixtures/identity/`
   (guest + WIT); `scripts/certify.sh`; `Cargo.toml` + committed `Cargo.lock`;
   `rust-toolchain.toml`.
 
