@@ -24,6 +24,8 @@ the CBP spine can audit and replay.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -33,6 +35,13 @@ from typing import Any
 # the verified spine. Callers may lower it (``step_limit=...``) but the module
 # default is the hard ceiling when none is granted.
 _DEFAULT_STEP_LIMIT = 512
+
+# Bounded connections (SPEC-0009): every edge is a connection with a capacity.
+# The default is a single slot; the ceiling bounds buffer memory and makes an
+# unbounded connection impossible to express.
+DEFAULT_CONNECTION_CAPACITY = 1
+MAX_CONNECTION_CAPACITY = 1024
+_PORT_DIRECTIONS = ("in", "out")
 
 
 class NetworkError(ValueError):
@@ -49,6 +58,9 @@ class Component:
         args: A template of input args; edges may override/feed these.
         verifier: An optional parent verifier for this component's run.
         child: An optional delegation target for this component's run.
+        ports: Declared named ports keyed by direction ("in"/"out"). When a
+            direction is declared, every edge on that side must use a declared
+            port name (fail-closed, SPEC-0009).
     """
 
     id: str
@@ -56,6 +68,7 @@ class Component:
     args: dict[str, Any] = field(default_factory=dict)
     verifier: str | None = None
     child: str | None = None
+    ports: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -66,13 +79,15 @@ class Edge:
         source: The source component id.
         source_field: The output field on the source (its result dict key).
         target: The target component id.
-        target_arg: The input arg on the target to feed.
+        target_arg: The input port/arg on the target to feed.
+        capacity: The connection's bounded-buffer capacity (default 1).
     """
 
     source: str
     source_field: str
     target: str
     target_arg: str
+    capacity: int = DEFAULT_CONNECTION_CAPACITY
 
 
 class ComponentNetwork:
@@ -93,6 +108,16 @@ class ComponentNetwork:
         """Add (or replace) a component by id. Returns self for chaining."""
         if not component.id:
             raise NetworkError("component id must be non-empty")
+        for direction, names in component.ports.items():
+            if direction not in _PORT_DIRECTIONS:
+                raise NetworkError(
+                    f"component {component.id!r}: unknown port direction {direction!r}"
+                )
+            if any(not name for name in names) or len(names) != len(set(names)):
+                raise NetworkError(
+                    f"component {component.id!r}: {direction} ports must be unique "
+                    "and non-empty"
+                )
         self._components[component.id] = component
         return self
 
@@ -116,6 +141,28 @@ class ComponentNetwork:
                 raise NetworkError(f"edge target {edge.target!r} is not a component")
             if edge.source == edge.target:
                 raise NetworkError("self-loop edge is not allowed")
+            if not 1 <= edge.capacity <= MAX_CONNECTION_CAPACITY:
+                raise NetworkError(
+                    f"connection {edge.source}.{edge.source_field} -> "
+                    f"{edge.target}.{edge.target_arg} has capacity {edge.capacity}; "
+                    f"must be within 1..{MAX_CONNECTION_CAPACITY}"
+                )
+            source = self._components[edge.source]
+            out_ports = source.ports.get("out", ())
+            if out_ports and edge.source_field not in out_ports:
+                raise NetworkError(
+                    f"edge {edge.source}.{edge.source_field} -> "
+                    f"{edge.target}.{edge.target_arg}: source {edge.source!r} "
+                    f"declares no out-port {edge.source_field!r}"
+                )
+            target = self._components[edge.target]
+            in_ports = target.ports.get("in", ())
+            if in_ports and edge.target_arg not in in_ports:
+                raise NetworkError(
+                    f"edge {edge.source}.{edge.source_field} -> "
+                    f"{edge.target}.{edge.target_arg}: target {edge.target!r} "
+                    f"declares no in-port {edge.target_arg!r}"
+                )
         self._check_acyclic()
 
     def _check_acyclic(self) -> None:
@@ -162,12 +209,25 @@ class ComponentNetwork:
         for cid in order:
             comp = self._components[cid]
             args = dict(comp.args)
+            wires: list[dict[str, Any]] = []
             for edge in self._edges:
                 if edge.target != cid:
                     continue
                 src = self._components[edge.source]
-                # The source's output record is its args (deterministic model);
-                # an unknown output field fails closed.
+                if src.ports.get("out"):
+                    # A declared out-port is a real connection: the value flows at
+                    # run time, so it is a wire (not a static arg).
+                    wires.append(
+                        {
+                            "inport": edge.target_arg,
+                            "source": edge.source,
+                            "outport": edge.source_field,
+                            "capacity": edge.capacity,
+                        }
+                    )
+                    continue
+                # Legacy static model: the source's args are its output record; an
+                # unknown output field fails closed.
                 if edge.source_field not in src.args:
                     raise NetworkError(
                         f"edge {edge.source}.{edge.source_field} -> {cid}.{edge.target_arg}: "
@@ -175,6 +235,11 @@ class ComponentNetwork:
                     )
                 args[edge.target_arg] = src.args[edge.source_field]
             step: dict[str, Any] = {"task": comp.task, "args": args}
+            if wires:
+                step["wires"] = sorted(
+                    wires,
+                    key=lambda w: (w["source"], w["outport"], w["inport"], w["capacity"]),
+                )
             if comp.verifier:
                 step["verifier"] = comp.verifier
             if comp.child:
@@ -224,6 +289,7 @@ class ComponentNetwork:
                     "args": dict(c.args),
                     "verifier": c.verifier,
                     "child": c.child,
+                    "ports": {k: list(v) for k, v in sorted(c.ports.items())},
                 }
                 for c in self.components()
             ],
@@ -233,10 +299,22 @@ class ComponentNetwork:
                     "source_field": e.source_field,
                     "target": e.target,
                     "target_arg": e.target_arg,
+                    "capacity": e.capacity,
                 }
                 for e in self.edges()
             ],
         }
+
+    def content_hash(self) -> str:
+        """The content address of the network document (sha256, hex).
+
+        Canonical and insertion-independent: the same graph always hashes the
+        same. This is the value a composite freezes and registers (SPEC-0009).
+        """
+        payload = json.dumps(
+            self.to_dict(), sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
 
 
 def network_from_dict(data: dict[str, Any]) -> ComponentNetwork:
@@ -252,6 +330,14 @@ def network_from_dict(data: dict[str, Any]) -> ComponentNetwork:
     for c in comps:
         if not isinstance(c, dict) or not isinstance(c.get("id"), str):
             raise NetworkError("each component needs an 'id' string")
+        raw_ports = c.get("ports") or {}
+        if not isinstance(raw_ports, dict):
+            raise NetworkError("component 'ports' must be a mapping")
+        ports: dict[str, tuple[str, ...]] = {}
+        for direction, names in raw_ports.items():
+            if not isinstance(names, list):
+                raise NetworkError("component port names must be a list")
+            ports[str(direction)] = tuple(str(name) for name in names)
         net.add_component(
             Component(
                 id=c["id"],
@@ -259,6 +345,7 @@ def network_from_dict(data: dict[str, Any]) -> ComponentNetwork:
                 args=dict(c.get("args") or {}),
                 verifier=c.get("verifier"),
                 child=c.get("child"),
+                ports=ports,
             )
         )
     edges = data.get("edges")
@@ -268,12 +355,17 @@ def network_from_dict(data: dict[str, Any]) -> ComponentNetwork:
         for e in edges:
             if not isinstance(e, dict):
                 raise NetworkError("each edge must be a dict")
+            try:
+                capacity = int(e.get("capacity", DEFAULT_CONNECTION_CAPACITY))
+            except (TypeError, ValueError) as exc:
+                raise NetworkError(f"edge capacity must be an integer: {exc}") from exc
             net.add_edge(
                 Edge(
                     source=str(e.get("source", "")),
                     source_field=str(e.get("source_field", "")),
                     target=str(e.get("target", "")),
                     target_arg=str(e.get("target_arg", "")),
+                    capacity=capacity,
                 )
             )
     return net

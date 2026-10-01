@@ -192,6 +192,8 @@ from .model_catalog import (
     resolve_base,
 )
 from .network import (
+    DEFAULT_CONNECTION_CAPACITY,
+    MAX_CONNECTION_CAPACITY,
     Component,
     ComponentNetwork,
     Edge,
@@ -405,6 +407,8 @@ __all__ = [
     "ComponentNetwork",
     "Edge",
     "NetworkError",
+    "DEFAULT_CONNECTION_CAPACITY",
+    "MAX_CONNECTION_CAPACITY",
     "network_from_dict",
     "run_network",
     "StoreAgent",

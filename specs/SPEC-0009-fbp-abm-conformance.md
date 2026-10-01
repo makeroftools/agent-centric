@@ -99,12 +99,23 @@ This spec states what that commits us to, where the current code is only
   adding a backend; changing `PRINCIPLES.md`; any silent (non-additive) contract
   rename.
 
+## Progress
+
+- **Slice 1 (delivered).** `network.v1` carries named **ports** per component and
+  a **capacity** per connection, with fail-closed port/capacity validation, a
+  deterministic `content_hash()`, and port-aware compilation (port edges compile
+  to `wires`; the legacy args-based model is unchanged). Tests:
+  `tests/test_cbp_ports.py`.
+- **Slice 2 (next).** Execution: Information Packet flow along wires, bounded
+  buffers with deterministic back-pressure, per-port IIPs, and the composite
+  **external-ports boundary guard** (needs the nested subnet body).
+
 ## Acceptance criteria
 
 - [ ] `network.v1` exposes components with **named typed ports**; edges connect
       **port → port**; a connection declares a **capacity**.
-- [ ] The compiler resolves a network to a **deterministic plan**; an identical
-      document yields an identical plan and content hash.
+- [x] The compiler resolves a network to a **deterministic plan**; an identical
+      document yields an identical plan and content hash (`content_hash()`).
 - [ ] A composite declares **external ports**; a cross-boundary edge that does
       not use them is **rejected fail-closed**.
 - [ ] A component at rest has **no edges**; dependency appears only in a network
