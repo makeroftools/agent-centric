@@ -265,6 +265,25 @@ class CbpLandingServer:
             return {"ok": False, "error": f"no saved network named {name!r}"}
         return {"ok": True, "network": net}
 
+    def _network_diagram(self, name: str) -> dict[str, Any]:
+        """Read-only, deterministic diagram of a saved network (fail-closed).
+
+        Projects the pinned wiring into a content-addressed ``cbp.diagram.v1``
+        document plus a rendered SVG. Purely a read: it never mutates the saved
+        network and never executes anything.
+        """
+        net = self._networks.get(name)
+        if net is None:
+            return {"ok": False, "error": f"no saved network named {name!r}"}
+        from .diagram import build_diagram, render_svg
+        from .network import NetworkError, network_from_dict
+
+        try:
+            diagram = build_diagram(network_from_dict(net))
+        except NetworkError as exc:
+            return {"ok": False, "error": f"network invalid: {exc}"}
+        return {"ok": True, "diagram": diagram, "svg": render_svg(diagram)}
+
     # -- driver setup (deterministic, offline) -----------------------------
 
     def _build_driver(self) -> CbpDriver:
@@ -978,6 +997,9 @@ class CbpLandingServer:
                 elif self.path.startswith("/network/load/"):
                     name = self.path[len("/network/load/"):]
                     self._send_json(server._network_load(name))
+                elif self.path.startswith("/network/diagram/"):
+                    name = self.path[len("/network/diagram/"):]
+                    self._send_json(server._network_diagram(name))
                 elif self.path == "/history":
                     # In-page chat history (per-session, bounded).
                     self._send_json(server._history_state())

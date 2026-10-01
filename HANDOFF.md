@@ -72,6 +72,10 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
   must reproduce the pin byte-identically (`plan-mismatch` otherwise). Network
   suite **14/14** on **both** the Python reference host and the Rust host
   (cross-runtime equivalence).
+- Diagram (**Layer 3, static**): `cbp/diagram.py` projects a validated network
+  into a deterministic, content-addressed `cbp.diagram.v1` document (longest-path
+  ranks; nodes/edges sorted) and renders it to XML-escaped, read-only SVG/HTML.
+  Served read-only at `/network/diagram/<name>`. Pure and offline (**14 tests**).
 - ABI content address: `component-abi.v1` **revision 3**, `source_sha256`
   `d8e0325d53789d1af631bae7638a5b8947606a2da00698d40452471316a3386e`
   (see `../conformance/contracts/ABI.lock.v1.json`, which also hashes
@@ -204,7 +208,7 @@ subset. The Core public repo is a **Python reflection** that helps build it.
 | 0 | Freeze **ABI + conformance vectors** | must not slip | **done** |
 | 1 | **Rust host** runs signed **WASM** components | **Python host**, same ABI | **1a/1b/1c + signing done** |
 | 2 | **Content-addressed network** + typed enforcement + replayable trajectory | static `network.v1` | **done (static + generated planner)** |
-| 3 | **Read-only web diagram** from the network document | static JSON/image | not started |
+| 3 | **Read-only web diagram** from the network document | static JSON/image | **done (json + svg + read-only route)** |
 | 4 | **Appointed** components (allowlisted) | static-only | not started |
 
 Launch provenances: static, A0 sandboxed. Gated: generated/translated/discovered.
@@ -291,8 +295,8 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 ## Next
 
-- **Immediate: Layer 3** — a **read-only web diagram** rendered from the pinned
-  `network.v1` document (static JSON/image fallback).
+- **Immediate: Layer 4** — **appointed** components (allowlisted; static-only
+  fallback), then the signing/distribution remainders below.
 - **Signing remainder** — wire the trust root into a signed lock-level artifact
   and the transparency log; key rotation. (Layer 1c signing is delivered: Ed25519
   over content addressing, accept/refuse vectors.)
