@@ -28,6 +28,7 @@ import json
 import os
 import queue
 import threading
+import urllib.error
 import urllib.request
 import webbrowser
 from collections.abc import Iterator

@@ -182,9 +182,10 @@ class Agent:
         context (required for ``inproc://``), the agent uses it and does not
         own it; otherwise it creates its own.
         """
-        self._context = self._config.context or zmq.asyncio.Context()
+        context: zmq.asyncio.Context = self._config.context or zmq.asyncio.Context()
+        self._context = context
         self._owns_context = self._config.context is None
-        self._parent = self._context.socket(zmq.DEALER)
+        self._parent = context.socket(zmq.DEALER)
         self._parent.setsockopt(zmq.IDENTITY, self._config.identity.encode())
         # CURVE encryption (opt-in): a connector (DEALER) presents the session's
         # client keypair + the server public key before connect.
@@ -343,7 +344,10 @@ class Agent:
         for child in self._children.values():
             poller.register(child, zmq.POLLIN)
 
-        events = dict(await poller.poll(timeout))
+        # pyzmq types the poll timeout as int milliseconds, while this steppable
+        # API forwards its float timeout unchanged (runtime behavior is preserved);
+        # the directive only silences the editor's static mismatch.
+        events = dict(await poller.poll(timeout))  # pyright: ignore[reportArgumentType]
         responses: list[Response] = []
 
         if events.get(self._parent) == zmq.POLLIN:

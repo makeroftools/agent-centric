@@ -29,7 +29,7 @@ from typing import Any
 # the pipe buffer flushes. Line-buffered stdout is the safe minimum.
 try:
     if sys.stdout is not None and hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(line_buffering=True)
+        sys.stdout.reconfigure(line_buffering=True)  # pyright: ignore[reportAttributeAccessIssue]
         sys.stderr.reconfigure(line_buffering=True)  # type: ignore[union-attr]
 except (ValueError, OSError):  # pragma: no cover - e.g. detached streams
     pass
