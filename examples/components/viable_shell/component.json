@@ -1,0 +1,27 @@
+{
+  "version": "component.v1",
+  "name": "shell",
+  "kind": "composite",
+  "implements": [
+    "component.v1"
+  ],
+  "entry": {
+    "runtime": "python",
+    "entrypoint": "agent_centric.cbp.shell_component:plan_delegation"
+  },
+  "children": [
+    {
+      "ref": "even"
+    }
+  ],
+  "directive": "",
+  "capabilities": [
+    {
+      "name": "shell",
+      "version": "1"
+    }
+  ],
+  "state": null,
+  "provenance": null,
+  "ports": {}
+}

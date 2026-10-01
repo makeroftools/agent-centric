@@ -86,6 +86,15 @@ product live, with the Core public repo as a *reflection* that helps build it.
       `implemented` specs' checkboxes un-ticked).
 - [x] This spec moves `draft` → `accepted` once the definition is fixed.
 
+> **Status (authoring).** The "viable" demonstration is now deterministic and
+> tested offline (`tests/test_viable_demo.py`, `examples/viable_demo.py`): boot a
+> signed `components.lock` → typed-port `network.v1` dataflow over the verified
+> entries → durable-ledger replay, with a recorded, confidence-scored `model`
+> node (`cbp/boot_network.py`). The umbrella lock is committed test-signed; the
+> operator re-signs it with the real key (key gate). The remaining capability
+> tests are tracked under SPEC-0002/SPEC-0008/SPEC-0009; the operator/CI run
+> remains the record (Law 12).
+
 ## Risks / invariants
 
 - **Do not trade determinism for scope.** Every MVP capability stays deterministic

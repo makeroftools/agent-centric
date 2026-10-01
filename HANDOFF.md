@@ -35,8 +35,11 @@ SPEC-0008 Phase 3), **signing-key rotation** with overlapping trust windows
 (`cbp/n8n_adapter.py`, SPEC-0008 Phase 2, lossless `design.v1` ⇄ n8n round-trip)
 are delivered, as is the **recorded, confidence-scored `model` component**
 boundary (`cbp/model_record.py`, SPEC-0009 slice 7) and **design envelope
-limits** (SPEC-0008 §4, validated and pinned) and the **offline umbrella
-`components.lock`** generator (test-signed offline; operator signing remains).
+limits** (SPEC-0008 §4, validated and pinned), the **offline umbrella
+`components.lock`** generator (test-signed offline; operator signing remains),
+and the **SPEC-0011 "viable" end-to-end** — boot a signed lock → typed-port
+dataflow → durable-ledger replay, with a recorded, confidence-scored `model`
+node (`cbp/boot_network.py`).
 
 ## Verify everything (do this before acting)
 
@@ -47,7 +50,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 123 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1570 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1576 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -82,7 +85,7 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (123 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1570 passed** (~63 s).
+  convention + home-path guard passed; full suite **1576 passed** (~63 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -178,7 +181,7 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > **L1**; target L3 gated) -> `core/HANDOFF.md`, then the frozen plan
 > `core/specs/SPEC-0011` through `SPEC-0017`, and `conformance/AGENTS.md` +
 > `pro/AGENTS.md`. Confirm all three repos are on `main` and clean, then run the
-> verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1570
+> verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1576
 > passed**, shared suite **31/31** on Python + Rust, WASM suite **10/10**, network
 > suite **14/14**, appointed suite **8/8**). **Layers 0, 1a, 1b, 1c, signing, 2,
 > 3, and 4 are delivered**, along with the `design → pin → components.lock`
@@ -415,14 +418,17 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **Live self-hosted mirror** (Gitea) — no real pinned remotes yet. Now tracked by
   **SPEC-0018** (`specs/`) + a **private companion repo**; Core's umbrella lock is
   offline-signed (SPEC-0011) and no longer depends on it.
-- **Integration spine** — the offline primitives exist; the **lock-level
-  signature is now consumed at boot** (`boot_from_lock` verifies a detached
-  signature over `lock_hash` before resolving anything, and records
-  `lock_verified`, fail-closed). Boot may also require the lock to be published
-  in a **serving transparency log** (chain + signatures + head verified; an
-  unpublished lock refuses). The `design → pin → signed lock` producer is now
-  delivered (`cbp/lockfile.py`); remaining: the end-to-end `run typed flow →
-  replay` wiring.
+- **Integration spine** — delivered. The **lock-level signature is consumed at
+  boot** (`boot_from_lock` verifies a detached signature over `lock_hash` before
+  resolving anything, and records `lock_verified`, fail-closed); boot may also
+  require the lock to be published in a **serving transparency log** (chain +
+  signatures + head verified; an unpublished lock refuses). The
+  `design → pin → signed lock` producer is delivered (`cbp/lockfile.py`), and
+  `cbp/boot_network.py` closes the end-to-end wiring: **boot a signed lock →
+  run its typed-port `network.v1` over the verified entries → replay the durable
+  directive ledger**, with a spawned `model` node recorded and
+  confidence-scored (`tests/test_viable_demo.py`, `examples/viable_demo.py`).
+  The only remaining deployment step is the operator-signed lock (key gate).
 - **`review.v1` / `confidence`** — absent; parked under SPEC-0017. Launch ships a
   minimal deterministic scorer + formalizer at the model boundary.
 - **Honest FBP note** — non-port networks still run on the legacy args model;

@@ -1,0 +1,22 @@
+{
+  "version": "component.v1",
+  "name": "even",
+  "kind": "atomic",
+  "implements": [
+    "component.v1"
+  ],
+  "entry": {
+    "runtime": "python",
+    "entrypoint": "agent_centric.cbp.viable_flow:is_even"
+  },
+  "children": [],
+  "directive": "",
+  "capabilities": [],
+  "state": null,
+  "provenance": null,
+  "ports": {
+    "in": [
+      "value"
+    ]
+  }
+}
