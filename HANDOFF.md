@@ -15,14 +15,14 @@ git repo); the work lives in three sibling repos:
 | [`../conformance/`](../conformance/AGENTS.md) | public | The shared contract: WIT ABI + conformance vectors + certifier. |
 | [`../pro/`](../pro/AGENTS.md) | private | The Rust host (optimization edition). |
 
-The most recent session delivered **Layers 0, 1a, 1b, and 1c, plus artifact
-signing**, of the full-version plan (`SPEC-0011`): the frozen component ABI
+The most recent session delivered **Layers 0, 1a, 1b, 1c, signing, and the static **Layer 2**
+network.v1**, of the full-version plan (`SPEC-0011`): the frozen component ABI
 (`component-abi.v1`) and v1 conformance vectors; a **Rust host certified
 cross-runtime-identical** to the Python reference host (shared suite **31/31**);
 **content-addressed, signed WASM execution** (WASM suite **10/10**), including a
 full **`component-abi.v1` WASM guest** that announces its channels/tasks and
 exchanges Information Packets over the host-mediated transport, and locked-down
-refusal of unsigned/bad-signature artifacts. **Next is Layer 2** (§Next).
+refusal of unsigned/bad-signature artifacts. **Next is the Layer 2 remainder / Layer 3** (§Next).
 
 ## Verify everything (do this before acting)
 
@@ -61,6 +61,11 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
   `component-abi.v1` guest, and detached Ed25519 artifact-signing accept/refuse).
+- Network (**Layer 2, static**): `network.v1` freezes a component network that is
+  **content-addressed (pinned) before it runs**, type-checks every edge at
+  instantiation, and records a deterministic, replayable trajectory that
+  includes the pin. Network suite **9/9** on **both** the Python reference host
+  and the Rust host (cross-runtime equivalence).
 - ABI content address: `component-abi.v1` **revision 3**, `source_sha256`
   `d8e0325d53789d1af631bae7638a5b8947606a2da00698d40452471316a3386e`
   (see `../conformance/contracts/ABI.lock.v1.json`, which also hashes
@@ -192,7 +197,7 @@ subset. The Core public repo is a **Python reflection** that helps build it.
 | --- | --- | --- | --- |
 | 0 | Freeze **ABI + conformance vectors** | must not slip | **done** |
 | 1 | **Rust host** runs signed **WASM** components | **Python host**, same ABI | **1a/1b/1c + signing done** |
-| 2 | **Content-addressed network** + typed enforcement + replayable trajectory | static `network.v1` | not started |
+| 2 | **Content-addressed network** + typed enforcement + replayable trajectory | static `network.v1` | **static network.v1 done; generated planner open** |
 | 3 | **Read-only web diagram** from the network document | static JSON/image | not started |
 | 4 | **Appointed** components (allowlisted) | static-only | not started |
 
@@ -261,7 +266,10 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   delivered** (ABI rev 3, vectors, certifier, Rust host 31/31, content-addressed
   WASM 10/10 including a full `component-abi.v1` guest and Ed25519 artifact
   signing).
-- **SPEC-0014–0017** `draft` — frozen full-version plan; nothing built.
+- **SPEC-0014** `draft` — static `network.v1` execution delivered (pinned +
+  typed + replayable; suite **9/9** cross-runtime); generated/deterministic-
+  planner mode open.
+- **SPEC-0015–0017** `draft` — frozen full-version plan; nothing built.
 - **SPEC-0002** `accepted` — Phase 1 not built (**0/6**): `review.v1` absent; no
   `Agent`→`Component` adapter; `_REGISTRY`/`_child_class_for` remain; no holdout
   scenarios; no response `confidence`/Review; no `inproc`-only backend.
@@ -277,8 +285,9 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 ## Next
 
-- **Immediate: Layer 2** — content-addressed network execution, typed-contract
-  enforcement, replayable trajectory (static `network.v1` fallback).
+- **Immediate: Layer 2 remainder** — generated/deterministic-planner networks
+  (propose-then-pin) on top of the delivered static `network.v1` execution;
+  then **Layer 3** (read-only web diagram from the network document).
 - **Signing remainder** — wire the trust root into a signed lock-level artifact
   and the transparency log; key rotation. (Layer 1c signing is delivered: Ed25519
   over content addressing, accept/refuse vectors.)
@@ -342,10 +351,12 @@ yourself reaching for an in-place tool, stop and use `safe-replace`.
   (`component.py`, `components_lock.py`, `design.py`); `specs/SPEC-0011`–`0017`;
   `examples/components/`; `tests/test_agent_conventions.py`.
 - **conformance** — `contracts/component-abi-v1.wit`, `contracts/ABI.md`,
-  `contracts/ABI.lock.v1.json`; `vectors/{fixtures,suite,vectors.lock}.v1.json`;
+  `contracts/ABI.lock.v1.json`, `contracts/network-v1.md`;
+  `vectors/{fixtures,suite,vectors.lock}.v1.json`;
+  `vectors/network-{fixtures,suite,lock}.v1.json` (network.v1, 9 cases);
   `vectors/wasm-{fixtures,suite,lock}.v1.json`; `artifacts/identity.wasm`;
   `certifier/{certify.py,reference_host.py,PROTOCOL.md}`.
-- **pro** — `src/{main.rs,host.rs,codec.rs,wasm.rs}`; `fixtures/identity/`
+- **pro** — `src/{main.rs,host.rs,codec.rs,wasm.rs,network.rs}`; `fixtures/identity/`
   (guest + WIT); `scripts/certify.sh`; `Cargo.toml` + committed `Cargo.lock`;
   `rust-toolchain.toml`.
 

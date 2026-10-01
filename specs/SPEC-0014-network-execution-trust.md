@@ -66,10 +66,24 @@ never permitted in *execution* of a claimed-verified result.
       network is content-addressed.
 - [ ] A generated network is pinned and recorded **before** execution; replay
       reproduces identical wiring (planner re-run or pinned plan).
-- [ ] Every edge, static or dynamic, is contract-checked at instantiation and
+- [x] Every edge, static or dynamic, is contract-checked at instantiation and
       fails closed on mismatch.
-- [ ] The generator's output hash is part of the recorded trajectory.
-- [ ] No result is claimed verified from a network that was never pinned.
+- [x] The generator's output hash is part of the recorded trajectory.
+- [x] No result is claimed verified from a network that was never pinned.
+
+## Progress
+
+- **Layer 2 (static `network.v1`) delivered.** `conformance/contracts/network-v1.md`
+  freezes the document, the pin rule (canonical-JSON content address computed with
+  `content_hash` removed), typed enforcement at instantiation, and the trajectory.
+  The executable contract is `vectors/network-{fixtures,suite,lock}.v1.json`
+  (9 cases: identity chain, fan-in, msgpack, replay determinism, and
+  type-mismatch/cycle/not-pinned/pin-mismatch/unknown-fixture refusals). It is
+  implemented by the Python reference host and the Rust host and passes **9/9** on
+  both (`certifier/certify.py`), proving cross-runtime equivalence.
+- **Open (generated mode).** A deterministic planner component and the
+  propose-then-pin path are not built; the pinned-before-run invariant and the
+  typed/replayable execution they require are.
 
 ## Risks / invariants
 
