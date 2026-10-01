@@ -4,7 +4,7 @@ title: Component ABI v1 — abstract components, typed contracts, dynamic task l
 type: feature
 target_repo: agent-centric
 target_branch: main
-status: draft
+status: accepted
 owner: operator
 ---
 
@@ -90,17 +90,26 @@ execute components it was never built against.
 
 ## Acceptance criteria
 
-- [ ] A language-agnostic ABI document exists stating `init` / `run` / `kill`,
+- [x] A language-agnostic ABI document exists stating `init` / `run` / `kill`,
       the ZeroMQ event loop, the pre-init/body split, and the rule that all
       channels and tasks are announced over the initial hard-coded channels.
-- [ ] Two-level identity is frozen: abstract = contract hash; concrete task =
+- [x] Two-level identity is frozen: abstract = contract hash; concrete task =
       signed content hash + provenance; ports are explicitly **not** identity.
 - [ ] The typed contract is expressed in WIT and consumed by at least two
       independent hosts.
-- [ ] Registry sources are enumerable and all resolve to a signed,
+- [x] Registry sources are enumerable and all resolve to a signed,
       content-addressed artifact.
-- [ ] "At rest, no edges" holds for the ABI (a component manifest carries no
+- [x] "At rest, no edges" holds for the ABI (a component manifest carries no
       wiring).
+
+## Progress
+
+- **Layer 0 (delivered).** The ABI is frozen in `conformance/contracts/`:
+  `component-abi-v1.wit` (package `cbp:component@1.0.0`, validated with the
+  pinned resolver), the normative `ABI.md`, and the content address
+  `ABI.lock.v1.json`. Two-level identity, the ZeroMQ event loop, the initial
+  hard-coded channels, the announcement rule, and "at rest, no edges" are
+  stated. Consuming the WIT from two independent hosts is Layer 1.
 
 ## Risks / invariants
 

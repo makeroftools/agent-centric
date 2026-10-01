@@ -9,9 +9,11 @@
 `main`; `main` is the only branch and is pushed to `origin`. The most recent work
 is the **MVP planning session** that froze the **full-version plan** and wrote
 specs **SPEC-0012–SPEC-0017** (component ABI, cross-runtime conformance, network
-trust, provenance/Assurance Labels, editions, parked frontier). The immediate next
-step is to **start implementation at Layer 0: freeze the component ABI and the
-conformance vectors**. Run the fresh-session checklist before acting.
+trust, provenance/Assurance Labels, editions, parked frontier). **Layer 0 is delivered**: the component ABI
+(`component-abi.v1`) and the v1 conformance vectors are frozen in
+`../conformance/`, and the certifier passes 17/17 against the reference host. The
+next step is **Layer 1** (a Rust host running signed WASM components over the same
+ABI). Run the fresh-session checklist before acting.
 
 ## Read first (in order)
 
@@ -75,9 +77,9 @@ conformance vectors**. Run the fresh-session checklist before acting.
 > frozen plan `specs/SPEC-0011` through `specs/SPEC-0017`. Confirm `main` and a
 > clean tree, run `uv sync --extra dev` once, then run `uv run ruff check .`, `uv run mypy src`,
 > `uv run agent-centric cbp-check`, and the suite
-> `uv run pytest -o addopts="" -p no:cacheprovider`. Begin **Layer 0** of the
-> full-version plan: freeze the component ABI (SPEC-0012) and the shared
-> conformance vectors (SPEC-0013). Obey the hard laws: whole-file replacement only
+> `uv run pytest -o addopts="" -p no:cacheprovider`. **Layer 0 is delivered** (the
+> frozen ABI + v1 vectors in `../conformance/`); begin **Layer 1**: a Rust host
+> running signed WASM components over the same ABI. Obey the hard laws: whole-file replacement only
 > via `tools/safe-replace.sh` (never in-place edits), commit and push
 > continuously, never `--no-verify`. Never act above L1 without the operator
 > changing `.agentfactory.toml` first.
@@ -151,6 +153,10 @@ blank-component → dynamic task load protocol (bind timing), hardened at Layer 
 
 ## Where we are (delivered)
 
+- **Component ABI + conformance (SPEC-0012/0013, Layer 0):** `../conformance/`
+  freezes `component-abi-v1.wit` (validated with pinned `wasm-tools` 1.260.0) and
+  the v1 vectors; `certifier/` runs them (17/17) against the reference host and
+  records the runtime identity.
 - **Convention layer** (SPEC-0001/0003/0004): `AGENTS.md` TOC, canonical skills
   (auto-discovered), scaffold `tools/new-skill.sh`, same-name component mapping,
   guarded by `tests/test_agent_conventions.py`.
@@ -184,7 +190,10 @@ is approved**, not built.
 
 - **SPEC-0011** `accepted` — MVP definition frozen; checkboxes for testable
   acceptance and the status-record correction remain.
-- **SPEC-0012–0017** `draft` — the frozen full-version plan; nothing built.
+- **SPEC-0012 / SPEC-0013** `accepted` — **Layer 0 delivered** in `../conformance/`:
+  the frozen ABI (`contracts/`) and the vectors + certifier (`vectors/`,
+  `certifier/`); the two-host realization (Layer 1) is open.
+- **SPEC-0014–0017** `draft` — the frozen full-version plan; nothing built.
 - **SPEC-0002** `accepted` — Phase 1 not built (**0/6**): `review.v1` absent; no
   `Agent`→`Component` adapter; `_REGISTRY`/`_child_class_for` remain; no holdout
   scenarios; no response `confidence`/Review; no `inproc`-only backend.
@@ -200,8 +209,9 @@ is approved**, not built.
 
 ## Next (candidate — not started)
 
-- **Immediate: Layer 0** — freeze the **component ABI** (SPEC-0012) and the
-  **shared conformance vectors** (SPEC-0013). Everything else depends on these.
+- **Immediate: Layer 1** — a **Rust host** runs signed **WASM** components over the
+  frozen ABI (fallback: **Python host**, same ABI), certified by the same vectors.
+  (Layer 0 is done.)
 - **Layer 1** — Rust host running signed WASM components (fallback: Python host,
   same ABI).
 - **Layer 2** — content-addressed network execution, typed-contract enforcement,

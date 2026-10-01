@@ -4,7 +4,7 @@ title: Cross-runtime realization and conformance vectors
 type: feature
 target_repo: agent-centric
 target_branch: main
-status: draft
+status: accepted
 owner: operator
 ---
 
@@ -81,9 +81,9 @@ A dialed-up foreign runtime is **part of the TCB**. Therefore:
 
 ## Acceptance criteria
 
-- [ ] The two realization paths are documented and both are stated to honor the
+- [x] The two realization paths are documented and both are stated to honor the
       SPEC-0012 ABI.
-- [ ] A language-agnostic conformance-vector suite exists, versioned and
+- [x] A language-agnostic conformance-vector suite exists, versioned and
       content-addressed, covering semantics, lifecycle, transport, determinism,
       and capability bounds.
 - [ ] Any runtime that executes a trusted component has passed the suite
@@ -92,6 +92,17 @@ A dialed-up foreign runtime is **part of the TCB**. Therefore:
       passes the suite.
 - [ ] The suite certifies cross-runtime equivalence (e.g. Python reflection vs
       Rust core) without appealing to Turing completeness.
+
+## Progress
+
+- **Layer 0 (delivered).** The language-agnostic conformance suite is frozen in
+  `conformance/vectors/` (`fixtures.v1.json` + `suite.v1.json`), content-addressed
+  by `vectors.lock.v1.json` and bound to the ABI `contract_sha256`. It covers the
+  five categories (semantics, lifecycle, transport, determinism, capability).
+  `conformance/certifier/` runs it against a host over the
+  `cbp.conformance-host.v1` protocol and records the pinned runtime identity; the
+  reference host passes 17/17. Certifying a non-reference runtime (Python
+  reflection vs Rust core) and signing the runtime are Layer 1.
 
 ## Risks / invariants
 
