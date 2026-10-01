@@ -48,7 +48,7 @@ node (`cbp/boot_network.py`).
 cd core
 uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
-uv run mypy src                                       # -> 123 files, clean
+uv run mypy src                                       # -> 125 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
 uv run pytest -o addopts="" -p no:cacheprovider       # -> 1576 passed
 
@@ -73,6 +73,10 @@ python3 certifier/certify.py \
 cd ../pro
 ./scripts/certify.sh                                  # builds + certifies ALL FOUR suites (31/31 + 10/10 + 14/14 + 8/8) + unit tests
 cargo test --release --features wasm                  # codec + artifact-signature + appointed tests: 6 passed
+
+# workspace IDE hygiene (run from the workspace root) ----------------------
+cd ..
+./scripts/check-pyright.sh                            # -> 0 errors, 0 warnings, 0 notes
 ```
 
 Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
@@ -84,7 +88,7 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
   commit hash written in prose — it drifts. Read the live tips instead:**
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`.
-- Core gates: `ruff` clean; `mypy` clean (123 files); `cbp-check` **READY (8/8)**;
+- Core gates: `ruff` clean; `mypy` clean (125 files); `cbp-check` **READY (8/8)**;
   convention + home-path guard passed; full suite **1576 passed** (~63 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
@@ -160,8 +164,13 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 - **Environment note (this machine).** Global `git` has `commit.gpgsign=true`
   and `~/.ssh/config` points `github.com` at a public key. If the SSH agent is
   unavailable, commits fail at signing and pushes fail. Commit with a per-command
-  `-c commit.gpgsign=false` (never `--no-verify`); push normally (this session's
-  pushes succeeded without the ssh workaround). **Do not edit global config/**keys**.
+  `-c commit.gpgsign=false` (never `--no-verify`). For tests that create temp git
+  repos, point `GIT_CONFIG_GLOBAL` at a throwaway gitconfig with
+  `[commit] gpgsign = false` - never edit the real global config. To push while
+  Bitwarden's SSH agent is down, use the already-authenticated `gh` token over
+  HTTPS through a throwaway askpass (`GIT_ASKPASS` -> `gh auth token`) with the
+  repository's HTTPS URL; this changes no remote and logs no secret.
+  **Do not edit global config/**keys.**
 
 ## Fresh-session start
 
@@ -302,6 +311,12 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **Convention layer (SPEC-0001/0003/0004)** — `AGENTS.md` TOC, canonical skills
   (auto-discovered), `tools/new-skill.sh`, same-name component mapping, guarded by
   `tests/test_agent_conventions.py`.
+- **Publication hygiene (SPEC-0016 §94 / SPEC-0018 §13)** —
+  `tests/test_public_boundary.py` fails closed if a private sibling-repo slug,
+  private host id, or RFC 1918 address appears in this public repo. The
+  workspace-root basedpyright policy (the IDE tray must read
+  `0 errors, 0 warnings, 0 notes`) is versioned in `tools/workspace/` with
+  `check-pyright.sh`.
 - **Distribution spine (SPEC-0007)** — `component.v1` + `components.lock/v1`;
   content-addressed cache; deterministic resolver; minisign/gpg verification;
   offline directory + git sources; deterministic bundle; boot from lock (with
@@ -384,10 +399,11 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   (verify-then-apply; self-hosted Gitea first). Public origin-agnostic spec in
   `specs/SPEC-0018-service-host-provisioning-and-continuous-deployment.md`; the
   private instantiation lives in a separate **private companion repo**. Additive
-  public **`service.v1`** contract delivered (`contracts/service.py`, 36 tests, incl. additive task-content pins);
-  Phase 1 infra **authored** (deterministic tasks, pull/apply agent, a pinned
-  host definition + `service.v1` instance, enrollment runbook, infra CI, DR
-  drill) — **nothing provisioned**.
+  public **`service.v1`** contract delivered (`contracts/service.py`, 36 tests,
+  incl. additive task-content pins and opt-in `require_task_digests`); Phase 1
+  infra **authored + hardened** (deterministic tasks, a pull/apply agent that
+  content-verifies every mutating task, a pinned host definition + `service.v1`
+  instance, enrollment runbook, infra CI, DR drill) — **nothing provisioned**.
 
 ## Next
 
