@@ -100,18 +100,11 @@ The result is a **recursive verification hierarchy**: every node is governed by 
 parent, and trust is re-established at every hop on the way up.
 
 ```mermaid
-sequenceDiagram
-    participant P as Parent (governs)
-    participant C as Child (works)
-    P->>C: directive + context (rules, verifier, grants)
-    C->>C: run, isolated
-    C-->>P: value + self-claim "verified"
-    P->>P: re-derive and re-verify the payload
-    alt confirmed
-        P-->>P: accept; responsibility passes up
-    else mismatch
-        P-->>P: explicit, audited failure (no silent win)
-    end
+flowchart TD
+    P["Parent (governs)"] -->|"directive + context: rules, verifier, grants"| C["Child (works)"]
+    C -->|"runs in isolation, then returns a value + self-claim verified"| V{"Parent re-derives and re-verifies the payload"}
+    V -->|"confirmed"| A["accept - responsibility passes up"]
+    V -->|"mismatch"| F["explicit, audited failure - no silent win"]
 ```
 
 A child that claims `verified` but returns a value its parent can't confirm is
