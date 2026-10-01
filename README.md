@@ -32,7 +32,7 @@
 - [Architecture](#architecture)
 - [How it compares to other agent harnesses](#how-it-compares-to-other-agent-harnesses)
 - [The CBP subsystem](#the-cbp-subsystem)
-- [The bills loop](#the-bills-loop)
+- [The bills loop (worked example)](#the-bills-loop-worked-example)
 - [Quick start](#quick-start)
 - [Use from Zed (ACP)](#use-from-zed-acp)
 - [Operator path](#operator-path)
@@ -189,7 +189,7 @@ manager**. It is run through a synchronous, easy-UX `CbpDriver`.
 | **Protocol + transport parity** | One enforced wire contract on `inproc://` / `tcp://` / `ipc://`. |
 | **Correctness spine** | A parent re-verifies a child on the way up; a child's self-claim is not conclusive on its own. |
 | **Durable single-writer state** | `StateStore` + `TrajectoryStore`; persistence is always an explicit grant. |
-| **Bills loop** | intake → human review only where there's non-determinism → registry → verified calendar. |
+| **Bills loop** *(worked example)* | intake → human review only where there's non-determinism → registry → verified calendar. |
 | **Intake** | `draft_from_file` / `_email` / `_pdf_text` → unverified drafts. |
 | **Registry maintenance** | `bills_mark_paid` / `bills_mark_status` → paid bills leave the calendar. |
 | **Allowlisted workspace** | Fail-closed file access under an explicit allowlist. |
@@ -209,10 +209,17 @@ Deep dive: [`docs/cbp.md`](docs/cbp.md).
 
 ---
 
-## The bills loop
+## The bills loop (worked example)
 
-Money and schedule. The governing rule is: **we never rely on a non-deterministic
-output directly.** Anything that looks non-deterministic — parsing free-form
+> **This is a worked example, not a built-in domain.** *Bills* is a
+> demonstration scenario chosen to exercise the deterministic pipeline and the
+> verification spine end-to-end (intake → derive a method → verified registry →
+> calendar). Agent-centric is **domain-agnostic** — the same tree, contracts, and
+> gates apply to any domain. See [`PRINCIPLES.md`](PRINCIPLES.md) §2a. The
+> **CBP subsystem**, not this example, is the product.
+
+Bills are money and schedule. The governing rule is: **we never rely on a
+non-deterministic output directly.** Anything that looks non-deterministic — parsing free-form
 prose, email, or a PDF — is treated as a *hint*, not an answer. We analyze it and
 **turn it into a deterministic method to every degree it physically can be** (a
 fixed parser, a stable rule, a recomputable transform). Only the small, genuinely
