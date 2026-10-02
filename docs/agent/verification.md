@@ -13,7 +13,7 @@ enthusiasm.
 | `mypy src` | types | yes | pre-commit + CI |
 | `agent-centric cbp-check` | readiness | yes | pre-commit + CI |
 | `pytest` | invariant suite | yes | CI / agent |
-| `holdout` | acceptance scenarios | yes | isolated validator ([SPEC-0019](../../specs/SPEC-0019-isolated-holdout-validator.md); not built) |
+| `holdout` | acceptance scenarios | yes | isolated validator ([SPEC-0019](../../specs/SPEC-0019-isolated-holdout-validator.md); built; awaits operator scenarios) |
 
 ## Principles
 

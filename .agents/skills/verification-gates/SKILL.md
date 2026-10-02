@@ -21,7 +21,7 @@ verify.
 | `mypy src` | types | yes | pre-commit + CI |
 | `agent-centric cbp-check` | readiness | yes | pre-commit + CI |
 | `pytest` | invariant suite | yes | CI / agent |
-| `holdout` | acceptance scenarios | yes | isolated validator (not built) |
+| `holdout` | acceptance scenarios | yes | isolated validator ([SPEC-0019](../../../specs/SPEC-0019-isolated-holdout-validator.md); built) |
 
 ## Principles
 
@@ -31,8 +31,11 @@ verify.
 3. **Fail closed.** A missing or errored gate blocks.
 4. **Earned, not declared.** Raise a level only when its gates have a track record.
 
-`specs/holdout/` holds author-blind scenarios. L3 (auto-merge) stays
-`declared-gated` until the isolated validator exists.
+The validator is **built** ([SPEC-0019](../../../specs/SPEC-0019-isolated-holdout-validator.md));
+real scenarios live in the **operator-private** root
+(`$CBP_HOLDOUT_ROOT`), never in the public `specs/holdout/`. L3 (auto-merge)
+stays `declared-gated` until the validator runs **green** and the operator flips
+it deliberately.
 
 ## Deterministic termination
 

@@ -19,7 +19,7 @@ not generation, is the constraint on autonomy" — is already recorded in
 [`docs/agent/verification.md`](../docs/agent/verification.md), and the gate is
 already reserved: `specs/holdout/` holds author-blind acceptance scenarios and
 [`docs/agent/levels.md`](../docs/agent/levels.md) lists the `holdout` gate as the
-isolated validator (not built). [SPEC-0017](SPEC-0017-frontier-workstreams.md) §4
+isolated validator (this spec builds it). [SPEC-0017](SPEC-0017-frontier-workstreams.md) §4
 parks the validator as a frontier workstream and requires it be promoted to its
 own spec before implementation. This is that spec.
 

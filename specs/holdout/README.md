@@ -24,7 +24,8 @@ threshold.
 
 ## Status
 
-No scenarios yet — the L3 validator that consumes them is not built (see
-[`SPEC-0019`](../SPEC-0019-isolated-holdout-validator.md) for its spec and
-[`docs/agent/verification.md`](../../docs/agent/verification.md)). This file
-reserves the format and the boundary.
+No scenarios yet — the L3 validator that consumes them is built
+([`SPEC-0019`](../SPEC-0019-isolated-holdout-validator.md)); real scenarios live
+in the **operator-private** root (`$CBP_HOLDOUT_ROOT`), never in this public path.
+This file reserves the format and the boundary (see
+[`docs/agent/verification.md`](../../docs/agent/verification.md)).

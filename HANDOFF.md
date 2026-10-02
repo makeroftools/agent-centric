@@ -11,7 +11,7 @@ git repo); the work lives in three sibling repos:
 
 | repo | visibility | role |
 | --- | --- | --- |
-| [`core/`](AGENTS.md) | public | Python **reflection** + the frozen specs (`specs/SPEC-0011`–`0017`). |
+| [`core/`](AGENTS.md) | public | Python **reflection** + the frozen specs (`specs/SPEC-0011`–`0019`). |
 | [`../conformance/`](../conformance/AGENTS.md) | public | The shared contract: WIT ABI + conformance vectors + certifier. |
 | [`../pro/`](../pro/AGENTS.md) | private | The Rust host (optimization edition). |
 
@@ -528,7 +528,7 @@ yourself reaching for an in-place tool, stop and use `safe-replace`.
   `signing_service.py`, `transparency.py`, `trust.py`, `design.py`,
   `lockfile.py`, `n8n_adapter.py`, `network.py`, `flow.py`,
   `cache.py`, `resolver.py`, `signing.py`, `agent.py`); `src/agent_centric/contracts/`
-  (`component.py`, `components_lock.py`, `design.py`); `specs/SPEC-0011`–`0017`;
+  (`component.py`, `components_lock.py`, `design.py`); `specs/SPEC-0011`–`0019`;
   `examples/components/`; `tests/test_agent_conventions.py`.
 - **conformance** — `contracts/component-abi-v1.wit`, `contracts/ABI.md`,
   `contracts/ABI.lock.v1.json`, `contracts/network-v1.md`,
