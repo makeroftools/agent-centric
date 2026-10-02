@@ -4,7 +4,7 @@ title: Service hosting — provider abstraction, reconciliation, and self-healin
 type: feature
 target_repo: agent-centric
 target_branch: main
-status: draft
+status: accepted
 owner: operator
 ---
 

@@ -4,7 +4,7 @@ title: Components as dynamic work — the work.v1 recipe and the task-load proto
 type: feature
 target_repo: agent-centric
 target_branch: main
-status: draft
+status: accepted
 owner: operator
 ---
 

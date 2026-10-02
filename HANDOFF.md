@@ -96,8 +96,8 @@ touched):
   confidence-scored component that proposes while the verifier disposes; bounds
   cannot self-widen.
 
-No code path changed; no operator gate was touched. The two specs are `draft`
-pending operator ratification.
+No code path changed; no operator gate was touched. The two specs were
+operator-ratified to `accepted` (still unimplemented).
 
 ## Latest session (documentation/spec hygiene — delivered under L1)
 
@@ -694,9 +694,9 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   (advisory-locked + `fsync`-ed). Delivered under L1; **operator-authored
   scenarios, the authoritative `isolation: enforced` run, and the L3 flip
   remain**; L3 stays `declared-gated`.
-- **SPEC-0020** `draft` — service hosting: provider abstraction + reconciliation +
+- **SPEC-0020** `accepted` — service hosting: provider abstraction + reconciliation +
   self-healing (extends SPEC-0018); **nothing implemented**.
-- **SPEC-0021** `draft` — components as dynamic work: `work.v1` recipe + the
+- **SPEC-0021** `accepted` — components as dynamic work: `work.v1` recipe + the
   dynamic task-load protocol (extends SPEC-0002); **nothing implemented**. Charters
   for the Brain and for learning/RSI live in `docs/agent/`.
 
