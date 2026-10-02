@@ -467,8 +467,10 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
    **SPEC-0014**–**SPEC-0021**; plus SPEC-0002/0007/0008/0009/0010.
    **SPEC-0020** (service hosting) and **SPEC-0021** (dynamic work) are
    operator-ratified (`accepted`); their **additive contracts**
-   (`contracts/provider.py`, `contracts/work.py`) are **implemented** (110
-   tests); the runtime realization remains.
+   (`contracts/provider.py`, `contracts/work.py`), their runtimes
+   (`cbp/provider_runtime.py`, `cbp/work_runtime.py`), and the work boot/bundle
+   bridge (`cbp/work_boot.py`) are **implemented and green** (151 tests); a
+   concrete provider adapter remains.
 5. `../conformance/AGENTS.md` and `../pro/AGENTS.md` — the shared contract and
    the Rust host.
 
@@ -527,23 +529,25 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > the provisioning spec; the local CD substrate (`infra/`); `review.v1` +
 > confidence; the offline umbrella lock (test-signed); the L3-ready validator +
 > honest rehearsal (`core/docs/agent/l3-milestone-plan.md`); the documentation/spec
-> hygiene pass (real `conformance/` + `pro/` READMEs, reconciled statuses); and
-> the doc-freshness guards (`core/tests/test_docs_freshness.py`, mirrored in
-> `infra/`).
+> hygiene pass (real `conformance/` + `pro/` READMEs, reconciled statuses); the
+> doc-freshness guards (`core/tests/test_docs_freshness.py`, mirrored in
+> `infra/`); and the **SPEC-0020/0021 realization** — the additive contracts
+> (`contracts/provider.py`, `contracts/work.py`), the provider runtime
+> (`cbp/provider_runtime.py`), the work runtime (`cbp/work_runtime.py`), and the
+> work boot/bundle bridge (`cbp/work_boot.py`).
 >
 > **Next work, in order.**
-> (1) **Implement the ratified contracts — the next buildable unit below the
-> gates.** [`SPEC-0020`](specs/SPEC-0020-service-hosting-provider-abstraction-and-self-healing.md)
-> (`provider.v1`: a pure, content-addressed `plan`; gated idempotent
-> `apply`/`health`/`teardown`; verify-then-apply; a reconcile loop with
-> deterministic auto-rollback and fail-closed escalation; an emit-only
-> notification component; declarative local-first/cloud; authN/Z via refs +
-> capability grants) and
-> [`SPEC-0021`](specs/SPEC-0021-components-as-dynamic-work.md) (a declarative
-> pinned `work.v1` recipe compiling via a pure seam to `component.v1`, plus the
-> dynamic task-load/bind protocol). Add the contracts additively in
-> `core/src/agent_centric/contracts/`, each its own L1-reviewed commit with
-> tests; keep `component-abi.v1` frozen and the legacy `task.v1` untouched.
+> (1) **Roadmap-planning session first (do not implement ahead of it).** The
+> SPEC-0020/0021 build below the gates is **complete and green** (contracts,
+> provider runtime, work runtime, and the work boot/bundle bridge). The only
+> remaining unit is a **concrete `provider.v1` adapter**; because it is
+> provider/host-specific, plan it against the private `infra/` instantiation
+> (the local CD substrate is the natural first adapter, and the private infra
+> HANDOFF explicitly asks for a planning pass before implementing). If the
+> planning session ratifies a local-first adapter, add it as a small,
+> L1-reviewed commit behind the existing injected `ProviderAdapter` seam
+> (`cbp/provider_runtime.py`) with tests; keep `component-abi.v1` frozen and the
+> legacy `task.v1` untouched.
 > (2) **Operator-gated:** the deliberate L3 flip (author scenarios in
 > `$CBP_HOLDOUT_ROOT`, run the validator green with `isolation: enforced` on a
 > distinct principal/host, then edit `[levels.L3]`); SPEC-0018 Phases 3–6 (VPS +
