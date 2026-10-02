@@ -271,7 +271,7 @@ cargo test --release --features wasm                  # codec + artifact-signatu
 
 # infra (private companion) -----------------------------------------------
 cd ../infra
-uv run --project ../core pytest -o addopts="" -p no:cacheprovider tests   # -> 104 passed, 1 skipped
+uv run --project ../core pytest -o addopts="" -p no:cacheprovider tests   # -> 109 passed, 1 skipped
 
 # workspace IDE hygiene (run from the workspace root) ----------------------
 cd ..
@@ -381,7 +381,10 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
    verification, committing, components.
 4. [`specs/`](specs) — the frozen plan of record: **SPEC-0011** (MVP; accepted),
    **SPEC-0012** (Component ABI), **SPEC-0013** (cross-runtime + vectors),
-   **SPEC-0014**–**SPEC-0017**; plus SPEC-0002/0007/0008/0009/0010.
+   **SPEC-0014**–**SPEC-0021**; plus SPEC-0002/0007/0008/0009/0010.
+   **SPEC-0020** (service hosting) and **SPEC-0021** (dynamic work) are
+   operator-ratified (`accepted`) and **not yet implemented** — the next build
+   unit.
 5. `../conformance/AGENTS.md` and `../pro/AGENTS.md` — the shared contract and
    the Rust host.
 
@@ -426,35 +429,47 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > local-first, fail-closed). Open at the workspace root `cbp/`. Read
 > `core/AGENTS.md` -> `core/PRINCIPLES.md` -> `core/.agentfactory.toml` (active
 > **L1**; target L3, operator-gated) -> `core/HANDOFF.md`, then
-> `core/specs/SPEC-0011`–`0019`, `conformance/AGENTS.md`, `pro/AGENTS.md`,
-> `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm **all four** repos
-> (`core`, `conformance`, `pro`, `infra`) are on `main` and clean, then run
-> `core/HANDOFF.md`'s verification block (expect: `cbp-check` READY, **1713
-> passed**; shared **31/31** in-process + external + Rust; WASM **10/10**; network
-> **14/14**; appointed **8/8**; infra **104 passed + 1 skipped**; basedpyright
-> **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL` workaround before any
-> pytest run.
+> `core/specs/SPEC-0011`–`0021`, `core/ROADMAP.md`, `conformance/AGENTS.md`,
+> `pro/AGENTS.md`, `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm
+> **all four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and
+> clean, then run `core/HANDOFF.md`'s verification block (expect: `cbp-check`
+> READY, **1713 passed**; shared **31/31** in-process + external + Rust; WASM
+> **10/10**; network **14/14**; appointed **8/8**; infra **109 passed + 1
+> skipped**; basedpyright **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL`
+> workaround before any pytest run.
 >
-> **The L3-ready validator + honest rehearsal milestone is already delivered**
-> (`core/docs/agent/l3-milestone-plan.md`, workstreams A–D) and **hardened**
-> (descriptor-path confinement, an advisory-locked `fsync`-ed ledger, `0/1/2/3`
-> exit semantics, the additive `service` probe + `holdout.deployment/v1`, TCB
-> pins, `--self-test`, advisory principal guard). **Do not re-implement it.**
-> **The build below the operator gates is complete**: Layers 0–4 + signing;
-> SPEC-0002 Phase-1 items 1/2/6 (adapter-first); SPEC-0018 Phases 1–2 + the
-> provisioning spec; the local CD substrate (`infra/`); `review.v1`+confidence;
-> and the offline umbrella lock (test-signed). This session is a **roadmap +
-> documentation + specification session — do not implement first.** Plan
-> workstreams: (1) **unblock L3** (operator-authorized) — author scenarios in
-> `$CBP_HOLDOUT_ROOT`, run the authoritative `isolation: enforced` validator on a
-> distinct principal/host, then the deliberate `[levels.L3]` edit;
-> (2) **SPEC-0018 Phases 3–6** (publish-gated) — VPS + public read-only mirror,
-> multi-tenant/branding, source-of-truth migration, hardening; (3) optional
-> **threshold signing** (key-gated) and the **SPEC-0017 frontier** (research;
-> whitepaper last); and (4) **documentation/spec hygiene** — fix the pre-existing
-> `conformance/` + `pro/` README drift, reconcile SPEC status front-matter and
-> §12 acceptance checkboxes (SPEC-0002 is implemented in substance), and refresh
-> the `conformance/`/`pro/` `AGENTS.md` "Next" lines.
+> **Do not re-implement delivered work.** Complete and green: Layers 0–4 +
+> signing; SPEC-0002 Phase-1 items 1/2/6 (adapter-first); SPEC-0018 Phases 1–2 +
+> the provisioning spec; the local CD substrate (`infra/`); `review.v1` +
+> confidence; the offline umbrella lock (test-signed); the L3-ready validator +
+> honest rehearsal (`core/docs/agent/l3-milestone-plan.md`); the documentation/spec
+> hygiene pass (real `conformance/` + `pro/` READMEs, reconciled statuses); and
+> the doc-freshness guards (`core/tests/test_docs_freshness.py`, mirrored in
+> `infra/`).
+>
+> **Next work, in order.**
+> (1) **Implement the ratified contracts — the next buildable unit below the
+> gates.** [`SPEC-0020`](specs/SPEC-0020-service-hosting-provider-abstraction-and-self-healing.md)
+> (`provider.v1`: a pure, content-addressed `plan`; gated idempotent
+> `apply`/`health`/`teardown`; verify-then-apply; a reconcile loop with
+> deterministic auto-rollback and fail-closed escalation; an emit-only
+> notification component; declarative local-first/cloud; authN/Z via refs +
+> capability grants) and
+> [`SPEC-0021`](specs/SPEC-0021-components-as-dynamic-work.md) (a declarative
+> pinned `work.v1` recipe compiling via a pure seam to `component.v1`, plus the
+> dynamic task-load/bind protocol). Add the contracts additively in
+> `core/src/agent_centric/contracts/`, each its own L1-reviewed commit with
+> tests; keep `component-abi.v1` frozen and the legacy `task.v1` untouched.
+> (2) **Operator-gated:** the deliberate L3 flip (author scenarios in
+> `$CBP_HOLDOUT_ROOT`, run the validator green with `isolation: enforced` on a
+> distinct principal/host, then edit `[levels.L3]`); SPEC-0018 Phases 3–6 (VPS +
+> public read-only mirror, multi-tenant/branding, source-of-truth migration,
+> hardening); re-sign the composition/umbrella locks with the operator key;
+> optional threshold signing.
+> (3) **Research (charters, no design freeze):**
+> [`docs/agent/brain-charter.md`](docs/agent/brain-charter.md) and
+> [`docs/agent/learning-charter.md`](docs/agent/learning-charter.md), each for a
+> dedicated session; the SPEC-0017 frontier afterward.
 >
 > Hard laws: whole-file replacement only via `tools/safe-replace.sh` (**never
 > in-place edits**), resolve every home path from `$HOME`, commit and push
@@ -464,7 +479,9 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > re-signing the composition/umbrella locks), and any public publish; the
 > **authoring principal must be unprivileged and distinct** (`agent-runner`, no
 > docker/sudo), and holdout scenarios and keys never enter a public repo. Every
-> change must be **correct, robust, secure, and idempotent**.
+> change must be **correct, robust, secure, and idempotent**. Volatile counts are
+> machine-checked — run the refresh ritual in `core/HANDOFF.md`
+> §"Documentation freshness" whenever a count or a spec status moves.
 
 ## What Agent-centric is
 
@@ -701,6 +718,23 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   for the Brain and for learning/RSI live in `docs/agent/`.
 
 ## Next
+
+- **SPEC-0020 / SPEC-0021 ratified (this session); the next buildable unit.** The
+  operator-ratified `accepted` specs are
+  [`SPEC-0020`](specs/SPEC-0020-service-hosting-provider-abstraction-and-self-healing.md)
+  (service hosting: a thin `provider.v1` — pure `plan`, gated idempotent
+  `apply`/`health`/`teardown`; verify-then-apply; a reconcile loop with
+  deterministic auto-rollback and fail-closed escalation; an emit-only
+  notification component; declarative local-first/cloud; authN/Z) and
+  [`SPEC-0021`](specs/SPEC-0021-components-as-dynamic-work.md) (components as
+  dynamic work: a declarative pinned `work.v1` recipe compiling via a pure seam
+  to `component.v1`, plus the dynamic task-load/bind protocol). **Nothing is
+  implemented.** The next unit is the additive contracts (`contracts/provider.py`,
+  `contracts/work.py`) with tests — each its own L1-reviewed commit;
+  `component-abi.v1` stays frozen. Study charters for the Brain
+  ([`docs/agent/brain-charter.md`](docs/agent/brain-charter.md)) and for
+  learning/RSI ([`docs/agent/learning-charter.md`](docs/agent/learning-charter.md))
+  are parked for dedicated sessions.
 
 - **SPEC-0002 Phase-1 remainder — S1–S5 implemented and verified (this
   session).** The design record is
