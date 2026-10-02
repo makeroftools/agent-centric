@@ -245,7 +245,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 130 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1713 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1774 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -327,7 +327,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (130 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1713 passed** (~64 s).
+  convention + home-path guard passed; full suite **1774 passed** (~67 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -433,7 +433,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > `pro/AGENTS.md`, `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm
 > **all four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and
 > clean, then run `core/HANDOFF.md`'s verification block (expect: `cbp-check`
-> READY, **1713 passed**; shared **31/31** in-process + external + Rust; WASM
+> READY, **1774 passed**; shared **31/31** in-process + external + Rust; WASM
 > **10/10**; network **14/14**; appointed **8/8**; infra **109 passed + 1
 > skipped**; basedpyright **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL`
 > workaround before any pytest run.
