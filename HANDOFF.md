@@ -74,6 +74,30 @@ entry/contract is exposed, never placed inside the composition under test.
 Operator-authored scenarios, the authoritative `isolation: enforced` green run on
 a distinct principal/host, and the L3 flip remain operator gates.
 
+## Latest session (threshold signing verification — delivered under L1)
+
+The roadmap plan's below-gate candidate #2 (Workstream D) is **implemented, tested,
+and pushed**
+([`src/agent_centric/cbp/threshold.py`](src/agent_centric/cbp/threshold.py),
+SPEC-0007 §6, 25 tests):
+
+- **`ThresholdPolicy`** is a pure, content-addressed ``(k, key_ids)`` declaration;
+  **`ThresholdSignature`** is a canonical, base64, content-addressed k-of-n bundle
+  (schema ``threshold.sig/v1``) sorted by key id, with no repeated key.
+- **`ThresholdVerifier`** implements the existing `SignatureVerifier` protocol and
+  **drops into the resolver and `boot_from_lock` unchanged**: only the signature
+  bytes differ. It refuses a malformed/non-canonical bundle, an ineligible or
+  unknown key, **any** part that fails to verify, and a bundle below threshold —
+  fail-closed. `ThresholdError` subclasses `SignatureError`, so boot still refuses
+  through its existing guard (a below-threshold lock is proven not to boot).
+- **`sign_threshold`** composes independent `Signer`s; **no new cryptography** (the
+  same system-tool signers are reused). `component-abi.v1` untouched.
+- Operator key acts (re-signing real locks, installing the trust root) remain
+  **gated**; this session delivers the verification logic offline only.
+
+Core suite **1881 → 1906 passed** (+25); `mypy` 137 files; `ruff`/`cbp-check`
+green; basedpyright 0/0/0. **No operator gate was touched.**
+
 ## Latest session (local-first provider adapter — delivered under L1)
 
 The roadmap plan's first below-gate unit (Workstream A) is **implemented, tested,
@@ -371,7 +395,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 130 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1881 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1906 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -453,7 +477,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (130 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1881 passed** (~65 s).
+  convention + home-path guard passed; full suite **1906 passed** (~65 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -563,7 +587,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > `pro/AGENTS.md`, `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm
 > **all four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and
 > clean, then run `core/HANDOFF.md`'s verification block (expect: `cbp-check`
-> READY, **1881 passed**; shared **31/31** in-process + external + Rust; WASM
+> READY, **1906 passed**; shared **31/31** in-process + external + Rust; WASM
 > **10/10**; network **14/14**; appointed **8/8**; infra **109 passed + 1
 > skipped**; basedpyright **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL`
 > workaround before any pytest run.
@@ -581,15 +605,15 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > work boot/bundle bridge (`cbp/work_boot.py`).
 >
 > **Next work, in order.**
-> (1) **Implement the next below-gate unit: threshold-signing verification**
-> (SPEC-0007 §6). The roadmap plan is delivered
-> ([`docs/agent/roadmap-plan.md`](docs/agent/roadmap-plan.md)) and its Workstream A
-> — the local-first `provider.v1` adapter
-> ([`src/agent_centric/cbp/provider_local.py`](src/agent_centric/cbp/provider_local.py))
-> — is **done**: `LocalTaskProviderAdapter` behind the injected `ProviderAdapter`
-> seam, additive `observe` role, verify-then-apply, offline tests. Keep
-> `component-abi.v1` frozen and the legacy `task.v1` untouched. Do not start any
-> operator-gated unit.
+> (1) **Below-gate build queue is clear.** Workstream A (local-first `provider.v1`
+> adapter, `cbp/provider_local.py`) and Workstream D (threshold-signing
+> verification, `cbp/threshold.py`) are **delivered**. The remaining
+> SPEC-0020/0021 unit — the concrete provider manifest/task wiring — is
+> host-specific and belongs to the private companion. Next, run a dedicated
+> research session for the charters
+> ([`docs/agent/brain-charter.md`](docs/agent/brain-charter.md),
+> [`docs/agent/learning-charter.md`](docs/agent/learning-charter.md)); do not start
+> any operator-gated unit.
 > (2) **Operator-gated:** the deliberate L3 flip (author scenarios in
 > `$CBP_HOLDOUT_ROOT`, run the validator green with `isolation: enforced` on a
 > distinct principal/host, then edit `[levels.L3]`); SPEC-0018 Phases 3–6 (VPS +
@@ -803,8 +827,10 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   (Holdout scenarios are operator-authored, in SPEC-0019.)
 - **SPEC-0003/0004/0006** `implemented` — criteria met by the convention guard;
   acceptance boxes ticked.
-- **SPEC-0007** `accepted` — Phases 0/0.5a/1a/1b/2 delivered; 0.5b signing and
-  **key rotation** delivered; the **offline umbrella `components.lock`** is
+- **SPEC-0007** `accepted` — Phases 0/0.5a/1a/1b/2 delivered; 0.5b signing,
+  **key rotation**, and **threshold-signing verification** (`cbp/threshold.py`:
+  canonical k-of-n bundles, fail-closed, drops into boot) delivered; the
+  **offline umbrella `components.lock`** is
   committed (test-signed offline; operator re-signs with the real key);
   **live mirror open**.
 - **SPEC-0008** `implemented` — `design.v1` + validate/compile, the Phase 3

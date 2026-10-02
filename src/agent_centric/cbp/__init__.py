@@ -342,6 +342,15 @@ from .slm import (
 )
 from .store import StateStore, StoreError, TrajectoryStore, open_state, open_trajectory
 from .store_agent import STORE_GET, STORE_KEYS, STORE_SET, StoreAgent
+from .threshold import (
+    THRESHOLD_SCHEMA,
+    SignaturePart,
+    ThresholdError,
+    ThresholdPolicy,
+    ThresholdSignature,
+    ThresholdVerifier,
+    sign_threshold,
+)
 from .training_plan import (
     TIER_CPU,
     TIER_KINDS,
@@ -535,6 +544,14 @@ __all__ = [
     "TransparencyError",
     "LOG_SCHEMA",
     "GENESIS",
+    # Threshold signing (SPEC-0007 §6): k-of-n detached signatures
+    "ThresholdError",
+    "ThresholdPolicy",
+    "ThresholdSignature",
+    "ThresholdVerifier",
+    "SignaturePart",
+    "sign_threshold",
+    "THRESHOLD_SCHEMA",
     # Component boot (SPEC-0007 Phase 2): resolve -> verify -> instantiate
     "BootError",
     "BootedComponent",

@@ -145,7 +145,11 @@ trusted at resolve time; the lock stores commits only.
   refuses) and uses an explicit, recorded instant (never a wall-clock read);
   `TrustStore` is a verifier (for the resolver and `boot_from_lock`) and
   `log_verifiers()` drives transparency-log verification across rotated keys.
-  Threshold signing remains open.
+  **Threshold verification (delivered).** `cbp/threshold.py` adds canonical
+  k-of-n bundles (`threshold.sig/v1`), a fail-closed `ThresholdVerifier` that
+  drops into the resolver and `boot_from_lock`, and `sign_threshold` over the
+  existing system-tool signers; installing the operator trust root and
+  re-signing remain key acts.
 - **Three clamp points** (`cbp/spec.md` §3c): registry write, consumption, and
   execution are each explicitly gated.
 
