@@ -42,6 +42,13 @@ and the **SPEC-0011 "viable" end-to-end** — boot a signed lock → typed-port
 dataflow → durable-ledger replay, with a recorded, confidence-scored `model`
 node (`cbp/boot_network.py`).
 
+**SPEC-0002 Phase-1 is delivered** (adapter-first, under L1): one `Component`
+contract with the `Agent` adapted onto it; a parent-provisioned
+`ComponentCatalog` that **removed the module-level registry global** and the
+central `_child_class_for` map (parent-declared kinds; an undeclared kind fails
+closed); and explicit `inproc`-only backend enforcement. Design + progress:
+[`docs/agent/spec-0002-phase1-adapter-design.md`](docs/agent/spec-0002-phase1-adapter-design.md).
+
 **Infrastructure (private `infra/`).** SPEC-0018 is authored end-to-end below
 the operator gates: Phase 1 (pinned NixOS host definition + `service.v1` + named
 tasks + pull/apply agent), Phase 2 (the bootstrap services **graduated to
@@ -66,6 +73,38 @@ synthetic known-good/known-bad `--self-test`, and an **advisory principal guard*
 entry/contract is exposed, never placed inside the composition under test.
 Operator-authored scenarios, the authoritative `isolation: enforced` green run on
 a distinct principal/host, and the L3 flip remain operator gates.
+
+## Latest session (SPEC-0002 Phase-1 remainder — delivered under L1)
+
+The remaining Phase-1 items of SPEC-0002 are **implemented, equivalence-tested,
+and pushed**, adapter-first; each step is an independently committed, green
+unit (design record and progress log:
+[`docs/agent/spec-0002-phase1-adapter-design.md`](docs/agent/spec-0002-phase1-adapter-design.md)
+§12):
+
+- **S1 — adapter (additive).** [`src/agent_centric/cbp/component_adapter.py`](src/agent_centric/cbp/component_adapter.py):
+  `AgentComponent` (lifecycle passthrough, entry bridge `run_once`, pure
+  `component.v1` manifest projection) with equivalence tests against the
+  `CbpDriver` round-trip; no existing path changed.
+- **S2 — catalog seam (additive).** [`src/agent_centric/cbp/component_catalog.py`](src/agent_centric/cbp/component_catalog.py)
+  (`ComponentCatalog`, passive) + `RegistryEntry.from_callable` +
+  `AgentConfig.catalog`; a child resolves only what its parent provisioned.
+- **S3a/S3b — runtime cut-over + global removal.** `CbpDriver` owns the catalog
+  and provisions it to the root; children inherit it; `replay_session` provisions
+  the replay tree's catalog; `replay_ledger` seeds the fresh driver's catalog
+  from the ledger manifest. The module-level `_REGISTRY`/`_resolve_entry`/
+  `register_callable` shim is **deleted**, the package no longer exports it, and
+  a guard test asserts no global remains.
+- **S4 — parent-declared children.** The central `_child_class_for` map is
+  **deleted**; `Agent.declare_child_kind` is provisioned by the tree builder
+  (`CbpDriver` declares `store`/`bills`/`model`); an undeclared kind fails closed
+  **before any socket bind** (no partial side effect).
+- **S5 — inproc-only backend.** `ADMITTED_BACKENDS = {"inproc"}`;
+  `CbpDriver(backend=…)` refuses anything else (`BackendNotAdmitted`).
+
+**SPEC-0002 Phase-1 items 1, 2, and 6 are complete.** Core suite **1680 → 1708
+passed**; mypy 130 files; basedpyright 0/0/0. No operator gate was touched (L1,
+no `.agentfactory.toml` edit, no key, no provisioning, no publish).
 
 ## Latest session (L3 milestone — implemented offline, under L1)
 
@@ -160,9 +199,9 @@ The validator is TCB: pin, sign, content-address, and record it.
 cd core
 uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
-uv run mypy src                                       # -> 128 files, clean
+uv run mypy src                                       # -> 130 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1680 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1708 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -211,8 +250,8 @@ pytest run; never edit the real global config. Pushes may need the
   commit hash written in prose — it drifts. Read the live tips instead:**
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
-- Core gates: `ruff` clean; `mypy` clean (128 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1680 passed** (~64 s).
+- Core gates: `ruff` clean; `mypy` clean (130 files); `cbp-check` **READY (8/8)**;
+  convention + home-path guard passed; full suite **1708 passed** (~64 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -314,7 +353,7 @@ pytest run; never edit the real global config. Pushes may need the
 > `core/specs/SPEC-0011`–`0019`, `conformance/AGENTS.md`, `pro/AGENTS.md`,
 > `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm **all four** repos
 > (`core`, `conformance`, `pro`, `infra`) are on `main` and clean, then run
-> `core/HANDOFF.md`'s verification block (expect: `cbp-check` READY, **1680
+> `core/HANDOFF.md`'s verification block (expect: `cbp-check` READY, **1708
 > passed**; shared **31/31** in-process + external + Rust; WASM **10/10**; network
 > **14/14**; appointed **8/8**; infra **104 passed + 1 skipped**; basedpyright
 > **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL` workaround before any
@@ -324,19 +363,22 @@ pytest run; never edit the real global config. Pushes may need the
 > (`core/docs/agent/l3-milestone-plan.md`, workstreams A–D) and **hardened**
 > (descriptor-path confinement, an advisory-locked `fsync`-ed ledger, `0/1/2/3`
 > exit semantics, the additive `service` probe + `holdout.deployment/v1`, TCB
-> pins, `--self-test`, advisory principal guard). **Do not re-implement it.** Then
-> hold a **roadmap-planning session (do not implement first)** over the remaining
-> choices, and begin only the one the operator selects:
-> (1) **unblock L3** (operator-authorized) — author scenarios in
+> pins, `--self-test`, advisory principal guard). **Do not re-implement it.**
+> **The build below the operator gates is complete**: Layers 0–4 + signing;
+> SPEC-0002 Phase-1 items 1/2/6 (adapter-first); SPEC-0018 Phases 1–2 + the
+> provisioning spec; the local CD substrate (`infra/`); `review.v1`+confidence;
+> and the offline umbrella lock (test-signed). This session is a **roadmap +
+> documentation + specification session — do not implement first.** Plan
+> workstreams: (1) **unblock L3** (operator-authorized) — author scenarios in
 > `$CBP_HOLDOUT_ROOT`, run the authoritative `isolation: enforced` validator on a
 > distinct principal/host, then the deliberate `[levels.L3]` edit;
-> (2) **SPEC-0002 Phase-1 remainder** (non-gated, but design first) — the
-> `Agent`→`Component` adapter, removal of the callable registry /
-> `_child_class_for`, `inproc`-only enforcement (adapter-first, not a big-bang);
-> (3) **SPEC-0018 Phases 3–6** (publish-gated) — VPS + public read-only mirror,
-> multi-tenant/branding, source-of-truth migration, hardening;
-> (4) optional **threshold signing** (key-gated) and the **SPEC-0017 frontier**
-> (research; whitepaper last).
+> (2) **SPEC-0018 Phases 3–6** (publish-gated) — VPS + public read-only mirror,
+> multi-tenant/branding, source-of-truth migration, hardening; (3) optional
+> **threshold signing** (key-gated) and the **SPEC-0017 frontier** (research;
+> whitepaper last); and (4) **documentation/spec hygiene** — fix the pre-existing
+> `conformance/` + `pro/` README drift, reconcile SPEC status front-matter and
+> §12 acceptance checkboxes (SPEC-0002 is implemented in substance), and refresh
+> the `conformance/`/`pro/` `AGENTS.md` "Next" lines.
 >
 > Hard laws: whole-file replacement only via `tools/safe-replace.sh` (**never
 > in-place edits**), resolve every home path from `$HOME`, commit and push
@@ -603,13 +645,21 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   validator green (`isolation: enforced`) on a distinct principal/host, and flips
   `[levels.L3]` deliberately; (2) **SPEC-0018 Phase 3** — the low-budget VPS +
   public read-only mirror, then Phases 4–6 (multi-tenant/branding,
-  source-of-truth migration, hardening) (operator/publish-gated); (3)
-  **SPEC-0002 Phase-1 remainder** — the `Agent`→`Component` adapter, removal of
-  the module-level callable registry / `_child_class_for`, and `inproc`-only
-  enforcement (adapter-first: prove equivalence before removing the old path; a
-  dedicated design step, not a big-bang); (4) **signing** — optional threshold
-  signing; (5) **SPEC-0017 frontier** — formal semantics/reduction, the
-  Universal Function Index, bounded RSI, whitepaper last.
+  source-of-truth migration, hardening) (operator/publish-gated); (3) **signing**
+  — optional threshold signing; (4) **SPEC-0017 frontier** — formal
+  semantics/reduction, the Universal Function Index, bounded RSI, whitepaper
+  last. (SPEC-0002 Phase-1 is **delivered** — see *Latest session*.)
+- **Documentation & specification hygiene (next session's focus).** Known gaps to
+  close: (a) the pre-existing `conformance/README.md` / `pro/README.md` (and
+  `conformance/contracts/README.md`, `conformance/vectors/README.md`) are
+  byte-identical vectors-README copies with broken relative links — author real
+  top-level READMEs; (b) the `conformance/AGENTS.md` and `pro/AGENTS.md` "Next"
+  lines still list key rotation / the `design→pin→lock` producer / the umbrella
+  lock as remaining — all are delivered; (c) reconcile SPEC status front-matter
+  (`accepted` vs `implemented`) and the §12 acceptance checkboxes (SPEC-0002
+  Phase-1 is implemented in substance; SPEC-0003/0004/0006 have doc-only unticked
+  boxes); (d) add a `docs/agent/` note covering `component_adapter` /
+  `component_catalog` and the removed module-level global.
 - **Umbrella `components.lock` — delivered offline; operator signing remains.**
   The `design → pin → components.lock` producer and the additive offline
   **directory-pin** path are delivered; `designs/core.v1.json`, the canonical
