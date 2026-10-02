@@ -421,7 +421,7 @@ cargo test --release --features wasm                  # codec + artifact-signatu
 
 # infra (private companion) -----------------------------------------------
 cd ../infra
-uv run --project ../core pytest -o addopts="" -p no:cacheprovider tests   # -> 111 passed, 2 skipped
+uv run --project ../core pytest -o addopts="" -p no:cacheprovider tests   # -> 117 passed, 2 skipped
 
 # workspace IDE hygiene (run from the workspace root) ----------------------
 cd ..
@@ -588,7 +588,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > **all four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and
 > clean, then run `core/HANDOFF.md`'s verification block (expect: `cbp-check`
 > READY, **1906 passed**; shared **31/31** in-process + external + Rust; WASM
-> **10/10**; network **14/14**; appointed **8/8**; infra **111 passed + 2
+> **10/10**; network **14/14**; appointed **8/8**; infra **117 passed + 2
 > skipped**; basedpyright **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL`
 > workaround before any pytest run.
 >
