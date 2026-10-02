@@ -84,7 +84,8 @@ implemented agent-side, workstream by workstream:
 - **C — scenario templates.** Format/templates only in
   [`holdout/templates/`](../infra/holdout/templates/README.md).
 - **D — hermetic acceptance + continuity.** Core tests
-  ([`tests/test_holdout_service.py`](tests/test_holdout_service.py), 19 tests)
+  ([`tests/test_holdout_validator.py`](tests/test_holdout_validator.py) and
+  [`tests/test_holdout_service.py`](tests/test_holdout_service.py))
   prove the deterministic green record on the test-signed umbrella, the tamper
   negatives, the principal guard, and `--self-test`; the private companion adds a
   rehearsal test over its composition. Core suite **1680 passed**; infra **104
@@ -116,10 +117,11 @@ are recorded below.
   services are verified structurally and **refuse when invoked** (fail-closed,
   their pinned host tasks are absent offline). Nothing is provisioned; no key
   is touched.
-- **Next milestone planned (not started).** A dedicated planning session
-  agreed the *L3-ready validator + honest rehearsal* plan; see
-  [`docs/agent/l3-milestone-plan.md`](docs/agent/l3-milestone-plan.md). It is a
-  handoff to implement in a new session; operator gates unchanged.
+- **Next milestone (subsequently implemented).** The *L3-ready validator +
+  honest rehearsal* plan
+  ([`docs/agent/l3-milestone-plan.md`](docs/agent/l3-milestone-plan.md)) was
+  implemented in the next session — see *Latest session* above; operator gates
+  unchanged.
 
 ## L3 invariants (recorded)
 
@@ -135,6 +137,22 @@ are recorded below.
    plus a `component.v1`-ready entry/contract; the **authoritative validator lives
    outside the composition it validates** (bootstrap circularity).
 
+## Quality bar (every change)
+
+Every change to this mission-critical system must be:
+
+- **Correct** — deterministic, fail-closed, no unverified success; proven by a
+  test (Law 12).
+- **Robust** — no partial success; explicit refusal on drift; atomic writes and
+  `fsync` where durability matters.
+- **Secure** — deny by default; content-address and verify before use; never leak
+  keys, scenarios, or private inventory into a public repo; confine untrusted
+  paths.
+- **Idempotent** — a retry never duplicates evidence (boot, ledger, transparency
+  log); the same inputs produce byte-identical outputs.
+
+The validator is TCB: pin, sign, content-address, and record it.
+
 ## Verify everything (do this before acting)
 
 ```sh
@@ -142,7 +160,7 @@ are recorded below.
 cd core
 uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
-uv run mypy src                                       # -> 127 files, clean
+uv run mypy src                                       # -> 128 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
 uv run pytest -o addopts="" -p no:cacheprovider       # -> 1680 passed
 
@@ -180,13 +198,20 @@ cd ..
 Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 `2` suite, lock, or contract drifted (refused **before** running).
 
+**Test environment (this machine).** Global `commit.gpgsign=true` plus an
+unavailable signing agent makes any test that creates a temp git repo fail. Point
+`GIT_CONFIG_GLOBAL` at a throwaway gitconfig with `[commit] gpgsign = false`
+(e.g. `printf '[commit]\n\tgpgsign = false\n' > /tmp/cbp-gitconfig`) for every
+pytest run; never edit the real global config. Pushes may need the
+`gh`-token-over-HTTPS workaround (see §"Current git state").
+
 ## Verified state (tips)
 
 - All four repos are on `main` and pushed to `origin/main`. **Never trust a
   commit hash written in prose — it drifts. Read the live tips instead:**
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
-- Core gates: `ruff` clean; `mypy` clean (127 files); `cbp-check` **READY (8/8)**;
+- Core gates: `ruff` clean; `mypy` clean (128 files); `cbp-check` **READY (8/8)**;
   convention + home-path guard passed; full suite **1680 passed** (~64 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
@@ -287,35 +312,41 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > `core/AGENTS.md` -> `core/PRINCIPLES.md` -> `core/.agentfactory.toml` (active
 > **L1**; target L3, operator-gated) -> `core/HANDOFF.md`, then
 > `core/specs/SPEC-0011`–`0019`, `conformance/AGENTS.md`, `pro/AGENTS.md`,
-> `infra/HANDOFF.md`, `infra/specs/SPEC-0018-instantiation.md`, and
-> `infra/specs/provisioning.md`. Confirm **all four** repos (`core`,
-> `conformance`, `pro`, `infra`) are on `main` and clean, then run
+> `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm **all four** repos
+> (`core`, `conformance`, `pro`, `infra`) are on `main` and clean, then run
 > `core/HANDOFF.md`'s verification block (expect: `cbp-check` READY, **1680
-> passed**; shared suite **31/31** in-process + external + Rust; WASM **10/10**;
-> network **14/14**; appointed **8/8**; infra **104 passed + 1 skipped**;
-> basedpyright **0/0/0**).
+> passed**; shared **31/31** in-process + external + Rust; WASM **10/10**; network
+> **14/14**; appointed **8/8**; infra **104 passed + 1 skipped**; basedpyright
+> **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL` workaround before any
+> pytest run.
 >
-> **Implement the agreed L3 milestone** — the *L3-ready validator + honest
-> rehearsal* plan in
-> `core/docs/agent/l3-milestone-plan.md` — offline, under L1, workstream by
-> workstream (A validator upgrade; B isolation runbook; C operator scenario
-> templates; D hermetic acceptance + continuity). Make the L3 machinery
-> **component-ready** (everything in the tree is a component; the harness is the
-> runtime; tooling graduates later — lock compiler → validator → signing →
-> provisioning; "the compiler builds the compiler" is the post-L3 milestone).
-> **Do not** perform the flip, author scenarios, run the authoritative validator,
-> touch keys, provision or enroll a host, publish, or edit `.agentfactory.toml`
-> — those are operator gates.
+> **The L3-ready validator + honest rehearsal milestone is already delivered**
+> (`core/docs/agent/l3-milestone-plan.md`, workstreams A–D) and **hardened**
+> (descriptor-path confinement, an advisory-locked `fsync`-ed ledger, `0/1/2/3`
+> exit semantics, the additive `service` probe + `holdout.deployment/v1`, TCB
+> pins, `--self-test`, advisory principal guard). **Do not re-implement it.** Then
+> hold a **roadmap-planning session (do not implement first)** over the remaining
+> choices, and begin only the one the operator selects:
+> (1) **unblock L3** (operator-authorized) — author scenarios in
+> `$CBP_HOLDOUT_ROOT`, run the authoritative `isolation: enforced` validator on a
+> distinct principal/host, then the deliberate `[levels.L3]` edit;
+> (2) **SPEC-0002 Phase-1 remainder** (non-gated, but design first) — the
+> `Agent`→`Component` adapter, removal of the callable registry /
+> `_child_class_for`, `inproc`-only enforcement (adapter-first, not a big-bang);
+> (3) **SPEC-0018 Phases 3–6** (publish-gated) — VPS + public read-only mirror,
+> multi-tenant/branding, source-of-truth migration, hardening;
+> (4) optional **threshold signing** (key-gated) and the **SPEC-0017 frontier**
+> (research; whitepaper last).
 >
 > Hard laws: whole-file replacement only via `tools/safe-replace.sh` (**never
 > in-place edits**), resolve every home path from `$HOME`, commit and push
 > continuously, never `--no-verify`. Mission-critical boundaries: never act above
-> L1 without the operator changing `.agentfactory.toml`; operator gates = real
-> host provisioning/enrollment, the operator signing key (including re-signing the
-> composition/umbrella locks), and any public publish; the **authoring principal
-> must be unprivileged and distinct** (`agent-runner`, no docker/sudo — docker is
-> root-equivalent; this workstation is a rehearsal), and holdout scenarios and
-> keys never enter a public repo.
+> L1 without the operator changing `.agentfactory.toml`; operator gates = the L3
+> flip, real host provisioning/enrollment, the operator signing key (including
+> re-signing the composition/umbrella locks), and any public publish; the
+> **authoring principal must be unprivileged and distinct** (`agent-runner`, no
+> docker/sudo), and holdout scenarios and keys never enter a public repo. Every
+> change must be **correct, robust, secure, and idempotent**.
 
 ## What Agent-centric is
 
@@ -496,9 +527,12 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **SPEC-0016** `draft` — frozen; nothing built. **SPEC-0017** `draft` —
   frontier index; its §4 **isolated holdout validator** is promoted to
   **SPEC-0019** (below).
-- **SPEC-0002** `accepted` — Phase 1 not built (**0/6**): `review.v1` absent; no
-  `Agent`→`Component` adapter; `_REGISTRY`/`_child_class_for` remain; no holdout
-  scenarios; no response `confidence`/Review; no `inproc`-only backend.
+- **SPEC-0002** `accepted` — **`review.v1` + response `confidence` + the
+  persistent append-only Review queue are delivered** (`contracts/review.py`,
+  `cbp/review.py`, 37 tests). Remaining: the `Agent`→`Component` adapter; removal
+  of the module-level callable registry / `_child_class_for`; `inproc`-only
+  backend. (Holdout scenarios are operator-authored, in SPEC-0019.) Adapter-first:
+  prove equivalence before removing the old path.
 - **SPEC-0003/0004/0006** `implemented` — criteria met by the convention guard;
   some checkboxes un-ticked (doc-only correction).
 - **SPEC-0007** `accepted` — Phases 0/0.5a/1a/1b/2 delivered; 0.5b signing and
@@ -525,17 +559,20 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   additive `component.v1`, pinned in a signed composition lock, and bound by
   `service.v1` (`refs.composition`); the agent verifies the lock + graph before
   apply (fail-closed).
-- **SPEC-0019** `draft` — the **L3 isolated holdout validator**: **structural**
-  isolation (scenarios in the operator-private root, owner-only; public
-  `specs/holdout/` a placeholder; the authoring principal must be distinct and
-  unprivileged — no docker/sudo, since docker is root-equivalent), a context-
-  gated separate process, the deterministic decision engine (`ERROR` = infra
-  flake; mixed PASS/FAIL = nondeterministic; high = all-run; normal = 2-of-3),
-  fail-closed `holdout.lock` verification + a `holdout.v1` task-probe runner, an
-  append-only **idempotent run ledger**, and a synthetic known-good/known-bad
-  self-test (`tools/holdout-validate.py`, 39 tests; core `26b555c`).
-  Operator-authored scenarios, network-boot probes, and the L3 flip remain; L3
-  stays `declared-gated`.
+- **SPEC-0019** `draft` — the **L3 isolated holdout validator is L3-ready**.
+  Structural isolation (operator-private owner-only scenarios; public
+  `specs/holdout/` a placeholder; a distinct unprivileged principal; a
+  context-gated separate process) plus: the pure library `cbp/holdout.py` behind a
+  thin CLI; the additive `service` probe (boot a signed composition via an
+  operator-private, content-addressed `holdout.deployment/v1` descriptor and
+  compare a canonical-JSON projection / assert a refusal); TCB pins in the lock
+  (`probe_contract_sha256`, `validator_sha256`) and record (`runtime`,
+  `platform`, `lock_sha256`, `suite_sha256`, `isolation`); exit codes `0/1/2/3`; an
+  advisory principal guard with a recorded rehearsal escape; a synthetic
+  known-good/known-bad `--self-test`; and a wall-clock-free idempotent ledger
+  (advisory-locked + `fsync`-ed). Delivered under L1; **operator-authored
+  scenarios, the authoritative `isolation: enforced` run, and the L3 flip
+  remain**; L3 stays `declared-gated`.
 
 ## Next
 
@@ -606,8 +643,10 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   repo (`locks/core-umbrella/`: lock, bundles, and the **public** trust root),
   verified with the core `GpgVerifier` against a keyring holding only the public
   key; the committed Core lock stays test-signed for hermetic CI.
-- **`review.v1` / `confidence`** — absent; parked under SPEC-0017. Launch ships a
-  minimal deterministic scorer + formalizer at the model boundary.
+- **`review.v1` / `confidence`** — **delivered** (SPEC-0002 §4/§6):
+  `contracts/review.py` + `cbp/review.py`, a persistent append-only Review queue,
+  and a deterministic confidence on every driver response (37 tests). The
+  formalizer / higher tiers remain under SPEC-0017.
 - **Honest FBP note** — non-port networks still run on the legacy args model;
   port-declared networks use `run_flow`. Both are deterministic.
 - **The ABI is now consumed.** `component-abi.v1` (revision 3) is implemented
