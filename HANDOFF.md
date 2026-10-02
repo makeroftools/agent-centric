@@ -74,6 +74,31 @@ entry/contract is exposed, never placed inside the composition under test.
 Operator-authored scenarios, the authoritative `isolation: enforced` green run on
 a distinct principal/host, and the L3 flip remain operator gates.
 
+## Latest session (spec authoring — Service Hosting + Components; charters)
+
+Four new artifacts were authored (all `draft`; no implementation, no operator gate
+touched):
+
+- **SPEC-0020** — service hosting: a thin `provider.v1` (pure `plan`; gated,
+  idempotent `apply`/`health`/`teardown`), verify-then-apply, a reconcile loop
+  with deterministic auto-rollback and fail-closed escalation, an emit-only
+  notification component, declarative local-first/cloud selection, and authN/Z at
+  the provider boundary. Extends SPEC-0018.
+- **SPEC-0021** — components as dynamic work: a declarative, pinned **`work.v1`**
+  recipe (obtain | create/generate; build; tests/verifier; provenance/grant;
+  envelope) that compiles via a pure seam to `component.v1`; the explicit dynamic
+  task-load/bind protocol (SPEC-0002 open item #2); generation gated by
+  SPEC-0013/0015. `component-abi.v1` unchanged; legacy `task.v1` untouched.
+- **`docs/agent/brain-charter.md`** — the ontological knowledge base: study
+  charter, no design freeze; home SPEC-0010 + SPEC-0017 WS1.
+- **`docs/agent/learning-charter.md`** — RL / active inference / bounded RSI:
+  study charter, post-L3; home SPEC-0010 + SPEC-0017 WS5. Learning is a recorded,
+  confidence-scored component that proposes while the verifier disposes; bounds
+  cannot self-widen.
+
+No code path changed; no operator gate was touched. The two specs are `draft`
+pending operator ratification.
+
 ## Latest session (documentation/spec hygiene — delivered under L1)
 
 The documentation/spec drift recorded in the previous handoff is closed:
@@ -669,6 +694,11 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   (advisory-locked + `fsync`-ed). Delivered under L1; **operator-authored
   scenarios, the authoritative `isolation: enforced` run, and the L3 flip
   remain**; L3 stays `declared-gated`.
+- **SPEC-0020** `draft` — service hosting: provider abstraction + reconciliation +
+  self-healing (extends SPEC-0018); **nothing implemented**.
+- **SPEC-0021** `draft` — components as dynamic work: `work.v1` recipe + the
+  dynamic task-load protocol (extends SPEC-0002); **nothing implemented**. Charters
+  for the Brain and for learning/RSI live in `docs/agent/`.
 
 ## Next
 
