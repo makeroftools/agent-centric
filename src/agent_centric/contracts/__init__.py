@@ -57,6 +57,16 @@ from .pipeline import PipelineVersion, SequentialComposition, StageSpec
 from .policy import Policy, PolicyDecision, PolicyVersion
 from .replay import ReplayDiff, ReplayResult, ReplayVersion
 from .result import Failure, FailureReason, VerifiedResult, VerifiedResultVersion
+from .review import (
+    DEFAULT_REVIEW_THRESHOLD,
+    REVIEW_SCHEMA,
+    ReviewItem,
+    ReviewResolution,
+    ReviewStatus,
+    ReviewVersion,
+    is_content_hash,
+    needs_review,
+)
 from .service import (
     SERVICE_SCHEMA,
     PinnedRef,
@@ -151,6 +161,14 @@ __all__ = [
     "FailureReason",
     "VerifiedResult",
     "VerifiedResultVersion",
+    "DEFAULT_REVIEW_THRESHOLD",
+    "REVIEW_SCHEMA",
+    "ReviewItem",
+    "ReviewResolution",
+    "ReviewStatus",
+    "ReviewVersion",
+    "needs_review",
+    "is_content_hash",
     "ReplayResult",
     "ReplayDiff",
     "ReplayVersion",

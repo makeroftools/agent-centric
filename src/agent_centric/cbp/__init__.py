@@ -263,6 +263,11 @@ from .resolver import (
     ResolveError,
     Resolver,
 )
+from .review import (
+    ReviewError,
+    ReviewQueue,
+    enqueue_for_review,
+)
 from .security import (
     INTEGRITY_TAG,
     PeerAuthz,
@@ -640,6 +645,10 @@ __all__ = [
     "ModelRecordError",
     "is_content_hash",
     "score_model_confidence",
+    # Persistent append-only Review queue (review.v1; SPEC-0002 §4, §6)
+    "ReviewQueue",
+    "ReviewError",
+    "enqueue_for_review",
     # Bills loop (real end-to-end CBP graph)
     "BillsAgent",
     "TASK_ACCEPT_DETERMINISTIC",

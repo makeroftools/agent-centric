@@ -18,6 +18,10 @@ Determinism is preserved by construction:
   **confidence-scored** by the deterministic model boundary
   (``cbp.model_record``, SPEC-0009 §4). A record never promotes the output to a
   verified success: the parent still re-verifies the value.
+- When a :class:`ReviewQueue` is supplied, an outcome that needs review is
+  enqueued to the persistent, append-only Review queue (``review.v1``,
+  SPEC-0002 §4). By the fail-closed default every model output is queued:
+  a model's word is never conclusive on its own.
 - A real provider is an opt-in hook (``ModelProvider``); enabling one does not
   relax the correctness spine — the parent still re-verifies the output.
 """
@@ -39,6 +43,7 @@ from .model_record import (
     ModelRecord,
     ModelRecordLog,
 )
+from .review import ReviewQueue, enqueue_for_review
 
 # The run-task this agent serves.
 TASK_MODEL = "model"
@@ -83,11 +88,18 @@ class ModelAgent(Agent):
         _model_records: An append-only, idempotent log of this agent's calls.
     """
 
-    def __init__(self, config: Any, *, model_id: str = _STUB_MODEL_ID) -> None:
+    def __init__(
+        self,
+        config: Any,
+        *,
+        model_id: str = _STUB_MODEL_ID,
+        review_queue: ReviewQueue | None = None,
+    ) -> None:
         super().__init__(config)
         self._model_id = model_id
         self._provider: ModelProvider | None = None
         self._model_records = ModelRecordLog()
+        self._review_queue = review_queue
 
     def _handle(self, directive: Directive) -> Response:
         if directive.kind == DIRECTIVE_RUN:
@@ -173,7 +185,7 @@ class ModelAgent(Agent):
             output=output,
         )
         self._model_records.record(record)
-        return Response(
+        response = Response(
             correlation_id=directive.correlation_id,
             kind=RESPONSE_RESULT,
             value=output,
@@ -191,3 +203,6 @@ class ModelAgent(Agent):
             confidence=record.confidence,
             model_record=record.record_hash(),
         )
+        if self._review_queue is not None:
+            enqueue_for_review(self._review_queue, response, domain=TASK_MODEL)
+        return response
