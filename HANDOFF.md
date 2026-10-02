@@ -74,6 +74,19 @@ entry/contract is exposed, never placed inside the composition under test.
 Operator-authored scenarios, the authoritative `isolation: enforced` green run on
 a distinct principal/host, and the L3 flip remain operator gates.
 
+## Latest session (front-end spec + local substrate — under L2)
+
+- **SPEC-0022 drafted**
+  ([`specs/SPEC-0022-frontend-and-components.md`](specs/SPEC-0022-frontend-and-components.md)):
+  the front end as components — a `ui.v1` UI-component contract, the front end as
+  a pinned UI composition, pure projections of pinned documents, content-addressed
+  directives through the verified spine, edge transports that are never the
+  execution path, and the local-substrate development workflow. It formalizes the
+  existing `cbp/web.py` surface as `ui.v1` v0; no implementation yet.
+- **Local CD substrate is up on this host** (private companion): loopback Gitea +
+  OpenBao, mirror seeded (`gitea=200`, `openbao=200`), for front-end development.
+  No host provisioned; no operator gate crossed.
+
 ## Latest session (threshold signing verification — delivered under L1)
 
 The roadmap plan's below-gate candidate #2 (Workstream D) is **implemented, tested,
@@ -531,7 +544,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
    verification, committing, components.
 4. [`specs/`](specs) — the frozen plan of record: **SPEC-0011** (MVP; accepted),
    **SPEC-0012** (Component ABI), **SPEC-0013** (cross-runtime + vectors),
-   **SPEC-0014**–**SPEC-0021**; plus SPEC-0002/0007/0008/0009/0010.
+   **SPEC-0014**–**SPEC-0022**; plus SPEC-0002/0007/0008/0009/0010.
    **SPEC-0020** (service hosting) and **SPEC-0021** (dynamic work) are
    operator-ratified (`accepted`); their **additive contracts**
    (`contracts/provider.py`, `contracts/work.py`), their runtimes
@@ -583,7 +596,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > local-first, fail-closed). Open at the workspace root `cbp/`. Read
 > `core/AGENTS.md` -> `core/PRINCIPLES.md` -> `core/.agentfactory.toml` (active
 > **L2**; target L3, operator-gated) -> `core/HANDOFF.md`, then
-> `core/specs/SPEC-0011`–`0021`, `core/ROADMAP.md`, `conformance/AGENTS.md`,
+> `core/specs/SPEC-0011`–`0022`, `core/ROADMAP.md`, `conformance/AGENTS.md`,
 > `pro/AGENTS.md`, `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm
 > **all four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and
 > clean, then run `core/HANDOFF.md`'s verification block (expect: `cbp-check`
@@ -886,6 +899,16 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   8 tests: resolve a task entry from a verified bundle, allowlisted in-process or
   process-isolated, and run a `network.v1` over the bound tasks). Charters for the
   Brain and for learning/RSI live in `docs/agent/`.
+
+- **SPEC-0022** `draft` — the front end as components: an additive **`ui.v1`**
+  UI-component contract (declared read projections, content-addressed directives,
+  capability grants, secret refs only); the front end as a **pinned UI
+  composition** (a surface = a component); pure projections of pinned documents;
+  interactive actions as content-addressed intents through the verified spine;
+  edge transports (HTTP/SSE, MCP/ACP) never on the execution path; loopback /
+  read-only-by-default security and the local-substrate development workflow. It
+  formalizes the existing `cbp/web.py` landing page as `ui.v1` v0. No
+  implementation yet.
 
 ## Next
 
