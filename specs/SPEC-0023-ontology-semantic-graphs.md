@@ -74,6 +74,12 @@ Changing an ontology changes meaning and verification, so it is
 **constitutional-level** (spec + review), exactly like a lock change
 ([`SPEC-0007`](SPEC-0007-harness-shell-component-distribution.md) §7.4).
 
+An **ontology fragment** is `name@version` + its content hash, and its
+`imports` pin `{id, version, hash}`. Versioning is **additive-only**: a new
+version may add terms, rules, and shapes but never changes or removes a term's
+meaning; deprecation is an annotation. Every closure pins the exact ontology
+hashes, so historic closures stay reproducible (`S15`).
+
 ### 2. Representation — bespoke canonical assertion model (**RATIFIED**)
 
 - An **assertion** is `{s, p, o}` canonical JSON; a **term** is a `urn:cbp:` name.
@@ -113,9 +119,10 @@ single global ontology and no flat namespace.
   outside the pinned set.
 - Evaluation is a **semi-naive least fixpoint**; stratified negation; the result
   is **canonical-sorted**, so evaluation order never affects the content address.
-- The closure is **bounded** by an explicit ceiling (mirroring
-  `MAX_DIAGRAM_NODES` in `cbp/diagram.py`), refusing oversized materialization
-  fail-closed.
+- The closure is **bounded** by explicit, test-enforced, fail-closed ceilings —
+  `MAX_CLOSURE_ASSERTIONS = 100_000` and `MAX_FRAGMENT_TERMS = 10_000`
+  (tunable), mirroring `MAX_DIAGRAM_NODES` in `cbp/diagram.py`, refusing
+  oversized materialization before it begins (`S16`).
 - Decidable, deterministic, and cheap to reimplement identically in the Rust host.
 
 ### 6. Parent-subgraph semantics (the core question)
@@ -143,8 +150,22 @@ clamp: open-world inference **may derive** facts for use, but an operational
 ### 8. Shapes (gates)
 
 Shapes are **bespoke deterministic validators** over the pinned closure (not
-SHACL, since the model is bespoke). A gate is satisfied only by a closed shape
-over the pinned closure. Shape expression syntax is on the [open frontier](#open-frontier).
+SHACL, since the model is bespoke). A shape is a **pinned JSON document** —
+`{id, target (class/term pattern), requirements: [{relation, cardinality,
+ datatype, allowed}], closed: bool}` — evaluated deterministically; it returns
+pass/fail plus the **specific violated requirement**. An undeclared shape or
+relation fails closed. `closed: true` means only facts asserted or derived
+*within the pinned profile* may satisfy the gate (`S12`).
+
+### 8a. Capability discovery (M1) (**RATIFIED**)
+
+A discovery query is a **pinned JSON document** over a fixed, tiny algebra: match
+a class, require capabilities, and check port-type compatibility (reusing
+`types_compatible`). It names its **scope** (a composite/fragment) and resolves
+**only within that subtree** (sovereignty). The result is a canonically-sorted
+list of satisfying components; query + result are content-addressed, so the same
+query over the same graph yields the same result hash. M1 does **no inference** —
+it is exact matching over the projected graph (`S13`).
 
 ### 9. Assertion source — pure projection (**RATIFIED**)
 
@@ -191,6 +212,21 @@ closure (M2), following the existing mechanics: a `ReferenceHost.run_case` branc
 (+ the Rust `run_case` branch), `vectors/*-{fixtures,suite,lock}.json`, any new
 `compare()` observation fields, and a `certify.sh` invocation. Identical inputs ⇒
 identical content/closure hash, cross-runtime ([`SPEC-0013`](SPEC-0013-cross-runtime-conformance.md)).
+
+### 14. Component integration (**RATIFIED**)
+
+- Contracts live in `contracts/ontology.py`; the pure runtime lives in
+  `cbp/ontology_runtime.py` (core) and is reimplemented in `pro/src/ontology.rs`.
+- The **semantic graph is a `component.v1` of kind `atomic`** with a SQLite state
+  descriptor — no new component kind, no new backend. In **M1** its authority is
+  the **projection**, so the DB is a cache; owned-ABox state applies only once
+  authored/instance facts arrive (M3).
+- **M1 projects from the `network.v1` document for the scope** (children, edges,
+  external ports) **plus each child's `component.v1` manifest and the resolved
+  `components.lock` entries** — the same inputs `cbp/diagram.py` uses.
+- The component exposes pure tasks `project`, `query`, and `validate` (shapes)
+  (`S14`, refined: in M1 the graph is a derived artifact, not mutable authored
+  state).
 
 ## Delivery stages
 
@@ -290,24 +326,27 @@ architecture: it changes no `src/` semantics on acceptance of the spec alone.
 | S9 | Rule profile | Positive Datalog + stratified negation, rules pinned in `ontology.v1` | grill R3/Q7 |
 | S10 | Assertion source | Pure projection of existing contracts; no authored second source of truth | grill R3/Q9 |
 | S11 | Non-deterministic inference | None in M1/M2; any future linking is a separate recorded `model` component | grill R3/Q10 |
+| S12 | Shape expression | Pinned JSON shape document (SHACL-inspired), deterministic validator, fail-closed | grill R4/Q11 |
+| S13 | Discovery (M1) | Pinned query document; exact matching; subtree-scoped; content-addressed result | grill R4/Q12 |
+| S14 | Component integration | `contracts/ontology.py`; `cbp/ontology_runtime.py` + `pro/src/ontology.rs`; graph is an `atomic` component; M1 authority is the projection | grill R4/Q13 (+ refinement) |
+| S15 | Versioning | `name@version` + hash; imports pin `{id,version,hash}`; additive-only; deprecate-not-change | grill R4/Q14 |
+| S16 | Bounds | `MAX_CLOSURE_ASSERTIONS=100_000`, `MAX_FRAGMENT_TERMS=10_000`, fail-closed | grill R4/Q15 |
 
 ## Open frontier
 
 Remaining design branches (to be grilled to empty before implementation):
 
-1. **Shape expression** — the concrete syntax/format of `shapes.v1` and its
-   deterministic validator contract.
-2. **Discovery-query semantics** — how a capability-discovery query is pinned and
-   evaluated deterministically in M1.
-3. **Component integration** — where the runtime lives (module/branch in `core`
-   and `pro`), and whether the semantic graph is itself a `component.v1` (and of
-   which kind).
-4. **Versioning mechanics** — the precise `ontology.v1` fragment/term version
-   scheme and additive-migration rules.
-5. **Bounds & performance** — the closure ceiling and per-fragment term limits.
-6. **Conformance vectors** — the M1/M2 suite, fixtures, and lock set.
-7. **M1 definition of done** — the observable that proves capability discovery
-   works.
+1. **TBox expressiveness** — whether M1 permits `subClassOf` and property
+   `domain`/`range` (single-inheritance subsumption) or only flat declared
+   classes and properties.
+2. **Error taxonomy** — the fail-closed error kinds (undeclared term, missing
+   import, version conflict, shape violation, closure overflow) the conformance
+   `compare()` surface will assert.
+3. **Component task/API surface** — the exact shape of `project`/`query`/
+   `validate`, and whether shapes are enforced at design time, run time, or both.
+4. **M1 definition of done** — the observable that proves capability discovery
+   works end to end.
+5. **Conformance vectors** — the M1/M2 suite, fixtures, and lock set.
 
 ## Next step
 
