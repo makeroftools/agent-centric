@@ -12,7 +12,7 @@ schema = "agentfactory/v1"
 
 [factory]
 # Active level: one of L0, L1, L2, L3.
-level = "L1"
+level = "L2"
 # Long-term target. L3 automation is declared but gated until the isolated
 # validator exists — honest, not aspirational.
 target = "L3"

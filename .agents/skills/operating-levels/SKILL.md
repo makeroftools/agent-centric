@@ -21,7 +21,7 @@ checks), and *review* (where a human is required).
 | L2 | light-factory | spec-driven | human-gate | agent + validator | no |
 | L3 | dark-factory | holdout | none-on-green | isolated validator | gated |
 
-- **L1 is the active default.** The agent authors full changes; a human reviews every one.
+- **L2 (light-factory) is the active mode**, raised by the operator from the L1 default; the suite is a release gate and a human holds the review gate.
 - **L3 is declared but gated** (`status = "declared-gated"`); selecting it is a hard error until the isolated validator exists.
 - A path may never operate below its floor (`src/**` has `min_level = "L1"`).
 

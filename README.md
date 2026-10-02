@@ -15,7 +15,7 @@
 [![Tests](https://img.shields.io/badge/tests-1906%20passing-3fb950)](https://github.com/makeroftools/agent-centric/actions/workflows/gates.yml)
 ![cbp-check](https://img.shields.io/badge/cbp--check-8%2F8%20READY-38bdf8)
 [![License](https://img.shields.io/badge/license-MPL--2.0-blue)](LICENSE)
-![Mode](https://img.shields.io/badge/mode-L1%20assisted-a78bfa)
+![Mode](https://img.shields.io/badge/mode-L2%20light-factory-a78bfa)
 ![Control plane](https://img.shields.io/badge/control%20plane-deterministic-38bdf8)
 ![Fail-closed](https://img.shields.io/badge/failure-explicit%20%26%20audited-ef4444)
 
@@ -393,7 +393,7 @@ Working in this repository:
 
 - Start at [`AGENTS.md`](AGENTS.md); the constitution is [`PRINCIPLES.md`](PRINCIPLES.md).
 - The active operating level is [`.agentfactory.toml`](.agentfactory.toml)
-  (currently **L1 — assisted**; a human reviews every change).
+  (currently **L2 — light-factory**; the suite is a release gate and a human holds the review gate).
 - File changes are **whole-file atomic replacements** only, via
   [`tools/safe-replace.sh`](tools/safe-replace.sh) — never in-place edits.
 - Commit and push continuously; pre-commit hooks and CI are the guardrails

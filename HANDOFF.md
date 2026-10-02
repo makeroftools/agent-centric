@@ -525,7 +525,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 ## Read first (in order)
 
 1. This file, then [`AGENTS.md`](AGENTS.md) → [`PRINCIPLES.md`](PRINCIPLES.md) →
-   [`.agentfactory.toml`](.agentfactory.toml) (active mode **L1**; target L3, gated).
+   [`.agentfactory.toml`](.agentfactory.toml) (active mode **L2**; target L3, gated).
 2. [`.agents/skills/`](.agents/skills) — on-demand Agent Skills.
 3. [`docs/agent/`](docs/agent/README.md) — architecture, levels, testing,
    verification, committing, components.
@@ -569,7 +569,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 
 ## Fresh-session start
 
-1. Read `AGENTS.md` → `PRINCIPLES.md` → `.agentfactory.toml` (mode **L1**;
+1. Read `AGENTS.md` → `PRINCIPLES.md` → `.agentfactory.toml` (mode **L2**;
    target L3, gated) → this file.
 2. Confirm every tree: `git branch --show-current` → `main`; `git status` clean
    (in `core`, `../conformance`, `../pro`, `../infra`).
@@ -582,7 +582,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > Continue the mission-critical `agent-centric` system (CBP/ABM; deterministic,
 > local-first, fail-closed). Open at the workspace root `cbp/`. Read
 > `core/AGENTS.md` -> `core/PRINCIPLES.md` -> `core/.agentfactory.toml` (active
-> **L1**; target L3, operator-gated) -> `core/HANDOFF.md`, then
+> **L2**; target L3, operator-gated) -> `core/HANDOFF.md`, then
 > `core/specs/SPEC-0011`–`0021`, `core/ROADMAP.md`, `conformance/AGENTS.md`,
 > `pro/AGENTS.md`, `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm
 > **all four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and
@@ -628,7 +628,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > Hard laws: whole-file replacement only via `tools/safe-replace.sh` (**never
 > in-place edits**), resolve every home path from `$HOME`, commit and push
 > continuously, never `--no-verify`. Mission-critical boundaries: never act above
-> L1 without the operator changing `.agentfactory.toml`; operator gates = the L3
+> L2 without the operator changing `.agentfactory.toml`; operator gates = the L3
 > flip, real host provisioning/enrollment, the operator signing key (including
 > re-signing the composition/umbrella locks), and any public publish; the
 > **authoring principal must be unprivileged and distinct** (`agent-runner`, no
