@@ -78,11 +78,12 @@ a distinct principal/host, and the L3 flip remain operator gates.
 
 - **SPEC-0022 drafted**
   ([`specs/SPEC-0022-frontend-and-components.md`](specs/SPEC-0022-frontend-and-components.md)):
-  the front end as components — a `ui.v1` UI-component contract, the front end as
-  a pinned UI composition, pure projections of pinned documents, content-addressed
-  directives through the verified spine, edge transports that are never the
-  execution path, and the local-substrate development workflow. It formalizes the
-  existing `cbp/web.py` surface as `ui.v1` v0; no implementation yet.
+  component-provided UI — a target-agnostic `ui.v1` contract with pluggable UI
+  targets (web/cli/os/embedded), pinned UI refs on behavior components, dynamic
+  assembly pinned before render, **mandatory provenance-tiered sandboxing**
+  (security over dynamicism), verify-before-execute, pure projections, and
+  directives through the verified spine. It formalizes the existing `cbp/web.py`
+  surface as the `web` v0 target; no implementation yet.
 - **Local CD substrate is up on this host** (private companion): loopback Gitea +
   OpenBao, mirror seeded (`gitea=200`, `openbao=200`), for front-end development.
   No host provisioned; no operator gate crossed.
@@ -900,15 +901,15 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   process-isolated, and run a `network.v1` over the bound tasks). Charters for the
   Brain and for learning/RSI live in `docs/agent/`.
 
-- **SPEC-0022** `draft` — the front end as components: an additive **`ui.v1`**
-  UI-component contract (declared read projections, content-addressed directives,
-  capability grants, secret refs only); the front end as a **pinned UI
-  composition** (a surface = a component); pure projections of pinned documents;
-  interactive actions as content-addressed intents through the verified spine;
-  edge transports (HTTP/SSE, MCP/ACP) never on the execution path; loopback /
-  read-only-by-default security and the local-substrate development workflow. It
-  formalizes the existing `cbp/web.py` landing page as `ui.v1` v0. No
-  implementation yet.
+- **SPEC-0022** `draft` — component-provided UI: a **target-agnostic `ui.v1`**
+  contract (projections in, directives out, capability grants, slots/tokens,
+  secret refs only) with pluggable **UI targets** (web/cli/os/embedded); a
+  behavior component may carry a **pinned UI ref** without changing its verified
+  semantics; dynamic assembly is **pinned before render**; **mandatory,
+  provenance-tiered capability sandboxing** (security over dynamicism);
+  verify-before-execute with strict UI-ABI negotiation; pure projections of pinned
+  documents; directives through the verified spine. Formalizes `cbp/web.py` as the
+  `web` v0 target. No implementation yet.
 
 ## Next
 
