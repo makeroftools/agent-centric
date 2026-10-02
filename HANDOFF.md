@@ -59,6 +59,24 @@ process, and runs emit an append-only, content-addressed **idempotent** ledger.
 It has a synthetic known-good/known-bad self-test. Operator-authored scenarios,
 network-boot probes, and the L3 flip remain.
 
+## Latest session (Horizon 1 — delivered offline, under L1)
+
+- **`review.v1` + confidence (SPEC-0002 §4/§6).** A pure, content-addressed
+  review contract plus a persistent, append-only, idempotent **Review queue**;
+  every driver response carries a deterministic confidence (`1.0` for a
+  verified deterministic output, the model score for a model output, else
+  `0.0`); a sub-threshold run outcome enters the queue at one boundary
+  (`contracts/review.py`, `cbp/review.py`, `tests/test_cbp_review.py`, 37
+  tests). This closes the `review.v1`/confidence gap and the SPEC-0015
+  promotion gate's queue.
+- **Self-hosting (offline slice).** The private `infra/` companion boots the
+  signed bootstrap composition **through the core harness** (`boot_from_lock`)
+  and runs its deterministic local nodes — the shell entry in-process, the
+  pull/apply node process-isolated from its verified bundle. Host-bound
+  services are verified structurally and **refuse when invoked** (fail-closed,
+  their pinned host tasks are absent offline). Nothing is provisioned; no key
+  is touched.
+
 ## Verify everything (do this before acting)
 
 ```sh
@@ -66,9 +84,9 @@ network-boot probes, and the L3 flip remain.
 cd core
 uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
-uv run mypy src                                       # -> 125 files, clean
+uv run mypy src                                       # -> 127 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1618 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1655 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -94,7 +112,7 @@ cargo test --release --features wasm                  # codec + artifact-signatu
 
 # infra (private companion) -----------------------------------------------
 cd ../infra
-uv run --project ../core pytest -o addopts="" -p no:cacheprovider tests   # -> 95 passed, 1 skipped
+uv run --project ../core pytest -o addopts="" -p no:cacheprovider tests   # -> 98 passed, 1 skipped
 
 # workspace IDE hygiene (run from the workspace root) ----------------------
 cd ..
@@ -110,8 +128,8 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
   commit hash written in prose — it drifts. Read the live tips instead:**
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
-- Core gates: `ruff` clean; `mypy` clean (125 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1618 passed** (~63 s).
+- Core gates: `ruff` clean; `mypy` clean (127 files); `cbp-check` **READY (8/8)**;
+  convention + home-path guard passed; full suite **1655 passed** (~64 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -214,24 +232,24 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > `infra/HANDOFF.md`, `infra/specs/SPEC-0018-instantiation.md`, and
 > `infra/specs/provisioning.md`. Confirm **all four** repos (`core`,
 > `conformance`, `pro`, `infra`) are on `main` and clean, then run
-> `core/HANDOFF.md`'s verification block (expect: `cbp-check` READY, **1618
+> `core/HANDOFF.md`'s verification block (expect: `cbp-check` READY, **1655
 > passed**; shared suite **31/31** in-process + external + Rust; WASM **10/10**;
-> network **14/14**; appointed **8/8**; infra **95 passed + 1 skipped**;
+> network **14/14**; appointed **8/8**; infra **98 passed + 1 skipped**;
 > basedpyright **0/0/0**).
 >
-> **This session is a ROADMAP PLANNING session — do not start implementing until
-> the operator and you have agreed the plan.** Delivered: Layers 0–4 + signing,
-> the distribution spine, the offline umbrella lock (committed test-signed; the
-> **operator-signed** system lock recorded in `infra/locks/core-umbrella/`), the
-> local CD substrate (full verify→apply→rollback→DR path), **SPEC-0019** (the L3
-> isolated holdout validator), **SPEC-0018 Phase 2** (bootstrap services
-> graduated to `component.v1`; `service.v1` binds the signed composition; the
-> agent verifies it before apply), and the **provisioning specification + tasks**.
-> Roadmap candidates to suss out: self-hosting the composition; SPEC-0018 Phases
-> 3–6 (VPS + public read-only mirror, multi-tenant/branding, source-of-truth
-> migration, hardening); authoring L3 holdout scenarios and the deliberate L3
-> flip; threshold signing; the SPEC-0017 frontier; and the `review.v1`/confidence
-> gap.
+> **Horizon 1 of the agreed roadmap is delivered** (offline, under L1):
+> `review.v1` + the persistent append-only Review queue, confidence on every
+> driver response, and the **self-hosting offline smoke** (the harness boots
+> the signed composition and runs its deterministic local nodes; host-bound
+> services refuse when invoked). Still delivered: Layers 0–4 + signing, the
+> distribution spine, the offline umbrella lock (committed test-signed; the
+> **operator-signed** system lock recorded in the private companion), the local
+> CD substrate (full verify→apply→rollback→DR path), **SPEC-0019** (the L3
+> isolated holdout validator), **SPEC-0018 Phase 2**, and the **provisioning
+> specification + tasks**. **Next (operator-gated / planning):** author L3
+> holdout scenarios and flip the level; SPEC-0018 Phases 3–6; threshold signing;
+> the SPEC-0017 frontier; the SPEC-0002 Phase-1 adapter/registry remainder. Do
+> not implement operator-gated items without the operator.
 >
 > Hard laws: whole-file replacement only via `tools/safe-replace.sh` (**never
 > in-place edits**), resolve every home path from `$HOME`, commit and push
@@ -465,16 +483,19 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 ## Next
 
-- **This is a handoff into a ROADMAP PLANNING session.** Near-term build
-  options, in rough dependency order: (1) **self-hosting** — boot the composition
-  itself (`boot_from_lock` over the graduated components) and conformance-check
-  the nodes; (2) **SPEC-0018 Phase 3** — the low-budget VPS + public read-only
-  mirror, then Phases 4–6 (multi-tenant/branding, source-of-truth migration,
-  hardening); (3) **L3** — author holdout scenarios in the operator-private root
-  and flip `[levels.L3]` deliberately; (4) **signing** — optional threshold
-  signing; (5) **SPEC-0017 frontier** — formal semantics/reduction, the Universal
-  Function Index, bounded RSI, whitepaper last. Operator gates unchanged (real
-  host, signing key, publish).
+- **Horizon 1 delivered offline (this session).** The `review.v1`/confidence
+  gap is closed and the offline self-hosting smoke runs (see *Latest session*
+  above). Remaining, in dependency order: (1) **L3** — author holdout scenarios
+  in the operator-private root (`$CBP_HOLDOUT_ROOT`) and flip `[levels.L3]`
+  deliberately (operator); (2) **SPEC-0018 Phase 3** — the low-budget VPS +
+  public read-only mirror, then Phases 4–6 (multi-tenant/branding,
+  source-of-truth migration, hardening) (operator/publish-gated); (3)
+  **SPEC-0002 Phase-1 remainder** — the `Agent`→`Component` adapter, removal of
+  the module-level callable registry / `_child_class_for`, and `inproc`-only
+  enforcement (adapter-first: prove equivalence before removing the old path; a
+  dedicated design step, not a big-bang); (4) **signing** — optional threshold
+  signing; (5) **SPEC-0017 frontier** — formal semantics/reduction, the
+  Universal Function Index, bounded RSI, whitepaper last.
 - **Umbrella `components.lock` — delivered offline; operator signing remains.**
   The `design → pin → components.lock` producer and the additive offline
   **directory-pin** path are delivered; `designs/core.v1.json`, the canonical
