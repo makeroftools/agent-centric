@@ -88,7 +88,10 @@ half stays operator-gated, so SPEC-0002 stays `accepted`), and
 SPEC-0003/0004/0006/0011 boxes are ticked; and
 [`docs/agent/component-adapter.md`](docs/agent/component-adapter.md) records the
 adapter/catalog and the removed module-level global. No code path changed; the
-suite stayed **1708 passed**, basedpyright 0/0/0. No operator gate was touched.
+suite stayed green, basedpyright 0/0/0. No operator gate was touched. A
+fail-closed **documentation-freshness guard**
+([`tests/test_docs_freshness.py`](tests/test_docs_freshness.py)) was then added
+(§"Documentation freshness").
 
 ## Latest session (SPEC-0002 Phase-1 remainder — delivered under L1)
 
@@ -217,7 +220,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 130 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1708 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1713 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -260,6 +263,36 @@ unavailable signing agent makes any test that creates a temp git repo fail. Poin
 pytest run; never edit the real global config. Pushes may need the
 `gh`-token-over-HTTPS workaround (see §"Current git state").
 
+## Documentation freshness (periodic refresh)
+
+Volatile facts — the suite count, the conformance suite ratios, and spec
+references — drift when one document is updated and another is missed. This
+system makes that drift **fail closed** instead of trusting memory.
+
+- **Single source of truth.** The `# -> N passed` anchor in §"Verify everything"
+  above is authoritative; update it from a real run.
+- **Machine-checked.**
+  [`tests/test_docs_freshness.py`](tests/test_docs_freshness.py) asserts that the
+  README test badge, the "Verified state" bullet, and the suite ratios in
+  [`ROADMAP.md`](ROADMAP.md) all agree with the anchor, that the **real** collected
+  count equals the anchor, and that every `SPEC-NNNN` referenced in the
+  README/ROADMAP/HANDOFF exists. It runs as part of the suite.
+
+**Refresh ritual — run whenever a change moves a count or a spec status:**
+
+1. Run the suite and read the real count.
+2. Update the anchor in §"Verify everything" (`# -> N passed`).
+3. Update the **README badge** (`tests-N%20passing`) and the "Verified state"
+   bullet; update any suite ratio that moved.
+4. Update [`ROADMAP.md`](ROADMAP.md) if a horizon or spec status moved.
+5. If the **conformance** or **Rust host** suites moved, update the four ratios
+   here and in `ROADMAP.md` together. The private companion points here for the
+   core count and keeps only its own count.
+6. Run `uv run pytest tests/test_docs_freshness.py` — green means the documents
+   agree with reality.
+
+Re-run the ritual at least once per working session; CI enforces it via the suite.
+
 ## Verified state (tips)
 
 - All four repos are on `main` and pushed to `origin/main`. **Never trust a
@@ -267,7 +300,7 @@ pytest run; never edit the real global config. Pushes may need the
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (130 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1708 passed** (~64 s).
+  convention + home-path guard passed; full suite **1713 passed** (~64 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -369,7 +402,7 @@ pytest run; never edit the real global config. Pushes may need the
 > `core/specs/SPEC-0011`–`0019`, `conformance/AGENTS.md`, `pro/AGENTS.md`,
 > `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm **all four** repos
 > (`core`, `conformance`, `pro`, `infra`) are on `main` and clean, then run
-> `core/HANDOFF.md`'s verification block (expect: `cbp-check` READY, **1708
+> `core/HANDOFF.md`'s verification block (expect: `cbp-check` READY, **1713
 > passed**; shared **31/31** in-process + external + Rust; WASM **10/10**; network
 > **14/14**; appointed **8/8**; infra **104 passed + 1 skipped**; basedpyright
 > **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL` workaround before any
