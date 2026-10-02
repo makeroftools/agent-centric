@@ -32,6 +32,7 @@ revealed here, only as needed:
 | [`committing.md`](committing.md) | Commit and push (Law 13). |
 | [`components.md`](components.md) | Adding a component (a skill); the scaffold and the contract. |
 | [`architecture.md`](architecture.md) | Harness vs tree; components contain or point to children; distribution boundaries. |
+| [`l3-milestone-plan.md`](l3-milestone-plan.md) | The agreed L3 milestone plan — handoff; not yet implemented. |
 
 ## The constitution
 

@@ -76,6 +76,10 @@ network-boot probes, and the L3 flip remain.
   services are verified structurally and **refuse when invoked** (fail-closed,
   their pinned host tasks are absent offline). Nothing is provisioned; no key
   is touched.
+- **Next milestone planned (not started).** A dedicated planning session
+  agreed the *L3-ready validator + honest rehearsal* plan; see
+  [`docs/agent/l3-milestone-plan.md`](docs/agent/l3-milestone-plan.md). It is a
+  handoff to implement in a new session; operator gates unchanged.
 
 ## Verify everything (do this before acting)
 
@@ -237,19 +241,17 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > network **14/14**; appointed **8/8**; infra **98 passed + 1 skipped**;
 > basedpyright **0/0/0**).
 >
-> **Horizon 1 of the agreed roadmap is delivered** (offline, under L1):
-> `review.v1` + the persistent append-only Review queue, confidence on every
-> driver response, and the **self-hosting offline smoke** (the harness boots
-> the signed composition and runs its deterministic local nodes; host-bound
-> services refuse when invoked). Still delivered: Layers 0–4 + signing, the
-> distribution spine, the offline umbrella lock (committed test-signed; the
-> **operator-signed** system lock recorded in the private companion), the local
-> CD substrate (full verify→apply→rollback→DR path), **SPEC-0019** (the L3
-> isolated holdout validator), **SPEC-0018 Phase 2**, and the **provisioning
-> specification + tasks**. **Next (operator-gated / planning):** author L3
-> holdout scenarios and flip the level; SPEC-0018 Phases 3–6; threshold signing;
-> the SPEC-0017 frontier; the SPEC-0002 Phase-1 adapter/registry remainder. Do
-> not implement operator-gated items without the operator.
+> **Implement the agreed L3 milestone** — the *L3-ready validator + honest
+> rehearsal* plan in
+> `core/docs/agent/l3-milestone-plan.md` — offline, under L1, workstream by
+> workstream (A validator upgrade; B isolation runbook; C operator scenario
+> templates; D hermetic acceptance + continuity). Make the L3 machinery
+> **component-ready** (everything in the tree is a component; the harness is the
+> runtime; tooling graduates later — lock compiler → validator → signing →
+> provisioning; "the compiler builds the compiler" is the post-L3 milestone).
+> **Do not** perform the flip, author scenarios, run the authoritative validator,
+> touch keys, provision or enroll a host, publish, or edit `.agentfactory.toml`
+> — those are operator gates.
 >
 > Hard laws: whole-file replacement only via `tools/safe-replace.sh` (**never
 > in-place edits**), resolve every home path from `$HOME`, commit and push
