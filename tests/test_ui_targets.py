@@ -9,6 +9,7 @@ degrades to the raw projection).
 
 from __future__ import annotations
 
+import hashlib
 import json
 
 import pytest
@@ -32,6 +33,7 @@ from agent_centric.cbp.ui_runtime import (
     UIRef,
     WebTarget,
     default_ui_composition,
+    pinned_ui_ref,
     sandbox_policy,
     submit_directive,
     target_binding,
@@ -41,9 +43,11 @@ from agent_centric.cbp.ui_runtime import (
     tree_view,
 )
 from agent_centric.contracts.capability import Capability
+from agent_centric.contracts.component import ComponentManifest, EntryDescriptor
 from agent_centric.contracts.ui import (
     Assurance,
     DirectiveBinding,
+    PinnedUIRef,
     UIComponent,
     UITarget,
 )
@@ -423,3 +427,73 @@ class TestDefaultComposition:
     def test_tree_hash_is_deterministic(self) -> None:
         tree = tree_table(("a", "b"), [[1, 2]])
         assert tree_hash(tree) == tree_hash(tree)
+
+
+class TestPinnedUIRef:
+    """A presentation binding is separate from the behavior component's bytes."""
+
+    def _behavior(self) -> ComponentManifest:
+        return ComponentManifest(
+            version="component.v1",
+            name="double-agent",
+            kind="atomic",
+            entry=EntryDescriptor(runtime="python", entrypoint="tasks.double:run"),
+            implements=("agent",),
+        )
+
+    @staticmethod
+    def _manifest_hash(manifest: ComponentManifest) -> str:
+        body = json.dumps(
+            manifest.to_dict(), sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        return hashlib.sha256(body).hexdigest()
+
+    def test_ref_is_content_addressed_and_round_trips(self) -> None:
+        ref = pinned_ui_ref(DiagramView.manifest, behavior="double-agent", target="web")
+        assert ref.ui_hash == DiagramView.manifest.ui_hash()
+        assert len(ref.content_hash()) == 64
+        assert PinnedUIRef.from_dict(ref.to_dict()) == ref
+
+    def test_ref_does_not_change_the_behavior_content_address(self) -> None:
+        manifest = self._behavior()
+        before = self._manifest_hash(manifest)
+        pinned_ui_ref(DiagramView.manifest, behavior=manifest.name, target="web")
+        assert self._manifest_hash(manifest) == before
+
+    def test_a_view_change_moves_the_ref_not_the_behavior(self) -> None:
+        manifest = self._behavior()
+        behavior_hash = self._manifest_hash(manifest)
+        first = pinned_ui_ref(DiagramView.manifest, behavior=manifest.name)
+        other = UIComponent(
+            id="cbp.diagram-view",
+            targets=(UITarget.WEB, UITarget.CLI),
+            projections=("cbp.diagram.v1",),
+            tokens={"accent": "#ff0000"},
+        )
+        second = pinned_ui_ref(other, behavior=manifest.name)
+        assert first.ui_hash != second.ui_hash
+        assert first.content_hash() != second.content_hash()
+        assert self._manifest_hash(manifest) == behavior_hash
+
+    def test_unknown_target_refuses(self) -> None:
+        with pytest.raises(UIError):
+            pinned_ui_ref(DiagramView.manifest, behavior="double-agent", target="os")
+
+    def test_empty_behavior_refuses(self) -> None:
+        with pytest.raises(UIError):
+            pinned_ui_ref(DiagramView.manifest, behavior="")
+
+    def test_bad_hash_refuses(self) -> None:
+        with pytest.raises(ValueError):
+            PinnedUIRef(behavior="b", ui_id="u", ui_hash="not-a-hash")
+
+    def test_from_dict_rejects_unknown_schema(self) -> None:
+        with pytest.raises(ValueError):
+            PinnedUIRef.from_dict(
+                {
+                    "schema": "ui.ref.v2",
+                    "behavior": "b",
+                    "ui_id": "u",
+                    "ui_hash": "a" * 64,
+                }
+            )

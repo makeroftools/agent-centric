@@ -126,9 +126,11 @@ from .trajectory import (
 )
 from .ui import (
     UI_ABI_VERSION,
+    UI_REF_SCHEMA,
     UI_SCHEMA,
     Assurance,
     DirectiveBinding,
+    PinnedUIRef,
     UIComponent,
     UIReport,
     UITarget,
@@ -316,6 +318,8 @@ __all__ = [
     # UI contract (ui.v1; SPEC-0022): target-agnostic component-provided UI
     "UI_SCHEMA",
     "UI_ABI_VERSION",
+    "UI_REF_SCHEMA",
+    "PinnedUIRef",
     "UITarget",
     "Assurance",
     "DirectiveBinding",

@@ -117,6 +117,69 @@ class DirectiveBinding:
         )
 
 
+UI_REF_SCHEMA = "ui.ref.v1"
+
+
+@dataclass(frozen=True)
+class PinnedUIRef:
+    """A **separate**, content-addressed presentation binding (SPEC-0022 §4).
+
+    A behavior component's default presentation per target is a *reference*, not a
+    field on the behavior component: changing the referenced view must never change
+    the behavior component's own content address or verified semantics. This
+    document therefore lives beside the behavior component and pins the UI
+    component's content address (``ui_hash``) to the behavior it presents.
+
+    Attributes:
+        behavior: The behavior component's name or content address.
+        ui_id: The UI component id whose content address is pinned.
+        ui_hash: The UI component content address (64-hex sha256).
+        target: The UI target this binding presents (``web``/``cli``/``os``/
+            ``embedded``).
+    """
+
+    behavior: str
+    ui_id: str
+    ui_hash: str
+    target: str = UITarget.WEB
+
+    def __post_init__(self) -> None:
+        if not self.behavior:
+            raise ValueError("PinnedUIRef behavior must be non-empty.")
+        if not self.ui_id:
+            raise ValueError("PinnedUIRef ui_id must be non-empty.")
+        if not _SHA256_RE.match(self.ui_hash):
+            raise ValueError(f"PinnedUIRef ui_hash must be 64-hex: {self.ui_hash!r}")
+        if not UITarget.is_known(self.target):
+            raise ValueError(f"Unsupported ui target: {self.target!r}")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema": UI_REF_SCHEMA,
+            "behavior": self.behavior,
+            "ui_id": self.ui_id,
+            "ui_hash": self.ui_hash,
+            "target": self.target,
+        }
+
+    def canonical_bytes(self) -> bytes:
+        return _canonical_bytes(self.to_dict())
+
+    def content_hash(self) -> str:
+        return hashlib.sha256(self.canonical_bytes()).hexdigest()
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> PinnedUIRef:
+        if data.get("schema", UI_REF_SCHEMA) != UI_REF_SCHEMA:
+            raise ValueError(f"Unsupported ui ref schema: {data.get('schema')!r}")
+        return cls(
+            behavior=str(data["behavior"]),
+            ui_id=str(data["ui_id"]),
+            ui_hash=str(data["ui_hash"]),
+            target=str(data.get("target", UITarget.WEB)),
+        )
+
+
 @dataclass(frozen=True)
 class UIComponent:
     """An immutable, target-agnostic ``ui.v1`` presentation manifest."""

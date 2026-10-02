@@ -43,6 +43,7 @@ from typing import Any, Protocol
 from ..contracts.ui import (
     Assurance,
     DirectiveBinding,
+    PinnedUIRef,
     UIComponent,
     UITarget,
     assert_directive_declared,
@@ -844,6 +845,28 @@ def _weakest(
     if not candidates:
         return fallback
     return max(candidates, key=lambda value: severity.get(value, -1))
+
+
+def pinned_ui_ref(
+    component: UIComponent, *, behavior: str, target: str = UITarget.WEB
+) -> PinnedUIRef:
+    """Bind a UI component's content address to a behavior component (SPEC-0022 §4).
+
+    This is presentation **metadata**, not a field on the behavior component: the
+    returned document is separate and content-addressed, so changing the view
+    never changes the behavior component's own content address or verified
+    semantics. Fail-closed: a behavior-less or wrong-target binding refuses.
+    """
+    if not behavior:
+        raise UIError("pinned_ui_ref requires a non-empty behavior name")
+    if target not in component.targets:
+        raise UIError(f"UI component {component.id!r} does not target {target!r}")
+    return PinnedUIRef(
+        behavior=behavior,
+        ui_id=component.id,
+        ui_hash=component.ui_hash(),
+        target=target,
+    )
 
 
 def default_ui_composition() -> UIAssembly:

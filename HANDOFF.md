@@ -13,9 +13,10 @@ L3, gated. The suite is a release gate; a human holds the review gate. Never act
 above L2 without the operator editing [`.agentfactory.toml`](.agentfactory.toml).
 
 **All four repos on `main`, clean, pushed.** Verify with §"Verify everything"
-(authoritative): core **1975 passed**, `mypy` 139, `cbp-check` READY; conformance
-shared **31/31** + network **14/14** + appointed **8/8**; pro **31/31 + 10/10 +
-14/14 + 8/8**; infra **118 passed, 2 skipped**; basedpyright **0/0/0**.
+(authoritative): core **1982 passed**, `mypy` 139, `cbp-check` READY; conformance
+shared **31/31** + network **14/14** + appointed **8/8** + ui **10/10**; pro
+**31/31 + 10/10 + 14/14 + 8/8 + 10/10**; infra **137 passed, 2 skipped**;
+basedpyright **0/0/0**.
 
 **Delivered this arc (all below the gates):**
 
@@ -34,14 +35,23 @@ shared **31/31** + network **14/14** + appointed **8/8**; pro **31/31 + 10/10 +
   read composition (`cbp.web.read`), a provenance-tiered sandbox, default-deny
   content-addressed directives, and additive read-only `/ui` routes in
   `cbp/web.py` (existing routes unchanged); 49 tests.
+- **SPEC-0022 completion** — the shared **`ui.v1` conformance suite**
+  (`../conformance` vectors + the certifier `ui` comparison; `../pro/src/ui.rs`)
+  certified **10/10** cross-runtime, and the additive **`PinnedUIRef`**
+  (`ui.ref.v1` + `cbp/ui_runtime.pinned_ui_ref`) — a separate, content-addressed
+  presentation binding that never moves the behavior component's content address
+  (+7 tests).
 
-**Next (below-gate):** the additive SPEC-0022 remainder — a shared `ui.v1`
-conformance suite (conformance + Rust host vectors) and a pinned UI ref on a
-behavior component (its own content address unchanged). Nothing else in core is
-buildable below the gates: the concrete `provider.v1` manifest/task wiring is
-host-specific (`infra/`), and the L3 flip, Vultr provisioning, SPEC-0018
-Phases 3–6, re-signing the composition/umbrella locks, and any publish remain
-operator-gated. See [`SPEC-0022`](specs/SPEC-0022-frontend-and-components.md).
+**Next (below-gate):** complete. The concrete `provider.v1` manifest/task wiring
+is delivered in the private `infra/` companion; the `ui.v1` targets, the shared
+`ui.v1` conformance suite, and the pinned UI ref are all delivered here and in
+siblings. The **remaining work is operator-gated** and must not be started
+without the operator: the deliberate L3 flip (author holdout scenarios, an
+`isolation: enforced` green run on a distinct principal, then edit `[levels.L3]`);
+SPEC-0018 Phases 3–6 (VPS + public read-only mirror, multi-tenant/branding,
+source-of-truth migration, hardening); re-signing the composition/umbrella locks
+with the operator key; optional threshold signing; the SPEC-0017 frontier (after
+the research charters).
 
 **Parked / operator-gated:** Vultr provisioning (P1) — the token works
 (`VULTR_PERSONAL_ACCESS_TOKEN`) and the read-only observe is green (regions/plans/
@@ -123,6 +133,34 @@ synthetic known-good/known-bad `--self-test`, and an **advisory principal guard*
 entry/contract is exposed, never placed inside the composition under test.
 Operator-authored scenarios, the authoritative `isolation: enforced` green run on
 a distinct principal/host, and the L3 flip remain operator gates.
+
+## Latest session (UI conformance + pinned refs; below-gate complete under L2)
+
+The SPEC-0022 remainder — and the last below-gate units across the workspace — are
+delivered:
+
+- **`ui.v1` shared conformance suite** (`../conformance`): a new `ui` category
+  and `vectors/ui-{fixtures,suite,lock}.v1.json` (**10 cases**) prove the manifest
+  is canonical and content-addressed, `render` is a deterministic pure function of
+  a granted projection, and `abi-mismatch` / `projection-denied` /
+  `directive-denied` fail closed. The certifier compares the `ui` observation
+  additively; `tools/gen-ui-vectors.py` reproduces the vectors. The **Rust host**
+  (`../pro/src/ui.rs`) implements the same runner and passes **10/10** —
+  cross-runtime equivalence certified on the Python reference host and the Rust
+  host.
+- **Pinned UI ref on a behavior component** (this repo): `contracts/ui.py` gains
+  the additive `PinnedUIRef` (`ui.ref.v1`) and `cbp/ui_runtime.py` gains
+  `pinned_ui_ref(...)`. It is a **separate, content-addressed document** binding a
+  UI component's `ui_hash` to a behavior component, so a view change never moves
+  the behavior component's own content address or verified semantics. +7 tests.
+- **Private `infra/`**: the concrete local-first `provider.v1` manifest/task
+  wiring (`services/local-dev.provider.v1.json`, `tasks/local_observe.py`,
+  `tools/pin_provider.py`) with 19 offline tests — see `../infra/HANDOFF.md`.
+
+Core suite **1975 → 1982 passed** (+7); `mypy` 139 files; `ruff`/`cbp-check`
+green; basedpyright **0/0/0**. Conformance **31/31 + 10/10 + 14/14 + 8/8 + ui
+10/10**; infra **137 passed, 2 skipped**. **Every below-gate unit is complete**;
+the remaining work is operator-gated.
 
 ## Latest session (UI targets — delivered under L2)
 
@@ -511,7 +549,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 138 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1975 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1982 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -537,7 +575,7 @@ cargo test --release --features wasm                  # codec + artifact-signatu
 
 # infra (private companion) -----------------------------------------------
 cd ../infra
-uv run --project ../core pytest -o addopts="" -p no:cacheprovider tests   # -> 118 passed, 2 skipped
+uv run --project ../core pytest -o addopts="" -p no:cacheprovider tests   # -> 137 passed, 2 skipped
 
 # workspace IDE hygiene (run from the workspace root) ----------------------
 cd ..
@@ -593,7 +631,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (138 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1975 passed** (~65 s).
+  convention + home-path guard passed; full suite **1982 passed** (~65 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -703,8 +741,8 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > `pro/AGENTS.md`, `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm
 > **all four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and
 > clean, then run `core/HANDOFF.md`'s verification block (expect: `cbp-check`
-> READY, **1975 passed**; shared **31/31** in-process + external + Rust; WASM
-> **10/10**; network **14/14**; appointed **8/8**; infra **118 passed + 2
+> READY, **1982 passed**; shared **31/31** in-process + external + Rust; WASM
+> **10/10**; network **14/14**; appointed **8/8**; ui **10/10**; infra **137 passed + 2
 > skipped**; basedpyright **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL`
 > workaround before any pytest run.
 >
