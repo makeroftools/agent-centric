@@ -294,6 +294,39 @@ class TestServiceProbe:
         assert "no deployment descriptor" in json.loads(capsys.readouterr().out)["reason"]
 
 
+class TestHardening:
+    def test_descriptor_path_traversal_is_refused(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        suite, deployments = _private_suite(tmp_path)
+        # The descriptor lives at tmp_path/deployment.json, outside the
+        # deployments root (tmp_path/deployments), so a ../ reference escapes.
+        descriptor = _descriptor(tmp_path)
+        probe = {
+            "kind": "service",
+            "deployment": "../" + descriptor.name,
+            "deployment_sha256": _M.sha256_hex(descriptor.read_bytes()),
+            "expect_refused": True,
+        }
+        (suite / "HO-0001.md").write_text(
+            "---\nid: HO-0001\nservice: cbp\nfeature: x\npriority: high\n---\n\n"
+            "```check\n" + json.dumps(probe, sort_keys=True) + "\n```\n",
+            encoding="utf-8",
+        )
+        code, _ = _run(tmp_path, suite, deployments)
+        assert code == _M.EXIT_REFUSED
+        assert "escapes the deployments root" in json.loads(
+            capsys.readouterr().out
+        )["reason"]
+
+    def test_default_deployments_root_is_under_the_private_root(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("CBP_HOLDOUT_ROOT", str(tmp_path / "root"))
+        args = _M.build_parser().parse_args([])
+        assert args.deployments_dir == str(tmp_path / "root" / "deployments")
+
+
 class TestPrincipalGuard:
     def test_root_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(_M, "_euid", lambda: 0)
@@ -414,6 +447,14 @@ class TestComponentReady:
             }
         )
         assert decided["ok"] is True
+
+    def test_component_entry_refuses_a_malformed_payload(self) -> None:
+        with pytest.raises(_M.Refusal):
+            _M.component_entry({"command": "build-lock"})
+        with pytest.raises(_M.Refusal):
+            _M.component_entry({"command": "decide", "threshold": "not-a-number"})
+        with pytest.raises(_M.Refusal):
+            _M.component_entry({"command": "unknown"})
 
     def test_validator_is_not_placed_inside_the_composition(self) -> None:
         design = _REPO / "designs" / "core.v1.json"

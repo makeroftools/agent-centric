@@ -59,7 +59,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Protocol, TextIO, cast
 
 from ..contracts.components_lock import ComponentsLock
 from .boot_network import run_booted_network
@@ -353,6 +353,11 @@ def private_root() -> Path:
     return Path(override) if override else DEFAULT_HOLDOUT_ROOT
 
 
+def default_deployments_root() -> Path:
+    """The default descriptor root (``$CBP_HOLDOUT_ROOT/deployments``)."""
+    return private_root() / "deployments"
+
+
 def enforce_private_suite(suite_dir: Path) -> None:
     """Refuse unless the suite is owner-only (not group- or other-accessible)."""
     if not suite_dir.exists():
@@ -370,24 +375,59 @@ def _record_fingerprint(record: Mapping[str, object]) -> str:
     return sha256_hex(_canonical_json(payload))
 
 
+def _lock_file(handle: TextIO) -> None:
+    """Take an exclusive advisory lock (POSIX); a no-op where unavailable."""
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - non-POSIX
+        return
+    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+
+
+def _unlock_file(handle: TextIO) -> None:
+    """Release the advisory lock taken by :func:`_lock_file`."""
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - non-POSIX
+        return
+    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 def append_record(ledger_path: Path, record: Mapping[str, object]) -> bool:
-    """Append a run record idempotently; return True iff appended (not a dup)."""
+    """Append a run record idempotently; return True iff appended (not a dup).
+
+    The read-check-append is serialized with an exclusive advisory lock, so the
+    idempotency guarantee holds under retry **and** under concurrent validators:
+    two processes can never both append the same content fingerprint. The write
+    is flushed and ``fsync``-ed before the lock is released, so an acknowledged
+    record is durable.
+    """
     fingerprint = _record_fingerprint(record)
     ledger_path.parent.mkdir(parents=True, exist_ok=True)
-    if ledger_path.is_file():
-        for line in ledger_path.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            try:
-                existing = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(existing, dict) and existing.get("fingerprint") == fingerprint:
-                return False
     entry = {**record, "fingerprint": fingerprint}
     line = json.dumps(entry, sort_keys=True, separators=(",", ":")) + "\n"
-    with ledger_path.open("a", encoding="utf-8") as handle:
-        handle.write(line)
+    with ledger_path.open("a+", encoding="utf-8") as handle:
+        _lock_file(handle)
+        try:
+            handle.seek(0)
+            for existing_line in handle.read().splitlines():
+                if not existing_line.strip():
+                    continue
+                try:
+                    existing = json.loads(existing_line)
+                except json.JSONDecodeError:
+                    continue
+                if (
+                    isinstance(existing, dict)
+                    and existing.get("fingerprint") == fingerprint
+                ):
+                    return False
+            handle.seek(0, os.SEEK_END)
+            handle.write(line)
+            handle.flush()
+            os.fsync(handle.fileno())
+        finally:
+            _unlock_file(handle)
     os.chmod(ledger_path, 0o600)
     return True
 
@@ -541,6 +581,23 @@ def verify_suite(suite: Suite, lock: Mapping[str, object]) -> None:
 def _resolve_under(base: Path, value: str) -> Path:
     path = Path(value)
     return path if path.is_absolute() else (base / path).resolve()
+
+
+def _confined_child(root: Path, name: str) -> Path:
+    """Resolve ``name`` under ``root``, refusing any escape (fail-closed).
+
+    A scenario's ``deployment`` is a private-root-relative name; an absolute
+    path or a ``..`` traversal (including via a symlink) refuses before any
+    descriptor is read.
+    """
+    resolved_root = root.resolve()
+    candidate = (root / name).resolve()
+    if not candidate.is_relative_to(resolved_root):
+        raise Refusal(
+            f"deployment descriptor {name!r} escapes the deployments root {root} "
+            "(fail-closed)"
+        )
+    return candidate
 
 
 def _verifier_from_spec(algorithm: str, public_key: str, prefix: str) -> SignatureVerifier:
@@ -745,7 +802,7 @@ def preflight(
     for scenario in suite.scenarios:
         if scenario.probe.get("kind") != "service":
             continue
-        path = deployment_root / str(scenario.probe["deployment"])
+        path = _confined_child(deployment_root, str(scenario.probe["deployment"]))
         deployment = load_deployment(path, str(scenario.probe["deployment_sha256"]))
         verify_deployment_available(deployment)
         if not allow_offline_test and any(
@@ -794,7 +851,7 @@ class ServiceBackend:
 
     def run(self, probe: Mapping[str, object]) -> RunOutcome:
         deployment = load_deployment(
-            self._deployment_root / str(probe["deployment"]),
+            _confined_child(self._deployment_root, str(probe["deployment"])),
             str(probe["deployment_sha256"]),
         )
         expect_refused = bool(probe.get("expect_refused", False))
@@ -1095,12 +1152,19 @@ def component_contract() -> dict[str, object]:
 
 
 def component_entry(payload: Mapping[str, object]) -> dict[str, object]:
-    """A pure, component.v1-ready entry dispatching the validator's pure ops."""
+    """A pure, component.v1-ready entry dispatching the validator's pure ops.
+
+    Fail-closed on a malformed payload: a missing/invalid argument refuses with
+    :class:`Refusal` rather than raising a bare ``KeyError``/``ValueError``.
+    """
     command = payload.get("command")
     if command == "contract":
         return component_contract()
     if command == "build-lock":
-        suite_dir = Path(str(payload["suite"]))
+        suite = payload.get("suite")
+        if not isinstance(suite, str) or not suite:
+            raise Refusal("build-lock requires a non-empty string 'suite'")
+        suite_dir = Path(suite)
         enforce_private_suite(suite_dir)
         return {"ok": True, "lock": build_lock(load_suite(suite_dir))}
     if command == "decide":
@@ -1108,7 +1172,10 @@ def component_entry(payload: Mapping[str, object]) -> dict[str, object]:
         if isinstance(raw_scenarios, list):
             raw_scenarios = {"scenarios": raw_scenarios}
         scenarios = _parse_decide_scenarios(raw_scenarios)
-        threshold = float(payload.get("threshold", DEFAULT_THRESHOLD))  # type: ignore[arg-type]
+        try:
+            threshold = float(payload.get("threshold", DEFAULT_THRESHOLD))  # type: ignore[arg-type]
+        except (TypeError, ValueError) as exc:
+            raise Refusal(f"invalid threshold: {exc}") from exc
         verdict = decide(scenarios, threshold=threshold)
         return {
             "ok": verdict.green,
@@ -1149,7 +1216,7 @@ def _execute(args: argparse.Namespace, env: Mapping[str, str]) -> tuple[dict[str
     enforce_private_suite(suite_dir)
     suite = load_suite(suite_dir)
     verify_suite(suite, _read_json_object(lock_path))
-    deployment_root = Path(args.deployments_dir) if args.deployments_dir else private_root()
+    deployment_root = Path(args.deployments_dir)
     preflight(suite, deployment_root, allow_offline_test=isolation == "rehearsal")
 
     tasks_dir = Path(args.tasks_dir)
@@ -1210,8 +1277,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--deployments-dir",
-        default="",
-        help="directory holding holdout.deployment/v1 descriptors (default: the private root)",
+        default=str(default_deployments_root()),
+        help=(
+            "directory holding holdout.deployment/v1 descriptors "
+            "(default: $CBP_HOLDOUT_ROOT/deployments)"
+        ),
     )
     parser.add_argument(
         "--workdir",

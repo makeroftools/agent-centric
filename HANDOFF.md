@@ -87,8 +87,11 @@ implemented agent-side, workstream by workstream:
   ([`tests/test_holdout_service.py`](tests/test_holdout_service.py), 19 tests)
   prove the deterministic green record on the test-signed umbrella, the tamper
   negatives, the principal guard, and `--self-test`; the private companion adds a
-  rehearsal test over its composition. Core suite **1674 passed**; infra **104
-  passed, 1 skipped**.
+  rehearsal test over its composition. Core suite **1678 passed**; infra **104
+  passed, 1 skipped**. Hardened after first write: descriptor paths are confined
+  to the deployments root (traversal/symlink escapes refuse), the ledger append is
+  advisory-locked + `fsync`-ed (idempotent under concurrency), and malformed
+  component-entry payloads refuse cleanly.
 
 **The flip, scenario authoring, the authoritative validator run, key acts,
 provisioning, and any publish remain operator gates.** The governing invariants
@@ -139,7 +142,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 127 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1674 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1678 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -182,7 +185,7 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (127 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1674 passed** (~64 s).
+  convention + home-path guard passed; full suite **1678 passed** (~64 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -285,7 +288,7 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > `infra/HANDOFF.md`, `infra/specs/SPEC-0018-instantiation.md`, and
 > `infra/specs/provisioning.md`. Confirm **all four** repos (`core`,
 > `conformance`, `pro`, `infra`) are on `main` and clean, then run
-> `core/HANDOFF.md`'s verification block (expect: `cbp-check` READY, **1674
+> `core/HANDOFF.md`'s verification block (expect: `cbp-check` READY, **1678
 > passed**; shared suite **31/31** in-process + external + Rust; WASM **10/10**;
 > network **14/14**; appointed **8/8**; infra **104 passed + 1 skipped**;
 > basedpyright **0/0/0**).

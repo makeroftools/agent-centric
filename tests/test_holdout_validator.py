@@ -373,6 +373,29 @@ class TestLedger:
         entry = json.loads(ledger.read_text(encoding="utf-8").splitlines()[0])
         assert len(entry["fingerprint"]) == 64
 
+    def test_concurrent_appends_never_duplicate(self, tmp_path: Path) -> None:
+        import threading
+
+        ledger = tmp_path / "runs.jsonl"
+        record = {"schema": "holdout.record/v1", "verdict": "green", "value": 1}
+        barrier = threading.Barrier(8)
+        appended: list[bool] = []
+        guard = threading.Lock()
+
+        def worker() -> None:
+            barrier.wait()
+            result = _M.append_record(ledger, record)
+            with guard:
+                appended.append(result)
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        assert sum(1 for result in appended if result) == 1
+        assert len(ledger.read_text(encoding="utf-8").splitlines()) == 1
+
 
 class TestSelfTest:
     """A synthetic known-good / known-bad pair: the gate must separate them."""
