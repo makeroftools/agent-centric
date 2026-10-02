@@ -4,6 +4,48 @@
 > contents; [`PRINCIPLES.md`](PRINCIPLES.md) is the constitution. This file is
 > the **current** session-continuity one-pager: it points, it does not restate.
 
+---
+
+## Mission-critical handoff (current state — read this first)
+
+**Active level: L2 (light-factory)** — operator-raised from L1 this session; target
+L3, gated. The suite is a release gate; a human holds the review gate. Never act
+above L2 without the operator editing [`.agentfactory.toml`](.agentfactory.toml).
+
+**All four repos on `main`, clean, pushed.** Verify with §"Verify everything"
+(authoritative): core **1926 passed**, `mypy` 138, `cbp-check` READY; conformance
+shared **31/31** + network **14/14** + appointed **8/8**; pro **31/31 + 10/10 +
+14/14 + 8/8**; infra **118 passed, 2 skipped**; basedpyright **0/0/0**.
+
+**Delivered this arc (all below the gates):**
+
+- **SPEC-0020/0021 realization** — `contracts/{provider,work}.py`,
+  `cbp/{provider_runtime,work_runtime,work_boot}.py`.
+- **Local-first `provider.v1` adapter** — `cbp/provider_local.py` (17 tests).
+- **Threshold signing verification** — `cbp/threshold.py` (25 tests; SPEC-0007 §6).
+- **SPEC-0022 (draft) + the UI ABI** — `conformance/contracts/ui-v1.wit` +
+  `UI-ABI.md` + `ui.lock.v1.json`; core `contracts/ui.py` (20 tests).
+- **Private `infra/`** — the pinned **Builder devShell** (`builder/`: sops, age,
+  vultr-cli, bitwarden-cli, nixos-anywhere; `flake.lock`; CI-gated) and a named,
+  read-only **Vultr inventory tool** (`tools/vultr_observe.py`). The **local CD
+  substrate** (Gitea + OpenBao, loopback) is **up and seeded** on this host.
+
+**Next (below-gate):** implement the **UI targets** — a minimal `web` and `cli`
+target that renders a `ui.v1` component to its medium (proving target-agnosticism);
+then extract `cbp/web.py`'s read routes into a pinned UI composition, additively
+(existing routes unchanged). See [`SPEC-0022`](specs/SPEC-0022-frontend-and-components.md).
+
+**Parked / operator-gated:** Vultr provisioning (P1) — the token works
+(`VULTR_PERSONAL_ACCESS_TOKEN`) and the read-only observe is green (regions/plans/
+OS/SSH key/instances), but **nothing is created**; the L3 flip; SPEC-0018 Phases
+3–6; re-signing the composition/umbrella locks; any publish. Secrets stay out of
+repos, commands, and logs; the component-signing key never leaves the operator.
+
+**Host notes:** `nix` is installed system-wide; the Vultr token is exported in
+`~/.bashrc` (plaintext — migrate it to SOPS/age or a mode-600 env file);
+`VULTR_PERSONAL_ACCESS_TOKEN` (36 alnum) is the live one (`VULTR_API_KEY` was
+invalid and should be revoked).
+
 **Prepared for a new model session. Every claim below was verified with the
 commands in §"Verify everything" — that block is authoritative; commit hashes in
 prose drift as work continues.** The workspace root is `cbp/` (a plain directory, **not** a
@@ -11,7 +53,7 @@ git repo); the work lives in four sibling repos:
 
 | repo | visibility | role |
 | --- | --- | --- |
-| [`core/`](AGENTS.md) | public | Python **reflection** + the frozen specs (`specs/SPEC-0011`–`0019`). |
+| [`core/`](AGENTS.md) | public | Python **reflection** + the frozen specs (`specs/SPEC-0011`–`0022`). |
 | [`../conformance/`](../conformance/AGENTS.md) | public | The shared contract: WIT ABI + conformance vectors + certifier. |
 | [`../pro/`](../pro/AGENTS.md) | private | The Rust host (optimization edition). |
 | [`../infra/`](../infra/HANDOFF.md) | private | SPEC-0018 instantiation: service-host provisioning + CD. |
@@ -634,24 +676,25 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > signing; SPEC-0002 Phase-1 items 1/2/6 (adapter-first); SPEC-0018 Phases 1–2 +
 > the provisioning spec; the local CD substrate (`infra/`); `review.v1` +
 > confidence; the offline umbrella lock (test-signed); the L3-ready validator +
-> honest rehearsal (`core/docs/agent/l3-milestone-plan.md`); the documentation/spec
-> hygiene pass (real `conformance/` + `pro/` READMEs, reconciled statuses); the
-> doc-freshness guards (`core/tests/test_docs_freshness.py`, mirrored in
-> `infra/`); and the **SPEC-0020/0021 realization** — the additive contracts
-> (`contracts/provider.py`, `contracts/work.py`), the provider runtime
-> (`cbp/provider_runtime.py`), the work runtime (`cbp/work_runtime.py`), and the
-> work boot/bundle bridge (`cbp/work_boot.py`).
+> honest rehearsal; the documentation/spec hygiene pass; the doc-freshness guards;
+> the **SPEC-0020/0021 realization** (`contracts/{provider,work}.py`,
+> `cbp/{provider_runtime,work_runtime,work_boot}.py`); the **local-first
+> `provider.v1` adapter** (`cbp/provider_local.py`); **threshold-signing
+> verification** (`cbp/threshold.py`); **SPEC-0022 + the UI ABI**
+> (`conformance/contracts/ui-v1.wit`, `UI-ABI.md`, `ui.lock.v1.json`;
+> `contracts/ui.py`); and the private **Builder devShell** (`infra/builder/`) +
+> read-only **Vultr inventory tool** (`infra/tools/vultr_observe.py`).
 >
 > **Next work, in order.**
-> (1) **Below-gate build queue is clear.** Workstream A (local-first `provider.v1`
-> adapter, `cbp/provider_local.py`) and Workstream D (threshold-signing
-> verification, `cbp/threshold.py`) are **delivered**. The remaining
-> SPEC-0020/0021 unit — the concrete provider manifest/task wiring — is
-> host-specific and belongs to the private companion. Next, run a dedicated
-> research session for the charters
-> ([`docs/agent/brain-charter.md`](docs/agent/brain-charter.md),
-> [`docs/agent/learning-charter.md`](docs/agent/learning-charter.md)); do not start
-> any operator-gated unit.
+> (1) **Below-gate: implement the UI targets** (SPEC-0022) — a minimal `web` and
+> `cli` target that renders a `ui.v1` component to its medium (proving
+> target-agnosticism), then extract `cbp/web.py`'s read routes into a pinned UI
+> composition, additively (existing routes unchanged). Keep `component-abi.v1`
+> frozen; a UI component is an ordinary component implementing `ui.v1` (no new
+> node kind).
+> (1b) **Parked (operator-gated to resume):** Vultr provisioning (SPEC-0018 Phase 3
+> / the concrete provider wiring) — the read-only observe is green and the token
+> works, but **nothing is created**.
 > (2) **Operator-gated:** the deliberate L3 flip (author scenarios in
 > `$CBP_HOLDOUT_ROOT`, run the validator green with `isolation: enforced` on a
 > distinct principal/host, then edit `[levels.L3]`); SPEC-0018 Phases 3–6 (VPS +
@@ -940,97 +983,31 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 ## Next
 
-- **SPEC-0020 / SPEC-0021 ratified (this session); the next buildable unit.** The
-  operator-ratified `accepted` specs are
-  [`SPEC-0020`](specs/SPEC-0020-service-hosting-provider-abstraction-and-self-healing.md)
-  (service hosting: a thin `provider.v1` — pure `plan`, gated idempotent
-  `apply`/`health`/`teardown`; verify-then-apply; a reconcile loop with
-  deterministic auto-rollback and fail-closed escalation; an emit-only
-  notification component; declarative local-first/cloud; authN/Z) and
-  [`SPEC-0021`](specs/SPEC-0021-components-as-dynamic-work.md) (components as
-  dynamic work: a declarative pinned `work.v1` recipe compiling via a pure seam
-  to `component.v1`, plus the dynamic task-load/bind protocol). The additive
-  contracts (`contracts/provider.py`, `contracts/work.py`) are **implemented and
-  green**, their **runtime realization** is delivered (`cbp/provider_runtime.py`,
-  `cbp/work_runtime.py`; 33 tests), and the `WorkBinder` is **wired through
-  boot/network** (`cbp/work_boot.py`, 8 tests); `component-abi.v1` stays frozen.
-  The only remaining SPEC-0020/0021 unit below the gates is a concrete provider
-  adapter; after that the work is operator-gated (L3 flip, SPEC-0018 Phases 3-6,
-  re-signing, publish). Study charters for the Brain
-  ([`docs/agent/brain-charter.md`](docs/agent/brain-charter.md)) and for
-  learning/RSI ([`docs/agent/learning-charter.md`](docs/agent/learning-charter.md))
-  are parked for dedicated sessions.
+**Below the gates (do now):** implement the **UI targets** per
+[`SPEC-0022`](specs/SPEC-0022-frontend-and-components.md) — a minimal `web` and
+`cli` target that renders a `ui.v1` component to its medium, then extract
+`cbp/web.py`'s read routes into a pinned UI composition **additively** (existing
+routes unchanged). The UI ABI is already authored/pinned
+(`conformance/contracts/ui-v1.wit` + `UI-ABI.md` + `ui.lock.v1.json`) and the core
+manifest is green (`contracts/ui.py`, 20 tests). `component-abi.v1` stays frozen;
+no new node kind.
 
-- **SPEC-0002 Phase-1 remainder — S1–S5 implemented and verified (this
-  session).** The design record is
-  [`docs/agent/spec-0002-phase1-adapter-design.md`](docs/agent/spec-0002-phase1-adapter-design.md)
-  (§12 = implementation progress). Delivered, each green: **S1** the
-  `Agent`→`Component` adapter (`cbp/component_adapter.py`); **S2** the
-  parent-provisioned `ComponentCatalog` + `AgentConfig.catalog`; **S3a** the
-  driver-owned catalog provisioned to the root and inherited by children;
-  **S4** the central `_child_class_for` map **deleted** (parent-declared
-  kinds; undeclared kind fails closed before any bind); **S5** explicit
-  `inproc`-only backend (`BackendNotAdmitted` otherwise). **S3b** deletes the
-  module-level `_REGISTRY`/`_resolve_entry`/`register_callable` shim, makes
-  `Agent._catalog_entry` resolve only from the parent-provisioned catalog, and
-  migrates every test/authoring call site (a guard test asserts no global
-  remains). **SPEC-0002 Phase-1 items 1, 2, and 6 are complete.** Core suite
-  **1680 → 1708 passed**; mypy 130 files; basedpyright 0/0/0.
+**Parked (below-gate, not started):** the concrete `provider.v1` manifest/task
+wiring in the private companion (host-specific). The read-only Vultr observe
+(`infra/tools/vultr_observe.py`) is green; resuming **P1** (create a VPS) is
+operator-gated.
 
-- **L3 milestone delivered agent-side (this session).** The validator is
-  L3-ready (A) and hermetically accepted (D); the isolation runbook (B) and
-  scenario templates (C) live in the private companion. Remaining, in dependency
-  order: (1) **L3** — the operator executes the isolation runbook, authors
-  holdout scenarios in the operator-private root (`$CBP_HOLDOUT_ROOT`), runs the
-  validator green (`isolation: enforced`) on a distinct principal/host, and flips
-  `[levels.L3]` deliberately; (2) **SPEC-0018 Phase 3** — the low-budget VPS +
-  public read-only mirror, then Phases 4–6 (multi-tenant/branding,
-  source-of-truth migration, hardening) (operator/publish-gated); (3) **signing**
-  — optional threshold signing; (4) **SPEC-0017 frontier** — formal
-  semantics/reduction, the Universal Function Index, bounded RSI, whitepaper
-  last. (SPEC-0002 Phase-1 is **delivered** — see *Latest session*.)
-- **Documentation & specification hygiene — delivered (this session).** (a) The
-  real `conformance/README.md` + `conformance/contracts/README.md` and
-  `pro/README.md` are authored (the byte-identical vectors-README copies are
-  gone); (b) the `conformance/`/`pro/` `AGENTS.md` "Next" lines and the
-  `pro/AGENTS.md` copy are corrected, and the duplicated `PRINCIPLES.md`
-  cross-links are retargeted to `../core/`; (c) SPEC-0008/0009 are `implemented`,
-  SPEC-0002's §12 boxes are reconciled (the holdout half stays operator-gated),
-  and SPEC-0003/0004/0006/0011 boxes are ticked; (d)
-  [`docs/agent/component-adapter.md`](docs/agent/component-adapter.md) records the
-  adapter/catalog and the removed global. A repo-wide relative-link check passes.
-- **Umbrella `components.lock` — delivered offline; operator signing remains.**
-  The `design → pin → components.lock` producer and the additive offline
-  **directory-pin** path are delivered; `designs/core.v1.json`, the canonical
-  bundles, the lock, and its detached signature are committed and regenerated
-  deterministically by `tools/umbrella-lock.sh`. The committed lock is
-  **test-signed offline**; the operator re-signs it with the real, out-of-process
-  key and installs the public trust root (key gate). Everything else on the spine
-  is done: content-addressed cache, deterministic resolver, minisign/gpg
-  verification, git/directory sources, deterministic bundle, boot-from-lock (with
-  lock-level signature + transparency log verification, fail-closed), **key
-  rotation**, and the **`pin`/`record`** wiring.
-- **SPEC-0018 (draft): service-host provisioning + CD** — public spec in
-  `specs/` (now with a §4.1 provisioning protocol); the instantiation lives in
-  the **private `infra/` companion**. Authored: Phase 1 (pinned host definition,
-  `service.v1`, named tasks, pull/apply agent), **Phase 2** (bootstrap services
-  graduated to `component.v1`; `service.v1` binds the signed composition; the
-  agent verifies lock + graph before apply), and the **provisioning
-  specification** (`infra/specs/provisioning.md`, P0–P9) with its tasks
-  (`verify-image`, `install-host` plan/gated, `authorize-host`). **Nothing is
-  provisioned.**
-- **L3 holdout gate (SPEC-0019)** — the validator is built and its isolation is
-  **structural**; the remaining steps are operator-side: author scenarios in the
-  operator-private root (`$CBP_HOLDOUT_ROOT`, default `$HOME/.cbp/holdout/suite`),
-  pin them (`tools/holdout-validate.py --build-lock --suite …`), run the validator
-  to **green** on a principal/host distinct from the author, then flip
-  `[levels.L3] status` deliberately.
-- **Signing** — **key rotation delivered** (`cbp/trust.py`); optional threshold
-  signing remains.
-- **SPEC-0017 frontier** — formal semantics/ontology; reduction + formal
-  verification; Universal Function Index; bounded RSI; whitepaper last. The
-  **isolated validator (L3)** is now **SPEC-0019** (spec + Phase 1 isolation +
-  decision engine + probe runner delivered).
+**Operator-gated (do not start):** the L3 flip (author scenarios in
+`$CBP_HOLDOUT_ROOT`, an `isolation: enforced` green run on a distinct
+principal/host, then the `[levels.L3]` edit); SPEC-0018 Phases 3–6 (VPS + public
+read-only mirror, multi-tenant/branding, source-of-truth migration, hardening);
+installing/re-signing the operator trust root (composition + umbrella locks);
+optional threshold-signing key acts; any public publish.
+
+**Research (dedicated sessions):**
+[`docs/agent/brain-charter.md`](docs/agent/brain-charter.md) and
+[`docs/agent/learning-charter.md`](docs/agent/learning-charter.md), then the
+SPEC-0017 frontier.
 
 ## Open threads (blockers & honest gaps)
 
@@ -1063,18 +1040,16 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   pre-consumption correction made at consumption was the data-plane transport
   (`transport.send-on` / `receive-on`), which the frozen `send`/`receive`
   (control channel only) could not express.
-- **Pre-existing doc drift (not introduced by this work).** In the untouched
-  public `conformance/` and private `pro/` repos, `README.md`,
-  `conformance/contracts/README.md`, and `conformance/vectors/README.md` are
-  byte-identical copies of the *vectors* README, so their relative links
-  (`fixtures.v1.json`, `../certifier/`) resolve wrongly at the top level. The
-  proper fix is to author real top-level READMEs (roadmap candidate). A
-  repo-wide link check reports these plus the copied `PRINCIPLES.md` cross-links;
-  every link in the documents changed this session resolves.
-- **Unrun local gate.** `infra/tools/pin-flake.sh --check`, `nix flake lock`, and
-  `nix flake check` were **not** executed here (no `nix` installed). The committed
-  `hosts/<host>/flake.lock` is validated by infra CI and by a skipped test
-  (`CBP_RUN_NIX=1` on a nix-capable host); verify there before P3.
+- **Doc drift — resolved.** The earlier byte-identical README copies are gone:
+  `conformance/` + `pro/` have real top-level/contracts READMEs and corrected
+  `AGENTS.md`, and `contracts/README.md` lists `ui.v1`. Repo-wide relative-link
+  checks pass; the doc-freshness guards keep it that way.
+- **Local Nix gate — now run.** `nix` is installed on this host; the **Builder**
+  flake (`infra/builder/`) is locked and `nix flake check ./builder` is green
+  (`nix develop ./builder` materializes sops/age/vultr-cli/bitwarden-cli/
+  nixos-anywhere). The host and builder locks are current
+  (`tools/pin-flake.sh --check`), and infra CI gates them. Real provisioning (P3)
+  remains operator-gated.
 
 ## How to work here (hard laws)
 
