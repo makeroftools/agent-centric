@@ -1,7 +1,8 @@
 # Ontology and semantic graphs (SPEC-0023)
 
-> **Status:** design spec, **decisions ratified**, no implementation yet.
-> Authoritative source: [`specs/SPEC-0023-ontology-semantic-graphs.md`](../../specs/SPEC-0023-ontology-semantic-graphs.md).
+> **Status:** design spec, **decisions ratified and the design tree complete**
+> (S1–S20), no implementation yet. Authoritative source:
+> [`specs/SPEC-0023-ontology-semantic-graphs.md`](../../specs/SPEC-0023-ontology-semantic-graphs.md).
 > Study charter: [`brain-charter.md`](brain-charter.md). Entry point: [`AGENTS.md`](../../AGENTS.md).
 
 This is the summary of the ontological knowledge base — *the Brain*. It answers a
@@ -22,11 +23,17 @@ A parent owns the shared **TBox** fragment and holds a **derived closure** over
 references them by content address. It never stores, duplicates, or mutates child
 state.
 
+**And — in M2 — the semantic graph is itself a CBP sub-graph:** a *semantic
+subnet*, a composite of pure `fragment` components feeding a bounded `closure`
+component, exposing `project`/`query`/`validate` as external ports. It composes
+exactly like the process subnets, but the two graphs are **never conflated**: the
+network is the composition, the assertions are the payload.
+
 ## The model
 
 | Contract | Role |
 | --- | --- |
-| `ontology.v1` | TBox — declared classes/properties, the pinned rule set, imports, shape references. Composable. |
+| `ontology.v1` | TBox — declared classes/properties, pinned rules, imports, shape references. Composable. |
 | `semantic-graph.v1` | ABox — the assertions (M1: a pure projection). |
 | `shapes.v1` | Closed shapes used as deterministic, fail-closed gates. |
 | `closure.v1` | Pinned entailment closure: `(graph hash, ontology hash, rule profile) → closure hash`. |
@@ -39,6 +46,8 @@ Three graphs stay distinct — **process** (`network.v1`), **design**
 - **Assertions** are `{s, p, o}` canonical JSON; **terms** are `urn:cbp:` names.
 - **No blank nodes**; **declaration-before-use fails closed**; terms are
   **additive-only**.
+- **TBox is minimal:** classes/properties, acyclic `subClassOf`, and
+  `domain`/`range` as validation. Richer OWL is out.
 - Hashed with `sha256(canonical_json_bytes(...))`, reusing the system's one
   canonicalization (`cbp/network.py`).
 - **No external RDF/OWL/SHACL/Datalog dependency** — the Rust host reimplements
@@ -50,16 +59,17 @@ Three graphs stay distinct — **process** (`network.v1`), **design**
   its subtree's TBox.
 - Reasoning is **positive Datalog + stratified negation**, rules pinned in
   `ontology.v1`, evaluated as a **semi-naive fixpoint**, canonical-sorted, and
-  **bounded**.
+  **bounded** (`MAX_CLOSURE_ASSERTIONS`, `MAX_FRAGMENT_TERMS`).
 - **Open-world derives; gates are closed** — a gate passes only on a closed shape
-  over the pinned closure.
+  over the pinned closure. Failures are fail-closed with a fixed error kind.
 
 ## Delivery stages
 
-1. **M1 — vocabulary + closed shapes + capability discovery & composition** (pure
-   projection; no entailment).
+1. **M1 — vocabulary + closed shapes + capability discovery & composition**
+   (pure projection; no entailment; atomic kernel). Certified as a new
+   `ontology` conformance category.
 2. **M2 — pinned entailment closure** (Datalog + stratified negation) and the
-   parent-held derived subgraph.
+   composite **semantic subnet** so parent-subgraphs compose and execute.
 3. **M3 (deferred) — authored/instance facts; a standard export adapter.**
 
 ## Storage
@@ -81,6 +91,7 @@ capacity/performance/deployment/governance/support/UI, never meaning
 
 - Deterministic control plane; **no `model` components in M1/M2** (Law 2).
 - Child state sovereignty; derived closure by content reference (Law 10).
+- **No conflation** of the semantic graph with the process graph (SPEC-0010 §0).
 - Content-address + verify before use; nothing trusted before verified
   ([`SPEC-0015`](../../specs/SPEC-0015-provenance-assurance-labels.md)).
 - Ontology change is constitutional-level and additive-only.
@@ -89,7 +100,7 @@ capacity/performance/deployment/governance/support/UI, never meaning
 
 - Full design and ratified decisions:
   [`SPEC-0023`](../../specs/SPEC-0023-ontology-semantic-graphs.md) (see its
-  *Decisions log* and *Open frontier*).
+  *Decisions log*).
 - Intent: [`SPEC-0010`](../../specs/SPEC-0010-extensibility-knowledge-graphs-rsi.md).
 - Verification sibling: [`SPEC-0017`](../../specs/SPEC-0017-frontier-workstreams.md)
   workstream 1.
