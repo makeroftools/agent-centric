@@ -66,6 +66,17 @@ from .review import ReviewQueue, enqueue_for_review
 Task = Callable[..., Any]
 Verifier = Callable[[Any], bool]
 
+# SPEC-0002 section 5 / item 6: the reference tree runs only the ``inproc``
+# backend (deterministic, offline, replayable). Other backends are
+# declared-gated and fail closed; ``component_boot(allow_subprocess=True)``
+# is a separate, opt-in isolation path, not a tree backend.
+ADMITTED_BACKENDS = frozenset({"inproc"})
+
+
+class BackendNotAdmitted(ValueError):
+    """A non-``inproc`` execution backend was requested (fail-closed)."""
+
+
 
 class CbpDriver:
     """A synchronous driver over a root agent and its tree.
@@ -78,6 +89,8 @@ class CbpDriver:
     Args:
         endpoint: The root channel name (default ``root``).
         transport: The transport to use (``inproc``, ``tcp``, ``ipc``).
+        backend: The execution backend. Only ``inproc`` is admitted;
+            any other value fails closed (SPEC-0002 item 6).
         identity: The root agent's identity (default ``root``).
         security: The trust-boundary security profile. The default
             ``loopback`` permits loopback binds only (fail-closed); ``local``
@@ -92,6 +105,7 @@ class CbpDriver:
         *,
         endpoint: str = "root",
         transport: str = "inproc",
+        backend: str = "inproc",
         identity: str = "root",
         security: str = _transport.SECURITY_DEFAULT,
         replay_state_isolate: bool = False,
@@ -102,6 +116,11 @@ class CbpDriver:
         tls_creds: Any = None,
         curve: bool = False,
     ) -> None:
+        if backend not in ADMITTED_BACKENDS:
+            raise BackendNotAdmitted(
+                f"backend {backend!r} is not admitted; only 'inproc' is "
+                "enabled (SPEC-0002 item 6; other backends are declared-gated)"
+            )
         self._transport = transport
         self._security = security
         self._peer_autz = peer_autz
@@ -206,6 +225,7 @@ class CbpDriver:
             )
         )
         self._root.init()
+        self._declare_builtin_child_kinds()
         self._seq = 0
         self._child_base = 0
         self._ledger: dict[str, dict[str, Any]] = {}
@@ -382,6 +402,21 @@ class CbpDriver:
             self._loop.run_until_complete(child.poll(timeout=self._poll_timeout))
 
     # -- registry-as-agent -------------------------------------------------
+
+    def _declare_builtin_child_kinds(self) -> None:
+        """Declare the built-in domain child kinds on the root.
+
+        SPEC-0002 Phase-1 item 2: the runtime holds no central kind->class
+        map; the tree builder declares the concrete classes. Spawned children
+        inherit the declarations transitively (still parent-declared).
+        """
+        from .bills_agent import BillsAgent
+        from .model_agent import ModelAgent
+        from .store_agent import StoreAgent
+
+        self._root.declare_child_kind("store", StoreAgent)
+        self._root.declare_child_kind("bills", BillsAgent)
+        self._root.declare_child_kind("model", ModelAgent)
 
     def register(
         self, name: str, fn: Task, *, source_url: str = ""

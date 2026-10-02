@@ -141,6 +141,9 @@ class Agent:
         # the module-global compatibility shim; a provisioned catalog makes
         # resolution explicit and fail-closed.
         self._catalog = config.catalog
+        # Parent-declared child kinds (SPEC-0002 Phase-1 item 2). The runtime
+        # holds no central kind->class map; the tree builder declares them.
+        self._child_kinds: dict[str, type[Agent]] = {}
         self._rules: tuple[str, ...] = ()
         self._verifier: str | None = None
         # A hard, enforced resource envelope (see ``envelopes.py``). ``None``
@@ -177,6 +180,17 @@ class Agent:
     def children(self) -> dict[str, Agent]:
         """The spawned child agents (a read-only copy)."""
         return dict(self._child_agents)
+
+    def declare_child_kind(self, kind: str, cls: type[Agent]) -> None:
+        """Declare the concrete class for a child ``kind`` (parent-declared).
+
+        SPEC-0002 Phase-1 item 2: there is no central kind->class map in the
+        runtime. The tree builder (e.g. ``CbpDriver``) declares the kinds a
+        parent may spawn; an undeclared kind fails closed at spawn.
+        """
+        if not kind:
+            raise ValueError("child kind must be non-empty")
+        self._child_kinds[kind] = cls
 
     def init(self) -> None:
         """Bootstrap: create the context and connect to the parent.
@@ -946,6 +960,18 @@ class Agent:
         if guard is not None:
             guard.record_step(is_spawn=True)
 
+        # Resolve the child class from the parent's declarations *before*
+        # binding anything: an undeclared kind fails closed with no partial
+        # side effect (no leaked bound socket). A kind of ``None`` is the
+        # generic base agent.
+        kind = payload.get("kind")
+        if kind is None:
+            child_cls: type[Agent] = Agent
+        elif isinstance(kind, str) and kind in self._child_kinds:
+            child_cls = self._child_kinds[kind]
+        else:
+            return self._error(directive, f"undeclared child kind {kind!r}")
+
         # Trust-boundary enforcement (docs/transport_trust_boundary.md §5.1,
         # §5.3): a child bind must obey the same policy as the root bind. A
         # non-loopback tcp bind fails closed; an ipc socket is made owner-only.
@@ -971,7 +997,6 @@ class Agent:
             if reason is not None:
                 child_socket.close(0)
                 return self._error(directive, reason)
-        child_cls = self._child_class_for(payload.get("kind"))
         # Children inherit the parent's traffic-integrity secret (when set) so
         # the whole tree speaks the same protected wire contract (\u00a75.5).
         child = child_cls(
@@ -986,6 +1011,7 @@ class Agent:
                 catalog=self._catalog,
             )
         )
+        child._child_kinds = dict(self._child_kinds)
         child.init()
         self._children[child_identity] = child_socket
         self._child_agents[child_identity] = child
@@ -995,29 +1021,6 @@ class Agent:
             verified=True,
             node=self.identity,
         )
-
-    @staticmethod
-    def _child_class_for(kind: Any) -> type[Agent]:
-        """Resolve a spawned child's concrete class from its ``kind``.
-
-        A spawn directive may name a domain child kind (e.g. ``store``). Only
-        built-in, vetted classes are resolved here; an unknown kind fails
-        closed (returns the base ``Agent``) rather than ever instantiating an
-        arbitrary class. The base agent is the default.
-        """
-        if kind == "store":
-            from .store_agent import StoreAgent
-
-            return StoreAgent
-        if kind == "bills":
-            from .bills_agent import BillsAgent
-
-            return BillsAgent
-        if kind == "model":
-            from .model_agent import ModelAgent
-
-            return ModelAgent
-        return Agent
 
     def configure_child(
         self,
