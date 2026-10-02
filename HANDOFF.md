@@ -7,13 +7,14 @@
 **Prepared for a new model session. Every claim below was verified with the
 commands in §"Verify everything" — that block is authoritative; commit hashes in
 prose drift as work continues.** The workspace root is `cbp/` (a plain directory, **not** a
-git repo); the work lives in three sibling repos:
+git repo); the work lives in four sibling repos:
 
 | repo | visibility | role |
 | --- | --- | --- |
 | [`core/`](AGENTS.md) | public | Python **reflection** + the frozen specs (`specs/SPEC-0011`–`0019`). |
 | [`../conformance/`](../conformance/AGENTS.md) | public | The shared contract: WIT ABI + conformance vectors + certifier. |
 | [`../pro/`](../pro/AGENTS.md) | private | The Rust host (optimization edition). |
+| [`../infra/`](../infra/HANDOFF.md) | private | SPEC-0018 instantiation: service-host provisioning + CD. |
 
 Delivered so far, of the full-version plan (`SPEC-0011`): **Layers 0, 1a, 1b,
 1c, signing, and Layer 2** (the frozen `component-abi.v1` and v1 conformance
@@ -40,6 +41,16 @@ limits** (SPEC-0008 §4, validated and pinned), the **offline umbrella
 and the **SPEC-0011 "viable" end-to-end** — boot a signed lock → typed-port
 dataflow → durable-ledger replay, with a recorded, confidence-scored `model`
 node (`cbp/boot_network.py`).
+
+**Infrastructure (private `infra/`).** SPEC-0018 is authored end-to-end below
+the operator gates: Phase 1 (pinned NixOS host definition + `service.v1` + named
+tasks + pull/apply agent), Phase 2 (the bootstrap services **graduated to
+`component.v1`**, pinned in a signed content-addressed composition, and bound by
+`service.v1.refs.composition`; the agent verifies the lock + graph before apply),
+and the **provisioning specification** (`infra/specs/provisioning.md`, stages
+P0–P9) whose tasks are now authored (`verify-image`, `install-host` plan/gated,
+`authorize-host`). **Nothing is provisioned**; the real host, the operator signing
+key, and any publish remain gates.
 
 The **L3 isolated holdout validator (SPEC-0019)** is built with **structural**
 isolation: scenarios live in the operator-private root (owner-only; the public
@@ -81,6 +92,10 @@ cd ../pro
 ./scripts/certify.sh                                  # builds + certifies ALL FOUR suites (31/31 + 10/10 + 14/14 + 8/8) + unit tests
 cargo test --release --features wasm                  # codec + artifact-signature + appointed tests: 6 passed
 
+# infra (private companion) -----------------------------------------------
+cd ../infra
+uv run --project ../core pytest -o addopts="" -p no:cacheprovider tests   # -> 95 passed, 1 skipped
+
 # workspace IDE hygiene (run from the workspace root) ----------------------
 cd ..
 ./scripts/check-pyright.sh                            # -> 0 errors, 0 warnings, 0 notes
@@ -91,10 +106,10 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 
 ## Verified state (tips)
 
-- All three repos are on `main` and pushed to `origin/main`. **Never trust a
+- All four repos are on `main` and pushed to `origin/main`. **Never trust a
   commit hash written in prose — it drifts. Read the live tips instead:**
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
-  `git -C ../pro log -1 --oneline`.
+  `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (125 files); `cbp-check` **READY (8/8)**;
   convention + home-path guard passed; full suite **1618 passed** (~63 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
@@ -184,7 +199,7 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 1. Read `AGENTS.md` → `PRINCIPLES.md` → `.agentfactory.toml` (mode **L1**;
    target L3, gated) → this file.
 2. Confirm every tree: `git branch --show-current` → `main`; `git status` clean
-   (in `core`, `../conformance`, `../pro`).
+   (in `core`, `../conformance`, `../pro`, `../infra`).
 3. Run §"Verify everything" and confirm the results.
 4. Continue from **Next**. Never act above the active level without the operator
    changing `.agentfactory.toml` first.
@@ -195,30 +210,38 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > local-first, fail-closed). Open at the workspace root `cbp/`. Read
 > `core/AGENTS.md` -> `core/PRINCIPLES.md` -> `core/.agentfactory.toml` (active
 > **L1**; target L3, operator-gated) -> `core/HANDOFF.md`, then
-> `core/specs/SPEC-0011`–`0019`, `conformance/AGENTS.md`, `pro/AGENTS.md`, and
-> `infra/HANDOFF.md` + `infra/specs/SPEC-0018-instantiation.md`. Confirm **all
-> four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and clean,
-> then run `core/HANDOFF.md`'s verification block (expect: `cbp-check` READY,
-> **1618 passed**; shared suite **31/31** in-process + external + Rust; WASM
-> **10/10**; network **14/14**; appointed **8/8**; infra **79 passed**;
-> basedpyright **0/0/0**). Delivered: Layers 0–4 + signing, the distribution
-> spine, the offline umbrella lock (committed test-signed; the **operator-signed**
-> system lock is recorded in `infra/locks/core-umbrella/`), the local CD
-> substrate, and **SPEC-0019** (the L3 isolated holdout validator: structural
-> isolation, decision engine, `holdout.lock`, probe runner, append-only ledger).
-> **SPEC-0018 Phase 2 (authored, private companion): the bootstrap services
-> are graduated to `component.v1` and `service.v1` binds the composition**; the
-> agent verifies the composition lock + graph before apply. **Next mission:
-> self-hosting** (boot the composition itself) and, operator-gated, provision/
-> enroll the intranet host and publish to the live mirror.
+> `core/specs/SPEC-0011`–`0019`, `conformance/AGENTS.md`, `pro/AGENTS.md`,
+> `infra/HANDOFF.md`, `infra/specs/SPEC-0018-instantiation.md`, and
+> `infra/specs/provisioning.md`. Confirm **all four** repos (`core`,
+> `conformance`, `pro`, `infra`) are on `main` and clean, then run
+> `core/HANDOFF.md`'s verification block (expect: `cbp-check` READY, **1618
+> passed**; shared suite **31/31** in-process + external + Rust; WASM **10/10**;
+> network **14/14**; appointed **8/8**; infra **95 passed + 1 skipped**;
+> basedpyright **0/0/0**).
+>
+> **This session is a ROADMAP PLANNING session — do not start implementing until
+> the operator and you have agreed the plan.** Delivered: Layers 0–4 + signing,
+> the distribution spine, the offline umbrella lock (committed test-signed; the
+> **operator-signed** system lock recorded in `infra/locks/core-umbrella/`), the
+> local CD substrate (full verify→apply→rollback→DR path), **SPEC-0019** (the L3
+> isolated holdout validator), **SPEC-0018 Phase 2** (bootstrap services
+> graduated to `component.v1`; `service.v1` binds the signed composition; the
+> agent verifies it before apply), and the **provisioning specification + tasks**.
+> Roadmap candidates to suss out: self-hosting the composition; SPEC-0018 Phases
+> 3–6 (VPS + public read-only mirror, multi-tenant/branding, source-of-truth
+> migration, hardening); authoring L3 holdout scenarios and the deliberate L3
+> flip; threshold signing; the SPEC-0017 frontier; and the `review.v1`/confidence
+> gap.
+>
 > Hard laws: whole-file replacement only via `tools/safe-replace.sh` (**never
 > in-place edits**), resolve every home path from `$HOME`, commit and push
 > continuously, never `--no-verify`. Mission-critical boundaries: never act above
 > L1 without the operator changing `.agentfactory.toml`; operator gates = real
-> host provisioning/enrollment, the operator signing key, and any public publish;
-> the **authoring principal must be unprivileged and distinct** (`agent-runner`,
-> no docker/sudo — docker is root-equivalent; this workstation is a rehearsal),
-> and holdout scenarios and keys never enter a public repo.
+> host provisioning/enrollment, the operator signing key (including re-signing the
+> composition/umbrella locks), and any public publish; the **authoring principal
+> must be unprivileged and distinct** (`agent-runner`, no docker/sudo — docker is
+> root-equivalent; this workstation is a rehearsal), and holdout scenarios and
+> keys never enter a public repo.
 
 ## What Agent-centric is
 
@@ -442,6 +465,16 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 ## Next
 
+- **This is a handoff into a ROADMAP PLANNING session.** Near-term build
+  options, in rough dependency order: (1) **self-hosting** — boot the composition
+  itself (`boot_from_lock` over the graduated components) and conformance-check
+  the nodes; (2) **SPEC-0018 Phase 3** — the low-budget VPS + public read-only
+  mirror, then Phases 4–6 (multi-tenant/branding, source-of-truth migration,
+  hardening); (3) **L3** — author holdout scenarios in the operator-private root
+  and flip `[levels.L3]` deliberately; (4) **signing** — optional threshold
+  signing; (5) **SPEC-0017 frontier** — formal semantics/reduction, the Universal
+  Function Index, bounded RSI, whitepaper last. Operator gates unchanged (real
+  host, signing key, publish).
 - **Umbrella `components.lock` — delivered offline; operator signing remains.**
   The `design → pin → components.lock` producer and the additive offline
   **directory-pin** path are delivered; `designs/core.v1.json`, the canonical
@@ -454,11 +487,14 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   lock-level signature + transparency log verification, fail-closed), **key
   rotation**, and the **`pin`/`record`** wiring.
 - **SPEC-0018 (draft): service-host provisioning + CD** — public spec in
-  `specs/`; the instantiation lives in a **private companion repo**. Phase 1:
-  bootstrap the intranet host (native Gitea + OpenBao + pull/apply agent) under
-  verify-then-apply. Phase 2 (authored): the bootstrap services graduated to
-  `component.v1`, with `service.v1` binding the signed composition lock. The
-  private mission brief holds the plan and paste-in kickoff prompts.
+  `specs/` (now with a §4.1 provisioning protocol); the instantiation lives in
+  the **private `infra/` companion**. Authored: Phase 1 (pinned host definition,
+  `service.v1`, named tasks, pull/apply agent), **Phase 2** (bootstrap services
+  graduated to `component.v1`; `service.v1` binds the signed composition; the
+  agent verifies lock + graph before apply), and the **provisioning
+  specification** (`infra/specs/provisioning.md`, P0–P9) with its tasks
+  (`verify-image`, `install-host` plan/gated, `authorize-host`). **Nothing is
+  provisioned.**
 - **L3 holdout gate (SPEC-0019)** — the validator is built and its isolation is
   **structural**; the remaining steps are operator-side: author scenarios in the
   operator-private root (`$CBP_HOLDOUT_ROOT`, default `$HOME/.cbp/holdout/suite`),
@@ -501,6 +537,18 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   pre-consumption correction made at consumption was the data-plane transport
   (`transport.send-on` / `receive-on`), which the frozen `send`/`receive`
   (control channel only) could not express.
+- **Pre-existing doc drift (not introduced by this work).** In the untouched
+  public `conformance/` and private `pro/` repos, `README.md`,
+  `conformance/contracts/README.md`, and `conformance/vectors/README.md` are
+  byte-identical copies of the *vectors* README, so their relative links
+  (`fixtures.v1.json`, `../certifier/`) resolve wrongly at the top level. The
+  proper fix is to author real top-level READMEs (roadmap candidate). A
+  repo-wide link check reports these plus the copied `PRINCIPLES.md` cross-links;
+  every link in the documents changed this session resolves.
+- **Unrun local gate.** `infra/tools/pin-flake.sh --check`, `nix flake lock`, and
+  `nix flake check` were **not** executed here (no `nix` installed). The committed
+  `hosts/dev-01/flake.lock` is validated by infra CI and by a skipped test
+  (`CBP_RUN_NIX=1` on a nix-capable host); verify there before P3.
 
 ## How to work here (hard laws)
 
