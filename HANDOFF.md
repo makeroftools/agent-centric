@@ -527,12 +527,15 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **SPEC-0016** `draft` — frozen; nothing built. **SPEC-0017** `draft` —
   frontier index; its §4 **isolated holdout validator** is promoted to
   **SPEC-0019** (below).
-- **SPEC-0002** `accepted` — **`review.v1` + response `confidence` + the
-  persistent append-only Review queue are delivered** (`contracts/review.py`,
-  `cbp/review.py`, 37 tests). Remaining: the `Agent`→`Component` adapter; removal
-  of the module-level callable registry / `_child_class_for`; `inproc`-only
-  backend. (Holdout scenarios are operator-authored, in SPEC-0019.) Adapter-first:
-  prove equivalence before removing the old path.
+- **SPEC-0002** `accepted` — **Phase-1 items 1, 2, 6 delivered** (adapter-first,
+  under L1): `review.v1` + response `confidence` + the persistent append-only
+  Review queue (`contracts/review.py`, `cbp/review.py`, 37 tests); the
+  `Agent`→`Component` adapter (`cbp/component_adapter.py`); a parent-provisioned
+  `ComponentCatalog` (`cbp/component_catalog.py`) that **removed the module-level
+  registry global** and the central `_child_class_for` map (parent-declared
+  kinds; undeclared kind fails closed); and explicit `inproc`-only backend
+  enforcement. Design record: `docs/agent/spec-0002-phase1-adapter-design.md`.
+  (Holdout scenarios are operator-authored, in SPEC-0019.)
 - **SPEC-0003/0004/0006** `implemented` — criteria met by the convention guard;
   some checkboxes un-ticked (doc-only correction).
 - **SPEC-0007** `accepted` — Phases 0/0.5a/1a/1b/2 delivered; 0.5b signing and
