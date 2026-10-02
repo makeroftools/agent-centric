@@ -63,6 +63,9 @@ The declared-gated program that would let verification, not generation, be the
 constraint on autonomy. Required before any auto-labeling at scale and before any
 self-improvement of verification.
 
+Promoted to its own spec: [SPEC-0019](SPEC-0019-isolated-holdout-validator.md) (draft; spec only, not
+implemented).
+
 ### 5. Bounded RSI
 
 Propose → review → sign → lock. Verification remains off-limits until the

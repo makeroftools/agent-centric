@@ -24,6 +24,7 @@ threshold.
 
 ## Status
 
-No scenarios yet — the L3 validator that consumes them is not built
-(see [`docs/agent/verification.md`](../../docs/agent/verification.md)). This file
+No scenarios yet — the L3 validator that consumes them is not built (see
+[`SPEC-0019`](../SPEC-0019-isolated-holdout-validator.md) for its spec and
+[`docs/agent/verification.md`](../../docs/agent/verification.md)). This file
 reserves the format and the boundary.

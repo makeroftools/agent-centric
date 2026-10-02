@@ -13,13 +13,14 @@ enthusiasm.
 | `mypy src` | types | yes | pre-commit + CI |
 | `agent-centric cbp-check` | readiness | yes | pre-commit + CI |
 | `pytest` | invariant suite | yes | CI / agent |
-| `holdout` | acceptance scenarios | yes | isolated validator (not built) |
+| `holdout` | acceptance scenarios | yes | isolated validator ([SPEC-0019](../../specs/SPEC-0019-isolated-holdout-validator.md); not built) |
 
 ## Principles
 
 1. **The gate is the contract.** Encode rules as checks, not wiki pages.
 2. **Codegen and validation are isolated.** The authoring agent never sees
    [`specs/holdout/`](../../specs/holdout/README.md) and never runs the validator.
+   The validator's contract is [`SPEC-0019`](../../specs/SPEC-0019-isolated-holdout-validator.md).
 3. **Fail closed.** A missing gate named by the active level means refuse, not
    proceed — never bypass a hook with `--no-verify`.
 
