@@ -57,7 +57,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 125 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1576 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1618 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -96,7 +96,7 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (125 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1576 passed** (~63 s).
+  convention + home-path guard passed; full suite **1618 passed** (~63 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -194,20 +194,28 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > Continue the mission-critical `agent-centric` system (CBP/ABM; deterministic,
 > local-first, fail-closed). Open at the workspace root `cbp/`. Read
 > `core/AGENTS.md` -> `core/PRINCIPLES.md` -> `core/.agentfactory.toml` (active
-> **L1**; target L3 gated) -> `core/HANDOFF.md`, then the frozen plan
-> `core/specs/SPEC-0011` through `SPEC-0017`, and `conformance/AGENTS.md` +
-> `pro/AGENTS.md`. Confirm all three repos are on `main` and clean, then run the
-> verification block in `core/HANDOFF.md` (expect: cbp-check READY, **1576
-> passed**, shared suite **31/31** on Python + Rust, WASM suite **10/10**, network
-> suite **14/14**, appointed suite **8/8**). **Layers 0, 1a, 1b, 1c, signing, 2,
-> 3, and 4 are delivered**, along with the `design → pin → components.lock`
-> producer, signing-key rotation, the n8n authoring adapter, and the recorded,
-> confidence-scored `model` component boundary. The offline umbrella
-> `components.lock` is committed (test-signed; operator signing remains).
-> Obey the hard laws: whole-file replacement
-> only via `tools/safe-replace.sh` (**never in-place edits**), commit and push
-> continuously, never `--no-verify`. Never act above L1 without the operator
-> changing `.agentfactory.toml` first.
+> **L1**; target L3, operator-gated) -> `core/HANDOFF.md`, then
+> `core/specs/SPEC-0011`–`0019`, `conformance/AGENTS.md`, `pro/AGENTS.md`, and
+> `infra/HANDOFF.md` + `infra/specs/SPEC-0018-instantiation.md`. Confirm **all
+> four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and clean,
+> then run `core/HANDOFF.md`'s verification block (expect: `cbp-check` READY,
+> **1618 passed**; shared suite **31/31** in-process + external + Rust; WASM
+> **10/10**; network **14/14**; appointed **8/8**; infra **64 passed**;
+> basedpyright **0/0/0**). Delivered: Layers 0–4 + signing, the distribution
+> spine, the offline umbrella lock (committed test-signed; the **operator-signed**
+> system lock is recorded in `infra/locks/core-umbrella/`), the local CD
+> substrate, and **SPEC-0019** (the L3 isolated holdout validator: structural
+> isolation, decision engine, `holdout.lock`, probe runner, append-only ledger).
+> **Next mission: provision components** (SPEC-0018 Phase 2 — graduate the
+> bootstrap services to `component.v1`; `service.v1` binds the composition).
+> Hard laws: whole-file replacement only via `tools/safe-replace.sh` (**never
+> in-place edits**), resolve every home path from `$HOME`, commit and push
+> continuously, never `--no-verify`. Mission-critical boundaries: never act above
+> L1 without the operator changing `.agentfactory.toml`; operator gates = real
+> host provisioning/enrollment, the operator signing key, and any public publish;
+> the **authoring principal must be unprivileged and distinct** (`agent-runner`,
+> no docker/sudo — docker is root-equivalent; this workstation is a rehearsal),
+> and holdout scenarios and keys never enter a public repo.
 
 ## What Agent-centric is
 
