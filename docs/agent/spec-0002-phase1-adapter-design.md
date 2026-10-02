@@ -222,7 +222,7 @@ operator acts. This design crosses none of them.
 ## 12. Implementation progress (recorded from git; do not trust prose hashes)
 
 Delivered under L1, each a green, committed unit (re-verify with the
-`HANDOFF.md` block; the suite grew 1680 → 1706):
+`HANDOFF.md` block; the suite grew 1680 → 1708):
 
 - **S1 — adapter (additive).** `src/agent_centric/cbp/component_adapter.py`
   (`AgentComponent`: lifecycle passthrough, entry bridge `run_once`, pure

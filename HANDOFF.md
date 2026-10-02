@@ -74,6 +74,22 @@ entry/contract is exposed, never placed inside the composition under test.
 Operator-authored scenarios, the authoritative `isolation: enforced` green run on
 a distinct principal/host, and the L3 flip remain operator gates.
 
+## Latest session (documentation/spec hygiene — delivered under L1)
+
+The documentation/spec drift recorded in the previous handoff is closed:
+`conformance/` and `pro/` now have real top-level READMEs
+(`conformance/README.md`, `conformance/contracts/README.md`, `pro/README.md`) in
+place of the byte-identical vectors-README copies; `pro/AGENTS.md` is rewritten
+for the Rust host (it had been a verbatim copy of `conformance/AGENTS.md`); the
+`conformance/`/`pro/` "Next" lines are refreshed and their duplicated
+`PRINCIPLES.md` cross-links retargeted to `../core/`; SPEC-0008/0009 are
+`implemented`, SPEC-0002's §12 boxes are reconciled (the author-blind holdout
+half stays operator-gated, so SPEC-0002 stays `accepted`), and
+SPEC-0003/0004/0006/0011 boxes are ticked; and
+[`docs/agent/component-adapter.md`](docs/agent/component-adapter.md) records the
+adapter/catalog and the removed module-level global. No code path changed; the
+suite stayed **1708 passed**, basedpyright 0/0/0. No operator gate was touched.
+
 ## Latest session (SPEC-0002 Phase-1 remainder — delivered under L1)
 
 The remaining Phase-1 items of SPEC-0002 are **implemented, equivalence-tested,
@@ -553,8 +569,8 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 `status` is `draft | accepted | implemented`; `accepted` = design approved, not built.
 
-- **SPEC-0011** `accepted` — MVP definition frozen; testable acceptance +
-  status-record correction remain.
+- **SPEC-0011** `accepted` — MVP definition frozen; acceptance reconciled
+  (status record corrected; the `implemented` specs' boxes ticked).
 - **SPEC-0012 / SPEC-0013** `accepted` — **Layers 0/1a/1b/1c + signing
   delivered** (ABI rev 3, vectors, certifier, Rust host 31/31, content-addressed
   WASM 10/10 including a full `component-abi.v1` guest and Ed25519 artifact
@@ -579,17 +595,17 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   enforcement. Design record: `docs/agent/spec-0002-phase1-adapter-design.md`.
   (Holdout scenarios are operator-authored, in SPEC-0019.)
 - **SPEC-0003/0004/0006** `implemented` — criteria met by the convention guard;
-  some checkboxes un-ticked (doc-only correction).
+  acceptance boxes ticked.
 - **SPEC-0007** `accepted` — Phases 0/0.5a/1a/1b/2 delivered; 0.5b signing and
   **key rotation** delivered; the **offline umbrella `components.lock`** is
   committed (test-signed offline; operator re-signs with the real key);
   **live mirror open**.
-- **SPEC-0008** `draft` — `design.v1` + validate/compile, the Phase 3
+- **SPEC-0008** `implemented` — `design.v1` + validate/compile, the Phase 3
   `pin`/`record` wiring (`cbp/lockfile.py`), the Phase 2 n8n adapter
   (`cbp/n8n_adapter.py`), **and** design envelope limits (`cbp/design.py`
   validate + `pin`) delivered.
-- **SPEC-0009** `draft` — **9/9** built: recorded, confidence-scored `model`
-  components delivered (`cbp/model_record.py`); spec status understates it.
+- **SPEC-0009** `implemented` — **9/9** built: recorded, confidence-scored
+  `model` components delivered (`cbp/model_record.py`).
 - **SPEC-0010** `draft` — roadmap only.
 - **SPEC-0018** `draft` — service-host provisioning + continuous deployment
   (verify-then-apply; self-hosted Gitea first). Public origin-agnostic spec in
@@ -649,17 +665,16 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   — optional threshold signing; (4) **SPEC-0017 frontier** — formal
   semantics/reduction, the Universal Function Index, bounded RSI, whitepaper
   last. (SPEC-0002 Phase-1 is **delivered** — see *Latest session*.)
-- **Documentation & specification hygiene (next session's focus).** Known gaps to
-  close: (a) the pre-existing `conformance/README.md` / `pro/README.md` (and
-  `conformance/contracts/README.md`, `conformance/vectors/README.md`) are
-  byte-identical vectors-README copies with broken relative links — author real
-  top-level READMEs; (b) the `conformance/AGENTS.md` and `pro/AGENTS.md` "Next"
-  lines still list key rotation / the `design→pin→lock` producer / the umbrella
-  lock as remaining — all are delivered; (c) reconcile SPEC status front-matter
-  (`accepted` vs `implemented`) and the §12 acceptance checkboxes (SPEC-0002
-  Phase-1 is implemented in substance; SPEC-0003/0004/0006 have doc-only unticked
-  boxes); (d) add a `docs/agent/` note covering `component_adapter` /
-  `component_catalog` and the removed module-level global.
+- **Documentation & specification hygiene — delivered (this session).** (a) The
+  real `conformance/README.md` + `conformance/contracts/README.md` and
+  `pro/README.md` are authored (the byte-identical vectors-README copies are
+  gone); (b) the `conformance/`/`pro/` `AGENTS.md` "Next" lines and the
+  `pro/AGENTS.md` copy are corrected, and the duplicated `PRINCIPLES.md`
+  cross-links are retargeted to `../core/`; (c) SPEC-0008/0009 are `implemented`,
+  SPEC-0002's §12 boxes are reconciled (the holdout half stays operator-gated),
+  and SPEC-0003/0004/0006/0011 boxes are ticked; (d)
+  [`docs/agent/component-adapter.md`](docs/agent/component-adapter.md) records the
+  adapter/catalog and the removed global. A repo-wide relative-link check passes.
 - **Umbrella `components.lock` — delivered offline; operator signing remains.**
   The `design → pin → components.lock` producer and the additive offline
   **directory-pin** path are delivered; `designs/core.v1.json`, the canonical
