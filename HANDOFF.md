@@ -547,7 +547,7 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   every link in the documents changed this session resolves.
 - **Unrun local gate.** `infra/tools/pin-flake.sh --check`, `nix flake lock`, and
   `nix flake check` were **not** executed here (no `nix` installed). The committed
-  `hosts/dev-01/flake.lock` is validated by infra CI and by a skipped test
+  `hosts/<host>/flake.lock` is validated by infra CI and by a skipped test
   (`CBP_RUN_NIX=1` on a nix-capable host); verify there before P3.
 
 ## How to work here (hard laws)
