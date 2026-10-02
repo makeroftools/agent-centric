@@ -21,7 +21,6 @@ from agent_centric.cbp import (
     Agent,
     AgentConfig,
     CbpDriver,
-    register_callable,
 )
 from agent_centric.cbp.component_catalog import ComponentCatalog
 from agent_centric.cbp.message import Directive, Response
@@ -103,8 +102,7 @@ class TestProvisionedResolution:
         assert response.value == 42
 
     def test_provisioned_agent_refuses_unprovisioned_name(self) -> None:
-        # Present in the module global, absent from the provisioned catalog.
-        register_callable("global_only_double", _double)
+        # A name absent from the provisioned catalog fails closed.
         catalog = ComponentCatalog()
         agent = Agent(
             AgentConfig(
@@ -116,13 +114,10 @@ class TestProvisionedResolution:
         with pytest.raises(KeyError):
             _configure(agent, ("global_only_double",))
 
-    def test_agent_without_catalog_keeps_global_shim(self) -> None:
-        register_callable("shim_double", _double)
+    def test_agent_without_catalog_fails_closed(self) -> None:
         agent = Agent(AgentConfig(identity="leaf", parent_endpoint="inproc://parent"))
-        _configure(agent, ("shim_double",))
-        response = _run_task(agent, "shim_double")
-        assert response.verified is True
-        assert response.value == 42
+        with pytest.raises(KeyError):
+            _configure(agent, ("any_double",))
 
 
 class TestDriverProvisionsTheCatalog:
@@ -137,10 +132,25 @@ class TestDriverProvisionsTheCatalog:
             driver.spawn("child")
             assert driver._root.children["child"]._catalog is driver._catalog
 
-    def test_live_global_after_construction_is_not_consulted(self) -> None:
+    def test_unregistered_name_is_not_consulted(self) -> None:
         with CbpDriver() as driver:
-            # Registered in the shim only *after* the catalog was provisioned:
-            # the driver must not see it (no live-global fallback).
-            register_callable("late_global_only_double", _double)
-            response = driver.configure(tasks=("late_global_only_double",))
+            # Nothing was registered on this driver; an unregistered name must
+            # fail closed (no ambient fallback).
+            response = driver.configure(tasks=("never_registered_double",))
             assert response.verified is False
+
+
+class TestNoGlobalRegistry:
+    """SPEC-0002 item 2 acceptance: no module-level registry global remains."""
+
+    def test_agent_module_has_no_registry_global(self) -> None:
+        from agent_centric.cbp import agent as agent_module
+
+        assert not hasattr(agent_module, "_REGISTRY")
+        assert not hasattr(agent_module, "register_callable")
+        assert not hasattr(agent_module, "_resolve_entry")
+
+    def test_package_does_not_export_the_shim(self) -> None:
+        import agent_centric.cbp as cbp
+
+        assert not hasattr(cbp, "register_callable")

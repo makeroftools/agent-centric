@@ -29,12 +29,9 @@ class TestModelAgent:
     def test_model_is_an_ordinary_child_reverified_by_parent(self) -> None:
         """The parent re-verifies the model's value; a failing verifier demotes
         it to an audited failure (not trusted on its own word)."""
-        from agent_centric.cbp import register_callable
-
         def _reject(_v) -> bool:
             return False
 
-        register_callable("no_verify", _reject)
         with CbpDriver() as driver:
             driver.spawn("model", kind="model")
             driver.register("no_verify", _reject)
@@ -92,12 +89,9 @@ class TestModelAgent:
     def test_configure_provider_keeps_verification_spine(self) -> None:
         """A real provider output is still re-verified by the parent; a failing
         verifier demotes it (a real provider never relaxes the spine)."""
-        from agent_centric.cbp import register_callable
-
         def _reject(_v):
             return False
 
-        register_callable("no_verify2", _reject)
         with CbpDriver() as driver:
             driver.spawn("model", kind="model")
             driver.register("no_verify2", _reject)

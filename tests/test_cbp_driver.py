@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 
-from agent_centric.cbp import CbpDriver, register_callable
+from agent_centric.cbp import CbpDriver
 
 
 def _double(value: int) -> int:
@@ -270,8 +270,8 @@ class TestMediatedSpawnDelegation:
 
     def test_parent_reverifies_child_on_upward_path(self) -> None:
         with CbpDriver() as driver:
-            register_callable("double", _double)
-            register_callable("odd", _odd)
+            driver.register("double", _double)
+            driver.register("odd", _odd)
             driver.configure(tasks=("double",), verifiers=("odd",), verifier="odd")
             driver.spawn("child")
             driver.configure_child("child", tasks=("double",))
@@ -1224,8 +1224,8 @@ class TestInspection:
     internals or mutating anything."""
 
     def test_tree_reports_root_and_children(self, tmp_path: Path) -> None:
-        register_callable("double", _double)
         with CbpDriver() as driver:
+            driver.register("double", _double)
             driver.spawn("child")
             driver.configure_child("child", tasks=("double",))
             driver.spawn("store", kind="store")

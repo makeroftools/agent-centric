@@ -38,7 +38,7 @@ import zmq.asyncio
 
 from . import ledger as _ledger
 from . import transport as _transport
-from .agent import Agent, register_callable
+from .agent import Agent
 from .audit import AuditChain
 from .component_catalog import ComponentCatalog
 from .config import AgentConfig
@@ -60,6 +60,7 @@ from .message import (
     stamp_confidence,
 )
 from .model_record import ModelRecord
+from .registry import RegistryEntry
 from .review import ReviewQueue, enqueue_for_review
 
 # A task is a registered callable; a verifier is a pure predicate.
@@ -206,12 +207,9 @@ class CbpDriver:
                 )
         # The driver owns the tree's catalog and provisions it to the root
         # (and, by inheritance, to every spawned child). SPEC-0002 Phase-1
-        # S3a: runtime resolution is parent-provisioned. `register_callable`
-        # remains a documented test/authoring shim; its entries are snapshotted
-        # here, once, so legacy callers keep working until S3b migrates them.
-        from .agent import _REGISTRY as _shim
-
-        self._catalog = ComponentCatalog.from_entries(dict(_shim))
+        # item 2: runtime resolution is parent-provisioned; there is no
+        # module-level registry global.
+        self._catalog = ComponentCatalog()
         self._root = Agent(
             AgentConfig(
                 identity=identity,
@@ -427,7 +425,6 @@ class CbpDriver:
         can resolve it by name) and immediately made available to the root
         agent's own registry, so ``resolve`` works without a prior ``configure``.
         """
-        register_callable(name, fn, source_url=source_url)
         self._catalog.register(name, fn, source_url=source_url)
         entry = self._catalog.entry(name)
         assert entry is not None  # just registered
@@ -671,6 +668,11 @@ class CbpDriver:
         failed: list[dict[str, Any]] = []
 
         with self.__class__(replay_state_isolate=True) as fresh:
+            # Provision the replay tree with this session's catalog: the
+            # recorded directives name callables, and a fresh driver now starts
+            # with an empty catalog (no module-level global).
+            for entry in self._catalog.entries():
+                fresh._catalog.register_entry(entry)
             for cid, directive in ordered:
                 payload = directive["payload"]
                 if directive.get("_child") is True:
@@ -1258,31 +1260,31 @@ def summarise_ledger(
     return _summarise_entries(entries)
 
 
-def _seed_entry_from_source(name: str, info: dict[str, str]) -> bool:
-    """Register ``name`` by importing the recorded module.qualname.
+def _entry_from_source(name: str, info: dict[str, str]) -> RegistryEntry | None:
+    """Build a registry entry by importing the recorded module.qualname.
 
-    Returns True if the callable was imported and registered in the module-level
-    catalog (so the replayed tree can resolve it). Returns False if the manifest
-    has no importable source or the import fails (the caller can seed manually).
+    Returns the entry, or None if the manifest has no importable source or the
+    import fails (the caller records it as missing and may seed manually).
     """
     module = info.get("module", "")
     qualname = info.get("qualname", "")
     if not module or not qualname:
-        return False
+        return None
     try:
         mod = importlib.import_module(module)
     except (ImportError, ModuleNotFoundError):
-        return False
+        return None
     obj: Any = mod
     try:
         for part in qualname.split("."):
             obj = getattr(obj, part)
     except AttributeError:
-        return False
+        return None
     if not callable(obj):
-        return False
-    register_callable(name, obj, source_url=info.get("source_url", ""))
-    return True
+        return None
+    return RegistryEntry.from_callable(
+        name, obj, source_url=info.get("source_url", "")
+    )
 
 
 def load_ledger(ledger_path: str | os.PathLike[str]) -> dict[str, dict[str, Any]]:
@@ -1353,10 +1355,17 @@ def replay_ledger(
     manifest = ledger_callables(ledger_path)
     seeded: list[str] = []
     missing: list[str] = []
+    restored: dict[str, RegistryEntry] = {}
     for name, info in manifest.items():
-        ok = _seed_entry_from_source(name, info)
-        (seeded if ok else missing).append(name)
+        entry = _entry_from_source(name, info)
+        if entry is None:
+            missing.append(name)
+        else:
+            restored[name] = entry
+            seeded.append(name)
     with CbpDriver(transport=transport, endpoint=endpoint) as fresh:
+        for entry in restored.values():
+            fresh._catalog.register_entry(entry)
         result = fresh.replay_session(entries=entries)
         result["seeded_callables"] = seeded
         result["missing_callables"] = missing

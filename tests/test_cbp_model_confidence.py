@@ -17,7 +17,6 @@ from agent_centric.cbp import (
     PROVIDER_EXTERNAL,
     PROVIDER_STUB,
     CbpDriver,
-    register_callable,
 )
 from agent_centric.cbp.model_agent import TASK_MODEL
 
@@ -76,7 +75,6 @@ class TestModelComponentRecording:
         def _reject(_value: object) -> bool:
             return False
 
-        register_callable("no_model_verify", _reject)
         with CbpDriver() as driver:
             driver.spawn("model", kind="model")
             driver.register("no_model_verify", _reject)

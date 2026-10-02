@@ -1,6 +1,6 @@
 # SPEC-0002 Phase-1 remainder — adapter-first design
 
-> **Status: S1–S5 implemented and verified (green); S3b (delete the shim) remains.**
+> **Status: S1–S5b implemented and verified (SPEC-0002 Phase-1 items 1, 2, 6 complete).**
 > **how** the remaining Phase-1 items of
 > [`../../specs/SPEC-0002-cbp-component-architecture.md`](../../specs/SPEC-0002-cbp-component-architecture.md)
 > are built: the `Agent`→`Component` adapter (item 1), removal of the module-level
@@ -245,8 +245,11 @@ Delivered under L1, each a green, committed unit (re-verify with the
   `CbpDriver(backend=...)` refuses any other backend
   (`BackendNotAdmitted`). `tests/test_cbp_backend.py`.
 
-**S3b — remaining.** Delete the module-level `_REGISTRY`, `_resolve_entry`, and
-the `register_callable` shim, and migrate the remaining ~77 test/authoring call
-sites to `CbpDriver.register` (driver tests) or an explicit `ComponentCatalog`
-(direct-`Agent` tests). This is a mechanical, high-churn change and is deferred
-to its own reviewed unit; the runtime no longer reads the global.
+**S3b — delivered.** The module-level `_REGISTRY`/`_resolve_entry`/
+`register_callable` shim is **deleted**; `Agent._catalog_entry` resolves only
+from the parent-provisioned catalog (fail-closed when absent); the package no
+longer exports `register_callable`; `CbpDriver` owns a fresh catalog;
+`replay_session` provisions the replay tree's catalog; and `replay_ledger`
+seeds the fresh driver's catalog from the ledger manifest. All test/authoring
+call sites migrated to `CbpDriver.register` or an explicit `ComponentCatalog`.
+A guard test asserts no module-level registry global remains.

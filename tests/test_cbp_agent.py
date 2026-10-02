@@ -37,11 +37,11 @@ from agent_centric.cbp import (
     Agent,
     AgentConfig,
     ProtocolError,
-    register_callable,
     validate_ack,
     validate_directive,
     validate_response,
 )
+from agent_centric.cbp.component_catalog import ComponentCatalog
 from agent_centric.cbp.message import Ack, Directive, Response
 
 
@@ -55,6 +55,17 @@ def _even(value: Any) -> bool:
 
 def _odd(value: Any) -> bool:
     return isinstance(value, int) and value % 2 == 1
+
+
+def _make_test_catalog() -> ComponentCatalog:
+    catalog = ComponentCatalog()
+    catalog.register("double", _double)
+    catalog.register("even", _even)
+    catalog.register("odd", _odd)
+    return catalog
+
+
+_TEST_CATALOG = _make_test_catalog()
 
 
 async def _send(
@@ -133,13 +144,13 @@ class TestProtocol:
 
 class TestAgentLifecycle:
     def test_init_provides_minimal_config(self) -> None:
-        config = AgentConfig(identity="leaf", parent_endpoint="inproc://parent")
+        config = AgentConfig(catalog=_TEST_CATALOG, identity="leaf", parent_endpoint="inproc://parent")
         agent = Agent(config)
         assert agent.identity == "leaf"
         assert agent.config.parent_endpoint == "inproc://parent"
 
     def test_kill_releases_state(self) -> None:
-        agent = Agent(AgentConfig(identity="leaf", parent_endpoint="inproc://parent"))
+        agent = Agent(AgentConfig(catalog=_TEST_CATALOG, identity="leaf", parent_endpoint="inproc://parent"))
         agent.init()
         agent.kill()
         assert agent._parent is None  # noqa: SLF001
@@ -160,7 +171,7 @@ class TestAgentRun:
         parent.bind("inproc://parent")
         if agent is None:
             agent = Agent(
-                AgentConfig(
+                AgentConfig(catalog=_TEST_CATALOG, 
                     identity="leaf",
                     parent_endpoint="inproc://parent",
                     context=context,
@@ -168,7 +179,7 @@ class TestAgentRun:
             )
         else:
             # Re-point the pre-configured agent at the shared context.
-            agent._config = AgentConfig(
+            agent._config = AgentConfig(catalog=_TEST_CATALOG, 
                 identity=agent.identity,
                 parent_endpoint="inproc://parent",
                 context=context,
@@ -186,8 +197,6 @@ class TestAgentRun:
 
     def test_configure_then_run(self) -> None:
         async def scenario() -> None:
-            register_callable("double", _double)
-            register_callable("even", _even)
             cfg = Directive(
                 correlation_id="cfg1",
                 kind=DIRECTIVE_CONFIGURE,
@@ -201,10 +210,8 @@ class TestAgentRun:
 
     def test_run_verified_task(self) -> None:
         async def scenario() -> None:
-            register_callable("double", _double)
-            register_callable("even", _even)
             agent = Agent(
-                AgentConfig(
+                AgentConfig(catalog=_TEST_CATALOG, 
                     identity="leaf",
                     parent_endpoint="inproc://parent",
                     context=zmq.asyncio.Context(),
@@ -232,10 +239,8 @@ class TestAgentRun:
 
     def test_run_fails_verification(self) -> None:
         async def scenario() -> None:
-            register_callable("double", _double)
-            register_callable("odd", _odd)
             agent = Agent(
-                AgentConfig(
+                AgentConfig(catalog=_TEST_CATALOG, 
                     identity="leaf",
                     parent_endpoint="inproc://parent",
                     context=zmq.asyncio.Context(),
@@ -263,9 +268,8 @@ class TestAgentRun:
 
     def test_idempotency(self) -> None:
         async def scenario() -> None:
-            register_callable("double", _double)
             agent = Agent(
-                AgentConfig(
+                AgentConfig(catalog=_TEST_CATALOG, 
                     identity="leaf",
                     parent_endpoint="inproc://parent",
                     context=zmq.asyncio.Context(),
@@ -298,9 +302,8 @@ class TestAgentRun:
         correlation id but different content is not served stale data.
         """
         async def scenario() -> None:
-            register_callable("double", _double)
             agent = Agent(
-                AgentConfig(
+                AgentConfig(catalog=_TEST_CATALOG, 
                     identity="leaf",
                     parent_endpoint="inproc://parent",
                     context=zmq.asyncio.Context(),
@@ -351,14 +354,16 @@ class TestAgentRun:
         ran and from where, so execution is fully auditable.
         """
         async def scenario() -> None:
-            register_callable("double", _double, source_url="src://tasks/double.py")
+            catalog = ComponentCatalog()
+            catalog.register("double", _double, source_url="src://tasks/double.py")
             agent = Agent(
-                AgentConfig(
+                AgentConfig(catalog=_TEST_CATALOG, 
                     identity="leaf",
                     parent_endpoint="inproc://parent",
                     context=zmq.asyncio.Context(),
                 )
             )
+            agent._catalog = catalog
             agent.init()
             agent._configure(
                 Directive(
@@ -383,9 +388,8 @@ class TestAgentRun:
     def test_run_without_source_is_empty(self) -> None:
         """A callable registered without a source records an empty source."""
         async def scenario() -> None:
-            register_callable("double", _double)
             agent = Agent(
-                AgentConfig(
+                AgentConfig(catalog=_TEST_CATALOG, 
                     identity="leaf",
                     parent_endpoint="inproc://parent",
                     context=zmq.asyncio.Context(),
@@ -431,19 +435,28 @@ class TestTwoAgentRoundTrip:
 
         # Parent agent: connects DEALER up (unused here), holds child ROUTER.
         parent = Agent(
-            AgentConfig(identity="parent", parent_endpoint="inproc://root", context=context)
+            AgentConfig(
+                catalog=_TEST_CATALOG,
+                identity="parent",
+                parent_endpoint="inproc://root",
+                context=context,
+            )
         )
         parent.init()
         parent._children["child"] = parent_socket  # child ROUTER on parent's poll
 
         # Child agent: connects DEALER to the parent's child ROUTER.
         child = Agent(
-            AgentConfig(identity="child", parent_endpoint="inproc://children", context=context)
+            AgentConfig(
+                catalog=_TEST_CATALOG,
+                identity="child",
+                parent_endpoint="inproc://children",
+                context=context,
+            )
         )
         child.init()
 
         # Configure the child with the double task.
-        register_callable("double", _double)
         child._configure(
             Directive(
                 correlation_id="cfg-child",
@@ -491,7 +504,6 @@ class TestMediatedSpawnDelegation:
 
     def test_spawn_provisions_real_child_and_delegates(self) -> None:
         async def scenario() -> None:
-            register_callable("double", _double)
             context = zmq.asyncio.Context()
 
             # Root ROUTER: the parent connects its DEALER up to it. This is the
@@ -500,7 +512,12 @@ class TestMediatedSpawnDelegation:
             root.bind("inproc://root")
 
             parent = Agent(
-                AgentConfig(identity="parent", parent_endpoint="inproc://root", context=context)
+                AgentConfig(
+                    catalog=_TEST_CATALOG,
+                    identity="parent",
+                    parent_endpoint="inproc://root",
+                    context=context,
+                )
             )
             parent.init()
 
@@ -565,14 +582,18 @@ class TestMediatedSpawnDelegation:
         routed to an arbitrary child.
         """
         async def scenario() -> None:
-            register_callable("double", _double)
             context = zmq.asyncio.Context()
 
             root = context.socket(zmq.ROUTER)
             root.bind("inproc://root")
 
             parent = Agent(
-                AgentConfig(identity="parent", parent_endpoint="inproc://root", context=context)
+                AgentConfig(
+                    catalog=_TEST_CATALOG,
+                    identity="parent",
+                    parent_endpoint="inproc://root",
+                    context=context,
+                )
             )
             parent.init()
             parent._configure(
@@ -614,7 +635,12 @@ class TestMediatedSpawnDelegation:
         async def scenario() -> None:
             context = zmq.asyncio.Context()
             parent = Agent(
-                AgentConfig(identity="parent", parent_endpoint="inproc://root", context=context)
+                AgentConfig(
+                    catalog=_TEST_CATALOG,
+                    identity="parent",
+                    parent_endpoint="inproc://root",
+                    context=context,
+                )
             )
             parent.init()
 
@@ -649,15 +675,18 @@ class TestMediatedSpawnDelegation:
         verification in the synchronous node model.
         """
         async def scenario() -> None:
-            register_callable("double", _double)
-            register_callable("odd", _odd)
             context = zmq.asyncio.Context()
 
             root = context.socket(zmq.ROUTER)
             root.bind("inproc://root")
 
             parent = Agent(
-                AgentConfig(identity="parent", parent_endpoint="inproc://root", context=context)
+                AgentConfig(
+                    catalog=_TEST_CATALOG,
+                    identity="parent",
+                    parent_endpoint="inproc://root",
+                    context=context,
+                )
             )
             parent.init()
             # Parent's own default verifier: only odd results pass.
@@ -724,7 +753,12 @@ class TestFailClosedOnMalformedInput:
             parent.bind("inproc://parent")
 
             agent = Agent(
-                AgentConfig(identity="parent", parent_endpoint="inproc://parent", context=context)
+                AgentConfig(
+                    catalog=_TEST_CATALOG,
+                    identity="parent",
+                    parent_endpoint="inproc://parent",
+                    context=context,
+                )
             )
             agent.init()
 
@@ -738,7 +772,6 @@ class TestFailClosedOnMalformedInput:
             assert error.verified is False
 
             # The agent is still alive and can service a valid directive.
-            register_callable("double", _double)
             agent._configure(
                 Directive(
                     correlation_id="cfg1",
@@ -771,7 +804,12 @@ class TestFailClosedOnMalformedInput:
             parent.bind("inproc://parent")
 
             agent = Agent(
-                AgentConfig(identity="parent", parent_endpoint="inproc://parent", context=context)
+                AgentConfig(
+                    catalog=_TEST_CATALOG,
+                    identity="parent",
+                    parent_endpoint="inproc://parent",
+                    context=context,
+                )
             )
             agent.init()
 
@@ -808,7 +846,12 @@ class TestRegistryAsAgent:
             parent.bind("inproc://parent")
 
             registry_agent = Agent(
-                AgentConfig(identity="registry", parent_endpoint="inproc://parent", context=context)
+                AgentConfig(
+                    catalog=_TEST_CATALOG,
+                    identity="registry",
+                    parent_endpoint="inproc://parent",
+                    context=context,
+                )
             )
             registry_agent.init()
 
@@ -856,7 +899,12 @@ class TestRegistryAsAgent:
             parent.bind("inproc://parent")
 
             registry_agent = Agent(
-                AgentConfig(identity="registry", parent_endpoint="inproc://parent", context=context)
+                AgentConfig(
+                    catalog=_TEST_CATALOG,
+                    identity="registry",
+                    parent_endpoint="inproc://parent",
+                    context=context,
+                )
             )
             registry_agent.init()
 
@@ -888,7 +936,6 @@ class TestTransportParity:
 
     async def _round_trip(self, bind_endpoint: str, transport: str) -> Response:
         context = zmq.asyncio.Context()
-        register_callable("double", _double)
         parent = context.socket(zmq.ROUTER)
         parent.bind(bind_endpoint)
         # For transport with ephemeral ports, connect to the actual bound endpoint.
@@ -898,7 +945,7 @@ class TestTransportParity:
             parent_endpoint = bind_endpoint
 
         agent = Agent(
-            AgentConfig(
+            AgentConfig(catalog=_TEST_CATALOG, 
                 identity="leaf",
                 parent_endpoint=parent_endpoint,
                 transport=transport,

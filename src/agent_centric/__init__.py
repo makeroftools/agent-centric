@@ -31,9 +31,6 @@ from .cbp import (
 from .cbp import (
     Shell as CbpShell,
 )
-from .cbp import (
-    register_callable as cbp_register_callable,
-)
 from .contracts import (
     AcceptResult,
     AgendaEntry,
@@ -251,5 +248,4 @@ __all__ = [
     "CbpDriver",
     "CbpResponse",
     "CbpShell",
-    "cbp_register_callable",
 ]

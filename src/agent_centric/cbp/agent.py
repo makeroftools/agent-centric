@@ -74,52 +74,6 @@ def _as_envelope(value: Any) -> ResourceEnvelope | None:
     raise TypeError(f"invalid resource envelope: {type(value).__name__}")
 
 
-# The registry of callables known to the system. In the foundation this is a
-# module-level stub; trust and persistence are clamped down later. Each entry
-# carries the callable and its source location (URL) so the trajectory can
-# record *which* callable ran and from where (chain audit).
-_REGISTRY: dict[str, RegistryEntry] = {}
-
-
-def _resolve_entry(name: str) -> RegistryEntry:
-    """Resolve the full registry entry (callable + source) by name.
-
-    Raises:
-        KeyError: If the name is not registered.
-    """
-    return _REGISTRY[name]
-
-
-def register_callable(
-    name: str, fn: Callable[..., Any], *, source_url: str = ""
-) -> None:
-    """Register a callable by name so directives can reference it.
-
-    Args:
-        name: The name directives will use to reference the callable.
-        fn: The callable to register.
-        source_url: The source location (URL) of the callable, for chain audit.
-
-    When ``fn`` is a plain, importable function (has a real module and qualified
-    name), its import location is recorded so a later process can re-create the
-    callable from source (cross-process replay without re-seeding by hand).
-    """
-    module = getattr(fn, "__module__", "") or ""
-    qualname = getattr(fn, "__qualname__", "") or ""
-    if module == "__main__" or not module:
-        # A REPL/script-defined function is not reliably importable; record only
-        # the in-memory callable (no importable source).
-        module = ""
-        qualname = ""
-    _REGISTRY[name] = RegistryEntry(
-        name=name,
-        callable=fn,
-        source_url=source_url,
-        module=module,
-        qualname=qualname,
-    )
-
-
 class Agent:
     """The abstract agent: worker to its parent, manager to its children.
 
@@ -596,17 +550,16 @@ class Agent:
     def _catalog_entry(self, name: str) -> RegistryEntry:
         """Resolve a granted name from the parent-provisioned catalog.
 
-        SPEC-0002 Phase-1 step S2: when a parent provisions a catalog
-        (``AgentConfig.catalog``), the child resolves only from it and an
-        absent name fails closed (``KeyError``). With no catalog the agent
-        keeps the documented module-global compatibility shim.
+        SPEC-0002 Phase-1 item 2 (S3b): the parent provisions a catalog
+        (``AgentConfig.catalog``); resolution is only from it, and an absent
+        name fails closed (``KeyError``). There is no module-level global.
         """
-        if self._catalog is not None:
-            entry = self._catalog.entry(name)
-            if entry is None:
-                raise KeyError(name)
-            return entry
-        return _resolve_entry(name)
+        if self._catalog is None:
+            raise KeyError(name)
+        entry = self._catalog.entry(name)
+        if entry is None:
+            raise KeyError(name)
+        return entry
 
     def _configure(self, directive: Directive) -> Response:
         """Configure the agent's rules and callable registry from the directive.

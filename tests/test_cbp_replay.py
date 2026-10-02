@@ -10,7 +10,6 @@ import pytest
 from agent_centric.cbp import (
     CbpDriver,
     DirectiveLedger,
-    register_callable,
     replay_ledger,
 )
 
@@ -33,7 +32,6 @@ def _odd(v) -> bool:
 
 class TestReplay:
     def test_replay_passes_for_deterministic_run(self) -> None:
-        register_callable("double", _double)
         with CbpDriver() as driver:
             driver.register("double", _double)
             driver.configure(tasks=("double",))
@@ -47,7 +45,6 @@ class TestReplay:
             assert result["recorded"]["terminal_value"] == 42
 
     def test_replay_by_target_correlation_id(self) -> None:
-        register_callable("double", _double)
         with CbpDriver() as driver:
             driver.register("double", _double)
             driver.configure(tasks=("double",))
@@ -63,7 +60,6 @@ class TestReplay:
             assert result["passed"] is True
 
     def test_replay_unknown_target_fails_closed(self) -> None:
-        register_callable("double", _double)
         with CbpDriver() as driver:
             driver.register("double", _double)
             driver.configure(tasks=("double",))
@@ -90,7 +86,6 @@ class TestReplay:
                 return value * 2
             raise RuntimeError("boom on replay")
 
-        register_callable("flaky", _flaky)
         with CbpDriver() as driver:
             driver.register("flaky", _flaky)
             driver.configure(tasks=("flaky",))
@@ -105,9 +100,6 @@ class TestReplay:
         """A run whose per-run verifier differs from the root default must
         replay faithfully. Without registering the verifier on the fresh root,
         a verified original would diverge into a spurious verification failure."""
-        register_callable("triple", _triple)
-        register_callable("odd", _odd)
-        register_callable("even", _even)
         with CbpDriver() as driver:
             driver.register("triple", _triple)
             driver.register("odd", _odd)
@@ -129,7 +121,6 @@ class TestReplaySession:
     fresh tree and verifies every run outcome (including delegated ones)."""
 
     def test_replays_local_session(self) -> None:
-        register_callable("double", _double)
         with CbpDriver() as driver:
             driver.register("double", _double)
             driver.configure(tasks=("double",))
@@ -143,7 +134,6 @@ class TestReplaySession:
             assert result["failed"] == []
 
     def test_replays_delegated_child_run(self) -> None:
-        register_callable("double", _double)
         with CbpDriver() as driver:
             driver.register("double", _double)
             driver.configure(tasks=("double",))
@@ -168,7 +158,6 @@ class TestReplaySession:
                 return value * 2
             raise RuntimeError("boom on replay")
 
-        register_callable("flaky", _flaky)
         with CbpDriver() as driver:
             driver.register("flaky", _flaky)
             driver.configure(tasks=("flaky",))
@@ -182,9 +171,6 @@ class TestReplaySession:
     def test_replay_session_resolves_per_run_verifier(self) -> None:
         """replay_session must faithfully rebuild a session that used per-run
         verifiers differing from the root default."""
-        register_callable("triple", _triple)
-        register_callable("odd", _odd)
-        register_callable("even", _even)
         with CbpDriver() as driver:
             driver.register("triple", _triple)
             driver.register("odd", _odd)
@@ -202,8 +188,6 @@ class TestReplaySession:
     def test_replay_session_clears_verifier_faithfully(self) -> None:
         """A ``configure(clear_verifier=True)`` must be recorded and reproduced
         on replay, so delegate results are not spuriously demoted."""
-        register_callable("double", _double)
-        register_callable("even", _even)
         with CbpDriver() as driver:
             driver.register("double", _double)
             driver.register("even", _even)
@@ -400,8 +384,6 @@ class TestSummary:
     """summary() / summarise_ledger give a deterministic, operator-facing view."""
 
     def test_summary_reports_verified_and_error_runs(self) -> None:
-        register_callable("double", _double)
-        register_callable("even", _even)
         with CbpDriver() as driver:
             driver.register("double", _double)
             driver.register("even", _even)
@@ -424,7 +406,6 @@ class TestSummary:
     def test_summarise_ledger_matches_driver_summary(
         self, tmp_path: Path
     ) -> None:
-        register_callable("double", _double)
         ledger_path = tmp_path / "session.ledger.db"
         with CbpDriver(ledger_path=str(ledger_path)) as driver:
             driver.register("double", _double)
@@ -495,11 +476,6 @@ class TestDurableLedger:
             driver.configure(tasks=("double",))
             driver.run("double", {"value": 21})
 
-        # The module-level registry is empty (no manual seeding). replay_ledger
-        # must import _double from its recorded module.qualname and re-verify.
-        from agent_centric.cbp import agent as _agent
-
-        _agent._REGISTRY.clear()
         result = replay_ledger(str(ledger_path))
         assert result["ok"] is True, result["failed"]
         assert result["passed"] == result["runs"]
@@ -556,8 +532,6 @@ class TestDeterminismEvidence:
         """Two fresh drivers with the same registered callable + same directive
         must produce byte-identical verified results (deterministic by
         construction, not by luck)."""
-        register_callable("double", _double)
-        register_callable("even", _even)
         outcomes: list[tuple[bool, Any]] = []
         for _ in range(2):
             with CbpDriver() as driver:
@@ -572,8 +546,6 @@ class TestDeterminismEvidence:
     def test_table_driven_payload_shapes_replay_exactly(self) -> None:
         """A table of distinct payload shapes must each replay to the exact same
         outcome — the replay guarantee holds across input diversity."""
-        register_callable("double", _double)
-        register_callable("even", _even)
         payloads = [
             {"value": 0},
             {"value": 1},
@@ -595,8 +567,6 @@ class TestDeterminismEvidence:
     def test_replay_equivalence_is_exact_not_approximate(self) -> None:
         """Replay must reproduce the recorded terminal kind, value, and error
         exactly — not just 'close enough'."""
-        register_callable("double", _double)
-        register_callable("even", _even)
         with CbpDriver() as driver:
             driver.register("double", _double)
             driver.register("even", _even)

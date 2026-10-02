@@ -750,20 +750,6 @@ def _cbp_cpm(nodes: Any) -> Any:
     return cpm_from_dict(nodes).to_dict()
 
 
-def _seed_cbp_callables(cbp: Any) -> None:
-    """Register the deterministic demo callables in the module-level registry.
-
-    These are needed both to drive the live demo and to re-resolve directives
-    when a durable ledger is replayed in a fresh process. The names match what
-    the demo's directives reference (double/even/odd/cpm), so a replayed ledger
-    re-resolves them deterministically.
-    """
-    cbp.register_callable("double", _cbp_double, source_url="file:///tasks/double")
-    cbp.register_callable("even", _cbp_even)
-    cbp.register_callable("odd", _cbp_odd)
-    cbp.register_callable("cpm", _cbp_cpm)
-
-
 def _cbp_endpoint(transport: str) -> str:
     """A transport-appropriate root endpoint for the CBP driver/CLI."""
     return {
@@ -790,7 +776,6 @@ def _cmd_cbp(
     """
     import agent_centric.cbp as cbp
 
-    _seed_cbp_callables(cbp)
 
     # A transport-appropriate root endpoint: "inproc" uses a bare name;
     # "tcp" needs host:port; "ipc" needs a path. Child endpoints are
@@ -1105,7 +1090,6 @@ def _cmd_cbp_check(
     """
     import agent_centric.cbp as cbp
 
-    _seed_cbp_callables(cbp)
 
     endpoint = _cbp_endpoint(transport)
     driver_kwargs: dict[str, Any] = {}
@@ -1506,7 +1490,6 @@ def _cmd_cbp_replay(ledger_path: Path, transport: str) -> int:
     # registry manifest (importing module.qualname). The deterministic demo set
     # is still re-registered here when available, keeping manual seeding the
     # documented fallback for non-importable callables.
-    _seed_cbp_callables(cbp)
     endpoint = _cbp_endpoint(transport)
     try:
         result = cbp.replay_ledger(

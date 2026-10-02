@@ -585,11 +585,12 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   driver-owned catalog provisioned to the root and inherited by children;
   **S4** the central `_child_class_for` map **deleted** (parent-declared
   kinds; undeclared kind fails closed before any bind); **S5** explicit
-  `inproc`-only backend (`BackendNotAdmitted` otherwise). Core suite **1680 →
-  1706 passed**; mypy 130 files; basedpyright 0/0/0. **Remaining: S3b** —
-  delete the module-level `_REGISTRY`/`_resolve_entry`/`register_callable`
-  shim and migrate the ~77 test/authoring call sites (mechanical, high
-  churn; the runtime no longer reads the global).
+  `inproc`-only backend (`BackendNotAdmitted` otherwise). **S3b** deletes the
+  module-level `_REGISTRY`/`_resolve_entry`/`register_callable` shim, makes
+  `Agent._catalog_entry` resolve only from the parent-provisioned catalog, and
+  migrates every test/authoring call site (a guard test asserts no global
+  remains). **SPEC-0002 Phase-1 items 1, 2, and 6 are complete.** Core suite
+  **1680 → 1708 passed**; mypy 130 files; basedpyright 0/0/0.
 
 - **L3 milestone delivered agent-side (this session).** The validator is
   L3-ready (A) and hermetically accepted (D); the isolation runbook (B) and

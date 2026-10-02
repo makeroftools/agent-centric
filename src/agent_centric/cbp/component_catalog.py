@@ -1,17 +1,14 @@
 """Parent-provisioned component catalog (SPEC-0002 Phase-1 item 2, step S2).
 
 A registry is a **passive catalog** (Law 10): it records *what* and *where*, and
-never decides. Today the CBP tree still resolves task/verifier names from a
-module-level global (``agent.py::_REGISTRY``); the SPEC-0002 target makes
-registration/resolution **a component provided by the parent**, so a child can
-resolve only what its parent explicitly provisioned and an absent name fails
-closed.
+never decides. Historically the CBP tree resolved task/verifier names from a
+module-level global (``agent.py::_REGISTRY``); SPEC-0002 item 2 replaced that
+with a catalog **provided by the parent**, so a child resolves only what its
+parent explicitly provisioned and an absent name fails closed.
 
-This module introduces that explicit carrier — :class:`ComponentCatalog` — as an
-**additive** layer over the existing :class:`~agent_centric.cbp.registry.Registry`.
-It changes no behavior on its own: an agent that is not given a catalog keeps
-resolving from the module global (the documented compatibility shim). Step S3
-cuts the runtime over to the parent-provisioned catalog.
+This module is that explicit carrier — :class:`ComponentCatalog` — a **passive**
+layer over :class:`~agent_centric.cbp.registry.Registry`. The runtime no longer
+has a module-level registry global.
 """
 
 from __future__ import annotations
@@ -61,6 +58,15 @@ class ComponentCatalog:
     def callable_from_source(self, name: str) -> CallableT | None:
         """Reconstruct a callable from its recorded importable source."""
         return self._registry.callable_from_source(name)
+
+    def entries(self) -> tuple[RegistryEntry, ...]:
+        """All entries in deterministic (name-sorted) order."""
+        out: list[RegistryEntry] = []
+        for name in self._registry.names():
+            entry = self._registry.entry(name)
+            if entry is not None:
+                out.append(entry)
+        return tuple(out)
 
     @classmethod
     def from_entries(cls, entries: dict[str, RegistryEntry]) -> ComponentCatalog:

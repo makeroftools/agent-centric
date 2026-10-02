@@ -13,25 +13,14 @@ Offline and deterministic — no network, no daemons.
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 
-from agent_centric.cbp import CbpDriver, register_callable
+from agent_centric.cbp import CbpDriver
 from agent_centric.cbp.envelopes import EnvelopeGuard, ResourceEnvelope
 
 
 def _double(value: int) -> int:
     return value * 2
-
-
-def _stub(_: Any) -> int:
-    return 1
-
-
-def _seed() -> None:
-    register_callable("double_env", _double)
-    register_callable("stub_env", _stub)
 
 
 class TestResourceEnvelopeModel:
@@ -88,9 +77,6 @@ class TestEnvelopeGuard:
 
 class TestEnvelopeEnforcement:
     """End-to-end through the driver: the envelope actually bounds work."""
-
-    def setup_method(self) -> None:
-        _seed()
 
     def test_step_limit_blocks_runs_fail_closed(self) -> None:
         with CbpDriver() as driver:

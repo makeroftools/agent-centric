@@ -25,9 +25,9 @@ from agent_centric.cbp import (
     Agent,
     AgentConfig,
     CbpDriver,
-    register_callable,
 )
 from agent_centric.cbp.component_adapter import AgentComponent, ComponentAdapterError
+from agent_centric.cbp.component_catalog import ComponentCatalog
 from agent_centric.cbp.message import Directive
 from agent_centric.contracts.component import (
     ChildRef,
@@ -47,7 +47,14 @@ def _even(value: Any) -> bool:
 
 
 def _configured_agent() -> Agent:
-    agent = Agent(AgentConfig(identity="leaf", parent_endpoint="inproc://parent"))
+    catalog = ComponentCatalog()
+    catalog.register("double", _double)
+    catalog.register("even", _even)
+    agent = Agent(
+        AgentConfig(
+            identity="leaf", parent_endpoint="inproc://parent", catalog=catalog
+        )
+    )
     agent._configure(
         Directive(
             correlation_id="cfg",
@@ -85,7 +92,6 @@ class TestEntryBridgeEquivalence:
         )
 
     def test_run_once_fails_closed_on_unknown_task(self) -> None:
-        register_callable("double", _double)
         adapter = AgentComponent(_configured_agent(), entry=_ENTRY)
         response = adapter.run_once(
             Directive(
@@ -100,9 +106,14 @@ class TestEntryBridgeEquivalence:
 
 class TestDeclarativeProjection:
     def test_manifest_is_valid_and_deterministic(self) -> None:
-        register_callable("double", _double)
-        register_callable("even", _even)
-        agent = Agent(AgentConfig(identity="leaf", parent_endpoint="inproc://parent"))
+        catalog = ComponentCatalog()
+        catalog.register("double", _double)
+        catalog.register("even", _even)
+        agent = Agent(
+            AgentConfig(
+                identity="leaf", parent_endpoint="inproc://parent", catalog=catalog
+            )
+        )
         agent._configure(
             Directive(
                 correlation_id="cfg",

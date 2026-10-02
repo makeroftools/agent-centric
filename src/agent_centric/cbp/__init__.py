@@ -31,7 +31,7 @@ from .activity import (
     ActivityError,
     ActivityFeed,
 )
-from .agent import Agent, register_callable
+from .agent import Agent
 from .audit import AuditChain, ChainEvent, reconstruct_chains
 from .bills import (
     BillsError,
@@ -365,7 +365,6 @@ __all__ = [
     "Agent",
     "AgentConfig",
     "CbpDriver",
-    "register_callable",
     # Context / governance
     "Context",
     "Verifier",
