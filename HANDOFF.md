@@ -41,6 +41,11 @@ and the **SPEC-0011 "viable" end-to-end** — boot a signed lock → typed-port
 dataflow → durable-ledger replay, with a recorded, confidence-scored `model`
 node (`cbp/boot_network.py`).
 
+The **L3 isolated holdout validator (SPEC-0019)** is authored and partly built:
+the author-blind isolation guard, the deterministic decision engine, and a
+fail-closed suite/lock + probe-runner pipeline (`tools/holdout-validate.py`, 30
+tests). Network-boot probes and operator-authored scenarios remain.
+
 ## Verify everything (do this before acting)
 
 ```sh
@@ -378,7 +383,9 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   `appointed.v1` source allowlist + ordered A0 gate, **8/8** cross-runtime); tiers
   A1–A4, `review.v1` promotion, and the generated/discovered gates remain
   (SPEC-0017).
-- **SPEC-0016 / SPEC-0017** `draft` — frozen; nothing built.
+- **SPEC-0016** `draft` — frozen; nothing built. **SPEC-0017** `draft` —
+  frontier index; its §4 **isolated holdout validator** is promoted to
+  **SPEC-0019** (below).
 - **SPEC-0002** `accepted` — Phase 1 not built (**0/6**): `review.v1` absent; no
   `Agent`→`Component` adapter; `_REGISTRY`/`_child_class_for` remain; no holdout
   scenarios; no response `confidence`/Review; no `inproc`-only backend.
@@ -404,6 +411,14 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   infra **authored + hardened** (deterministic tasks, a pull/apply agent that
   content-verifies every mutating task, a pinned host definition + `service.v1`
   instance, enrollment runbook, infra CI, DR drill) — **nothing provisioned**.
+- **SPEC-0019** `draft` — the **L3 isolated holdout validator**: author-blind
+  isolation (read-deny of `specs/holdout/` + a context-gated separate process), a
+  deterministic decision engine (`ERROR` = infra flake; mixed PASS/FAIL =
+  nondeterministic; high = all-run; normal = 2-of-3), and a fail-closed
+  `holdout.lock` verification + `holdout.v1` task-probe runner
+  (`tools/holdout-validate.py`, 30 tests; core `19547cd`). Network-boot probes,
+  the recorded ledger, and operator-authored scenarios remain; L3 stays
+  `declared-gated`.
 
 ## Next
 
@@ -426,8 +441,9 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **Signing** — **key rotation delivered** (`cbp/trust.py`); optional threshold
   signing remains.
 - **SPEC-0017 frontier** — formal semantics/ontology; reduction + formal
-  verification; Universal Function Index; isolated validator (L3); bounded RSI;
-  whitepaper last.
+  verification; Universal Function Index; bounded RSI; whitepaper last. The
+  **isolated validator (L3)** is now **SPEC-0019** (spec + Phase 1 isolation +
+  decision engine + probe runner delivered).
 
 ## Open threads (blockers & honest gaps)
 
@@ -444,7 +460,10 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   run its typed-port `network.v1` over the verified entries → replay the durable
   directive ledger**, with a spawned `model` node recorded and
   confidence-scored (`tests/test_viable_demo.py`, `examples/viable_demo.py`).
-  The only remaining deployment step is the operator-signed lock (key gate).
+  The **operator-signed system umbrella lock is recorded** in the private infra
+  repo (`locks/core-umbrella/`: lock, bundles, and the **public** trust root),
+  verified with the core `GpgVerifier` against a keyring holding only the public
+  key; the committed Core lock stays test-signed for hermetic CI.
 - **`review.v1` / `confidence`** — absent; parked under SPEC-0017. Launch ships a
   minimal deterministic scorer + formalizer at the model boundary.
 - **Honest FBP note** — non-port networks still run on the legacy args model;
