@@ -20,6 +20,7 @@ from agent_centric.cbp import (
     RESPONSE_RESULT,
     Agent,
     AgentConfig,
+    CbpDriver,
     register_callable,
 )
 from agent_centric.cbp.component_catalog import ComponentCatalog
@@ -122,3 +123,24 @@ class TestProvisionedResolution:
         response = _run_task(agent, "shim_double")
         assert response.verified is True
         assert response.value == 42
+
+
+class TestDriverProvisionsTheCatalog:
+    """S3a: the driver owns the tree catalog and provisions it to the root and
+    every spawned child; runtime resolution never falls back to the live global."""
+
+    def test_driver_owns_catalog_and_provisions_children(self) -> None:
+        with CbpDriver() as driver:
+            driver.register("cat_driver_double", _double)
+            assert driver._root._catalog is driver._catalog
+            driver.configure(tasks=("cat_driver_double",))
+            driver.spawn("child")
+            assert driver._root.children["child"]._catalog is driver._catalog
+
+    def test_live_global_after_construction_is_not_consulted(self) -> None:
+        with CbpDriver() as driver:
+            # Registered in the shim only *after* the catalog was provisioned:
+            # the driver must not see it (no live-global fallback).
+            register_callable("late_global_only_double", _double)
+            response = driver.configure(tasks=("late_global_only_double",))
+            assert response.verified is False

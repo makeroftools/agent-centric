@@ -38,8 +38,9 @@ import zmq.asyncio
 
 from . import ledger as _ledger
 from . import transport as _transport
-from .agent import Agent, _resolve_entry, register_callable
+from .agent import Agent, register_callable
 from .audit import AuditChain
+from .component_catalog import ComponentCatalog
 from .config import AgentConfig
 from .envelopes import ResourceEnvelope
 from .message import (
@@ -184,6 +185,14 @@ class CbpDriver:
                 raise _transport.TransportSecurityError(
                     f"TLS profile requested but not ready: {tls_state['reason']}"
                 )
+        # The driver owns the tree's catalog and provisions it to the root
+        # (and, by inheritance, to every spawned child). SPEC-0002 Phase-1
+        # S3a: runtime resolution is parent-provisioned. `register_callable`
+        # remains a documented test/authoring shim; its entries are snapshotted
+        # here, once, so legacy callers keep working until S3b migrates them.
+        from .agent import _REGISTRY as _shim
+
+        self._catalog = ComponentCatalog.from_entries(dict(_shim))
         self._root = Agent(
             AgentConfig(
                 identity=identity,
@@ -193,6 +202,7 @@ class CbpDriver:
                 transport_security=security,
                 integrity_secret=integrity_secret,
                 curve=self._curve,
+                catalog=self._catalog,
             )
         )
         self._root.init()
@@ -383,9 +393,11 @@ class CbpDriver:
         agent's own registry, so ``resolve`` works without a prior ``configure``.
         """
         register_callable(name, fn, source_url=source_url)
-        self._root._registry.register_entry(_resolve_entry(name))
+        self._catalog.register(name, fn, source_url=source_url)
+        entry = self._catalog.entry(name)
+        assert entry is not None  # just registered
+        self._root._registry.register_entry(entry)
         if self._ledger_store is not None:
-            entry = _resolve_entry(name)
             self._ledger_store.record_callable(
                 name=name,
                 source_url=source_url,
@@ -548,9 +560,8 @@ class CbpDriver:
         task = payload.get("task")
         if not isinstance(task, str):
             return None
-        try:
-            entry = _resolve_entry(task)
-        except KeyError:
+        entry = self._catalog.entry(task)
+        if entry is None:
             return None
         fresh_verifier = self._root._verifier
         # The run directive may carry its own per-run verifier (``payload["verifier"]``)
@@ -564,9 +575,8 @@ class CbpDriver:
             try:
                 fresh.register(task, entry.callable if entry.callable else _noop)
                 for vname in verifier_names:
-                    try:
-                        ventry = _resolve_entry(vname)
-                    except KeyError:
+                    ventry = self._catalog.entry(vname)
+                    if ventry is None:
                         continue
                     fresh.register(
                         vname, ventry.callable if ventry.callable else _noop

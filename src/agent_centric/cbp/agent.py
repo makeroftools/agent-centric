@@ -983,6 +983,7 @@ class Agent:
                 transport_security=self._config.transport_security,
                 integrity_secret=self._config.integrity_secret,
                 curve=self._config.curve,
+                catalog=self._catalog,
             )
         )
         child.init()
