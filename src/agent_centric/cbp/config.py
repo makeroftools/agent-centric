@@ -12,9 +12,12 @@ directive/response protocol over the transport.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .message import PROTOCOL_VERSION
+
+if TYPE_CHECKING:
+    from .component_catalog import ComponentCatalog
 
 
 @dataclass(frozen=True)
@@ -39,6 +42,10 @@ class AgentConfig:
         curve: An optional ``CurveConfig``. When set, the agent encrypts its
             links with ZeroMQ CURVE (server for a bound ROUTER, client for a
             connecting DEALER). ``None`` (the default) keeps the transport plain.
+        catalog: An optional parent-provisioned component catalog
+            (SPEC-0002 Phase-1 S2). When given, the agent resolves granted
+            task/verifier names from it; when ``None`` (the default) the agent
+            keeps the documented module-global compatibility shim.
     """
 
     identity: str
@@ -49,3 +56,4 @@ class AgentConfig:
     transport_security: str = "local"
     integrity_secret: bytes | None = None
     curve: Any | None = None
+    catalog: ComponentCatalog | None = None

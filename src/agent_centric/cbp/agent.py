@@ -137,6 +137,10 @@ class Agent:
         self._children: dict[str, zmq.asyncio.Socket] = {}
         self._child_agents: dict[str, Agent] = {}
         self._registry = Registry()
+        # Parent-provisioned catalog (SPEC-0002 Phase-1 S2). ``None`` keeps
+        # the module-global compatibility shim; a provisioned catalog makes
+        # resolution explicit and fail-closed.
+        self._catalog = config.catalog
         self._rules: tuple[str, ...] = ()
         self._verifier: str | None = None
         # A hard, enforced resource envelope (see ``envelopes.py``). ``None``
@@ -575,6 +579,21 @@ class Agent:
             error=f"unknown directive kind {directive.kind!r}",
         )
 
+    def _catalog_entry(self, name: str) -> RegistryEntry:
+        """Resolve a granted name from the parent-provisioned catalog.
+
+        SPEC-0002 Phase-1 step S2: when a parent provisions a catalog
+        (``AgentConfig.catalog``), the child resolves only from it and an
+        absent name fails closed (``KeyError``). With no catalog the agent
+        keeps the documented module-global compatibility shim.
+        """
+        if self._catalog is not None:
+            entry = self._catalog.entry(name)
+            if entry is None:
+                raise KeyError(name)
+            return entry
+        return _resolve_entry(name)
+
     def _configure(self, directive: Directive) -> Response:
         """Configure the agent's rules and callable registry from the directive.
 
@@ -599,10 +618,10 @@ class Agent:
         elif isinstance(payload.get("verifier"), str):
             self._verifier = payload["verifier"]
         for name in payload.get("tasks", ()):
-            entry = _resolve_entry(name)
+            entry = self._catalog_entry(name)
             self._registry.register_entry(entry)
         for name in payload.get("verifiers", ()):
-            entry = _resolve_entry(name)
+            entry = self._catalog_entry(name)
             self._registry.register_entry(entry)
         # Durable, on-demand persistence, granted by the parent via paths. A
         # state path opens a single-writer store; a trajectory path opens an

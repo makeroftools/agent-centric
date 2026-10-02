@@ -53,6 +53,30 @@ class RegistryEntry:
     module: str = ""
     qualname: str = ""
 
+    @classmethod
+    def from_callable(
+        cls, name: str, fn: CallableT, *, source_url: str = ""
+    ) -> RegistryEntry:
+        """Build an entry from a callable, recording an importable source.
+
+        When ``fn`` is a plain, importable function (has a real module and
+        qualified name), its import location is recorded so a later process can
+        re-create the callable from source. A REPL/script-defined function
+        (``__main__`` or no module) records only the in-memory callable.
+        """
+        module = getattr(fn, "__module__", "") or ""
+        qualname = getattr(fn, "__qualname__", "") or ""
+        if module == "__main__" or not module:
+            module = ""
+            qualname = ""
+        return cls(
+            name=name,
+            callable=fn,
+            source_url=source_url,
+            module=module,
+            qualname=qualname,
+        )
+
 
 class Registry:
     """A stub registry of named agents/capabilities.
