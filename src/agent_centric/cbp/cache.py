@@ -35,8 +35,27 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _fsync_dir(path: Path) -> None:
+    """Best-effort fsync of a directory so a rename is durable."""
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError:  # pragma: no cover - platform-dependent
+        return
+    try:
+        os.fsync(fd)
+    except OSError:  # pragma: no cover - platform-dependent
+        pass
+    finally:
+        os.close(fd)
+
+
 def atomic_write(path: Path, data: bytes) -> None:
-    """Write ``data`` to ``path`` atomically (temp + fsync + os.replace)."""
+    """Write ``data`` to ``path`` atomically (temp + fsync + replace + dir fsync).
+
+    The file contents are fsynced before the rename and the parent directory is
+    fsynced after it, so an acknowledged write survives a crash (durability
+    parity with :func:`agent_centric.cbp.component_state.materialize_state`).
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=".tmp-", suffix=".part")
     tmp = Path(tmp_name)
@@ -46,6 +65,7 @@ def atomic_write(path: Path, data: bytes) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp, path)
+        _fsync_dir(path.parent)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise

@@ -48,3 +48,18 @@ class TestCache:
         cache = ContentAddressedCache(tmp_path)
         with pytest.raises(CacheError):
             cache.get("not-a-digest")
+
+    def test_put_repairs_a_corrupt_entry(self, tmp_path: Path) -> None:
+        cache = ContentAddressedCache(tmp_path)
+        digest = sha256_bytes(b"good")
+        atomic_write(tmp_path / digest[:2] / digest, b"evil")
+        assert cache.put(b"good") == digest
+        assert cache.get(digest) == b"good"
+
+    def test_atomic_write_leaves_no_temp_files(self, tmp_path: Path) -> None:
+        target = tmp_path / "dir" / "file"
+        atomic_write(target, b"data")
+        leftovers = [
+            entry.name for entry in (tmp_path / "dir").iterdir() if entry.name != "file"
+        ]
+        assert leftovers == []
