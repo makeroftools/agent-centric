@@ -10,6 +10,17 @@ owner: operator
 
 # Isolated holdout validator (the L3 gate)
 
+> **Implementation status.** The isolated validator core is built as an
+> importable library (`src/agent_centric/cbp/holdout.py`) behind the thin,
+> separate-process CLI (`tools/holdout-validate.py`). It supports the additive
+> `service` probe (boot a signed composition through the core harness and compare
+> a canonical-JSON projection), pins its own TCB, distinguishes infrastructure
+> flake from semantic nondeterminism, emits a wall-clock-free idempotent record,
+> has a synthetic known-good/known-bad `--self-test`, and enforces an advisory
+> principal guard. Operator-authored scenarios, the authoritative green run on a
+> distinct principal/host, and the `[levels.L3]` flip remain operator gates; see
+> the L3 milestone plan (`docs/agent/l3-milestone-plan.md`) and `HANDOFF.md`.
+
 ## Context
 
 `.agentfactory.toml` targets **L3 (dark-factory)** but keeps it `declared-gated`:
@@ -63,6 +74,14 @@ it is **not** the guarantee: with `bash: allow` it is advisory — which is exac
 why (1) and (2) carry the weight. The **authoritative L3 gate must not share a
 principal or host with the author**; the operator workstation is a rehearsal.
 
+**Advisory principal guard.** As defence in depth the probe run also refuses on a
+privileged principal (`geteuid() == 0`, or membership of the `docker` group,
+which is root-equivalent). This guard is **in-process only** and cannot prove
+host/principal isolation; that isolation is **environment-enforced** by facts
+(1) and (2). A `--rehearsal` run bypasses the guard for offline development and
+**records** `isolation: rehearsal`; only an `isolation: enforced` record is
+authoritative.
+
 ### 2. Scenario contract — deterministic and author-blind
 
 A scenario is Markdown + YAML front-matter in `specs/holdout/`, using the format
@@ -82,27 +101,45 @@ The body has two parts:
 - a **plain-language** statement of the required behaviour (for humans and the
   operator's record), and
 - a fenced `check` block: a **deterministic, declarative** probe naming a
-  `network.v1` / `service.v1` task and the expected observable (exit status, a
-  canonical-JSON projection, or a ledger state). There is **no free-form shell**;
-  the probe vocabulary is a pinned, additive contract, **`holdout.v1`**.
+  `service.v1` task, a booted composition, or a ledger state. There is **no
+  free-form shell**; the probe vocabulary is a pinned, additive contract,
+  **`holdout.v1`**, with two kinds:
+  - **`task`** — run the named task `target` (a `service.v1` task executable) and
+    require `expect_exit` (default `0`); a missing/unstartable task is
+    infrastructure flake, a wrong exit is semantic failure.
+  - **`service`** — load the scenario's operator-private
+    **`holdout.deployment/v1`** descriptor (content-pinned by
+    `deployment_sha256`), boot the signed composition under test through the core
+    harness (`boot_from_lock`), run its declared observable, and compare the
+    **canonical-JSON projection** to `expect` (or assert a fail-closed refusal
+    when `expect_refused` is true).
 
 Scenarios are content-addressed. The validator verifies a **`holdout.lock`**
-(suite hash + per-scenario digest + probe-contract hash) and refuses on any drift
-**before** running anything — the same fail-closed lock/contract discipline as
-the conformance certifier (exit `2` = refused before running).
+(suite hash + per-scenario digest + probe-contract hash + TCB pins) and refuses
+on any drift **before** running anything — the same fail-closed lock/contract
+discipline as the conformance certifier (`exit 3` = refused before running;
+`exit 2` is reserved for usage errors).
 
 ### 3. Ephemeral deployment, then teardown
 
 For each run the validator:
 
-1. boots the tree from the **signed, content-addressed lock under test**
+1. loads the scenario's **`holdout.deployment/v1`** descriptor (operator-private,
+   content-addressed) and verifies its `lock_hash` and referenced trust root; the
+   validator hard-codes **no** private path or slug;
+2. boots the tree from the **signed, content-addressed lock under test**
    (`cbp/boot_network.py` / `boot_from_lock`), verifying the lock signature and
    every entry signature;
-2. runs the scenario's probe against that tree with a **pinned deterministic
+3. runs the scenario's probe against that tree with a **pinned deterministic
    seed**, wall-clock frozen, no network, and no ambient filesystem;
-3. captures a deterministic observation, then tears the deployment down.
+4. captures a deterministic observation (the observable's canonical-JSON
+   projection), then tears the deployment down.
 
-Nothing persists between runs; every run is a fresh, reproducible instance.
+Nothing persists between runs; every run is a fresh, reproducible instance. A
+deployment descriptor that is missing or whose content address does not match its
+pin **refuses before running**. A tampered lock or entry signature inside the
+composition is a **scenario failure** (a negative scenario asserts the refusal
+with `expect_refused`), never a silent pass.
 
 ### 4. Supermajority and overall threshold
 
@@ -132,57 +169,69 @@ nondeterminism always fails.
   on a known-good / known-bad pair.
 - The validator is **TCB**: pinned, signed, content-addressed, and
   version-recorded (the SPEC-0013 doctrine for a foreign runtime), so a verdict
-  is reproducible and auditable.
+  is reproducible and auditable. `holdout.lock` pins `probe_contract_sha256` and
+  `validator_sha256`; the record carries `runtime`, `platform`,
+  `lock_sha256`, and `suite_sha256`.
 
 ### 6. Recording
 
-Every validator run emits a deterministic **holdout record** (`holdout.record/v1`:
-validator version, lock hash, suite hash, per-scenario verdicts, aggregate) and
+Every validator run emits a deterministic **holdout record**
+(`holdout.record/v1`: validator version + TCB hashes, runtime/platform, the
+`isolation` mode, lock hash, suite hash, per-scenario verdicts, aggregate) and
 appends it to an **append-only ledger** in the same operator-private root
 (`$HOME/.cbp/holdout/runs.jsonl`, mode `0600`). The record is pure — **no
 wall-clock** — so a retried run is **idempotent for its head**: a record whose
 content fingerprint is already present is never appended twice. The record is the
-evidence for the merge decision; a merge at L3 is reconstructible from it.
+evidence for the merge decision; a merge at L3 is reconstructible from it. Only a
+record with `isolation: enforced`, produced on a principal and host distinct from
+the author, is authoritative.
 
 ## Scope
 
 - **In:** the isolation model and its enforcement; the `holdout.v1` scenario
-  contract and `holdout.lock`; ephemeral deployment of the built tree; the
-  multi-run / supermajority / threshold decision rule; the level transition; and
-  the deterministic record.
+  contract (`task` + additive `service`), the `holdout.deployment/v1` descriptor,
+  and `holdout.lock`; ephemeral deployment of the built tree; the multi-run /
+  supermajority / threshold decision rule; the level transition; the
+  deterministic record; the TCB pins; the known-good/known-bad self-test; and the
+  component-ready boundary.
 - **Out:** scenario content (authored by the operator, author-blind); any change
   to `src/` verification semantics or the conformance contract; `review.v1`
   (SPEC-0017 §1); the formal-verification / Assurance-Label tiers A1–A4
-  (SPEC-0015); auto-labeling and RSI (SPEC-0017 §5); validator HA.
+  (SPEC-0015); auto-labeling and RSI (SPEC-0017 §5); validator HA; the
+  authoritative green run and the level flip (operator gates).
 
 ## Acceptance criteria
 
-- [ ] The authoring context cannot read `specs/holdout/` (deny rule present and
+- [x] The authoring context cannot read `specs/holdout/` (deny rule present and
       guard-tested); the validator runs as a separate process.
-- [ ] `holdout.v1` freezes the deterministic probe vocabulary; each scenario
-      carries a content-addressed digest and `holdout.lock` pins the suite.
-- [ ] The validator boots the signed lock under test, verifies signatures, and
+- [x] `holdout.v1` freezes the deterministic probe vocabulary (`task` + additive
+      `service`); each scenario carries a content-addressed digest and
+      `holdout.lock` pins the suite and the TCB.
+- [x] The validator boots the signed lock under test, verifies signatures, and
       refuses on lock/contract drift **before** running.
-- [ ] Each scenario runs R=3 on fresh ephemeral instances; pass = 2-of-3;
+- [x] Each scenario runs R=3 on fresh ephemeral instances; pass = 2-of-3;
       high-priority scenarios require all-run pass; the aggregate threshold is
       pinned.
-- [ ] Semantic nondeterminism fails closed; infrastructure flake is distinguished
+- [x] Semantic nondeterminism fails closed; infrastructure flake is distinguished
       and never silently passes.
-- [ ] A green run is required for an L3 merge; `.agentfactory.toml` flips to L3
+- [x] A green run is required for an L3 merge; `.agentfactory.toml` flips to L3
       only on the operator's deliberate edit, after the self-test.
-- [ ] Every run yields a deterministic record appended to the ledger.
-- [ ] The validator is pinned/signed/version-recorded, and a self-test proves it
-      fails a known-bad change.
+- [x] Every run yields a deterministic, wall-clock-free record appended to the
+      ledger.
+- [x] The validator is pinned/signed/version-recorded, and a `--self-test`
+      proves it fails a known-bad change.
+- [ ] The authoritative green run is produced on a principal/host distinct from
+      the author, and the operator flips the level. **(operator gate)**
 
 ## Phases
 
-| Phase | Deliverable |
-| --- | --- |
-| 0 | this spec; `holdout.v1` probe vocabulary + `holdout.lock` schema |
-| 1 | isolation enforcement (read-deny + separate validator process) and the guard test |
-| 2 | ephemeral deployment + deterministic observation; the `holdout` gate wired into `.agentfactory.toml` |
-| 3 | supermajority/threshold decisions, the record + ledger, and the known-good/known-bad self-test |
-| 4 | operator flips L3 `status`; auto-labeling (SPEC-0015) and RSI (SPEC-0017 §5) unblocked |
+| Phase | Deliverable | Status |
+| --- | --- | --- |
+| 0 | this spec; `holdout.v1` probe vocabulary + `holdout.lock` schema | done |
+| 1 | isolation enforcement (read-deny + separate validator process + advisory principal guard) and the guard tests | done |
+| 2 | ephemeral deployment + deterministic observation (`service` probe + `holdout.deployment/v1`); the `holdout` gate named in `.agentfactory.toml` | done (agent-side) |
+| 3 | supermajority/threshold decisions, the record + ledger, and the known-good/known-bad self-test | done |
+| 4 | operator flips L3 `status`; auto-labeling (SPEC-0015) and RSI (SPEC-0017 §5) unblocked | operator gate |
 
 ## Risks / invariants
 
@@ -196,3 +245,7 @@ evidence for the merge decision; a merge at L3 is reconstructible from it.
   operator edit, never a prompt side effect.
 - Determinism is the premise: supermajority absorbs flake, never semantic
   nondeterminism.
+- **Component-ready, graduated later.** The validator is a pure core library plus
+  a component-ready entry/contract; the authoritative validator lives **outside**
+  the composition it validates (bootstrap circularity). Tooling graduates in
+  order: lock compiler → validator/holdout → signing → provisioning.

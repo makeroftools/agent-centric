@@ -1,6 +1,6 @@
 # L3 milestone plan — L3-ready validator + honest rehearsal
 
-> **Status: agreed plan — NOT yet implemented.** This page is the mission-critical
+> **Status: implemented (agent-side, offline, under L1); operator gates remain.** This page is the mission-critical
 > handoff for the implementing session. It was produced in a roadmap-planning
 > session at the workspace root `cbp/` and is authoritative for **this milestone
 > only**. Read [`../../HANDOFF.md`](../../HANDOFF.md), [`../../AGENTS.md`](../../AGENTS.md),
@@ -8,6 +8,38 @@
 > with `PRINCIPLES.md`, the laws win. Operator gates are unchanged and must not be
 > crossed: real host provisioning/enrollment, any signing-key act, any public
 > publish, and any edit to [`../../.agentfactory.toml`](../../.agentfactory.toml).
+
+## 0. Implementation status (this session)
+
+Workstreams **A–D are implemented offline under L1**:
+
+- **A — validator upgrade.** The logic is extracted to the pure library
+  [`../../src/agent_centric/cbp/holdout.py`](../../src/agent_centric/cbp/holdout.py);
+  [`../../tools/holdout-validate.py`](../../tools/holdout-validate.py) is a thin
+  CLI. The additive **`service`** probe boots a signed composition through
+  `component_boot.boot_from_lock` via an operator-private content-addressed
+  **`holdout.deployment/v1`** descriptor and compares the observable's
+  canonical-JSON projection (or asserts a fail-closed refusal). `holdout.lock`
+  pins `probe_contract_sha256` and `validator_sha256`; the record adds `runtime`,
+  `platform`, `lock_sha256`, `suite_sha256`, and `isolation`. Exit semantics are
+  `0` green / `1` red / `2` usage / `3` refused (SPEC-0019 reconciled). A synthetic
+  `--self-test` proves the known-good/known-bad separation and ledger idempotency.
+  The advisory principal guard refuses `uid 0` / the `docker` group, with a
+  `--rehearsal` escape that **records** `isolation: rehearsal` (never
+  authoritative). A component-ready entry/contract is exposed; it is deliberately
+  **not** placed inside the composition under test.
+- **B — isolation runbook.** Authored in the private companion
+  (`infra/holdout/runbook.md`); the operator executes the group/ACL/root setup.
+- **C — scenario templates.** Format/templates only (no scenario content) in the
+  private companion (`infra/holdout/templates/`).
+- **D — hermetic acceptance + continuity.** Core tests
+  (`tests/test_holdout_service.py`) prove a deterministic green record on the
+  test-signed composition, the negative tamper cases, the principal guard, and
+  `--self-test`; the private companion adds a rehearsal test over its own
+  composition. This page and `HANDOFF.md` record the §3 invariants.
+
+The flip, scenario authoring, the authoritative validator run, key acts,
+provisioning, and any publish remain **operator gates** (see §10).
 
 ## 1. Goal
 

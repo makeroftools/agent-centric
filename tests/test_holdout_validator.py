@@ -8,29 +8,13 @@ author). The validator must fail closed on every drift and decide deterministica
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
-import sys
 from pathlib import Path
 
 import pytest
 
-_REPO = Path(__file__).resolve().parents[1]
-
-
-def _module():
-    spec = importlib.util.spec_from_file_location(
-        "cbp_holdout_validate", _REPO / "tools" / "holdout-validate.py"
-    )
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module  # dataclasses need the module registered
-    spec.loader.exec_module(module)
-    return module
-
-
-_M = _module()
+from agent_centric.cbp import holdout as _M
 
 _PASS = _M.RunOutcome.PASS
 _FAIL = _M.RunOutcome.FAIL
@@ -108,7 +92,7 @@ class TestIsolation:
 
 class TestFailClosed:
     def test_refuses_when_no_lock_exists(self, capsys: pytest.CaptureFixture[str]) -> None:
-        code = _M.main(["--lock", "/nonexistent/holdout.lock"], env=_VALIDATOR_ENV)
+        code = _M.main(["--lock", "/nonexistent/holdout.lock", "--rehearsal"], env=_VALIDATOR_ENV)
         assert code == _M.EXIT_REFUSED
         assert "no holdout lock" in json.loads(capsys.readouterr().out)["reason"]
 
@@ -121,7 +105,7 @@ class TestFailClosed:
         suite.mkdir()
         os.chmod(suite, 0o700)
         code = _M.main(
-            ["--lock", str(lock), "--suite", str(suite)], env=_VALIDATOR_ENV
+            ["--lock", str(lock), "--suite", str(suite), "--rehearsal"], env=_VALIDATOR_ENV
         )
         assert code == _M.EXIT_REFUSED
         assert "no scenarios" in json.loads(capsys.readouterr().out)["reason"]
@@ -303,7 +287,7 @@ class TestCliEndToEnd:
     def test_green_run(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         suite, tasks, lock = self._fixture(tmp_path)
         code = _M.main(
-            ["--suite", str(suite), "--lock", str(lock), "--tasks-dir", str(tasks)],
+            ["--suite", str(suite), "--lock", str(lock), "--tasks-dir", str(tasks), "--rehearsal"],
             env=_VALIDATOR_ENV,
         )
         assert code == _M.EXIT_OK
@@ -319,7 +303,7 @@ class TestCliEndToEnd:
         scenario = suite / "HO-0001.md"
         scenario.write_text(scenario.read_text(encoding="utf-8") + "\n", encoding="utf-8")
         code = _M.main(
-            ["--suite", str(suite), "--lock", str(lock), "--tasks-dir", str(tasks)],
+            ["--suite", str(suite), "--lock", str(lock), "--tasks-dir", str(tasks), "--rehearsal"],
             env=_VALIDATOR_ENV,
         )
         assert code == _M.EXIT_REFUSED
@@ -408,7 +392,7 @@ class TestSelfTest:
         ledger = tmp_path / "runs.jsonl"
         code = _M.main(
             ["--suite", str(suite), "--lock", str(lock), "--tasks-dir", str(tasks),
-             "--ledger", str(ledger)],
+             "--ledger", str(ledger), "--rehearsal"],
             env=_VALIDATOR_ENV,
         )
         return code, json.loads(capsys.readouterr().out), ledger
@@ -418,11 +402,12 @@ class TestSelfTest:
         assert code == _M.EXIT_OK and out["verdict"] == "green"
         entry = json.loads(ledger.read_text(encoding="utf-8").splitlines()[0])
         assert entry["validator_version"] == _M.VALIDATOR_VERSION
+        assert entry["isolation"] == "rehearsal"
         assert len(entry["lock_sha256"]) == 64
 
     def test_known_bad_is_red(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         code, out, _ = self._run(tmp_path, capsys, 1)
-        assert code == _M.EXIT_OK and out["verdict"] == "red"
+        assert code == _M.EXIT_RED and out["verdict"] == "red"
 
     def test_reruns_are_identical_and_ledger_is_single(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -440,7 +425,7 @@ class TestSelfTest:
         lock.write_text(json.dumps(_M.build_lock(_M.load_suite(suite))), encoding="utf-8")
         ledger = tmp_path / "runs.jsonl"
         args = ["--suite", str(suite), "--lock", str(lock), "--tasks-dir", str(tasks),
-                "--ledger", str(ledger)]
+                "--ledger", str(ledger), "--rehearsal"]
         first = _M.main(args, env=_VALIDATOR_ENV)
         out_first = capsys.readouterr().out
         second = _M.main(args, env=_VALIDATOR_ENV)
@@ -466,7 +451,7 @@ class TestPublicBoundaryGuard:
         lock = tmp_path / "holdout.lock"
         lock.write_text(json.dumps(_M.build_lock(_M.load_suite(suite))), encoding="utf-8")
         code = _M.main(
-            ["--suite", str(suite), "--lock", str(lock), "--tasks-dir", str(tasks)],
+            ["--suite", str(suite), "--lock", str(lock), "--tasks-dir", str(tasks), "--rehearsal"],
             env=_VALIDATOR_ENV,
         )
         assert code == _M.EXIT_REFUSED
