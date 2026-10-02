@@ -12,7 +12,7 @@
 [![Python](https://img.shields.io/badge/python-3.13%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 ![Ruff](https://img.shields.io/badge/lint-ruff-261230)
 ![mypy](https://img.shields.io/badge/types-mypy%20strict-2A6DB2)
-[![Tests](https://img.shields.io/badge/tests-1338%20passing-3fb950)](https://github.com/makeroftools/agent-centric/actions/workflows/gates.yml)
+[![Tests](https://img.shields.io/badge/tests-1708%20passing-3fb950)](https://github.com/makeroftools/agent-centric/actions/workflows/gates.yml)
 ![cbp-check](https://img.shields.io/badge/cbp--check-8%2F8%20READY-38bdf8)
 [![License](https://img.shields.io/badge/license-MPL--2.0-blue)](LICENSE)
 ![Mode](https://img.shields.io/badge/mode-L1%20assisted-a78bfa)
@@ -362,34 +362,18 @@ tests/                 Invariants across every volley
 
 ## Roadmap
 
-The target architecture is specified, not hand-waved. Status is honest — no claim
-exceeds the suite.
+**Capability is easy. Trust is the product.** The platform is built so that every
+result is either *proven* or *explicitly refused* — and the roadmap is the honest
+story of earning more autonomy through more verification.
 
-| Spec | Theme | Status |
-| --- | --- | --- |
-| [SPEC-0002](specs/SPEC-0002-cbp-component-architecture.md) | CBP component architecture | Target; MVP delivered |
-| [SPEC-0007](specs/SPEC-0007-harness-shell-component-distribution.md) | Harness/shell split + component distribution | Phases 0–2 delivered; live mirror pending |
-| [SPEC-0008](specs/SPEC-0008-shell-design-interface-n8n.md) | Shell design interface + n8n authoring | Phase 1 delivered; n8n adapter pending |
-| [SPEC-0009](specs/SPEC-0009-fbp-abm-conformance.md) | FBP/ABM conformance — ports, IPs, subnets | Slices 1–3a delivered; streaming + external-ports guard pending |
-| [SPEC-0010](specs/SPEC-0010-extensibility-knowledge-graphs-rsi.md) | Extensibility — knowledge graphs + bounded RSI | Draft / roadmap |
+The foundation is **delivered and cross-checked on two independent runtimes**. What
+remains is **earned autonomy** (the L3 milestone), **self-hosting** (a platform
+that deploys and heals itself), **threshold signing**, and a **research frontier**
+of formal verification and bounded self-improvement.
 
-<details>
-<summary><strong>What is already implemented &amp; tested</strong></summary>
-
-- Convention layer: `AGENTS.md` TOC, canonical skills, scaffold, same-name
-  component mapping — guarded by a convention test.
-- Distribution spine: `component.v1` + `components.lock/v1`, content-addressed
-  atomic cache, deterministic resolver, signature verification, offline directory
-  and git sources.
-- Composite components with SQLite state (path-safe, WAL, integrity-checked,
-  atomic), deterministic dependency-ordered graph resolution.
-- Boot-from-lock, process-isolated execution, release signing, and an
-  append-only hash-chained transparency log.
-- `design.v1` authoring (validate + compile) and first-class `network.v1`
-  **ports**, **bounded connections**, **Information-Packet flow**, and
-  **per-port IIP documents**.
-
-</details>
+➡️ **Read the full roadmap: [`ROADMAP.md`](ROADMAP.md)** — a plain-language guide
+to where the system is today, where it is going, and the detail behind every
+claim.
 
 ---
 
@@ -424,6 +408,7 @@ Working in this repository:
 | [`AGENTS.md`](AGENTS.md) | Agent entry point; points to every rule. |
 | [`PRINCIPLES.md`](PRINCIPLES.md) | Non-negotiable rules. |
 | [`HANDOFF.md`](HANDOFF.md) | Current session-continuity one-pager. |
+| [`ROADMAP.md`](ROADMAP.md) | The human-facing roadmap: where we are and where we're going. |
 | [`.agents/skills/`](.agents/skills) | Canonical Agent Skills (on-demand agent convention layer). |
 | [`docs/agent/`](docs/agent/README.md) | Human map of the convention layer. |
 | [`docs/agent/architecture.md`](docs/agent/architecture.md) | The two-layer harness/shell architecture. |
