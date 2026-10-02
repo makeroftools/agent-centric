@@ -287,7 +287,9 @@ system makes that drift **fail closed** instead of trusting memory.
 4. Update [`ROADMAP.md`](ROADMAP.md) if a horizon or spec status moved.
 5. If the **conformance** or **Rust host** suites moved, update the four ratios
    here and in `ROADMAP.md` together. The private companion points here for the
-   core count and keeps only its own count.
+   core count, keeps only its own count, and mirrors this guard
+   (`infra/tests/test_docs_freshness.py`) to cross-check the four ratios across
+   every sibling doc.
 6. Run `uv run pytest tests/test_docs_freshness.py` — green means the documents
    agree with reality.
 
