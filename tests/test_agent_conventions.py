@@ -9,6 +9,7 @@ only; it never touches ``$HOME``.
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import os
 import re
@@ -16,6 +17,15 @@ import tomllib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _last_matching_action(rules: dict[str, str], path: str) -> str | None:
+    """Return the action of the LAST rule matching ``path`` (opencode order)."""
+    action: str | None = None
+    for pattern, candidate in rules.items():
+        if fnmatch.fnmatch(path, pattern):
+            action = candidate
+    return action
 SKILLS_DIR = REPO_ROOT / ".agents" / "skills"
 
 _VALID_LEVELS = {"L0", "L1", "L2", "L3"}
@@ -268,6 +278,25 @@ class TestEnforcement:
     def test_opencode_loads_the_convention_map(self) -> None:
         cfg = json.loads(_read("opencode.json"))
         assert "docs/agent/README.md" in cfg["instructions"]
+
+    def test_opencode_denies_reading_holdout_scenarios(self) -> None:
+        """SPEC-0019: the authoring context cannot read specs/holdout/."""
+        cfg = json.loads(_read("opencode.json"))
+        rules = cfg["permission"]["read"]
+        assert rules["*"] == "allow"
+        assert _last_matching_action(rules, "specs/holdout/HO-0001.md") == "deny"
+        assert (
+            _last_matching_action(rules, "src/agent_centric/cbp/cache.py")
+            == "allow"
+        )
+
+    def test_holdout_validator_is_a_separate_fail_closed_process(self) -> None:
+        """SPEC-0019: the validator is a distinct, context-gated executable."""
+        script = REPO_ROOT / "tools" / "holdout-validate.py"
+        assert script.is_file()
+        assert os.access(script, os.X_OK), "the validator must be executable"
+        text = _read("tools/holdout-validate.py")
+        assert "CBP_HOLDOUT_CONTEXT" in text
 
     def test_sanctioned_mutation_primitive_exists(self) -> None:
         assert (REPO_ROOT / "tools" / "safe-replace.sh").is_file()
