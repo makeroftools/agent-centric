@@ -665,6 +665,22 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Port of the running server to stop (default: 8790).",
     )
 
+    p_cbp_ui = sub.add_parser(
+        "cbp-ui",
+        help="Render a ui.v1 projection to a target (web|cli; SPEC-0022).",
+    )
+    p_cbp_ui.add_argument(
+        "--target",
+        choices=("web", "cli"),
+        default="cli",
+        help="UI target to render to (default: cli).",
+    )
+    p_cbp_ui.add_argument(
+        "--schema",
+        default=None,
+        help="Projection schema when stdin is raw data (else read the envelope).",
+    )
+
     p_cbp_replay = sub.add_parser(
         "cbp-replay",
         help="Re-open a durable directive ledger and re-verify (replay) it.",
@@ -1409,6 +1425,46 @@ def _cmd_cbp_web_kill(*, port: int = 8790) -> int:
     return 0
 
 
+def _cmd_cbp_ui(target: str, schema: str | None) -> int:
+    """Render a ``ui.v1`` projection from stdin to a UI target (SPEC-0022).
+
+    Reads a JSON projection from stdin -- either the full
+    ``{schema, assurance, data}`` envelope or raw data plus ``--schema`` -- and
+    renders the matching component of the default pinned composition to ``web``
+    or ``cli``. Pure, offline, deterministic; it executes nothing and mutates
+    nothing, so the same projection renders identically on both targets.
+    """
+    from agent_centric.cbp.ui_runtime import Projection, UIError, default_ui_composition
+
+    raw = sys.stdin.read()
+    try:
+        payload = json.loads(raw) if raw.strip() else {}
+    except ValueError as exc:
+        print(f"cbp-ui: stdin is not JSON: {exc}", file=sys.stderr)
+        return 2
+    try:
+        if isinstance(payload, dict) and "schema" in payload and "data" in payload:
+            projection = Projection.from_dict(payload)
+        elif schema:
+            projection = Projection.of(schema, payload)
+        else:
+            print(
+                "cbp-ui: stdin has no projection envelope; pass --schema",
+                file=sys.stderr,
+            )
+            return 2
+    except (KeyError, ValueError) as exc:
+        print(f"cbp-ui: malformed projection: {exc}", file=sys.stderr)
+        return 2
+    try:
+        result = default_ui_composition().render(target=target, projection=projection)
+    except UIError as exc:
+        print(f"cbp-ui: {exc}", file=sys.stderr)
+        return 2
+    sys.stdout.write(result.output)
+    return 0
+
+
 def _pid_on_port(port: int) -> int | None:
     """Return the PID listening on ``port`` (loopback), or None."""
     import subprocess
@@ -1594,6 +1650,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.command == "cbp-web-kill":
         return _cmd_cbp_web_kill(port=args.port)
+    if args.command == "cbp-ui":
+        return _cmd_cbp_ui(args.target, args.schema)
     if args.command == "cbp-replay":
         return _cmd_cbp_replay(args.ledger_path, args.transport)
     if args.command == "cbp-summary":

@@ -598,3 +598,82 @@ class TestFailClosed:
                 assert exc.code == 404
         finally:
             srv.close()
+
+
+class TestUiComposition:
+    """The additive ui.v1 read composition (SPEC-0022) over the real server.
+
+    Existing routes are unchanged (covered above); these exercise the new
+    target-agnostic ``/ui`` surface end-to-end, including target selection,
+    composition metadata, and the default-deny directive boundary.
+    """
+
+    def test_ui_web_surface_renders(self, monkeypatch) -> None:
+        srv = _BoundServer(monkeypatch)
+        try:
+            status, ctype, html = srv.get("/ui")
+            assert status == 200
+            assert "text/html" in ctype
+            assert "Agent tree" in html
+            assert "Directive ledger" in html
+        finally:
+            srv.close()
+
+    def test_ui_cli_surface_renders_plain_text(self, monkeypatch) -> None:
+        srv = _BoundServer(monkeypatch)
+        try:
+            status, ctype, text = srv.get("/ui?target=cli")
+            assert status == 200
+            assert "text/plain" in ctype
+            assert "Agent tree" in text
+        finally:
+            srv.close()
+
+    def test_ui_meta_reports_pinned_composition(self, monkeypatch) -> None:
+        srv = _BoundServer(monkeypatch)
+        try:
+            status, ctype, body = srv.get("/ui/meta")
+            assert status == 200
+            assert "application/json" in ctype
+            data = json.loads(body)
+            assert data["ok"] is True
+            assert data["targets"] == ["web", "cli"]
+            assert len(data["composition_hash"]) == 64
+            assert "cbp.tree-view" in data["components"]
+        finally:
+            srv.close()
+
+    def test_ui_directive_is_default_deny(self, monkeypatch) -> None:
+        srv = _BoundServer(monkeypatch)
+        try:
+            status, _, body = srv.post(
+                "/ui/directive",
+                json.dumps(
+                    {"component": "cbp.diagram-view", "name": "open-review", "args": {}}
+                ),
+            )
+            data = json.loads(body)
+            assert status == 200
+            assert data["ok"] is True
+            assert data["executed"] is False
+            assert len(data["content_hash"]) == 64
+            _, _, denied = srv.post(
+                "/ui/directive",
+                json.dumps({"component": "cbp.diagram-view", "name": "delete-all"}),
+            )
+            assert json.loads(denied)["ok"] is False
+        finally:
+            srv.close()
+
+    def test_ui_unknown_target_returns_404(self, monkeypatch) -> None:
+        srv = _BoundServer(monkeypatch)
+        try:
+            import urllib.error
+
+            try:
+                srv.get("/ui?target=os")
+                raise AssertionError("expected 404")
+            except urllib.error.HTTPError as exc:
+                assert exc.code == 404
+        finally:
+            srv.close()

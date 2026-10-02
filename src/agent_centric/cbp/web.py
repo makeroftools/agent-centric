@@ -29,6 +29,7 @@ import os
 import queue
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 import webbrowser
 from collections.abc import Iterator
@@ -814,6 +815,102 @@ class CbpLandingServer:
             "count": len(self._driver.ledger()),
         }
 
+    # -- UI targets (ui.v1; SPEC-0022) — additive read projection -----------
+
+    def _ui_projections(self) -> dict[str, Any]:
+        """The granted projections for the pinned UI read composition.
+
+        Read-only and deterministic: the live tree and the recorded ledger,
+        projected as pinned documents with honest assurance. A schema with no
+        data is simply absent, so the matching UI component is skipped (the
+        surface degrades, it never guesses).
+        """
+        from .ui_runtime import (
+            LEDGER_PROJECTION_SCHEMA,
+            TREE_PROJECTION_SCHEMA,
+            Projection,
+        )
+
+        projections: dict[str, Projection] = {}
+        projections[TREE_PROJECTION_SCHEMA] = Projection.of(
+            TREE_PROJECTION_SCHEMA, self._page_state()
+        )
+        projections[LEDGER_PROJECTION_SCHEMA] = Projection.of(
+            LEDGER_PROJECTION_SCHEMA, self._ledger_state()
+        )
+        return projections
+
+    def _ui_surface(self, target: str, schema: str | None) -> dict[str, Any]:
+        """Render the pinned UI composition for a target over the read projections.
+
+        Read-only and deterministic. ``schema`` optionally narrows the projections
+        to one granted document. Unknown, target-incompatible, or ABI-incompatible
+        UI is skipped and the surface degrades to the raw projection.
+        """
+        from .ui_runtime import UIError, default_ui_composition
+
+        projections = self._ui_projections()
+        if schema is not None:
+            if schema not in projections:
+                return {"ok": False, "error": f"unknown projection schema {schema!r}"}
+            projections = {schema: projections[schema]}
+        try:
+            result = default_ui_composition().render_document(
+                target=target, projections=projections
+            )
+        except UIError as exc:
+            return {"ok": False, "error": str(exc)}
+        return {"ok": True, "surface": result.to_dict(), "output": result.output}
+
+    def _ui_meta(self) -> dict[str, Any]:
+        """Read-only metadata for the pinned UI composition (target-agnostic)."""
+        from .ui_runtime import AVAILABLE_TARGETS, default_ui_composition
+
+        assembly = default_ui_composition()
+        return {
+            "ok": True,
+            "targets": list(AVAILABLE_TARGETS),
+            "composition_hash": assembly.composition_hash,
+            "components": [component.id for component in assembly.components()],
+        }
+
+    def _ui_directive(self, body: str) -> dict[str, Any]:
+        """Submit a UI directive as a content-addressed intent (default deny).
+
+        The target never mutates platform state: this validates the directive
+        against the component manifest and returns the pinned intent (whether it
+        needs approval). Execution through the verified spine is out of scope for
+        this read surface, so ``executed`` is always false.
+        """
+        from .ui_runtime import default_ui_composition, submit_directive
+
+        try:
+            payload = json.loads(body or "{}") if body else {}
+        except ValueError as exc:
+            return {"ok": False, "error": f"invalid JSON body: {exc}"}
+        if not isinstance(payload, dict):
+            return {"ok": False, "error": "body must be a JSON object"}
+        component_id = str(payload.get("component") or "")
+        name = str(payload.get("name") or "")
+        args = payload.get("args")
+        if args is not None and not isinstance(args, dict):
+            return {"ok": False, "error": "'args' must be an object"}
+        for ref in default_ui_composition().refs():
+            if ref.component.id != component_id:
+                continue
+            try:
+                directive = submit_directive(ref.component, name, args)
+            except ValueError as exc:
+                return {"ok": False, "error": str(exc)}
+            return {
+                "ok": True,
+                "component": component_id,
+                "directive": directive.to_dict(),
+                "content_hash": directive.content_hash(),
+                "executed": False,
+            }
+        return {"ok": False, "error": f"unknown UI component {component_id!r}"}
+
     # -- server wiring -----------------------------------------------------
 
     def serve_forever(self) -> None:
@@ -1026,6 +1123,11 @@ class CbpLandingServer:
                     # 200 when the platform can do verified work, 503 otherwise.
                     ready = server._readiness()
                     self._send_json(ready, code=200 if ready.get("ready") else 503)
+                elif self.path.startswith("/ui"):
+                    # Target-agnostic UI composition (SPEC-0022): a pure,
+                    # read-only projection of the read routes to the requested
+                    # target (web|cli). Existing routes are unchanged.
+                    self._serve_ui()
                 else:
                     self._send_html(
                         _render_landing(server._page_state(), error="unknown path"),
@@ -1071,6 +1173,35 @@ class CbpLandingServer:
                     self.send_header(k, v)
                 self.end_headers()
                 self.wfile.write(data)
+
+            def _serve_ui(self) -> None:
+                """Serve the pinned UI read composition to a target (read-only)."""
+                parsed = urllib.parse.urlparse(self.path)
+                query = urllib.parse.parse_qs(parsed.query)
+                target = (query.get("target") or ["web"])[0]
+                schema_values = query.get("schema")
+                schema = schema_values[0] if schema_values else None
+                if parsed.path == "/ui/meta":
+                    self._send_json(server._ui_meta())
+                    return
+                if parsed.path == "/ui/directive":
+                    self._send_json(server._ui_directive(self._read_body()))
+                    return
+                result = server._ui_surface(target, schema)
+                if not result.get("ok"):
+                    self._send_json(result, code=404)
+                    return
+                if target == "cli":
+                    data = str(result["output"]).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/plain; charset=utf-8")
+                    self.send_header("Content-Length", str(len(data)))
+                    for key, value in self._security_headers():
+                        self.send_header(key, value)
+                    self.end_headers()
+                    self.wfile.write(data)
+                else:
+                    self._send_html(str(result["output"]))
 
             def _serve_sse_stream(
                 self,

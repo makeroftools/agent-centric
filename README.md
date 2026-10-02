@@ -12,7 +12,7 @@
 [![Python](https://img.shields.io/badge/python-3.13%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 ![Ruff](https://img.shields.io/badge/lint-ruff-261230)
 ![mypy](https://img.shields.io/badge/types-mypy%20strict-2A6DB2)
-[![Tests](https://img.shields.io/badge/tests-1926%20passing-3fb950)](https://github.com/makeroftools/agent-centric/actions/workflows/gates.yml)
+[![Tests](https://img.shields.io/badge/tests-1975%20passing-3fb950)](https://github.com/makeroftools/agent-centric/actions/workflows/gates.yml)
 ![cbp-check](https://img.shields.io/badge/cbp--check-8%2F8%20READY-38bdf8)
 [![License](https://img.shields.io/badge/license-MPL--2.0-blue)](LICENSE)
 ![Mode](https://img.shields.io/badge/mode-L2%20light-factory-a78bfa)

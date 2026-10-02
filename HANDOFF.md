@@ -13,7 +13,7 @@ L3, gated. The suite is a release gate; a human holds the review gate. Never act
 above L2 without the operator editing [`.agentfactory.toml`](.agentfactory.toml).
 
 **All four repos on `main`, clean, pushed.** Verify with §"Verify everything"
-(authoritative): core **1926 passed**, `mypy` 138, `cbp-check` READY; conformance
+(authoritative): core **1975 passed**, `mypy` 139, `cbp-check` READY; conformance
 shared **31/31** + network **14/14** + appointed **8/8**; pro **31/31 + 10/10 +
 14/14 + 8/8**; infra **118 passed, 2 skipped**; basedpyright **0/0/0**.
 
@@ -29,11 +29,19 @@ shared **31/31** + network **14/14** + appointed **8/8**; pro **31/31 + 10/10 +
   vultr-cli, bitwarden-cli, nixos-anywhere; `flake.lock`; CI-gated) and a named,
   read-only **Vultr inventory tool** (`tools/vultr_observe.py`). The **local CD
   substrate** (Gitea + OpenBao, loopback) is **up and seeded** on this host.
+- **SPEC-0022 UI targets** — `cbp/ui_runtime.py`: deterministic, stdlib-only
+  `web` + `cli` renderers over one `ui.v1` manifest (target-agnostic), a pinned
+  read composition (`cbp.web.read`), a provenance-tiered sandbox, default-deny
+  content-addressed directives, and additive read-only `/ui` routes in
+  `cbp/web.py` (existing routes unchanged); 49 tests.
 
-**Next (below-gate):** implement the **UI targets** — a minimal `web` and `cli`
-target that renders a `ui.v1` component to its medium (proving target-agnosticism);
-then extract `cbp/web.py`'s read routes into a pinned UI composition, additively
-(existing routes unchanged). See [`SPEC-0022`](specs/SPEC-0022-frontend-and-components.md).
+**Next (below-gate):** the additive SPEC-0022 remainder — a shared `ui.v1`
+conformance suite (conformance + Rust host vectors) and a pinned UI ref on a
+behavior component (its own content address unchanged). Nothing else in core is
+buildable below the gates: the concrete `provider.v1` manifest/task wiring is
+host-specific (`infra/`), and the L3 flip, Vultr provisioning, SPEC-0018
+Phases 3–6, re-signing the composition/umbrella locks, and any publish remain
+operator-gated. See [`SPEC-0022`](specs/SPEC-0022-frontend-and-components.md).
 
 **Parked / operator-gated:** Vultr provisioning (P1) — the token works
 (`VULTR_PERSONAL_ACCESS_TOKEN`) and the read-only observe is green (regions/plans/
@@ -115,6 +123,34 @@ synthetic known-good/known-bad `--self-test`, and an **advisory principal guard*
 entry/contract is exposed, never placed inside the composition under test.
 Operator-authored scenarios, the authoritative `isolation: enforced` green run on
 a distinct principal/host, and the L3 flip remain operator gates.
+
+## Latest session (UI targets — delivered under L2)
+
+The SPEC-0022 **UI targets** are implemented, tested, and green
+([`src/agent_centric/cbp/ui_runtime.py`](src/agent_centric/cbp/ui_runtime.py)):
+
+- **Two targets, one manifest.** Deterministic, stdlib-only `web` (script-free
+  HTML) and `cli` (text/ANSI) renderers consume the **target-neutral tree** one
+  `ui.v1` component's `render` produces; the same manifest and pinned projection
+  render byte-identically to each medium (a pure function of the pinned
+  document).
+- **Reference components + a pinned composition.** `TreeView`, `LedgerView`, and
+  `DiagramView` project the existing `cbp/web.py` read routes; the default
+  composition (`cbp.web.read`) is **content-addressed before it renders**.
+  Unknown or target/ABI-incompatible UI is **skipped**, and the surface
+  **degrades to the raw projection** rather than failing whole.
+- **Security first.** Strict UI-ABI negotiation; a provenance-tiered sandbox
+  (`trusted` keeps its declared capabilities, `appointed` runs A0, `discovered`
+  refuses unless explicitly allowed); default-deny projections/directives;
+  directives are content-addressed **intents** that execute nothing; secret
+  material never enters a projection, manifest, or record.
+- **Additive edges.** `cbp/web.py` gains read-only `/ui`, `/ui/meta`, and
+  `/ui/directive` routes (existing routes unchanged); `agent-centric cbp-ui`
+  renders a projection from stdin to `web` or `cli`. `component-abi.v1` stays
+  frozen; no new node kind; core stays headless and dependency-free.
+
+Core suite **1926 → 1975 passed** (+49); `mypy` 139 files; `ruff`/`cbp-check`
+green; basedpyright **0/0/0**. No operator gate was touched.
 
 ## Latest session (UI ABI v1 — delivered under L2)
 
@@ -475,7 +511,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 138 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1926 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1975 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -557,7 +593,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (138 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1926 passed** (~65 s).
+  convention + home-path guard passed; full suite **1975 passed** (~65 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -667,7 +703,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > `pro/AGENTS.md`, `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm
 > **all four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and
 > clean, then run `core/HANDOFF.md`'s verification block (expect: `cbp-check`
-> READY, **1926 passed**; shared **31/31** in-process + external + Rust; WASM
+> READY, **1975 passed**; shared **31/31** in-process + external + Rust; WASM
 > **10/10**; network **14/14**; appointed **8/8**; infra **118 passed + 2
 > skipped**; basedpyright **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL`
 > workaround before any pytest run.
