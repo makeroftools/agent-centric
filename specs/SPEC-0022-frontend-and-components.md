@@ -151,6 +151,15 @@ dynamicism second** — where they conflict, security wins (fail-closed).
     surface: the spec extracts its surfaces into declared UI components and a
     pinned composition without changing existing routes or behavior.
 
+## Artifacts
+
+- `conformance/contracts/ui-v1.wit` — the typed, target-agnostic UI world
+  (`cbp:ui@1.0.0`); `conformance/contracts/UI-ABI.md` — the normative companion
+  (targets, projections/directives, sandbox, assembly); `ui.lock.v1.json` — the
+  content address via the pinned `wasm-tools` resolver.
+- `core/src/agent_centric/contracts/ui.py` — the pure, canonical,
+  content-hashable `ui.v1` manifest and the default-deny boundary helpers.
+
 ## Scope
 
 - **In:** the target-agnostic `ui.v1` contract; UI targets (web/cli/os/embedded)

@@ -124,6 +124,18 @@ from .trajectory import (
     Trajectory,
     TrajectoryVersion,
 )
+from .ui import (
+    UI_ABI_VERSION,
+    UI_SCHEMA,
+    Assurance,
+    DirectiveBinding,
+    UIComponent,
+    UIReport,
+    UITarget,
+    assert_directive_declared,
+    assert_projection_granted,
+    validate_ui,
+)
 from .work import (
     CONTROL_CHANNEL,
     DATA_CHANNEL,
@@ -301,4 +313,15 @@ __all__ = [
     "admit_task_load",
     "assert_work_executable",
     "compile_work",
+    # UI contract (ui.v1; SPEC-0022): target-agnostic component-provided UI
+    "UI_SCHEMA",
+    "UI_ABI_VERSION",
+    "UITarget",
+    "Assurance",
+    "DirectiveBinding",
+    "UIComponent",
+    "UIReport",
+    "validate_ui",
+    "assert_projection_granted",
+    "assert_directive_declared",
 ]

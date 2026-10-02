@@ -74,6 +74,30 @@ entry/contract is exposed, never placed inside the composition under test.
 Operator-authored scenarios, the authoritative `isolation: enforced` green run on
 a distinct principal/host, and the L3 flip remain operator gates.
 
+## Latest session (UI ABI v1 — delivered under L2)
+
+The UI ABI is authored and content-addressed, and its core manifest is
+implemented and tested:
+
+- **`conformance/contracts/ui-v1.wit`** — the target-agnostic **UI world**
+  (`cbp:ui@1.0.0`): a UI component exports `describe`/`render`/`handle` and
+  imports the host boundary (`get-projection`/`submit-directive`/`log`); no
+  execution capability, no ambient authority. Resolved with the pinned
+  `wasm-tools` **1.260.0**.
+- **`conformance/contracts/UI-ABI.md`** — the normative companion (targets,
+  projection/directive boundary, mandatory provenance-tiered sandboxing,
+  verify-before-execute, assembly/pinning); **`ui.lock.v1.json`** pins
+  `source_sha256`, `ui_md_sha256`, and `resolved_sha256`.
+- **`core/src/agent_centric/contracts/ui.py`** — the pure, canonical,
+  content-hashable `ui.v1` manifest (`UIComponent`, `UITarget`
+  web/cli/os/embedded, `DirectiveBinding`, `validate_ui` with strict ABI
+  negotiation, and default-deny `assert_projection_granted` /
+  `assert_directive_declared`), with **20 tests**. `component-abi.v1` stays
+  frozen; no new node kind.
+
+Core suite **1906 → 1926 passed** (+20); `mypy` 138 files; `ruff`/`cbp-check`
+green. No operator gate was touched.
+
 ## Latest session (front-end spec + local substrate — under L2)
 
 - **SPEC-0022 drafted**
@@ -407,9 +431,9 @@ The validator is TCB: pin, sign, content-address, and record it.
 cd core
 uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
-uv run mypy src                                       # -> 130 files, clean
+uv run mypy src                                       # -> 138 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1906 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1926 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -490,8 +514,8 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
   commit hash written in prose — it drifts. Read the live tips instead:**
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
-- Core gates: `ruff` clean; `mypy` clean (130 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1906 passed** (~65 s).
+- Core gates: `ruff` clean; `mypy` clean (138 files); `cbp-check` **READY (8/8)**;
+  convention + home-path guard passed; full suite **1926 passed** (~65 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -601,7 +625,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > `pro/AGENTS.md`, `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm
 > **all four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and
 > clean, then run `core/HANDOFF.md`'s verification block (expect: `cbp-check`
-> READY, **1906 passed**; shared **31/31** in-process + external + Rust; WASM
+> READY, **1926 passed**; shared **31/31** in-process + external + Rust; WASM
 > **10/10**; network **14/14**; appointed **8/8**; infra **118 passed + 2
 > skipped**; basedpyright **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL`
 > workaround before any pytest run.
@@ -909,7 +933,10 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   provenance-tiered capability sandboxing** (security over dynamicism);
   verify-before-execute with strict UI-ABI negotiation; pure projections of pinned
   documents; directives through the verified spine. Formalizes `cbp/web.py` as the
-  `web` v0 target. No implementation yet.
+  `web` v0 target. The typed **UI ABI** is authored and content-addressed
+  (`conformance/contracts/ui-v1.wit` + `UI-ABI.md` + `ui.lock.v1.json`), and
+  the core `ui.v1` manifest (`contracts/ui.py`) is implemented and green
+  (20 tests). The target bindings and assembly remain unimplemented.
 
 ## Next
 
