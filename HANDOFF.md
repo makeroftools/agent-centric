@@ -74,6 +74,38 @@ entry/contract is exposed, never placed inside the composition under test.
 Operator-authored scenarios, the authoritative `isolation: enforced` green run on
 a distinct principal/host, and the L3 flip remain operator gates.
 
+## Latest session (SPEC-0020/0021 additive contracts — delivered under L1)
+
+The two operator-ratified contracts are **implemented, tested, and pushed**,
+additively, each as its own L1-reviewed commit; `component-abi.v1` stays frozen
+and the legacy `task.v1` is untouched:
+
+- **`provider.v1`** ([`src/agent_centric/contracts/provider.py`](src/agent_centric/contracts/provider.py),
+  SPEC-0020, 61 tests). A thin provider manifest (local-first/cloud target,
+  capabilities, named `plan`/`apply`/`health`/`teardown` tasks, secret **refs
+  only**, grants) over the `service.v1` task discipline. Pure `plan_provider`
+  (content-addressed, byte-deterministic, no I/O); verify-then-apply gates
+  (`assert_plan_appliable`: drift / unpinned / unapproved destructive-or-cloud
+  refused; `assert_task_appliable`: idempotent or gated, mutating pinned); a
+  deterministic `reconcile_action` (`converged`/`apply`/`rollback`/`escalate`);
+  an **emit-only** `NotificationBinding` (only `notify.emit`, never mutating);
+  and `validate_provider` (cloud requires the explicit `provider.cloud` grant).
+- **`work.v1`** ([`src/agent_centric/contracts/work.py`](src/agent_centric/contracts/work.py),
+  SPEC-0021, 49 tests). A declarative, content-addressed recipe (obtain a pinned
+  source **or** generate from a pinned `model` generator; build; verifier;
+  envelope; grants) that `compile_work` maps **purely** onto a `component.v1`
+  (identical recipe ⇒ byte-identical artifact). `assert_work_executable`
+  refuses generated work until it passes its verifier/conformance; the dynamic
+  task-load protocol (`TaskAnnouncement`/`TaskLoad`/`admit_task_load`) is
+  explicit and fail-closed before any bind, with the task identity its **signed
+  content hash**, never its ports.
+
+Core suite **1713 → 1823 passed**; `mypy` 132 files; `ruff`/`cbp-check` green;
+basedpyright 0/0/0. **No operator gate was touched.** The runtime realization
+(provider adapter + reconcile/health/rollback loop, the notification component,
+and the `work.v1` compiler + dynamic task-load binder) is the next buildable
+unit below the gates.
+
 ## Latest session (spec authoring — Service Hosting + Components; charters)
 
 Four new artifacts were authored (all `draft`; no implementation, no operator gate
@@ -245,7 +277,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 130 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1774 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1823 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -327,7 +359,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (130 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1774 passed** (~67 s).
+  convention + home-path guard passed; full suite **1823 passed** (~67 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -383,8 +415,9 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
    **SPEC-0012** (Component ABI), **SPEC-0013** (cross-runtime + vectors),
    **SPEC-0014**–**SPEC-0021**; plus SPEC-0002/0007/0008/0009/0010.
    **SPEC-0020** (service hosting) and **SPEC-0021** (dynamic work) are
-   operator-ratified (`accepted`) and **not yet implemented** — the next build
-   unit.
+   operator-ratified (`accepted`); their **additive contracts**
+   (`contracts/provider.py`, `contracts/work.py`) are **implemented** (110
+   tests); the runtime realization remains.
 5. `../conformance/AGENTS.md` and `../pro/AGENTS.md` — the shared contract and
    the Rust host.
 
@@ -433,7 +466,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > `pro/AGENTS.md`, `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm
 > **all four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and
 > clean, then run `core/HANDOFF.md`'s verification block (expect: `cbp-check`
-> READY, **1774 passed**; shared **31/31** in-process + external + Rust; WASM
+> READY, **1823 passed**; shared **31/31** in-process + external + Rust; WASM
 > **10/10**; network **14/14**; appointed **8/8**; infra **109 passed + 1
 > skipped**; basedpyright **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL`
 > workaround before any pytest run.
@@ -711,11 +744,16 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   (advisory-locked + `fsync`-ed). Delivered under L1; **operator-authored
   scenarios, the authoritative `isolation: enforced` run, and the L3 flip
   remain**; L3 stays `declared-gated`.
-- **SPEC-0020** `accepted` — service hosting: provider abstraction + reconciliation +
-  self-healing (extends SPEC-0018); **nothing implemented**.
-- **SPEC-0021** `accepted` — components as dynamic work: `work.v1` recipe + the
-  dynamic task-load protocol (extends SPEC-0002); **nothing implemented**. Charters
-  for the Brain and for learning/RSI live in `docs/agent/`.
+- **SPEC-0020** `accepted` — service hosting: the additive **`provider.v1`**
+  contract is **delivered** (`contracts/provider.py`, 61 tests: pure plan,
+  verify-then-apply gates, deterministic reconcile decision, emit-only
+  notification, local-first/cloud, secret refs only). The provider adapter and
+  the reconcile/health/rollback runtime remain.
+- **SPEC-0021** `accepted` — components as dynamic work: the additive **`work.v1`**
+  contract is **delivered** (`contracts/work.py`, 49 tests: pure
+  `work.v1 → component.v1` compile seam; verifier-gated generated work; explicit
+  fail-closed dynamic task-load protocol). The runtime compiler/task-load binder
+  remains. Charters for the Brain and for learning/RSI live in `docs/agent/`.
 
 ## Next
 
@@ -728,10 +766,12 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   notification component; declarative local-first/cloud; authN/Z) and
   [`SPEC-0021`](specs/SPEC-0021-components-as-dynamic-work.md) (components as
   dynamic work: a declarative pinned `work.v1` recipe compiling via a pure seam
-  to `component.v1`, plus the dynamic task-load/bind protocol). **Nothing is
-  implemented.** The next unit is the additive contracts (`contracts/provider.py`,
-  `contracts/work.py`) with tests — each its own L1-reviewed commit;
-  `component-abi.v1` stays frozen. Study charters for the Brain
+  to `component.v1`, plus the dynamic task-load/bind protocol). The additive
+  contracts (`contracts/provider.py`, `contracts/work.py`) are **implemented and
+  green** (110 tests, two L1-reviewed commits); `component-abi.v1` stays frozen.
+  The next buildable unit is the **runtime realization** below the gates: the
+  provider adapter + reconcile/health/rollback loop, the emit-only notification
+  component, and the `work.v1` compiler + dynamic task-load binder. Study charters for the Brain
   ([`docs/agent/brain-charter.md`](docs/agent/brain-charter.md)) and for
   learning/RSI ([`docs/agent/learning-charter.md`](docs/agent/learning-charter.md))
   are parked for dedicated sessions.
