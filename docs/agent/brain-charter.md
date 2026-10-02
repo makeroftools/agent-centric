@@ -6,9 +6,10 @@
 > (the ontological knowledge base), with
 > [`SPEC-0017`](../../specs/SPEC-0017-frontier-workstreams.md) workstream 1
 > (formal semantics) as its verification sibling. The dedicated session has now
-> produced the **draft design spec**
-> [`SPEC-0023`](../../specs/SPEC-0023-ontology-semantic-graphs.md); it carries no
-> design freeze until the operator ratifies its open decisions. Entry point:
+> produced the **design spec**
+> [`SPEC-0023`](../../specs/SPEC-0023-ontology-semantic-graphs.md) — decisions
+> ratified, remaining branches on its open frontier; the
+> [`ontology.md`](ontology.md) page summarizes it. Entry point:
 > [`AGENTS.md`](../../AGENTS.md).
 
 ## The intent
@@ -60,6 +61,10 @@ a rushed ontology would become a permanent, load-bearing mistake.
    and [`SPEC-0017`](../../specs/SPEC-0017-frontier-workstreams.md) WS1 without
    duplicating either?
 
+**Answered.** This agenda is answered (or explicitly deferred) by
+[`SPEC-0023`](../../specs/SPEC-0023-ontology-semantic-graphs.md) and its
+[`ontology.md`](ontology.md) summary.
+
 ## Boundaries / non-goals (for now)
 
 - **Out:** full OWL DL; an open-ended crawler; any ontology that changes the
@@ -78,21 +83,25 @@ a rushed ontology would become a permanent, load-bearing mistake.
 - Passive catalogs; evidence immutable (Law 10).
 - The ontology change is constitutional-level and, once frozen, additive-only.
 
-## Design spec (draft)
+## Design spec — decisions ratified
 
 [`SPEC-0023`](../../specs/SPEC-0023-ontology-semantic-graphs.md) records the
-dedicated-session output: the `ontology.v1` / `semantic-graph.v1` / `shapes.v1` /
-`closure.v1` contracts; a decidable **Datalog + stratified-negation** closure
-(SHACL gates; OWL-RL optional); and the answer to the parent-subgraph question —
-**a parent holds a derived, pinned closure over its children's published facts, and
-never owns or mutates child state**. It also records the operator's open
-"secret sauce" question (distribution vs `SPEC-0016`'s one-semantics invariant) and
-marks every choice **PROPOSED** until ratified.
+dedicated-session output; its design decisions were settled in a recorded grilling
+and are **ratified** (see its
+[Decisions log](../../specs/SPEC-0023-ontology-semantic-graphs.md#decisions-log-grilling-session)).
+The human/agent summary is [`ontology.md`](ontology.md). In brief: a **bespoke
+canonical assertion model** (no blank nodes, `urn:cbp:` terms, canonical JSON +
+sha256); **composable ontology fragments** with explicit imports; a **positive
+Datalog + stratified-negation** pinned closure; assertions **derived by pure
+projection** of existing contracts; per-component **SQLite** storage; and the answer
+to the parent-subgraph question — **a parent holds a derived, pinned closure over its
+children's published facts, and never owns or mutates child state**. Public,
+implemented in both `core` and `pro`. Remaining branches are the spec's
+[open frontier](../../specs/SPEC-0023-ontology-semantic-graphs.md#open-frontier).
 
 ## Next step
 
-The operator ratifies `SPEC-0023`'s open decisions — a **grilling session** is the
-intended venue — then a focused session authors the conformance vectors and the
-`ontology.v1`/`closure.v1` schemas. No implementation before ratification; the
-output of the study is a **spec** (and, if needed, a refinement of `SPEC-0010`),
-not an implementation.
+Continue the grilling to empty the frontier, then author the M1 conformance vectors
+and the `ontology.v1`/`closure.v1` schemas. No implementation before the operator
+confirms shared understanding; the output of the study is a **spec** (and, if
+needed, a refinement of `SPEC-0010`), not an implementation.

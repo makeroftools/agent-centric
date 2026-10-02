@@ -202,7 +202,8 @@ tests can reach:
 
 **Detail.** [`SPEC-0017`](specs/SPEC-0017-frontier-workstreams.md) ·
 [`SPEC-0016`](specs/SPEC-0016-editions-distribution-cloud.md) ·
-[`SPEC-0010`](specs/SPEC-0010-extensibility-knowledge-graphs-rsi.md)
+[`SPEC-0010`](specs/SPEC-0010-extensibility-knowledge-graphs-rsi.md) ·
+[`SPEC-0023`](specs/SPEC-0023-ontology-semantic-graphs.md)
 
 ---
 
