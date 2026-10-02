@@ -74,6 +74,22 @@ entry/contract is exposed, never placed inside the composition under test.
 Operator-authored scenarios, the authoritative `isolation: enforced` green run on
 a distinct principal/host, and the L3 flip remain operator gates.
 
+## Latest session (roadmap planning — delivered under L1)
+
+A roadmap-planning session was held at the workspace root, as the prior handoffs'
+*Next* required (plan before implementing). It re-verified the full state (core
+**1864 passed**; shared **31/31** in-process + external + Rust, WASM **10/10**,
+network **14/14**, appointed **8/8**; infra **109 passed, 1 skipped**;
+basedpyright **0/0/0**) and fixed the plan of record for the next cycle in
+[`docs/agent/roadmap-plan.md`](docs/agent/roadmap-plan.md). **No code path
+changed; no operator gate was touched.** Decision: the sole remaining unit
+buildable below the gates is a concrete **local-first `provider.v1` adapter**,
+behind the existing injected `ProviderAdapter`/`TaskRunner` seams — the generic
+mechanism in core (additive, offline-tested), the concrete manifest/task wiring in
+the private companion. Everything else (the L3 flip, SPEC-0018 Phases 3–6,
+threshold-signing key acts, self-hosting apply, any publish, and the research
+charters) is sequenced and operator-gated.
+
 ## Latest session (work boot bridge — delivered under L1)
 
 The dynamic task-load binder is now **wired through the boot/bundle machinery**
@@ -537,17 +553,16 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > work boot/bundle bridge (`cbp/work_boot.py`).
 >
 > **Next work, in order.**
-> (1) **Roadmap-planning session first (do not implement ahead of it).** The
-> SPEC-0020/0021 build below the gates is **complete and green** (contracts,
-> provider runtime, work runtime, and the work boot/bundle bridge). The only
-> remaining unit is a **concrete `provider.v1` adapter**; because it is
-> provider/host-specific, plan it against the private `infra/` instantiation
-> (the local CD substrate is the natural first adapter, and the private infra
-> HANDOFF explicitly asks for a planning pass before implementing). If the
-> planning session ratifies a local-first adapter, add it as a small,
-> L1-reviewed commit behind the existing injected `ProviderAdapter` seam
-> (`cbp/provider_runtime.py`) with tests; keep `component-abi.v1` frozen and the
-> legacy `task.v1` untouched.
+> (1) **Implement the ratified local-first `provider.v1` adapter.** The
+> roadmap-planning session is **done** — the plan of record is
+> [`docs/agent/roadmap-plan.md`](docs/agent/roadmap-plan.md). Add the generic
+> `LocalTaskProviderAdapter` in core behind the existing injected
+> `ProviderAdapter` seam (`cbp/provider_runtime.py`), resolving the observed-state
+> role **additively**, with offline tests; keep the concrete provider
+> manifest/task wiring in the private companion. Keep `component-abi.v1` frozen
+> and the legacy `task.v1` untouched. Next below-gate candidate after that:
+> threshold-signing **verification** (SPEC-0007 §6). Do not start any
+> operator-gated unit.
 > (2) **Operator-gated:** the deliberate L3 flip (author scenarios in
 > `$CBP_HOLDOUT_ROOT`, run the validator green with `isolation: enforced` on a
 > distinct principal/host, then edit `[levels.L3]`); SPEC-0018 Phases 3–6 (VPS +
