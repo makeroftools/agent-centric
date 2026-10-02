@@ -56,8 +56,10 @@ from .message import (
     RESPONSE_ERROR,
     RESPONSE_OK,
     Response,
+    stamp_confidence,
 )
 from .model_record import ModelRecord
+from .review import ReviewQueue, enqueue_for_review
 
 # A task is a registered callable; a verifier is a pure predicate.
 Task = Callable[..., Any]
@@ -79,6 +81,9 @@ class CbpDriver:
         security: The trust-boundary security profile. The default
             ``loopback`` permits loopback binds only (fail-closed); ``local``
             and ``tls`` are explicit opt-ins for non-loopback ``tcp`` binds.
+        review_queue: An optional persistent Review queue (``review.v1``).
+            When given, a run outcome below full confidence is enqueued at
+            this single boundary (SPEC-0002 §4.4), never silently trusted.
     """
 
     def __init__(
@@ -90,6 +95,7 @@ class CbpDriver:
         security: str = _transport.SECURITY_DEFAULT,
         replay_state_isolate: bool = False,
         ledger_path: str | None = None,
+        review_queue: ReviewQueue | None = None,
         peer_autz: Any = None,
         integrity_secret: bytes | None = None,
         tls_creds: Any = None,
@@ -127,6 +133,10 @@ class CbpDriver:
         )
         if self._ledger_store is not None:
             self._ledger_store.open()
+        # An optional persistent Review queue (review.v1; SPEC-0002 §4.4).
+        # When given, a run outcome below full confidence is enqueued for
+        # review at this single boundary — never silently trusted.
+        self._review_queue = review_queue
         self._endpoint = f"{transport}://{endpoint}"
         # Trust-boundary enforcement (docs/transport_trust_boundary.md §5.1): a
         # non-loopback tcp bind is refused unless the caller opted in explicitly.
@@ -321,7 +331,22 @@ class CbpDriver:
                         self._ledger_store.set_outcome(
                             correlation_id=correlation_id, outcome=outcome
                         )
-                    return response
+                    # Every response carries a deterministic confidence
+                    # (SPEC-0002 §4.4); a sub-threshold run outcome is
+                    # enqueued for review at this one boundary.
+                    stamped = stamp_confidence(response)
+                    if self._review_queue is not None and kind == DIRECTIVE_RUN:
+                        run_domain = self._ledger[correlation_id]["payload"].get(
+                            "task"
+                        )
+                        enqueue_for_review(
+                            self._review_queue,
+                            stamped,
+                            domain=run_domain
+                            if isinstance(run_domain, str)
+                            else kind,
+                        )
+                    return stamped
             if attempt < attempts:
                 time.sleep(self._settle_delay)
         raise RuntimeError(

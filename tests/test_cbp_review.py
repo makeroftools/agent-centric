@@ -14,12 +14,15 @@ import pytest
 
 from agent_centric.cbp import ReviewError, ReviewQueue, enqueue_for_review
 from agent_centric.cbp.config import AgentConfig
+from agent_centric.cbp.driver import CbpDriver
 from agent_centric.cbp.message import (
     DIRECTIVE_RUN,
     RESPONSE_ERROR,
     RESPONSE_RESULT,
     Directive,
     Response,
+    effective_confidence,
+    stamp_confidence,
 )
 from agent_centric.cbp.model_agent import TASK_MODEL, ModelAgent
 from agent_centric.contracts.review import (
@@ -266,3 +269,72 @@ class TestModelAgentReviewWiring:
             )
         )
         assert response.verified is True
+
+
+def _double(value: int) -> int:
+    return value * 2
+
+
+class TestResponseConfidence:
+    """Every response carries a deterministic confidence (SPEC-0002 §0, §4.4)."""
+
+    def test_effective_confidence_rules(self) -> None:
+        verified = Response(correlation_id="c", kind=RESPONSE_RESULT, verified=True)
+        failed = Response(correlation_id="c", kind=RESPONSE_ERROR, verified=False)
+        scored = Response(
+            correlation_id="c", kind=RESPONSE_RESULT, verified=True, confidence=0.5
+        )
+        assert effective_confidence(verified) == 1.0
+        assert effective_confidence(failed) == 0.0
+        assert effective_confidence(scored) == 0.5
+
+    def test_stamp_is_identity_when_already_scored(self) -> None:
+        scored = Response(
+            correlation_id="c", kind=RESPONSE_RESULT, verified=True, confidence=0.9
+        )
+        assert stamp_confidence(scored) is scored
+
+    def test_stamp_sets_full_confidence_for_verified(self) -> None:
+        stamped = stamp_confidence(
+            Response(correlation_id="c", kind=RESPONSE_RESULT, verified=True)
+        )
+        assert stamped.confidence == 1.0
+
+    def test_driver_run_response_carries_confidence(self) -> None:
+        with CbpDriver() as driver:
+            driver.register("double", _double)
+            driver.configure(tasks=("double",))
+            resp = driver.run("double", {"value": 21})
+            assert resp.verified is True
+            assert resp.value == 42
+            assert resp.confidence == 1.0
+
+    def test_driver_error_response_carries_zero_confidence(self) -> None:
+        with CbpDriver() as driver:
+            resp = driver.run("ghost_task", {})
+            assert resp.verified is False
+            assert resp.confidence == 0.0
+
+    def test_driver_enqueues_subthreshold_run_outcome(self, tmp_path: Path) -> None:
+        with ReviewQueue(tmp_path / "review.db") as q:
+            with CbpDriver(review_queue=q) as driver:
+                driver.spawn("model", kind="model")
+                resp = driver.run(TASK_MODEL, {"prompt": "hi"}, child="model")
+                assert resp.verified is True
+                assert resp.confidence is not None
+                assert resp.confidence < 1.0
+            pending = q.pending()
+            assert len(pending) == 1
+            assert pending[0].domain == TASK_MODEL
+            assert pending[0].confidence < 1.0
+
+    def test_driver_does_not_enqueue_full_confidence_run(
+        self, tmp_path: Path
+    ) -> None:
+        with ReviewQueue(tmp_path / "review.db") as q:
+            with CbpDriver(review_queue=q) as driver:
+                driver.register("double", _double)
+                driver.configure(tasks=("double",))
+                resp = driver.run("double", {"value": 21})
+                assert resp.confidence == 1.0
+            assert q.count() == 0

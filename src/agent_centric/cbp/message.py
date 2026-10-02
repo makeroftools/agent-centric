@@ -20,7 +20,7 @@ accepted.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from .model_record import MAX_MODEL_CONFIDENCE, is_content_hash
@@ -206,3 +206,27 @@ def validate_response(msg: Response) -> None:
         raise ProtocolError(
             "response model_record must be a 64-character lowercase hex digest"
         )
+
+
+def effective_confidence(msg: Response) -> float:
+    """The deterministic confidence of a response (SPEC-0002 §0, §4).
+
+    A verified deterministic output is **1.0**; an explicitly scored (e.g.
+    model-boundary) output keeps its score; anything else (an unverified or
+    failed outcome) is **0.0**. Pure and total: it never raises.
+    """
+    if msg.confidence is not None:
+        return float(msg.confidence)
+    return 1.0 if msg.verified else 0.0
+
+
+def stamp_confidence(msg: Response) -> Response:
+    """Return ``msg`` with its confidence populated deterministically.
+
+    An already-scored response is returned unchanged; otherwise a verified
+    deterministic result is stamped 1.0 and an unverified/failed one 0.0, so
+    every response carries a confidence (SPEC-0002 §4.4).
+    """
+    if msg.confidence is not None:
+        return msg
+    return replace(msg, confidence=effective_confidence(msg))
