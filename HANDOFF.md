@@ -200,14 +200,17 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and clean,
 > then run `core/HANDOFF.md`'s verification block (expect: `cbp-check` READY,
 > **1618 passed**; shared suite **31/31** in-process + external + Rust; WASM
-> **10/10**; network **14/14**; appointed **8/8**; infra **64 passed**;
+> **10/10**; network **14/14**; appointed **8/8**; infra **79 passed**;
 > basedpyright **0/0/0**). Delivered: Layers 0–4 + signing, the distribution
 > spine, the offline umbrella lock (committed test-signed; the **operator-signed**
 > system lock is recorded in `infra/locks/core-umbrella/`), the local CD
 > substrate, and **SPEC-0019** (the L3 isolated holdout validator: structural
 > isolation, decision engine, `holdout.lock`, probe runner, append-only ledger).
-> **Next mission: provision components** (SPEC-0018 Phase 2 — graduate the
-> bootstrap services to `component.v1`; `service.v1` binds the composition).
+> **SPEC-0018 Phase 2 (authored, private companion): the bootstrap services
+> are graduated to `component.v1` and `service.v1` binds the composition**; the
+> agent verifies the composition lock + graph before apply. **Next mission:
+> self-hosting** (boot the composition itself) and, operator-gated, provision/
+> enroll the intranet host and publish to the live mirror.
 > Hard laws: whole-file replacement only via `tools/safe-replace.sh` (**never
 > in-place edits**), resolve every home path from `$HOME`, commit and push
 > continuously, never `--no-verify`. Mission-critical boundaries: never act above
@@ -421,6 +424,10 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   infra **authored + hardened** (deterministic tasks, a pull/apply agent that
   content-verifies every mutating task, a pinned host definition + `service.v1`
   instance, enrollment runbook, infra CI, DR drill) — **nothing provisioned**.
+  Phase 2 graduation **authored**: the bootstrap services are wrapped as public
+  additive `component.v1`, pinned in a signed composition lock, and bound by
+  `service.v1` (`refs.composition`); the agent verifies the lock + graph before
+  apply (fail-closed).
 - **SPEC-0019** `draft` — the **L3 isolated holdout validator**: **structural**
   isolation (scenarios in the operator-private root, owner-only; public
   `specs/holdout/` a placeholder; the authoring principal must be distinct and
@@ -449,8 +456,9 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **SPEC-0018 (draft): service-host provisioning + CD** — public spec in
   `specs/`; the instantiation lives in a **private companion repo**. Phase 1:
   bootstrap the intranet host (native Gitea + OpenBao + pull/apply agent) under
-  verify-then-apply. The private mission brief holds the Phase-1 plan and a
-  paste-in kickoff prompt for a new session.
+  verify-then-apply. Phase 2 (authored): the bootstrap services graduated to
+  `component.v1`, with `service.v1` binding the signed composition lock. The
+  private mission brief holds the plan and paste-in kickoff prompts.
 - **L3 holdout gate (SPEC-0019)** — the validator is built and its isolation is
   **structural**; the remaining steps are operator-side: author scenarios in the
   operator-private root (`$CBP_HOLDOUT_ROOT`, default `$HOME/.cbp/holdout/suite`),

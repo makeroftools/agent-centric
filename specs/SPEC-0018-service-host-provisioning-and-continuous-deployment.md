@@ -222,6 +222,15 @@ A0 sandbox backend** and a `component.v1 ⇄ sandbox-package` adapter. They are
 > tested (additive contract + offline suite in the private `infra/` repo);
 > provisioning/enrollment, OpenBao-backed secrets, the end-to-end release, and
 > the live DR drill remain operator-gated.
+>
+> **Phase 2 status (authored, locally verified; nothing self-hosted).** The
+> three bootstrap services are graduated to `component.v1` wrappers, pinned from
+> an offline directory source into a signed, content-addressed composition
+> `components.lock`, and bound by `service.v1` via `refs.composition`. The
+> pull/apply agent re-derives the lock hash, verifies the lock and every entry
+> signature, and resolves the pinned graph before apply — fail-closed, on the
+> same verify-then-apply path. Self-hosting, real provisioning/enrollment, and
+> the operator re-signing of the composition remain gated.
 
 - [ ] The layered model, the **bootstrap set**, and its **graduation** to managed
       components are stated and testable.
