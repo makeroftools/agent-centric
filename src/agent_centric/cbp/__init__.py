@@ -233,6 +233,23 @@ from .orchestrate import (
     run_artifact_plan,
 )
 from .pdf_intake import draft_from_pdf_text, extract_text
+from .provider_runtime import (
+    PROVIDER_EVIDENCE_ACTIONS,
+    PROVIDER_EVIDENCE_SCHEMA,
+    InMemoryProviderAdapter,
+    NotificationSink,
+    NullNotificationSink,
+    ProviderAdapter,
+    ProviderCall,
+    ProviderCallKind,
+    ProviderEvidence,
+    ProviderLedger,
+    ProviderResult,
+    ProviderRuntime,
+    ProviderRuntimeError,
+    ReconcileResult,
+    emit_notification,
+)
 from .providers import (
     ModalSlmProvider,
     ProviderRegistry,
@@ -351,6 +368,15 @@ from .transport import (
 )
 from .web import DEFAULT_HOST, DEFAULT_PORT, CbpLandingServer
 from .web import serve as serve_landing
+from .work_runtime import (
+    BoundTask,
+    MaterializedWork,
+    TaskLoader,
+    WorkBinder,
+    WorkRuntimeError,
+    compile_and_materialize,
+    materialize_work,
+)
 from .workspace import (
     DIRECTORY,
     FILE,
@@ -648,6 +674,22 @@ __all__ = [
     "ReviewQueue",
     "ReviewError",
     "enqueue_for_review",
+    # Provider hosting runtime (provider.v1; SPEC-0020 §1-§4)
+    "ProviderRuntime",
+    "ProviderRuntimeError",
+    "ProviderCall",
+    "ProviderCallKind",
+    "ProviderResult",
+    "ProviderAdapter",
+    "ProviderEvidence",
+    "ProviderLedger",
+    "PROVIDER_EVIDENCE_SCHEMA",
+    "PROVIDER_EVIDENCE_ACTIONS",
+    "ReconcileResult",
+    "NotificationSink",
+    "NullNotificationSink",
+    "emit_notification",
+    "InMemoryProviderAdapter",
     # Bills loop (real end-to-end CBP graph)
     "BillsAgent",
     "TASK_ACCEPT_DETERMINISTIC",
@@ -682,6 +724,14 @@ __all__ = [
     "WorkspaceError",
     "FILE",
     "DIRECTORY",
+    # Work runtime (work.v1; SPEC-0021): compile/materialize + task-load binder
+    "WorkRuntimeError",
+    "MaterializedWork",
+    "materialize_work",
+    "compile_and_materialize",
+    "TaskLoader",
+    "BoundTask",
+    "WorkBinder",
     # Landing-page server (stdlib http.server; local-only, actionable)
     "CbpLandingServer",
     "serve_landing",

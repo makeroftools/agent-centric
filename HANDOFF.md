@@ -74,6 +74,37 @@ entry/contract is exposed, never placed inside the composition under test.
 Operator-authored scenarios, the authoritative `isolation: enforced` green run on
 a distinct principal/host, and the L3 flip remain operator gates.
 
+## Latest session (SPEC-0020/0021 runtimes — delivered under L1)
+
+The runtime realization of the two contracts is **implemented, tested, and
+pushed** (one L1-reviewed commit), offline and fail-closed:
+
+- **Provider runtime** ([`src/agent_centric/cbp/provider_runtime.py`](src/agent_centric/cbp/provider_runtime.py),
+  SPEC-0020 §2/§3). The pure contract decides the plan; an injected
+  `ProviderAdapter` confines all provider I/O behind one typed `call` seam.
+  Every call is recorded in an append-only, advisory-locked, `fsync`-ed,
+  **idempotent** `ProviderLedger` (a retry never duplicates evidence). `apply`
+  is verify-then-apply (`assert_plan_appliable`); `reconcile` drives
+  plan → verify → apply → health, makes **no** mutating call on already-converged
+  healthy state, **auto-rolls-back** to the last healthy desired state on a
+  failed health gate (re-planned from the current observed state so drift is
+  removed), and **escalates and stops** after bounded retries. Notifications are
+  emit-only: a `NotificationSink` receives transition events validated against
+  the bound `NotificationBinding`. A deterministic `InMemoryProviderAdapter` is
+  the offline reference double; a real network adapter remains operator-gated.
+- **Work runtime** ([`src/agent_centric/cbp/work_runtime.py`](src/agent_centric/cbp/work_runtime.py),
+  SPEC-0021). `materialize_work` stores a compiled artifact in the
+  content-addressed cache (its digest *is* the artifact hash; idempotent);
+  `WorkBinder` implements the fail-closed dynamic task-load/bind protocol —
+  admit (declared + pinned) → verify-on-read the artifact → optional signature
+  verification → **only then** resolve the entry and register. A refusal leaves
+  no partial side effect.
+
+Core suite **1823 → 1856 passed** (+33); `mypy` 134 files; `ruff`/`cbp-check`
+green; basedpyright 0/0/0. **No operator gate was touched.** Next buildable unit
+below the gates: wire the binder through boot/network and provide a concrete,
+operator-gated provider adapter; then the operator-gated roadmap.
+
 ## Latest session (SPEC-0020/0021 additive contracts — delivered under L1)
 
 The two operator-ratified contracts are **implemented, tested, and pushed**,
@@ -277,7 +308,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 130 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1823 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1856 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -359,7 +390,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (130 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1823 passed** (~67 s).
+  convention + home-path guard passed; full suite **1856 passed** (~65 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -466,7 +497,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > `pro/AGENTS.md`, `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm
 > **all four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and
 > clean, then run `core/HANDOFF.md`'s verification block (expect: `cbp-check`
-> READY, **1823 passed**; shared **31/31** in-process + external + Rust; WASM
+> READY, **1856 passed**; shared **31/31** in-process + external + Rust; WASM
 > **10/10**; network **14/14**; appointed **8/8**; infra **109 passed + 1
 > skipped**; basedpyright **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL`
 > workaround before any pytest run.
@@ -747,13 +778,18 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 - **SPEC-0020** `accepted` — service hosting: the additive **`provider.v1`**
   contract is **delivered** (`contracts/provider.py`, 61 tests: pure plan,
   verify-then-apply gates, deterministic reconcile decision, emit-only
-  notification, local-first/cloud, secret refs only). The provider adapter and
-  the reconcile/health/rollback runtime remain.
+  notification, local-first/cloud, secret refs only). The deterministic runtime
+  engine (injected adapter, idempotent evidence ledger, reconcile/rollback/
+  escalation, emit-only notifications) is **delivered**
+  (`cbp/provider_runtime.py`, 20 tests); a concrete network adapter remains
+  operator-gated.
 - **SPEC-0021** `accepted` — components as dynamic work: the additive **`work.v1`**
   contract is **delivered** (`contracts/work.py`, 49 tests: pure
   `work.v1 → component.v1` compile seam; verifier-gated generated work; explicit
-  fail-closed dynamic task-load protocol). The runtime compiler/task-load binder
-  remains. Charters for the Brain and for learning/RSI live in `docs/agent/`.
+  fail-closed dynamic task-load protocol). The compile/`materialize` runtime and
+  the fail-closed task-load binder are **delivered**
+  (`cbp/work_runtime.py`, 13 tests). Charters for the Brain and for learning/RSI
+  live in `docs/agent/`.
 
 ## Next
 
@@ -768,10 +804,11 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   dynamic work: a declarative pinned `work.v1` recipe compiling via a pure seam
   to `component.v1`, plus the dynamic task-load/bind protocol). The additive
   contracts (`contracts/provider.py`, `contracts/work.py`) are **implemented and
-  green** (110 tests, two L1-reviewed commits); `component-abi.v1` stays frozen.
-  The next buildable unit is the **runtime realization** below the gates: the
-  provider adapter + reconcile/health/rollback loop, the emit-only notification
-  component, and the `work.v1` compiler + dynamic task-load binder. Study charters for the Brain
+  green**, and their **runtime realization** is delivered (`cbp/provider_runtime.py`,
+  `cbp/work_runtime.py`; 33 tests); `component-abi.v1` stays frozen. The next
+  buildable unit is wiring the `WorkBinder` through boot/network and a concrete,
+  operator-gated provider adapter; after that the work is operator-gated (L3
+  flip, SPEC-0018 Phases 3-6, re-signing, publish). Study charters for the Brain
   ([`docs/agent/brain-charter.md`](docs/agent/brain-charter.md)) and for
   learning/RSI ([`docs/agent/learning-charter.md`](docs/agent/learning-charter.md))
   are parked for dedicated sessions.
