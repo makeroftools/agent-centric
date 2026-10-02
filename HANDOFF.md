@@ -52,12 +52,47 @@ P0–P9) whose tasks are now authored (`verify-image`, `install-host` plan/gated
 `authorize-host`). **Nothing is provisioned**; the real host, the operator signing
 key, and any publish remain gates.
 
-The **L3 isolated holdout validator (SPEC-0019)** is built with **structural**
-isolation: scenarios live in the operator-private root (owner-only; the public
-`specs/holdout/` is a placeholder), the validator is a separate context-gated
-process, and runs emit an append-only, content-addressed **idempotent** ledger.
-It has a synthetic known-good/known-bad self-test. Operator-authored scenarios,
-network-boot probes, and the L3 flip remain.
+The **L3 isolated holdout validator (SPEC-0019)** is now **L3-ready**: the logic
+is a pure importable library (`cbp/holdout.py`) behind a thin, separate-process
+CLI. Beyond the original `task` probe it has the additive **`service`** probe
+(boot a signed composition through the core harness via an operator-private,
+content-addressed `holdout.deployment/v1` descriptor; compare the observable's
+canonical-JSON projection, or assert a fail-closed refusal), **TCB pins** in the
+lock (`probe_contract_sha256`, `validator_sha256`) and record (`runtime`,
+`platform`, `lock_sha256`, `suite_sha256`, `isolation`), exit codes `0/1/2/3`, a
+synthetic known-good/known-bad `--self-test`, and an **advisory principal guard**
+(uid 0 / docker group) with a `--rehearsal` escape that records
+`isolation: rehearsal` (offline-test trust is rehearsal-only). A component-ready
+entry/contract is exposed, never placed inside the composition under test.
+Operator-authored scenarios, the authoritative `isolation: enforced` green run on
+a distinct principal/host, and the L3 flip remain operator gates.
+
+## Latest session (L3 milestone — implemented offline, under L1)
+
+The agreed *L3-ready validator + honest rehearsal* plan
+([`docs/agent/l3-milestone-plan.md`](docs/agent/l3-milestone-plan.md)) is
+implemented agent-side, workstream by workstream:
+
+- **A — validator upgrade.** Logic extracted to
+  [`src/agent_centric/cbp/holdout.py`](src/agent_centric/cbp/holdout.py);
+  [`tools/holdout-validate.py`](tools/holdout-validate.py) is a thin CLI. Additive
+  `service` probe + `holdout.deployment/v1` descriptor; TCB pins; `0/1/2/3` exit
+  semantics (SPEC-0019 reconciled); `--self-test`; advisory principal guard with a
+  rehearsal record; component-ready boundary.
+- **B — isolation runbook.** Private companion
+  [`holdout/runbook.md`](../infra/holdout/runbook.md) (operator-executed).
+- **C — scenario templates.** Format/templates only in
+  [`holdout/templates/`](../infra/holdout/templates/README.md).
+- **D — hermetic acceptance + continuity.** Core tests
+  ([`tests/test_holdout_service.py`](tests/test_holdout_service.py), 19 tests)
+  prove the deterministic green record on the test-signed umbrella, the tamper
+  negatives, the principal guard, and `--self-test`; the private companion adds a
+  rehearsal test over its composition. Core suite **1674 passed**; infra **104
+  passed, 1 skipped**.
+
+**The flip, scenario authoring, the authoritative validator run, key acts,
+provisioning, and any publish remain operator gates.** The governing invariants
+are recorded below.
 
 ## Latest session (Horizon 1 — delivered offline, under L1)
 
@@ -81,6 +116,20 @@ network-boot probes, and the L3 flip remain.
   [`docs/agent/l3-milestone-plan.md`](docs/agent/l3-milestone-plan.md). It is a
   handoff to implement in a new session; operator gates unchanged.
 
+## L3 invariants (recorded)
+
+1. **Everything in the tree is a component** — one node ontology, no privileged
+   node type. The **harness/runtime is not a node**; the **bootstrap substrate
+   graduates**, it is not a permanent exemption.
+2. **Component-ready now, graduated later.** Tooling is wrapped/graduated in this
+   order: **lock compiler → validator/holdout → signing service → provisioning
+   tasks** (SPEC-0015: wrap → content-address → sandbox → conformance).
+3. **"The compiler builds the compiler."** A post-L3 milestone: the harness boots
+   a *tool composition* that produces/validates the next composition
+   byte-identically. It **does not gate L3**. The validator is a pure core library
+   plus a `component.v1`-ready entry/contract; the **authoritative validator lives
+   outside the composition it validates** (bootstrap circularity).
+
 ## Verify everything (do this before acting)
 
 ```sh
@@ -90,7 +139,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 127 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1655 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1674 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -116,7 +165,7 @@ cargo test --release --features wasm                  # codec + artifact-signatu
 
 # infra (private companion) -----------------------------------------------
 cd ../infra
-uv run --project ../core pytest -o addopts="" -p no:cacheprovider tests   # -> 98 passed, 1 skipped
+uv run --project ../core pytest -o addopts="" -p no:cacheprovider tests   # -> 104 passed, 1 skipped
 
 # workspace IDE hygiene (run from the workspace root) ----------------------
 cd ..
@@ -133,7 +182,7 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (127 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1655 passed** (~64 s).
+  convention + home-path guard passed; full suite **1674 passed** (~64 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -236,9 +285,9 @@ Certifier exit codes: `0` certified · `1` a case failed / nondeterministic ·
 > `infra/HANDOFF.md`, `infra/specs/SPEC-0018-instantiation.md`, and
 > `infra/specs/provisioning.md`. Confirm **all four** repos (`core`,
 > `conformance`, `pro`, `infra`) are on `main` and clean, then run
-> `core/HANDOFF.md`'s verification block (expect: `cbp-check` READY, **1655
+> `core/HANDOFF.md`'s verification block (expect: `cbp-check` READY, **1674
 > passed**; shared suite **31/31** in-process + external + Rust; WASM **10/10**;
-> network **14/14**; appointed **8/8**; infra **98 passed + 1 skipped**;
+> network **14/14**; appointed **8/8**; infra **104 passed + 1 skipped**;
 > basedpyright **0/0/0**).
 >
 > **Implement the agreed L3 milestone** — the *L3-ready validator + honest
@@ -485,11 +534,13 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 ## Next
 
-- **Horizon 1 delivered offline (this session).** The `review.v1`/confidence
-  gap is closed and the offline self-hosting smoke runs (see *Latest session*
-  above). Remaining, in dependency order: (1) **L3** — author holdout scenarios
-  in the operator-private root (`$CBP_HOLDOUT_ROOT`) and flip `[levels.L3]`
-  deliberately (operator); (2) **SPEC-0018 Phase 3** — the low-budget VPS +
+- **L3 milestone delivered agent-side (this session).** The validator is
+  L3-ready (A) and hermetically accepted (D); the isolation runbook (B) and
+  scenario templates (C) live in the private companion. Remaining, in dependency
+  order: (1) **L3** — the operator executes the isolation runbook, authors
+  holdout scenarios in the operator-private root (`$CBP_HOLDOUT_ROOT`), runs the
+  validator green (`isolation: enforced`) on a distinct principal/host, and flips
+  `[levels.L3]` deliberately; (2) **SPEC-0018 Phase 3** — the low-budget VPS +
   public read-only mirror, then Phases 4–6 (multi-tenant/branding,
   source-of-truth migration, hardening) (operator/publish-gated); (3)
   **SPEC-0002 Phase-1 remainder** — the `Agent`→`Component` adapter, removal of
