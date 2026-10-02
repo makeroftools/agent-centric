@@ -95,6 +95,33 @@ same definition targets the first intranet host and a later VPS. The first targe
 is the operator's **intranet development host** (treated as **cattle**,
 rebuildable from spec); a low-budget VPS is a later, prod/offsite phase.
 
+#### 4.1 Provisioning protocol — named, idempotent stages, operator-gated
+
+Provisioning is a **pipeline of named, deterministic, idempotent stages** — the
+§2 task rule applied end-to-end — never an opaque script. The origin-agnostic
+stages are:
+
+| stage | operation | gate |
+| --- | --- | --- |
+| **P0** pin & verify the definition | re-lock and content-check the host definition | read-only (CI) |
+| **P1** acquire installer media | fetch the image and verify its digest | operator |
+| **P2** prepare the target | declarative disk / hostname / addressing | operator |
+| **P3** install the pinned generation | atomic install (a system generation) | operator |
+| **P4** deliver the bootstrap credential | the **one-time** SOPS/age secret | operator (offline) |
+| **P5** identity + enrollment request | generate per-host identity; *request* trust | host (idempotent) |
+| **P6** authorize | the explicit allowlist act; audited | **human** |
+| **P7** readiness verification | deterministic host + service health | read-only |
+| **P8** baseline apply | verify-then-apply; auto-rollback on failure | operator approval |
+| **P9** DR readiness | backup → restore drill green | read-only |
+
+Invariants: every stage **re-derives the pins it consumes** (no floating
+references); a mismatch refuses **before** any mutation; an install or activation
+failure leaves the **prior generation** active; enrollment is **fail-closed**
+(nothing is trusted before the human authorization act); and the host is
+**cattle** — rebuildable from the pinned definition alone. The concrete inventory
+(host ids, addressing, recipients) lives in the private companion; only this
+origin-agnostic mechanism is normative here.
+
 ### 5. Identity, enrollment, and secrets
 
 - **Enrollment (fail-closed).** A host built from the pinned image generates its
