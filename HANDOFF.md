@@ -576,15 +576,20 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 ## Next
 
-- **SPEC-0002 Phase-1 remainder — adapter-first design delivered (this
-  session, design only; no code change).** The design record is
-  [`docs/agent/spec-0002-phase1-adapter-design.md`](docs/agent/spec-0002-phase1-adapter-design.md):
-  the `Agent`→`Component` adapter (item 1, additive, equivalence-tested), the
-  removal of the module-level `_REGISTRY` global and `_child_class_for`
-  (item 2, parent-provisioned catalog + parent-declared children), and
-  `inproc`-only enforcement (item 6), staged S1–S5. Three open decisions
-  (§10) need operator review before the risky slices (S3/S4) land; S1/S2 are
-  additive. `tests/test_agent_conventions.py` 44 passed.
+- **SPEC-0002 Phase-1 remainder — S1–S5 implemented and verified (this
+  session).** The design record is
+  [`docs/agent/spec-0002-phase1-adapter-design.md`](docs/agent/spec-0002-phase1-adapter-design.md)
+  (§12 = implementation progress). Delivered, each green: **S1** the
+  `Agent`→`Component` adapter (`cbp/component_adapter.py`); **S2** the
+  parent-provisioned `ComponentCatalog` + `AgentConfig.catalog`; **S3a** the
+  driver-owned catalog provisioned to the root and inherited by children;
+  **S4** the central `_child_class_for` map **deleted** (parent-declared
+  kinds; undeclared kind fails closed before any bind); **S5** explicit
+  `inproc`-only backend (`BackendNotAdmitted` otherwise). Core suite **1680 →
+  1706 passed**; mypy 130 files; basedpyright 0/0/0. **Remaining: S3b** —
+  delete the module-level `_REGISTRY`/`_resolve_entry`/`register_callable`
+  shim and migrate the ~77 test/authoring call sites (mechanical, high
+  churn; the runtime no longer reads the global).
 
 - **L3 milestone delivered agent-side (this session).** The validator is
   L3-ready (A) and hermetically accepted (D); the isolation runbook (B) and

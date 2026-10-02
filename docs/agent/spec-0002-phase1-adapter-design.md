@@ -1,6 +1,6 @@
 # SPEC-0002 Phase-1 remainder — adapter-first design
 
-> **Status: design only — no implementation in this change.** This page resolves
+> **Status: S1–S5 implemented and verified (green); S3b (delete the shim) remains.**
 > **how** the remaining Phase-1 items of
 > [`../../specs/SPEC-0002-cbp-component-architecture.md`](../../specs/SPEC-0002-cbp-component-architecture.md)
 > are built: the `Agent`→`Component` adapter (item 1), removal of the module-level
@@ -217,3 +217,36 @@ the suite green; nothing is removed until its replacement is proven equivalent.
 The L3 flip, real host provisioning/enrollment, the operator signing key
 (including re-signing composition/umbrella locks), and any public publish remain
 operator acts. This design crosses none of them.
+
+
+## 12. Implementation progress (recorded from git; do not trust prose hashes)
+
+Delivered under L1, each a green, committed unit (re-verify with the
+`HANDOFF.md` block; the suite grew 1680 → 1706):
+
+- **S1 — adapter (additive).** `src/agent_centric/cbp/component_adapter.py`
+  (`AgentComponent`: lifecycle passthrough, entry bridge `run_once`, pure
+  `component.v1` manifest projection) + `tests/test_component_adapter.py`
+  (equivalence to the `CbpDriver` round-trip). No existing path changed.
+- **S2 — catalog seam (additive).** `src/agent_centric/cbp/component_catalog.py`
+  (`ComponentCatalog`, passive) + `RegistryEntry.from_callable` +
+  `AgentConfig.catalog`; an agent given a catalog resolves **only** from it and
+  an absent name fails closed. `tests/test_component_catalog.py`.
+- **S3a — runtime cut-over.** `CbpDriver` owns the catalog and provisions it to
+  the root; spawned children inherit it; `_configure` and `_replay_run` read the
+  catalog. The module global is now a **test/authoring shim**, snapshotted once
+  at driver construction (documented bridge).
+- **S4 — parent-declared children.** The central `_child_class_for` map is
+  **deleted**; `Agent.declare_child_kind` is provisioned by the tree builder
+  (`CbpDriver` declares `store`/`bills`/`model`), children inherit declarations,
+  and an undeclared kind fails closed **before** any socket bind.
+  `tests/test_declared_children.py`.
+- **S5 — inproc-only backend.** `ADMITTED_BACKENDS = {"inproc"}`;
+  `CbpDriver(backend=...)` refuses any other backend
+  (`BackendNotAdmitted`). `tests/test_cbp_backend.py`.
+
+**S3b — remaining.** Delete the module-level `_REGISTRY`, `_resolve_entry`, and
+the `register_callable` shim, and migrate the remaining ~77 test/authoring call
+sites to `CbpDriver.register` (driver tests) or an explicit `ComponentCatalog`
+(direct-`Agent` tests). This is a mechanical, high-churn change and is deferred
+to its own reviewed unit; the runtime no longer reads the global.
