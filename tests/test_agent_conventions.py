@@ -336,6 +336,11 @@ class TestSpecs:
         for rel in ("specs/README.md", "specs/TEMPLATE.md", "specs/holdout/README.md"):
             assert (REPO_ROOT / rel).is_file()
 
+    def test_public_holdout_path_holds_no_scenarios(self) -> None:
+        """SPEC-0019: real scenarios must never live in the public repo."""
+        present = {path.name for path in (REPO_ROOT / "specs" / "holdout").iterdir()}
+        assert present <= {"README.md"}, f"holdout scenarios must be private: {present}"
+
     def test_convention_spec_is_recorded(self) -> None:
         assert (REPO_ROOT / "specs" / "agent-conventions.md").is_file()
 

@@ -55,6 +55,10 @@ PROBE_CONTRACT = "holdout.v1"
 CHECK_INFO_STRING = "check"
 SUPPORTED_PROBE_KINDS = ("task",)
 
+VALIDATOR_VERSION = "holdout-validator/1"
+HOLDOUT_RECORD_SCHEMA = "holdout.record/v1"
+DEFAULT_HOLDOUT_ROOT = Path.home() / ".cbp" / "holdout"
+
 RUNS = 3
 SUPERMAJORITY = 2
 DEFAULT_THRESHOLD = 1.0
@@ -208,6 +212,51 @@ def _read_json_object(path: Path) -> dict[str, object]:
     if not isinstance(data, dict):
         raise Refusal(f"expected a JSON object in {path}")
     return data
+
+
+def private_root() -> Path:
+    """The operator-private holdout root (never inside a public repo)."""
+    override = os.environ.get("CBP_HOLDOUT_ROOT")
+    return Path(override) if override else DEFAULT_HOLDOUT_ROOT
+
+
+def enforce_private_suite(suite_dir: Path) -> None:
+    """Refuse unless the suite is owner-only (not group- or other-accessible)."""
+    if not suite_dir.exists():
+        raise Refusal(f"no suite directory at {suite_dir}")
+    mode = suite_dir.stat().st_mode
+    if mode & 0o077:
+        raise Refusal(
+            f"suite directory {suite_dir} is accessible to group/other; "
+            "holdout scenarios must be owner-only (chmod 700)"
+        )
+
+
+def _record_fingerprint(record: Mapping[str, object]) -> str:
+    payload = {key: value for key, value in record.items() if key != "fingerprint"}
+    return sha256_hex(_canonical_json(payload))
+
+
+def append_record(ledger_path: Path, record: Mapping[str, object]) -> bool:
+    """Append a run record idempotently; return True iff appended (not a dup)."""
+    fingerprint = _record_fingerprint(record)
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    if ledger_path.is_file():
+        for line in ledger_path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                existing = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(existing, dict) and existing.get("fingerprint") == fingerprint:
+                return False
+    entry = {**record, "fingerprint": fingerprint}
+    line = json.dumps(entry, sort_keys=True, separators=(",", ":")) + "\n"
+    with ledger_path.open("a", encoding="utf-8") as handle:
+        handle.write(line)
+    os.chmod(ledger_path, 0o600)
+    return True
 
 
 def parse_scenario(text: str) -> tuple[dict[str, str], Mapping[str, object]]:
@@ -391,6 +440,7 @@ def run_suite(
 def _verdict_document(verdict: RunVerdict, *, threshold: float) -> dict[str, object]:
     return {
         "schema": HOLDOUT_RUN_SCHEMA,
+        "validator_version": VALIDATOR_VERSION,
         "verdict": "green" if verdict.green else "red",
         "aggregate": verdict.aggregate,
         "threshold": threshold,
@@ -440,10 +490,17 @@ def run(argv: Sequence[str] | None, *, env: Mapping[str, str]) -> dict[str, obje
         verdict = decide(scenarios, threshold=args.threshold)
         return _verdict_document(verdict, threshold=args.threshold)
 
+    if args.build_lock:
+        suite_dir = Path(args.suite)
+        enforce_private_suite(suite_dir)
+        return build_lock(load_suite(suite_dir))
+
     lock_path = Path(args.lock)
     if not lock_path.is_file():
         raise Refusal(f"no holdout lock at {lock_path} (no suite to validate)")
-    suite = load_suite(Path(args.suite))
+    suite_dir = Path(args.suite)
+    enforce_private_suite(suite_dir)
+    suite = load_suite(suite_dir)
     verify_suite(suite, _read_json_object(lock_path))
 
     tasks_dir = Path(args.tasks_dir)
@@ -457,6 +514,8 @@ def run(argv: Sequence[str] | None, *, env: Mapping[str, str]) -> dict[str, obje
     verdict = run_suite(suite, make_backend=make_backend, threshold=args.threshold)
     document = _verdict_document(verdict, threshold=args.threshold)
     document["lock_sha256"] = sha256_hex(lock_path.read_bytes())
+    document["suite_sha256"] = _suite_sha256(suite)
+    append_record(Path(args.ledger), {**document, "schema": HOLDOUT_RECORD_SCHEMA})
     return document
 
 
@@ -467,13 +526,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--lock",
-        default="specs/holdout/holdout.lock",
+        default=str(private_root() / "holdout.lock"),
         help="path to the holdout lock that pins the suite",
     )
     parser.add_argument(
         "--suite",
-        default="specs/holdout",
-        help="directory of scenario Markdown files",
+        default=str(private_root() / "suite"),
+        help="directory of scenario Markdown files (must be owner-only)",
+    )
+    parser.add_argument(
+        "--ledger",
+        default=str(private_root() / "runs.jsonl"),
+        help="append-only holdout ledger (idempotent per record)",
     )
     parser.add_argument(
         "--tasks-dir",
@@ -489,6 +553,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--decide",
         default="",
         help="evaluate a JSON run-outcome document (pure; no deployment)",
+    )
+    parser.add_argument(
+        "--build-lock",
+        action="store_true",
+        help="print the holdout.lock for --suite (operator pinning; no probes)",
     )
     parser.add_argument(
         "--threshold",

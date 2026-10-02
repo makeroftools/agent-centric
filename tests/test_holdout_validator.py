@@ -44,6 +44,12 @@ _VINSUFF = _M.ScenarioVerdict.INSUFFICIENT
 _VALIDATOR_ENV = {_M.CONTEXT_ENV: _M.CONTEXT_VALUE}
 
 
+@pytest.fixture(autouse=True)
+def _isolate_private_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Never write to the real operator-private root during tests.
+    monkeypatch.setenv("CBP_HOLDOUT_ROOT", str(tmp_path / "priv"))
+
+
 def _runs(sid, priority, *outcomes):
     return _M.ScenarioRuns(scenario_id=sid, priority=priority, runs=tuple(outcomes))
 
@@ -113,6 +119,7 @@ class TestFailClosed:
         lock.write_text("{}\n", encoding="utf-8")
         suite = tmp_path / "suite"
         suite.mkdir()
+        os.chmod(suite, 0o700)
         code = _M.main(
             ["--lock", str(lock), "--suite", str(suite)], env=_VALIDATOR_ENV
         )
@@ -282,6 +289,7 @@ class TestCliEndToEnd:
     def _fixture(self, tmp_path: Path):
         suite = tmp_path / "suite"
         suite.mkdir()
+        os.chmod(suite, 0o700)
         _write_scenario(suite / "HO-0001.md", "HO-0001", "normal", "health.sh")
         tasks = tmp_path / "tasks"
         tasks.mkdir()
@@ -351,3 +359,130 @@ class TestDecideCli:
         code = _M.main(["--decide", str(path)], env=_VALIDATOR_ENV)
         assert code == _M.EXIT_REFUSED
         assert json.loads(capsys.readouterr().out)["verdict"] == "refused"
+
+class TestPrivateSuite:
+    def test_refuses_a_group_or_other_accessible_suite(self, tmp_path: Path) -> None:
+        suite = tmp_path / "s"
+        suite.mkdir()
+        os.chmod(suite, 0o755)
+        with pytest.raises(_M.Refusal):
+            _M.enforce_private_suite(suite)
+
+    def test_accepts_an_owner_only_suite(self, tmp_path: Path) -> None:
+        suite = tmp_path / "s"
+        suite.mkdir()
+        os.chmod(suite, 0o700)
+        _M.enforce_private_suite(suite)  # does not raise
+
+
+class TestLedger:
+    def test_append_is_idempotent(self, tmp_path: Path) -> None:
+        ledger = tmp_path / "runs.jsonl"
+        record = {"schema": "holdout.record/v1", "verdict": "green"}
+        assert _M.append_record(ledger, record) is True
+        assert _M.append_record(ledger, record) is False
+        assert len(ledger.read_text(encoding="utf-8").splitlines()) == 1
+
+    def test_record_carries_a_fingerprint(self, tmp_path: Path) -> None:
+        ledger = tmp_path / "runs.jsonl"
+        _M.append_record(ledger, {"verdict": "green"})
+        entry = json.loads(ledger.read_text(encoding="utf-8").splitlines()[0])
+        assert len(entry["fingerprint"]) == 64
+
+
+class TestSelfTest:
+    """A synthetic known-good / known-bad pair: the gate must separate them."""
+
+    def _run(self, tmp_path: Path, capsys: pytest.CaptureFixture[str], exit_code: int):
+        suite = tmp_path / "s"
+        suite.mkdir()
+        os.chmod(suite, 0o700)
+        _write_scenario(suite / "HO-0001.md", "HO-0001", "high", "health.sh")
+        tasks = tmp_path / "tasks"
+        tasks.mkdir()
+        script = tasks / "health.sh"
+        script.write_text(f"#!/usr/bin/env bash\nexit {exit_code}\n", encoding="utf-8")
+        os.chmod(script, 0o755)
+        lock = tmp_path / "holdout.lock"
+        lock.write_text(json.dumps(_M.build_lock(_M.load_suite(suite))), encoding="utf-8")
+        ledger = tmp_path / "runs.jsonl"
+        code = _M.main(
+            ["--suite", str(suite), "--lock", str(lock), "--tasks-dir", str(tasks),
+             "--ledger", str(ledger)],
+            env=_VALIDATOR_ENV,
+        )
+        return code, json.loads(capsys.readouterr().out), ledger
+
+    def test_known_good_is_green(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        code, out, ledger = self._run(tmp_path, capsys, 0)
+        assert code == _M.EXIT_OK and out["verdict"] == "green"
+        entry = json.loads(ledger.read_text(encoding="utf-8").splitlines()[0])
+        assert entry["validator_version"] == _M.VALIDATOR_VERSION
+        assert len(entry["lock_sha256"]) == 64
+
+    def test_known_bad_is_red(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        code, out, _ = self._run(tmp_path, capsys, 1)
+        assert code == _M.EXIT_OK and out["verdict"] == "red"
+
+    def test_reruns_are_identical_and_ledger_is_single(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        suite = tmp_path / "s"
+        suite.mkdir()
+        os.chmod(suite, 0o700)
+        _write_scenario(suite / "HO-0001.md", "HO-0001", "normal", "health.sh")
+        tasks = tmp_path / "tasks"
+        tasks.mkdir()
+        script = tasks / "health.sh"
+        script.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+        os.chmod(script, 0o755)
+        lock = tmp_path / "holdout.lock"
+        lock.write_text(json.dumps(_M.build_lock(_M.load_suite(suite))), encoding="utf-8")
+        ledger = tmp_path / "runs.jsonl"
+        args = ["--suite", str(suite), "--lock", str(lock), "--tasks-dir", str(tasks),
+                "--ledger", str(ledger)]
+        first = _M.main(args, env=_VALIDATOR_ENV)
+        out_first = capsys.readouterr().out
+        second = _M.main(args, env=_VALIDATOR_ENV)
+        out_second = capsys.readouterr().out
+        assert first == second == _M.EXIT_OK
+        assert out_first == out_second
+        assert len(ledger.read_text(encoding="utf-8").splitlines()) == 1
+
+
+class TestPublicBoundaryGuard:
+    def test_cli_refuses_a_world_readable_suite(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        suite = tmp_path / "s"
+        suite.mkdir()
+        os.chmod(suite, 0o755)
+        _write_scenario(suite / "HO-0001.md", "HO-0001", "normal", "health.sh")
+        tasks = tmp_path / "tasks"
+        tasks.mkdir()
+        script = tasks / "health.sh"
+        script.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+        os.chmod(script, 0o755)
+        lock = tmp_path / "holdout.lock"
+        lock.write_text(json.dumps(_M.build_lock(_M.load_suite(suite))), encoding="utf-8")
+        code = _M.main(
+            ["--suite", str(suite), "--lock", str(lock), "--tasks-dir", str(tasks)],
+            env=_VALIDATOR_ENV,
+        )
+        assert code == _M.EXIT_REFUSED
+        assert "owner-only" in json.loads(capsys.readouterr().out)["reason"]
+
+class TestBuildLockCli:
+    def test_builds_a_lock_for_a_private_suite(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        suite = tmp_path / "s"
+        suite.mkdir()
+        os.chmod(suite, 0o700)
+        _write_scenario(suite / "HO-0001.md", "HO-0001", "high")
+        code = _M.main(["--build-lock", "--suite", str(suite)], env=_VALIDATOR_ENV)
+        assert code == _M.EXIT_OK
+        lock = json.loads(capsys.readouterr().out)
+        assert lock["schema"] == "holdout.lock/v1"
+        assert lock["probe_contract"] == _M.PROBE_CONTRACT
+        assert sorted(lock["scenarios"]) == ["HO-0001"]

@@ -45,12 +45,23 @@ the target level.
 | **validator** (program) | yes (its input) | yes | n/a |
 | **operator** | authors scenarios | may run | yes |
 
-Isolation is **structural, not advisory**. The authoring context is configured to
-**deny read** of `specs/holdout/` (extending the `opencode.json` `permission`
-block beyond the existing write deny), and the validator runs as a **separate
-process** with its own path access, inside an ephemeral sandbox. A guard test
-asserts the deny rule is present; the ability to read the path is exactly what
-would make the gate theater.
+Isolation is **structural, not advisory**, and it rests on three facts:
+
+1. **The scenarios are not in the public repo.** `core/specs/holdout/` holds only
+   a placeholder `README.md` (guard-tested); real scenarios live in the
+   operator-private holdout root (`$CBP_HOLDOUT_ROOT`, default
+   `$HOME/.cbp/holdout/suite`), which is **owner-only** (`0700`). The validator
+   **refuses** if the suite directory is group- or other-accessible.
+2. **The authoring principal is unprivileged and distinct.** The authoring agent
+   runs as a separate user (`agent-runner`) with **no `sudo` and no `docker`**
+   (docker is root-equivalent), so it cannot read the operator's `0700` space.
+3. **The validator is a separate process.** It refuses unless
+   `CBP_HOLDOUT_CONTEXT=validator` is set.
+
+An `opencode.json` read-deny of `specs/holdout/` is kept as defence in depth, but
+it is **not** the guarantee: with `bash: allow` it is advisory — which is exactly
+why (1) and (2) carry the weight. The **authoritative L3 gate must not share a
+principal or host with the author**; the operator workstation is a rehearsal.
 
 ### 2. Scenario contract — deterministic and author-blind
 
@@ -125,10 +136,13 @@ nondeterminism always fails.
 
 ### 6. Recording
 
-Every validator run emits a deterministic **holdout record** — scenario ids,
-per-run outcomes, supermajority results, aggregate, input hashes, validator
-version — and appends it to an append-only ledger. The record is the evidence for
-the merge decision and the audit trail; a merge at L3 is reconstructible from it.
+Every validator run emits a deterministic **holdout record** (`holdout.record/v1`:
+validator version, lock hash, suite hash, per-scenario verdicts, aggregate) and
+appends it to an **append-only ledger** in the same operator-private root
+(`$HOME/.cbp/holdout/runs.jsonl`, mode `0600`). The record is pure — **no
+wall-clock** — so a retried run is **idempotent for its head**: a record whose
+content fingerprint is already present is never appended twice. The record is the
+evidence for the merge decision; a merge at L3 is reconstructible from it.
 
 ## Scope
 
