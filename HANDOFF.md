@@ -576,6 +576,16 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
 
 ## Next
 
+- **SPEC-0002 Phase-1 remainder — adapter-first design delivered (this
+  session, design only; no code change).** The design record is
+  [`docs/agent/spec-0002-phase1-adapter-design.md`](docs/agent/spec-0002-phase1-adapter-design.md):
+  the `Agent`→`Component` adapter (item 1, additive, equivalence-tested), the
+  removal of the module-level `_REGISTRY` global and `_child_class_for`
+  (item 2, parent-provisioned catalog + parent-declared children), and
+  `inproc`-only enforcement (item 6), staged S1–S5. Three open decisions
+  (§10) need operator review before the risky slices (S3/S4) land; S1/S2 are
+  additive. `tests/test_agent_conventions.py` 44 passed.
+
 - **L3 milestone delivered agent-side (this session).** The validator is
   L3-ready (A) and hermetically accepted (D); the isolation runbook (B) and
   scenario templates (C) live in the private companion. Remaining, in dependency

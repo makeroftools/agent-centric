@@ -33,6 +33,7 @@ revealed here, only as needed:
 | [`components.md`](components.md) | Adding a component (a skill); the scaffold and the contract. |
 | [`architecture.md`](architecture.md) | Harness vs tree; components contain or point to children; distribution boundaries. |
 | [`l3-milestone-plan.md`](l3-milestone-plan.md) | The L3 milestone plan — implemented agent-side; operator gates remain. |
+| [`spec-0002-phase1-adapter-design.md`](spec-0002-phase1-adapter-design.md) | SPEC-0002 Phase-1 remainder — adapter-first design (design only). |
 
 ## The constitution
 
