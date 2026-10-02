@@ -233,6 +233,11 @@ from .orchestrate import (
     run_artifact_plan,
 )
 from .pdf_intake import draft_from_pdf_text, extract_text
+from .provider_local import (
+    LocalTaskProviderAdapter,
+    LocalTaskResult,
+    LocalTaskRunner,
+)
 from .provider_runtime import (
     PROVIDER_EVIDENCE_ACTIONS,
     PROVIDER_EVIDENCE_SCHEMA,
@@ -682,6 +687,9 @@ __all__ = [
     "ReviewError",
     "enqueue_for_review",
     # Provider hosting runtime (provider.v1; SPEC-0020 §1-§4)
+    "LocalTaskProviderAdapter",
+    "LocalTaskRunner",
+    "LocalTaskResult",
     "ProviderRuntime",
     "ProviderRuntimeError",
     "ProviderCall",

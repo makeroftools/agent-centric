@@ -74,6 +74,33 @@ entry/contract is exposed, never placed inside the composition under test.
 Operator-authored scenarios, the authoritative `isolation: enforced` green run on
 a distinct principal/host, and the L3 flip remain operator gates.
 
+## Latest session (local-first provider adapter — delivered under L1)
+
+The roadmap plan's first below-gate unit (Workstream A) is **implemented, tested,
+and pushed**
+([`src/agent_centric/cbp/provider_local.py`](src/agent_centric/cbp/provider_local.py),
+SPEC-0020 §1/§2, 17 tests):
+
+- **`LocalTaskProviderAdapter`** implements the injected `ProviderAdapter` seam by
+  mapping each typed provider call (`observe`/`apply`/`health`/`teardown`) to a
+  **named, content-pinned local task** run through an injected `LocalTaskRunner`.
+  It is offline and network-free.
+- **Verify-then-apply:** a mutating script task is re-hashed on disk against its
+  `TaskBinding.digest` and refused on drift, unreadability, or a missing digest
+  (and a mutating **callable** is refused as unverifiable) **before any side
+  effect**.
+- **Additive observe role:** `ProviderTask.OBSERVE` is added additively (optional,
+  read-only, not required by `validate_provider`); the adapter parses the
+  `observe` task's **canonical-JSON** output, refusing malformed/non-canonical
+  payloads. `component-abi.v1` stays frozen; legacy `task.v1` untouched.
+- The full reconcile loop is exercised over the real runtime (fresh convergence,
+  already-converged no-op, idempotent evidence, failed-health rollback then
+  escalation). The **concrete** provider manifest/task wiring stays in the private
+  companion; a network/cloud adapter remains operator-gated.
+
+Core suite **1864 → 1881 passed** (+17); `mypy` 136 files; `ruff`/`cbp-check`
+green; basedpyright 0/0/0. **No operator gate was touched.**
+
 ## Latest session (roadmap planning — delivered under L1)
 
 A roadmap-planning session was held at the workspace root, as the prior handoffs'
@@ -344,7 +371,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 130 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1864 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 1881 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -426,7 +453,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (130 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1864 passed** (~65 s).
+  convention + home-path guard passed; full suite **1881 passed** (~65 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -485,8 +512,9 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
    operator-ratified (`accepted`); their **additive contracts**
    (`contracts/provider.py`, `contracts/work.py`), their runtimes
    (`cbp/provider_runtime.py`, `cbp/work_runtime.py`), and the work boot/bundle
-   bridge (`cbp/work_boot.py`) are **implemented and green** (151 tests); a
-   concrete provider adapter remains.
+   bridge (`cbp/work_boot.py`) are **implemented and green**, and the concrete
+   **local-first `provider.v1` adapter** (`cbp/provider_local.py`) is
+   **delivered**.
 5. `../conformance/AGENTS.md` and `../pro/AGENTS.md` — the shared contract and
    the Rust host.
 
@@ -535,7 +563,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > `pro/AGENTS.md`, `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm
 > **all four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and
 > clean, then run `core/HANDOFF.md`'s verification block (expect: `cbp-check`
-> READY, **1864 passed**; shared **31/31** in-process + external + Rust; WASM
+> READY, **1881 passed**; shared **31/31** in-process + external + Rust; WASM
 > **10/10**; network **14/14**; appointed **8/8**; infra **109 passed + 1
 > skipped**; basedpyright **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL`
 > workaround before any pytest run.
@@ -553,15 +581,14 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > work boot/bundle bridge (`cbp/work_boot.py`).
 >
 > **Next work, in order.**
-> (1) **Implement the ratified local-first `provider.v1` adapter.** The
-> roadmap-planning session is **done** — the plan of record is
-> [`docs/agent/roadmap-plan.md`](docs/agent/roadmap-plan.md). Add the generic
-> `LocalTaskProviderAdapter` in core behind the existing injected
-> `ProviderAdapter` seam (`cbp/provider_runtime.py`), resolving the observed-state
-> role **additively**, with offline tests; keep the concrete provider
-> manifest/task wiring in the private companion. Keep `component-abi.v1` frozen
-> and the legacy `task.v1` untouched. Next below-gate candidate after that:
-> threshold-signing **verification** (SPEC-0007 §6). Do not start any
+> (1) **Implement the next below-gate unit: threshold-signing verification**
+> (SPEC-0007 §6). The roadmap plan is delivered
+> ([`docs/agent/roadmap-plan.md`](docs/agent/roadmap-plan.md)) and its Workstream A
+> — the local-first `provider.v1` adapter
+> ([`src/agent_centric/cbp/provider_local.py`](src/agent_centric/cbp/provider_local.py))
+> — is **done**: `LocalTaskProviderAdapter` behind the injected `ProviderAdapter`
+> seam, additive `observe` role, verify-then-apply, offline tests. Keep
+> `component-abi.v1` frozen and the legacy `task.v1` untouched. Do not start any
 > operator-gated unit.
 > (2) **Operator-gated:** the deliberate L3 flip (author scenarios in
 > `$CBP_HOLDOUT_ROOT`, run the validator green with `isolation: enforced` on a
@@ -820,8 +847,10 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   notification, local-first/cloud, secret refs only). The deterministic runtime
   engine (injected adapter, idempotent evidence ledger, reconcile/rollback/
   escalation, emit-only notifications) is **delivered**
-  (`cbp/provider_runtime.py`, 20 tests); a concrete network adapter remains
-  operator-gated.
+  (`cbp/provider_runtime.py`, 20 tests). The concrete **local-first adapter**
+  is **delivered** (`cbp/provider_local.py`, 17 tests: named, content-pinned
+  local tasks; verify-then-apply; additive read-only `observe`); a
+  network/cloud adapter remains operator-gated.
 - **SPEC-0021** `accepted` — components as dynamic work: the additive **`work.v1`**
   contract is **delivered** (`contracts/work.py`, 49 tests: pure
   `work.v1 → component.v1` compile seam; verifier-gated generated work; explicit

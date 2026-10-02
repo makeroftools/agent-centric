@@ -446,5 +446,11 @@ class TestProvider:
         assert PROVIDER_SCHEMA == "provider.v1"
         assert ProviderVersion.V1 == "provider.v1"
         assert ProviderTarget.all() == ("local", "cloud")
-        assert set(ProviderTask.all()) == {"plan", "apply", "health", "teardown"}
+        assert set(ProviderTask.all()) == {
+            "plan",
+            "observe",
+            "apply",
+            "health",
+            "teardown",
+        }
         assert set(ReconcileAction.all()) == {"converged", "apply", "rollback", "escalate"}

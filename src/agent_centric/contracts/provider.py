@@ -87,9 +87,17 @@ class ProviderTarget:
 
 
 class ProviderTask:
-    """The fixed set of named tasks a provider declares (SPEC-0020 §1)."""
+    """The fixed set of named tasks a provider declares (SPEC-0020 §1).
+
+    ``OBSERVE`` is **additive and optional**: a provider whose observed state is
+    read through a concrete, task-executing adapter declares a read-only
+    ``observe`` task; a provider that is never observed need not. It is not
+    required by :func:`validate_provider` and it is **not** gated (it is
+    read-only, never mutating).
+    """
 
     PLAN = "plan"
+    OBSERVE = "observe"
     APPLY = "apply"
     HEALTH = "health"
     TEARDOWN = "teardown"
@@ -98,11 +106,11 @@ class ProviderTask:
 
     @classmethod
     def all(cls) -> tuple[str, ...]:
-        return (cls.PLAN, cls.APPLY, cls.HEALTH, cls.TEARDOWN)
+        return (cls.PLAN, cls.OBSERVE, cls.APPLY, cls.HEALTH, cls.TEARDOWN)
 
     @classmethod
     def gated(cls) -> tuple[str, ...]:
-        """The network-facing tasks gated by verify-then-apply."""
+        """The network-facing tasks gated by verify-then-apply (mutating only)."""
         return (cls.APPLY, cls.HEALTH, cls.TEARDOWN)
 
 
