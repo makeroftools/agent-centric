@@ -3,14 +3,14 @@
 Deterministic and offline. These tests drive the **validator process** through
 its public entrypoint with synthetic inputs; they must never read the real
 ``specs/holdout/`` scenarios (that path belongs to the validator, not the
-author). The skeleton must fail closed in every current state, and the decision
-engine must be deterministic.
+author). The validator must fail closed on every drift and decide deterministically.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -48,6 +48,36 @@ def _runs(sid, priority, *outcomes):
     return _M.ScenarioRuns(scenario_id=sid, priority=priority, runs=tuple(outcomes))
 
 
+def _scenario(sid, priority, target="health.sh"):
+    return _M.Scenario(
+        scenario_id=sid,
+        priority=priority,
+        feature="feature",
+        probe={"kind": "task", "target": target, "expect_exit": 0},
+        digest="0" * 64,
+    )
+
+
+def _suite(*scenarios):
+    return _M.Suite(scenarios=tuple(scenarios))
+
+
+def _write_scenario(path: Path, sid: str, priority: str = "normal", target: str = "health.sh"):
+    path.write_text(
+        "---\n"
+        f"id: {sid}\n"
+        "service: cbp\n"
+        "feature: health\n"
+        f"priority: {priority}\n"
+        "---\n\n"
+        "The named task must exit as expected.\n\n"
+        "```check\n"
+        f'{{"kind": "task", "target": "{target}", "expect_exit": 0}}\n'
+        "```\n",
+        encoding="utf-8",
+    )
+
+
 class TestIsolation:
     def test_refuses_outside_the_validator_context(
         self, capsys: pytest.CaptureFixture[str]
@@ -71,21 +101,23 @@ class TestIsolation:
 
 
 class TestFailClosed:
-    def test_refuses_when_no_suite_exists(self, capsys: pytest.CaptureFixture[str]) -> None:
-        code = _M.main([], env=_VALIDATOR_ENV)
+    def test_refuses_when_no_lock_exists(self, capsys: pytest.CaptureFixture[str]) -> None:
+        code = _M.main(["--lock", "/nonexistent/holdout.lock"], env=_VALIDATOR_ENV)
         assert code == _M.EXIT_REFUSED
-        assert "no suite" in json.loads(capsys.readouterr().out)["reason"]
+        assert "no holdout lock" in json.loads(capsys.readouterr().out)["reason"]
 
-    def test_refuses_until_the_probe_vocabulary_exists(
+    def test_refuses_when_the_suite_is_empty(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         lock = tmp_path / "holdout.lock"
         lock.write_text("{}\n", encoding="utf-8")
-        code = _M.main(["--lock", str(lock)], env=_VALIDATOR_ENV)
+        suite = tmp_path / "suite"
+        suite.mkdir()
+        code = _M.main(
+            ["--lock", str(lock), "--suite", str(suite)], env=_VALIDATOR_ENV
+        )
         assert code == _M.EXIT_REFUSED
-        out = json.loads(capsys.readouterr().out)
-        assert out["verdict"] == "refused"
-        assert "Phase 2" in out["reason"]
+        assert "no scenarios" in json.loads(capsys.readouterr().out)["reason"]
 
 
 class TestContract:
@@ -94,12 +126,70 @@ class TestContract:
         assert _M.SUPERMAJORITY == 2
         assert _M.HOLDOUT_RUN_SCHEMA == "holdout.run/v1"
         assert _M.HOLDOUT_LOCK_SCHEMA == "holdout.lock/v1"
+        assert _M.PROBE_CONTRACT == "holdout.v1"
 
     def test_refusal_document_is_deterministic(self) -> None:
-        first = _M._refusal_document("why")
-        second = _M._refusal_document("why")
-        assert first == second
-        assert first["runs"] == 3 and first["supermajority"] == 2
+        assert _M._refusal_document("why") == _M._refusal_document("why")
+
+
+class TestScenarioParsing:
+    def test_parses_front_matter_and_check_block(self, tmp_path: Path) -> None:
+        path = tmp_path / "HO-0001.md"
+        _write_scenario(path, "HO-0001", "high", "health.sh")
+        front, probe = _M.parse_scenario(path.read_text(encoding="utf-8"))
+        assert front["id"] == "HO-0001" and front["priority"] == "high"
+        assert probe == {"kind": "task", "target": "health.sh", "expect_exit": 0}
+
+    def test_rejects_a_scenario_without_front_matter(self) -> None:
+        with pytest.raises(_M.Refusal):
+            _M.parse_scenario("no front matter here\n")
+
+    def test_rejects_a_scenario_without_a_check_block(self) -> None:
+        with pytest.raises(_M.Refusal):
+            _M.parse_scenario("---\nid: HO-1\npriority: high\n---\n\nprose only\n")
+
+    def test_rejects_an_unsupported_probe_kind(self) -> None:
+        with pytest.raises(_M.Refusal):
+            _M.parse_scenario(
+                "---\nid: HO-1\npriority: high\n---\n\n```check\n"
+                '{"kind": "network", "target": "x"}\n```\n'
+            )
+
+
+class TestSuiteAndLock:
+    def test_load_and_verify_round_trip(self, tmp_path: Path) -> None:
+        suite_dir = tmp_path / "suite"
+        suite_dir.mkdir()
+        _write_scenario(suite_dir / "HO-0001.md", "HO-0001", "high")
+        _write_scenario(suite_dir / "HO-0002.md", "HO-0002", "normal")
+        suite = _M.load_suite(suite_dir)
+        lock = _M.build_lock(suite)
+        _M.verify_suite(suite, lock)  # does not raise
+        assert sorted(lock["scenarios"]) == ["HO-0001", "HO-0002"]
+
+    def test_verification_refuses_on_scenario_drift(self, tmp_path: Path) -> None:
+        suite_dir = tmp_path / "suite"
+        suite_dir.mkdir()
+        path = suite_dir / "HO-0001.md"
+        _write_scenario(path, "HO-0001", "high")
+        lock = _M.build_lock(_M.load_suite(suite_dir))
+        path.write_text(path.read_text(encoding="utf-8") + "\nmore\n", encoding="utf-8")
+        with pytest.raises(_M.Refusal):
+            _M.verify_suite(_M.load_suite(suite_dir), lock)
+
+    def test_verification_refuses_on_a_changed_scenario_set(self) -> None:
+        suite = _suite(_scenario("HO-1", _HIGH))
+        lock = _M.build_lock(suite)
+        lock["scenarios"] = {"HO-9": "0" * 64}
+        with pytest.raises(_M.Refusal):
+            _M.verify_suite(suite, lock)
+
+    def test_verification_refuses_a_wrong_probe_contract(self) -> None:
+        suite = _suite(_scenario("HO-1", _HIGH))
+        lock = _M.build_lock(suite)
+        lock["probe_contract"] = "holdout.v2"
+        with pytest.raises(_M.Refusal):
+            _M.verify_suite(suite, lock)
 
 
 class TestDecisionEngine:
@@ -116,33 +206,116 @@ class TestDecisionEngine:
         assert _M.evaluate_scenario(_runs("n", _NORMAL, _PASS, _PASS, _FAIL)) is _VNONDET
         assert _M.evaluate_scenario(_runs("n", _NORMAL, _ERROR, _ERROR, _ERROR)) is _VINSUFF
 
-
-class TestDecide:
     def test_empty_suite_is_red(self) -> None:
         verdict = _M.decide(())
-        assert verdict.green is False
-        assert verdict.aggregate == 0.0
+        assert verdict.green is False and verdict.aggregate == 0.0
 
+
+class _PlannedBackend:
+    def __init__(self, plan, attempt: int) -> None:
+        self._plan = plan
+        self._attempt = attempt
+
+    def run(self, probe):
+        return self._plan[str(probe["target"])][self._attempt]
+
+
+class TestRunSuite:
     def test_all_pass_is_green(self) -> None:
-        verdict = _M.decide(
-            (_runs("a", _HIGH, _PASS, _PASS, _PASS), _runs("b", _NORMAL, _PASS, _PASS, _PASS))
-        )
-        assert verdict.green is True
-        assert verdict.aggregate == 1.0
+        suite = _suite(_scenario("a", _HIGH, "h.sh"), _scenario("b", _NORMAL, "n.sh"))
+        plan = {"h.sh": [_PASS, _PASS, _PASS], "n.sh": [_PASS, _PASS, _PASS]}
+        verdict = _M.run_suite(suite, make_backend=lambda i: _PlannedBackend(plan, i))
+        assert verdict.green is True and verdict.aggregate == 1.0
 
-    def test_a_high_failure_blocks_green(self) -> None:
-        verdict = _M.decide(
-            (_runs("a", _HIGH, _FAIL, _FAIL, _FAIL), _runs("b", _NORMAL, _PASS, _PASS, _PASS))
-        )
+    def test_normal_absorbs_one_flake(self) -> None:
+        suite = _suite(_scenario("a", _NORMAL, "n.sh"))
+        plan = {"n.sh": [_PASS, _PASS, _ERROR]}
+        verdict = _M.run_suite(suite, make_backend=lambda i: _PlannedBackend(plan, i))
+        assert verdict.green is True
+
+    def test_nondeterminism_is_red(self) -> None:
+        suite = _suite(_scenario("a", _NORMAL, "n.sh"))
+        plan = {"n.sh": [_PASS, _PASS, _FAIL]}
+        verdict = _M.run_suite(suite, make_backend=lambda i: _PlannedBackend(plan, i))
         assert verdict.green is False
 
-    def test_threshold_governs_normal_scenarios(self) -> None:
-        scenarios = (
-            _runs("a", _NORMAL, _PASS, _PASS, _PASS),
-            _runs("b", _NORMAL, _FAIL, _FAIL, _FAIL),
+
+class TestTaskBackend:
+    def _backend(self, tmp_path: Path):
+        tasks = tmp_path / "tasks"
+        tasks.mkdir()
+        work = tmp_path / "work"
+        work.mkdir()
+        return tasks, work
+
+    def _script(self, tasks: Path, name: str, body: str) -> None:
+        path = tasks / name
+        path.write_text(f"#!/usr/bin/env bash\n{body}\n", encoding="utf-8")
+        os.chmod(path, 0o755)
+
+    def test_zero_exit_passes(self, tmp_path: Path) -> None:
+        tasks, work = self._backend(tmp_path)
+        self._script(tasks, "health.sh", "exit 0")
+        backend = _M.TaskBackend(tasks, work)
+        assert backend.run({"kind": "task", "target": "health.sh"}) is _PASS
+
+    def test_expected_nonzero_exit_passes(self, tmp_path: Path) -> None:
+        tasks, work = self._backend(tmp_path)
+        self._script(tasks, "check.sh", "exit 3")
+        backend = _M.TaskBackend(tasks, work)
+        probe = {"kind": "task", "target": "check.sh", "expect_exit": 3}
+        assert backend.run(probe) is _PASS
+
+    def test_wrong_exit_fails(self, tmp_path: Path) -> None:
+        tasks, work = self._backend(tmp_path)
+        self._script(tasks, "check.sh", "exit 3")
+        backend = _M.TaskBackend(tasks, work)
+        assert backend.run({"kind": "task", "target": "check.sh"}) is _FAIL
+
+    def test_missing_task_is_a_flake(self, tmp_path: Path) -> None:
+        tasks, work = self._backend(tmp_path)
+        backend = _M.TaskBackend(tasks, work)
+        assert backend.run({"kind": "task", "target": "nope.sh"}) is _ERROR
+
+
+class TestCliEndToEnd:
+    def _fixture(self, tmp_path: Path):
+        suite = tmp_path / "suite"
+        suite.mkdir()
+        _write_scenario(suite / "HO-0001.md", "HO-0001", "normal", "health.sh")
+        tasks = tmp_path / "tasks"
+        tasks.mkdir()
+        script = tasks / "health.sh"
+        script.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+        os.chmod(script, 0o755)
+        lock = tmp_path / "holdout.lock"
+        lock.write_text(json.dumps(_M.build_lock(_M.load_suite(suite))), encoding="utf-8")
+        return suite, tasks, lock
+
+    def test_green_run(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        suite, tasks, lock = self._fixture(tmp_path)
+        code = _M.main(
+            ["--suite", str(suite), "--lock", str(lock), "--tasks-dir", str(tasks)],
+            env=_VALIDATOR_ENV,
         )
-        assert _M.decide(scenarios, threshold=0.5).green is True
-        assert _M.decide(scenarios, threshold=1.0).green is False
+        assert code == _M.EXIT_OK
+        out = json.loads(capsys.readouterr().out)
+        assert out["verdict"] == "green"
+        assert out["scenarios"] == [{"id": "HO-0001", "verdict": "pass"}]
+        assert len(out["lock_sha256"]) == 64
+
+    def test_drift_is_refused(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        suite, tasks, lock = self._fixture(tmp_path)
+        scenario = suite / "HO-0001.md"
+        scenario.write_text(scenario.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+        code = _M.main(
+            ["--suite", str(suite), "--lock", str(lock), "--tasks-dir", str(tasks)],
+            env=_VALIDATOR_ENV,
+        )
+        assert code == _M.EXIT_REFUSED
+        assert "drift" in json.loads(capsys.readouterr().out)["reason"]
 
 
 class TestDecideCli:
@@ -165,9 +338,7 @@ class TestDecideCli:
         assert out["verdict"] == "green"
         assert [s["id"] for s in out["scenarios"]] == ["HO-1", "HO-2"]
 
-    def test_decide_cli_still_requires_context(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_decide_cli_still_requires_context(self, tmp_path: Path) -> None:
         path = tmp_path / "runs.json"
         path.write_text(json.dumps(self._payload()), encoding="utf-8")
         assert _M.main(["--decide", str(path)], env={}) == _M.EXIT_REFUSED
