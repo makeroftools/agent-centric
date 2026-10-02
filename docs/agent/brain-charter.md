@@ -5,7 +5,10 @@
 > eventual home is [`SPEC-0010`](../../specs/SPEC-0010-extensibility-knowledge-graphs-rsi.md)
 > (the ontological knowledge base), with
 > [`SPEC-0017`](../../specs/SPEC-0017-frontier-workstreams.md) workstream 1
-> (formal semantics) as its verification sibling. Entry point:
+> (formal semantics) as its verification sibling. The dedicated session has now
+> produced the **draft design spec**
+> [`SPEC-0023`](../../specs/SPEC-0023-ontology-semantic-graphs.md); it carries no
+> design freeze until the operator ratifies its open decisions. Entry point:
 > [`AGENTS.md`](../../AGENTS.md).
 
 ## The intent
@@ -75,7 +78,21 @@ a rushed ontology would become a permanent, load-bearing mistake.
 - Passive catalogs; evidence immutable (Law 10).
 - The ontology change is constitutional-level and, once frozen, additive-only.
 
+## Design spec (draft)
+
+[`SPEC-0023`](../../specs/SPEC-0023-ontology-semantic-graphs.md) records the
+dedicated-session output: the `ontology.v1` / `semantic-graph.v1` / `shapes.v1` /
+`closure.v1` contracts; a decidable **Datalog + stratified-negation** closure
+(SHACL gates; OWL-RL optional); and the answer to the parent-subgraph question —
+**a parent holds a derived, pinned closure over its children's published facts, and
+never owns or mutates child state**. It also records the operator's open
+"secret sauce" question (distribution vs `SPEC-0016`'s one-semantics invariant) and
+marks every choice **PROPOSED** until ratified.
+
 ## Next step
 
-A dedicated study session. Its output is a **spec** (and, if needed, a refinement
-of `SPEC-0010`), not an implementation.
+The operator ratifies `SPEC-0023`'s open decisions — a **grilling session** is the
+intended venue — then a focused session authors the conformance vectors and the
+`ontology.v1`/`closure.v1` schemas. No implementation before ratification; the
+output of the study is a **spec** (and, if needed, a refinement of `SPEC-0010`),
+not an implementation.

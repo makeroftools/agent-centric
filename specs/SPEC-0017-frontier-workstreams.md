@@ -26,6 +26,10 @@ noted, its own planning session) before implementation.
 
 ### 1. Formal semantics, ontology, and closed shapes (dedicated session)
 
+> **Drafted:** the dedicated session produced
+> [`SPEC-0023`](SPEC-0023-ontology-semantic-graphs.md) — the `ontology.v1`,
+> closed-shape, and pinned-entailment-closure design.
+
 The deterministic formalizer at the model boundary (SPEC-0002 §4) grows into a
 real formal-semantics layer: an **ontology** (TBox) as a versioned, signed,
 content-addressed contract; a **semantic graph** (ABox) as component-owned state;

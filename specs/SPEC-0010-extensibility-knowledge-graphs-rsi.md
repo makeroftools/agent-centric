@@ -10,6 +10,10 @@ owner: operator
 
 # Extensibility — knowledge graphs and bounded recursive self-improvement
 
+> The dedicated-session design for the semantic layer is drafted in
+> [`SPEC-0023`](SPEC-0023-ontology-semantic-graphs.md) (`ontology.v1`,
+> `semantic-graph.v1`, closed shapes, and the pinned entailment closure).
+
 **Operator direction (recorded).** The architecture will eventually include
 **knowledge graphs** with an **ontology mapped on top of semantic graphs**, and
 **recursive self-improvement** (RL / active inference). This spec records the
