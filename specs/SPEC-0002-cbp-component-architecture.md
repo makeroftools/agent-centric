@@ -145,14 +145,24 @@ Each step is its own spec-accepted change; no big-bang.
 
 ## 12. Acceptance criteria and holdout
 
-- [ ] `component.v1` / `network.v1` / `review.v1` exist and are additive.
-- [ ] The `Agent` adapter satisfies the `Component` contract; no component-semantics test regresses under the operator's run.
-- [ ] No module-level registry global and no central child-class map remain.
+- [x] `component.v1` / `network.v1` / `review.v1` exist and are additive.
+- [x] The `Agent` adapter satisfies the `Component` contract; no component-semantics test regresses under the operator's run.
+- [x] No module-level registry global and no central child-class map remain.
 - [ ] An identical `network.v1` document schedules identically (CPM) and re-executes identically (replay) — proven by holdout scenarios in [`specs/holdout/`](holdout/README.md).
-- [ ] Every response carries `confidence`; a sub-threshold outcome appears in the persistent Review queue.
-- [ ] Only the `inproc` backend is enabled; others fail closed.
+- [x] Every response carries `confidence`; a sub-threshold outcome appears in the persistent Review queue.
+- [x] Only the `inproc` backend is enabled; others fail closed.
 
 Holdout scenarios (author-blind, validator-run) cover: determinism/replay, the verification spine, CPM schedule reproducibility, parent-context barrier determinism, component self-containment, and absence of globals.
+
+> **Progress (Phase-1, recorded).** Items 1, 2, and 6 are delivered
+> (adapter-first, under L1): `cbp/component_adapter.py`; a parent-provisioned
+> `ComponentCatalog` (`cbp/component_catalog.py`) that removed the module-level
+> registry global and the central `_child_class_for` map (parent-declared kinds;
+> an undeclared kind fails closed); and `inproc`-only backend enforcement. The
+> schedule/replay criterion is proven by the network suite (**14/14**,
+> cross-runtime); its author-blind holdout half remains operator-gated
+> (SPEC-0019), so this spec stays `accepted`. Design + progress:
+> [`docs/agent/spec-0002-phase1-adapter-design.md`](../docs/agent/spec-0002-phase1-adapter-design.md).
 
 ## 13. Risks / invariants
 

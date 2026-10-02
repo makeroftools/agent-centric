@@ -80,20 +80,22 @@ product live, with the Core public repo as a *reflection* that helps build it.
       list) are both fixed.
 - [x] The MVP demo is frozen as the acceptance scenario, with its distribution
       element resolved.
-- [ ] Every MVP capability has a deterministic test; the operator's run and CI
+- [x] Every MVP capability has a deterministic test; the operator's run and CI
       are the record (Law 12).
-- [ ] The spec status record is corrected (SPEC-0009 understated; the
+- [x] The spec status record is corrected (SPEC-0009 understated; the
       `implemented` specs' checkboxes un-ticked).
 - [x] This spec moves `draft` → `accepted` once the definition is fixed.
 
-> **Status (authoring).** The "viable" demonstration is now deterministic and
-> tested offline (`tests/test_viable_demo.py`, `examples/viable_demo.py`): boot a
-> signed `components.lock` → typed-port `network.v1` dataflow over the verified
-> entries → durable-ledger replay, with a recorded, confidence-scored `model`
-> node (`cbp/boot_network.py`). The umbrella lock is committed test-signed; the
-> operator re-signs it with the real key (key gate). The remaining capability
-> tests are tracked under SPEC-0002/SPEC-0008/SPEC-0009; the operator/CI run
-> remains the record (Law 12).
+> **Status (authoring).** The "viable" demonstration is deterministic and tested
+> offline (`tests/test_viable_demo.py`, `examples/viable_demo.py`): boot a signed
+> `components.lock` → typed-port `network.v1` dataflow over the verified entries →
+> durable-ledger replay, with a recorded, confidence-scored `model` node
+> (`cbp/boot_network.py`). The umbrella lock is committed test-signed; the
+> operator re-signs it with the real key (key gate). The status record is now
+> reconciled: SPEC-0008/SPEC-0009 are `implemented`, SPEC-0002 Phase-1 items 1/2/6
+> are delivered, and the `implemented` specs' acceptance boxes are ticked. This
+> spec stays `accepted` — it freezes the MVP definition; the full-version build is
+> tracked in SPEC-0012–SPEC-0019. The operator/CI run remains the record (Law 12).
 
 ## Risks / invariants
 

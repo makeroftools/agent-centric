@@ -38,9 +38,9 @@ the mapping.
 
 ## Acceptance criteria
 
-- [ ] No skill declares `metadata.terminates-in`.
-- [ ] Every discovered skill has `metadata.component == <skill name>`.
-- [ ] `tests/test_agent_conventions.py`, `ruff`, and `mypy src` are clean.
+- [x] No skill declares `metadata.terminates-in`.
+- [x] Every discovered skill has `metadata.component == <skill name>`.
+- [x] `tests/test_agent_conventions.py`, `ruff`, and `mypy src` are clean.
 
 ## Risks / invariants
 

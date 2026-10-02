@@ -44,12 +44,12 @@ be wired into the creation path and the guard, not maintained by hand.
 
 ## Acceptance criteria
 
-- [ ] Every discovered skill satisfies the canonical contract (guard).
-- [ ] A skill directory without `SKILL.md` fails the guard.
-- [ ] `tools/new-skill.sh` exists, is executable, and refuses invalid names and
+- [x] Every discovered skill satisfies the canonical contract (guard).
+- [x] A skill directory without `SKILL.md` fails the guard.
+- [x] `tools/new-skill.sh` exists, is executable, and refuses invalid names and
       overwrites.
-- [ ] `.claude/skills` exposes every discovered skill.
-- [ ] `tests/test_agent_conventions.py`, `ruff`, and `mypy src` are clean.
+- [x] `.claude/skills` exposes every discovered skill.
+- [x] `tests/test_agent_conventions.py`, `ruff`, and `mypy src` are clean.
 
 ## Risks / invariants
 

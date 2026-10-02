@@ -4,7 +4,7 @@ title: Shell design interface and the n8n authoring adapter
 type: feature
 target_repo: agent-centric
 target_branch: main
-status: draft
+status: implemented
 owner: operator
 ---
 

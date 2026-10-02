@@ -57,15 +57,15 @@ incomplete. A read-only audit found:
 
 ## Acceptance criteria
 
-- [ ] `docs/agent/{levels,testing,verification,committing}.md` exist and are
+- [x] `docs/agent/{levels,testing,verification,committing}.md` exist and are
       linked from `docs/agent/README.md`.
-- [ ] Every relative markdown link in tracked `.md` files resolves
+- [x] Every relative markdown link in tracked `.md` files resolves
       (`TestProgressiveDisclosure`).
-- [ ] Each in-scope doc carries the entry pointer to `AGENTS.md`
+- [x] Each in-scope doc carries the entry pointer to `AGENTS.md`
       (`TestStragglers`).
-- [ ] `opencode.json` keeps `$schema` and `permission.edit = "deny"`; its
+- [x] `opencode.json` keeps `$schema` and `permission.edit = "deny"`; its
       `instructions` include `docs/agent/README.md`.
-- [ ] `tests/test_agent_conventions.py` passes; `ruff` and `mypy src` clean.
+- [x] `tests/test_agent_conventions.py` passes; `ruff` and `mypy src` clean.
 
 ## Risks / invariants
 

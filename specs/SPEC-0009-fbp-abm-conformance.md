@@ -4,7 +4,7 @@ title: FBP/ABM conformance — ports, Information Packets, subnets, and composit
 type: feature
 target_repo: agent-centric
 target_branch: main
-status: draft
+status: implemented
 owner: operator
 ---
 
