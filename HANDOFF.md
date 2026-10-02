@@ -41,10 +41,12 @@ and the **SPEC-0011 "viable" end-to-end** — boot a signed lock → typed-port
 dataflow → durable-ledger replay, with a recorded, confidence-scored `model`
 node (`cbp/boot_network.py`).
 
-The **L3 isolated holdout validator (SPEC-0019)** is authored and partly built:
-the author-blind isolation guard, the deterministic decision engine, and a
-fail-closed suite/lock + probe-runner pipeline (`tools/holdout-validate.py`, 30
-tests). Network-boot probes and operator-authored scenarios remain.
+The **L3 isolated holdout validator (SPEC-0019)** is built with **structural**
+isolation: scenarios live in the operator-private root (owner-only; the public
+`specs/holdout/` is a placeholder), the validator is a separate context-gated
+process, and runs emit an append-only, content-addressed **idempotent** ledger.
+It has a synthetic known-good/known-bad self-test. Operator-authored scenarios,
+network-boot probes, and the L3 flip remain.
 
 ## Verify everything (do this before acting)
 
@@ -411,14 +413,17 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   infra **authored + hardened** (deterministic tasks, a pull/apply agent that
   content-verifies every mutating task, a pinned host definition + `service.v1`
   instance, enrollment runbook, infra CI, DR drill) — **nothing provisioned**.
-- **SPEC-0019** `draft` — the **L3 isolated holdout validator**: author-blind
-  isolation (read-deny of `specs/holdout/` + a context-gated separate process), a
-  deterministic decision engine (`ERROR` = infra flake; mixed PASS/FAIL =
-  nondeterministic; high = all-run; normal = 2-of-3), and a fail-closed
-  `holdout.lock` verification + `holdout.v1` task-probe runner
-  (`tools/holdout-validate.py`, 30 tests; core `19547cd`). Network-boot probes,
-  the recorded ledger, and operator-authored scenarios remain; L3 stays
-  `declared-gated`.
+- **SPEC-0019** `draft` — the **L3 isolated holdout validator**: **structural**
+  isolation (scenarios in the operator-private root, owner-only; public
+  `specs/holdout/` a placeholder; the authoring principal must be distinct and
+  unprivileged — no docker/sudo, since docker is root-equivalent), a context-
+  gated separate process, the deterministic decision engine (`ERROR` = infra
+  flake; mixed PASS/FAIL = nondeterministic; high = all-run; normal = 2-of-3),
+  fail-closed `holdout.lock` verification + a `holdout.v1` task-probe runner, an
+  append-only **idempotent run ledger**, and a synthetic known-good/known-bad
+  self-test (`tools/holdout-validate.py`, 39 tests; core `26b555c`).
+  Operator-authored scenarios, network-boot probes, and the L3 flip remain; L3
+  stays `declared-gated`.
 
 ## Next
 
@@ -438,6 +443,12 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   bootstrap the intranet host (native Gitea + OpenBao + pull/apply agent) under
   verify-then-apply. The private mission brief holds the Phase-1 plan and a
   paste-in kickoff prompt for a new session.
+- **L3 holdout gate (SPEC-0019)** — the validator is built and its isolation is
+  **structural**; the remaining steps are operator-side: author scenarios in the
+  operator-private root (`$CBP_HOLDOUT_ROOT`, default `$HOME/.cbp/holdout/suite`),
+  pin them (`tools/holdout-validate.py --build-lock --suite …`), run the validator
+  to **green** on a principal/host distinct from the author, then flip
+  `[levels.L3] status` deliberately.
 - **Signing** — **key rotation delivered** (`cbp/trust.py`); optional threshold
   signing remains.
 - **SPEC-0017 frontier** — formal semantics/ontology; reduction + formal
