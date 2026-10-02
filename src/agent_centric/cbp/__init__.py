@@ -368,6 +368,13 @@ from .transport import (
 )
 from .web import DEFAULT_HOST, DEFAULT_PORT, CbpLandingServer
 from .web import serve as serve_landing
+from .work_boot import (
+    WorkBootError,
+    WorkTaskSpec,
+    bind_work_tasks,
+    bundle_task_loader,
+    run_bound_work_network,
+)
 from .work_runtime import (
     BoundTask,
     MaterializedWork,
@@ -732,6 +739,11 @@ __all__ = [
     "TaskLoader",
     "BoundTask",
     "WorkBinder",
+    "WorkBootError",
+    "WorkTaskSpec",
+    "bundle_task_loader",
+    "bind_work_tasks",
+    "run_bound_work_network",
     # Landing-page server (stdlib http.server; local-only, actionable)
     "CbpLandingServer",
     "serve_landing",
