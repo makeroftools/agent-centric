@@ -72,7 +72,11 @@ Three graphs stay distinct — **process** (`network.v1`), **design**
    composite **semantic subnet** so parent-subgraphs compose and execute.
    **Delivered** (`contracts/closure.py`, `compute_closure`, `SemanticSubnet`;
    the `ontology` category's `closure` case, cross-runtime **11/11**).
-3. **M3 (deferred) — authored/instance facts; a standard export adapter.**
+3. **M3 — authored/instance facts; a standard export adapter.** **Delivered**
+   (`cbp/ontology_store.py`: a canonical append-only assertion log + a derived,
+   disposable SQLite index/closure cache; `cbp/rdf_export.py`: deterministic,
+   fail-closed one-way N-Triples/Turtle; the `ontology` category's `export` case,
+   cross-runtime **12/12**).
 
 ## Storage
 

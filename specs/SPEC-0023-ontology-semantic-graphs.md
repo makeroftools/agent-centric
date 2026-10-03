@@ -291,7 +291,7 @@ violation), and `scope-escape` (query/roll-up outside the named scope).
 | Capability discovery & composition + `ontology` conformance category | **delivered (M1)** |
 | Decidable closure (Datalog + stratified negation) + closed-shape gates | **delivered (M2)** |
 | Composite **semantic subnet** + parent-held derived closure | **delivered (M2)** |
-| Authored/instance facts; standard export adapter | **deferred (M3)** |
+| Authored/instance facts; standard export adapter | **delivered (M3)** |
 | Non-deterministic linking / full OWL DL / non-additive mutation | **out** |
 | Parent owning or mutating child ABox | **out** |
 | Conflating the semantic graph with the process graph | **out** |

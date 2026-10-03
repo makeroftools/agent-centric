@@ -13,9 +13,9 @@ L3, gated. The suite is a release gate; a human holds the review gate. Never act
 above L2 without the operator editing [`.agentfactory.toml`](.agentfactory.toml).
 
 **All four repos on `main`, clean, pushed.** Verify with §"Verify everything"
-(authoritative): core **2043 passed**, `mypy` 142, `cbp-check` READY; conformance
+(authoritative): core **2074 passed**, `mypy` 144, `cbp-check` READY; conformance
 shared **31/31** + network **14/14** + appointed **8/8** + ui **10/10** + ontology
-**11/11**; pro **31/31 + 10/10 + 14/14 + 8/8 + 10/10 + 11/11**; infra **137 passed,
+**12/12**; pro **31/31 + 10/10 + 14/14 + 8/8 + 10/10 + 12/12**; infra **137 passed,
 2 skipped**;
 basedpyright **0/0/0**.
 
@@ -42,24 +42,24 @@ basedpyright **0/0/0**.
   (`ui.ref.v1` + `cbp/ui_runtime.pinned_ui_ref`) — a separate, content-addressed
   presentation binding that never moves the behavior component's content address
   (+7 tests).
-- **SPEC-0023 M1 — the semantic layer** (below the gates): the Brain charter is
+- **SPEC-0023 M1–M3 — the semantic layer** (below the gates): the Brain charter is
   realized as a ratified design (`specs/SPEC-0023`, decisions S1–S20) with an
-  implemented, cross-runtime **M1 kernel** — `contracts/ontology.py` +
-  `cbp/ontology_runtime.py` (28 tests), a shared **`ontology`** conformance
-  category (`../conformance`), and a Rust runner (`../pro/src/ontology.rs`),
-  certified **11/11** on both hosts (M1 + the M2 `closure` case). Summary:
-  `docs/agent/ontology.md`.
+  implemented, cross-runtime kernel — `contracts/ontology.py` +
+  `contracts/closure.py` + `cbp/ontology_runtime.py` (28 + 32 tests), the
+  authored-fact store (`cbp/ontology_store.py`) and the one-way RDF export
+  adapter (`cbp/rdf_export.py`), a shared **`ontology`** conformance category
+  (`../conformance`, **12/12**), and a Rust runner (`../pro/src/ontology.rs`).
+  M1 is projection + discovery + shapes; M2 is the pinned entailment closure +
+  the composite semantic subnet; M3 is authored/instance facts + RDF export.
+  Summary: `docs/agent/ontology.md`.
 
-**Delivered this session — SPEC-0023 M2 (below the gates):** the pinned
-**entailment closure** (`closure.v1`; positive Datalog + stratified
-negation, bounded, canonical-sorted) in `contracts/{ontology,closure}.py` +
-`cbp/ontology_runtime.py`, the composite **semantic subnet** (fragment children +
-a `closure` component, DAG-only, `fragment`/`query` in and `result`/`closure`
-out), the shared **`closure`** conformance case (ontology category now **11/11**
-cross-runtime), and the Rust runner. Core **2043 passed**. M1 (projection +
-discovery + shapes) remains delivered cross-runtime; **M3** (authored/instance
-facts; a standard export adapter) is the next below-gate unit. The concrete
+**Below the gates: complete.** The authored/instance-fact store (a canonical
+append-only log + a derived, disposable SQLite index/closure cache) and the
+one-way RDF export adapter are delivered and certified (`ontology` **12/12**
+cross-runtime); M1/M2 (projection, discovery, shapes, the pinned closure, and the
+composite semantic subnet) remain delivered. Core **2074 passed**. The concrete
 `provider.v1` manifest/task wiring is delivered in the private `infra/` companion.
+**Every below-gate unit is now complete**; the remaining work is operator-gated.
 
 **Operator-gated (do not start):** the deliberate L3 flip (author holdout
 scenarios, an `isolation: enforced` green run on a distinct principal, then edit
@@ -149,6 +149,36 @@ synthetic known-good/known-bad `--self-test`, and an **advisory principal guard*
 entry/contract is exposed, never placed inside the composition under test.
 Operator-authored scenarios, the authoritative `isolation: enforced` green run on
 a distinct principal/host, and the L3 flip remain operator gates.
+
+## Latest session (Ontology M3 — authored facts + RDF export; below-gate complete under L2)
+
+SPEC-0023 **M3** is delivered, cross-runtime, and with it **every below-gate unit is
+complete**:
+
+- **The authored-fact store** ([`src/agent_centric/cbp/ontology_store.py`](src/agent_centric/cbp/ontology_store.py)):
+  an append-only, idempotent, `0600`, advisory-locked, `fsync`-ed **canonical
+  assertion log** (the source of truth) bound to one component's `StateScope`
+  namespace, with a **derived, disposable SQLite index** (via
+  `cbp/component_state.py`) and a disposable **closure cache**. The content address
+  is recomputed from the log, never the DB; `verify_index` fails closed if the
+  index disagrees.
+- **The one-way RDF export adapter** ([`cbp/rdf_export.py`](src/agent_centric/cbp/rdf_export.py)):
+  deterministic, ASCII-safe N-Triples and Turtle (`to_ntriples`/`to_turtle`), with
+  XSD-mapped scalars, a `urn:cbp:json` literal for structured values, and a
+  fail-closed refusal of a non-exportable literal. No parser: RDF never re-enters
+  the spine.
+- **Tests**: [`tests/test_ontology_store.py`](tests/test_ontology_store.py) +
+  [`tests/test_rdf_export.py`](tests/test_rdf_export.py) — **31** (idempotency,
+  sovereignty, canonical source-of-truth, malformed/non-canonical refusal, bounds,
+  the derived index/cache, and the canonical export). Core suite **2043 → 2074
+  passed**.
+- **Shared conformance** (`../conformance`): the `ontology` category gains the M3
+  `export` case (`op: export` ⇒ `ntriples_sha256`) — **12/12**; the **Rust host**
+  (`../pro/src/ontology.rs`) passes **12/12** cross-runtime. Core <-> reference <->
+  Rust compute an identical export hash.
+
+`mypy` 142 → **144** files; `cbp-check` READY; basedpyright **0/0/0**. Nothing
+executes, provisions, or signs; the remaining work is operator-gated.
 
 ## Latest session (Ontology M2 — entailment closure + semantic subnet; below-gate under L2)
 
@@ -628,7 +658,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 141 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 2043 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 2074 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -649,12 +679,12 @@ python3 certifier/certify.py \
   --suite vectors/ontology-suite.v1.json \
   --fixtures vectors/ontology-fixtures.v1.json \
   --lock vectors/ontology.lock.v1.json \
-  --contract-lock contracts/ABI.lock.v1.json          # ontology.v1 (M1+M2): 11/11
+  --contract-lock contracts/ABI.lock.v1.json          # ontology.v1 (M1+M2+M3): 12/12
 #   (the WASM suite is certified by the Rust host, below)
 
 # pro (Rust host) ---------------------------------------------------------
 cd ../pro
-./scripts/certify.sh                                  # builds + certifies ALL SIX suites (31/31 + 10/10 + 14/14 + 8/8 + ui 10/10 + ontology 11/11) + unit tests
+./scripts/certify.sh                                  # builds + certifies ALL SIX suites (31/31 + 10/10 + 14/14 + 8/8 + ui 10/10 + ontology 12/12) + unit tests
 cargo test --release --features wasm                  # codec + artifact-signature + appointed tests: 6 passed
 
 # infra (private companion) -----------------------------------------------
@@ -715,7 +745,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (141 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **2043 passed** (~65 s).
+  convention + home-path guard passed; full suite **2074 passed** (~65 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -739,14 +769,16 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
   scoped Assurance Label (property, tier, evidence). The ordered, fail-closed gate
   is implemented by the Python reference host and the Rust host and passes **8/8**
   cross-runtime; `appointed.lock.v1.json` carries the allowlist trust root.
-- Ontology (**M1**, [`SPEC-0023`](specs/SPEC-0023-ontology-semantic-graphs.md)):
+- Ontology (**M1–M3**, [`SPEC-0023`](specs/SPEC-0023-ontology-semantic-graphs.md)):
   the semantic layer is a **pure projection** of existing contracts; `discover` is
   exact matching over a class and its declared subclasses plus port-type
   compatibility; a `shapes.v1` shape is a deterministic gate. Bespoke canonical
   assertions (no blank nodes), a fixed nine-kind error taxonomy, and bounds;
-  **11/11** cross-runtime (Python reference host + Rust host), now including the
+  **12/12** cross-runtime (Python reference host + Rust host), now including the
   M2 `closure` case (positive Datalog + stratified negation, bounded,
-  canonical-sorted) and the composite semantic subnet.
+  canonical-sorted), the composite semantic subnet, and the M3 one-way RDF
+  `export` case; the authored-fact store keeps a canonical log as the source of
+  truth (SQLite is a disposable index).
 - ABI content address: `component-abi.v1` **revision 3**, `source_sha256`
   `d8e0325d53789d1af631bae7638a5b8947606a2da00698d40452471316a3386e`
   (see `../conformance/contracts/ABI.lock.v1.json`, which also hashes
@@ -837,8 +869,8 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > `pro/AGENTS.md`, `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm
 > **all four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and
 > clean, then run `core/HANDOFF.md`'s verification block (expect: `cbp-check`
-> READY, **2043 passed**; shared **31/31** in-process + external + Rust; WASM
-> **10/10**; network **14/14**; appointed **8/8**; ui **10/10**; ontology **11/11**;
+> READY, **2074 passed**; shared **31/31** in-process + external + Rust; WASM
+> **10/10**; network **14/14**; appointed **8/8**; ui **10/10**; ontology **12/12**;
 > infra **137 passed + 2 skipped**; basedpyright **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL`
 > workaround before any pytest run.
 >
@@ -859,14 +891,14 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > `pro/src/ontology.rs`); and the **SPEC-0023 M2 entailment closure + semantic
 > subnet** (`contracts/closure.py`, `cbp/ontology_runtime.py`,
 > `tests/test_ontology_closure.py`, 32 tests; conformance `ontology` **11/11**
-> including the `closure` case; `pro/src/ontology.rs`).
+> including the `closure` case; `pro/src/ontology.rs`); and the **SPEC-0023 M3
+> authored-fact store + one-way RDF export** (`cbp/ontology_store.py`,
+> `cbp/rdf_export.py`, `tests/test_ontology_store.py` + `tests/test_rdf_export.py`,
+> 31 tests; conformance `ontology` **12/12** including the `export` case).
 >
 > **Next work, in order.**
-> (1) **Below-gate: SPEC-0023 M3** — authored/instance facts and a standard
-> (one-way) RDF/Turtle export adapter. M1 (projection + discovery + shapes) and
-> M2 (the pinned entailment closure + the composite semantic subnet) are delivered
-> cross-runtime (`ontology` category **11/11**). Keep the semantics public and
-> certified.
+> (1) **Below the gates: complete** — M1/M2/M3 are all delivered and certified
+> cross-runtime (`ontology` **12/12**); no below-gate unit remains.
 > (1b) **Parked (operator-gated to resume):** Vultr provisioning (SPEC-0018 Phase 3
 > / the concrete provider wiring) — the read-only observe is green and the token
 > works, but **nothing is created**.
@@ -1160,19 +1192,19 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   SPEC-0017 WS1 sibling). Design **ratified** (grilling decisions S1–S20): a
   bespoke canonical assertion model (no blank nodes), composable fragments,
   positive Datalog + stratified negation, pure projection, per-component SQLite.
-  **M1 and M2 delivered** cross-runtime (`contracts/ontology.py`,
-  `contracts/closure.py`, `cbp/ontology_runtime.py`, 28 + 32 tests; conformance
-  `ontology` category **11/11**; `pro/src/ontology.rs` **11/11**). **M3**
-  (authored/instance facts; a standard export adapter) remains.
+  **M1, M2, and M3 delivered** cross-runtime (`contracts/ontology.py`,
+  `contracts/closure.py`, `cbp/ontology_runtime.py`, `cbp/ontology_store.py`,
+  `cbp/rdf_export.py`, 28 + 32 + 31 tests; conformance `ontology` category
+  **12/12**; `pro/src/ontology.rs` **12/12**).
 
 ## Next
 
-**Below the gates (do now):** implement **SPEC-0023 M3** — authored/instance facts
+**Below the gates: complete.** **SPEC-0023 M3** — authored/instance facts
 (component-owned ABox state, per-component SQLite) and a standard one-way
-RDF/Turtle export adapter. M1 (projection + discovery + shapes) and M2 (the pinned
-[closure](specs/SPEC-0023-ontology-semantic-graphs.md) + the composite semantic
-subnet) are delivered cross-runtime (`ontology` **11/11**); keep the semantics
-public and certified.
+RDF/Turtle export adapter — is delivered; M1 (projection + discovery + shapes),
+M2 (the pinned [closure](specs/SPEC-0023-ontology-semantic-graphs.md) + the
+composite semantic subnet), and M3 are all cross-runtime (`ontology` **12/12**).
+No below-gate unit remains; keep the semantics public and certified.
 
 **Parked (below-gate):** the concrete `provider.v1` manifest/task wiring in the
 private companion (host-specific). The read-only Vultr observe

@@ -20,8 +20,9 @@ it does not restate. The constitution is [`PRINCIPLES.md`](PRINCIPLES.md):
 
 7. [`specs/SPEC-0023-ontology-semantic-graphs.md`](specs/SPEC-0023-ontology-semantic-graphs.md)
    — the ratified **ontology / semantic-graph** design (a SPEC-0010 refinement);
-   its M1 kernel and the M2 entailment closure + semantic subnet are delivered.
-   Human summary: [`docs/agent/ontology.md`](docs/agent/ontology.md).
+   its M1 kernel, the M2 entailment closure + semantic subnet, and the M3
+   authored-fact store + one-way RDF export are delivered. Human summary:
+   [`docs/agent/ontology.md`](docs/agent/ontology.md).
 
 ## Background (optional, non-normative)
 
