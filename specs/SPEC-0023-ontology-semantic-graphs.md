@@ -219,10 +219,13 @@ A new certifier category is added, following the existing mechanics: a
 `vectors/*-{fixtures,suite,lock}.json`, new `compare()` observation fields, and a
 `certify.sh` invocation.
 
-- **M1 category (`ontology`):** cases `project` (fixture tree ⇒ canonical graph +
-  `graph_sha256`), `query` (pinned query ⇒ canonical `result` + hash), and
-  `validate` (shape ⇒ verdict or `error.kind`); error cases for the taxonomy
-  (§15).
+- **M1 category (`ontology`):** cases over provided canonical `semantic-graph.v1`
+  documents — `hash` (graph content address), `query` (capability discovery ⇒
+  canonical result), and `validate` (closed shape ⇒ verdict or `error.kind`);
+  error cases for the taxonomy (§15). `project_graph` (the projection glue) is
+  covered by core tests; the certified cross-runtime surface is the pure
+  semantics over a canonical graph. Delivered: vectors +
+  `certifier/reference_host.py` + `pro/src/ontology.rs`, 10/10 both hosts.
 - **M2 addition:** `closure` (graph + ontology + profile ⇒ `closure_sha256`).
 - Fixtures: a tiny fixture tree (component manifests + a `network.v1` scope doc +
   a lock subset) + a base ontology fragment + shapes.
