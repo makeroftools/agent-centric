@@ -18,6 +18,10 @@ it does not restate. The constitution is [`PRINCIPLES.md`](PRINCIPLES.md):
 6. [`specs/SPEC-0007-harness-shell-component-distribution.md`](specs/SPEC-0007-harness-shell-component-distribution.md)
    — the harness/shell split and component distribution (target).
 
+7. [`specs/SPEC-0023-ontology-semantic-graphs.md`](specs/SPEC-0023-ontology-semantic-graphs.md)
+   — the ratified **ontology / semantic-graph** design (a SPEC-0010 refinement);
+   its M1 kernel is delivered. Human summary: [`docs/agent/ontology.md`](docs/agent/ontology.md).
+
 ## Background (optional, non-normative)
 
 What is here is **enough to work**. The external **literature** that informed the

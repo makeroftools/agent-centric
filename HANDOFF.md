@@ -14,8 +14,9 @@ above L2 without the operator editing [`.agentfactory.toml`](.agentfactory.toml)
 
 **All four repos on `main`, clean, pushed.** Verify with §"Verify everything"
 (authoritative): core **2011 passed**, `mypy` 141, `cbp-check` READY; conformance
-shared **31/31** + network **14/14** + appointed **8/8** + ui **10/10**; pro
-**31/31 + 10/10 + 14/14 + 8/8 + 10/10**; infra **137 passed, 2 skipped**;
+shared **31/31** + network **14/14** + appointed **8/8** + ui **10/10** + ontology
+**10/10**; pro **31/31 + 10/10 + 14/14 + 8/8 + 10/10 + 10/10**; infra **137 passed,
+2 skipped**;
 basedpyright **0/0/0**.
 
 **Delivered this arc (all below the gates):**
@@ -41,17 +42,27 @@ basedpyright **0/0/0**.
   (`ui.ref.v1` + `cbp/ui_runtime.pinned_ui_ref`) — a separate, content-addressed
   presentation binding that never moves the behavior component's content address
   (+7 tests).
+- **SPEC-0023 M1 — the semantic layer** (below the gates): the Brain charter is
+  realized as a ratified design (`specs/SPEC-0023`, decisions S1–S20) with an
+  implemented, cross-runtime **M1 kernel** — `contracts/ontology.py` +
+  `cbp/ontology_runtime.py` (28 tests), a shared **`ontology`** conformance
+  category (`../conformance`), and a Rust runner (`../pro/src/ontology.rs`),
+  certified **10/10** on both hosts. Summary: `docs/agent/ontology.md`.
 
-**Next (below-gate):** complete. The concrete `provider.v1` manifest/task wiring
-is delivered in the private `infra/` companion; the `ui.v1` targets, the shared
-`ui.v1` conformance suite, and the pinned UI ref are all delivered here and in
-siblings. The **remaining work is operator-gated** and must not be started
-without the operator: the deliberate L3 flip (author holdout scenarios, an
-`isolation: enforced` green run on a distinct principal, then edit `[levels.L3]`);
-SPEC-0018 Phases 3–6 (VPS + public read-only mirror, multi-tenant/branding,
-source-of-truth migration, hardening); re-signing the composition/umbrella locks
-with the operator key; optional threshold signing; the SPEC-0017 frontier (after
-the research charters).
+**Next (below-gate, do now):** implement **SPEC-0023 M2** — the pinned entailment
+closure (positive Datalog + stratified negation, bounded, canonical-sorted) and the
+composite **semantic subnet** (fragment children + a `closure` component, DAG-only,
+external ports). M1 (projection + discovery + shapes) is delivered cross-runtime.
+The concrete `provider.v1` manifest/task wiring is delivered in the private
+`infra/` companion.
+
+**Operator-gated (do not start):** the deliberate L3 flip (author holdout
+scenarios, an `isolation: enforced` green run on a distinct principal, then edit
+`[levels.L3]`); SPEC-0018 Phases 3–6 (VPS + public read-only mirror,
+multi-tenant/branding, source-of-truth migration, hardening); re-signing the
+composition/umbrella locks with the operator key; optional threshold signing; any
+public publish. The **learning charter** and the SPEC-0017 frontier remain
+research (dedicated sessions); the **Brain charter is realized by SPEC-0023**.
 
 **Parked / operator-gated:** Vultr provisioning (P1) — the token works
 (`VULTR_PERSONAL_ACCESS_TOKEN`) and the read-only observe is green (regions/plans/
@@ -133,6 +144,38 @@ synthetic known-good/known-bad `--self-test`, and an **advisory principal guard*
 entry/contract is exposed, never placed inside the composition under test.
 Operator-authored scenarios, the authoritative `isolation: enforced` green run on
 a distinct principal/host, and the L3 flip remain operator gates.
+
+## Latest session (Ontology M1 — semantic layer; below-gate under L2)
+
+The [Brain charter](docs/agent/brain-charter.md) was turned into a ratified design
+([`SPEC-0023`](specs/SPEC-0023-ontology-semantic-graphs.md); grilling decisions
+S1–S20) and its **M1 kernel is delivered cross-runtime**:
+
+- **Contracts** ([`src/agent_centric/contracts/ontology.py`](src/agent_centric/contracts/ontology.py)):
+  `ontology.v1` (a minimal TBox — classes/properties, acyclic `subClassOf`,
+  `domain`/`range` as validation, additive-only), `semantic-graph.v1` (canonical
+  `{s,p,o}` assertions, `urn:cbp:` terms, **no blank nodes**, content-addressed),
+  `shapes.v1` (pinned closed shapes), `ontology.query.v1`, and a fixed
+  **nine-kind `ErrorKind`** taxonomy.
+- **Runtime** ([`src/agent_centric/cbp/ontology_runtime.py`](src/agent_centric/cbp/ontology_runtime.py)):
+  `project_graph` (a pure projection of `network.v1` + `component.v1` manifests +
+  `components.lock`), `discover` (subtree-scoped exact match + subsumption +
+  port-type compatibility), `validate_shape`/`assert_shape`. No I/O, no ambient
+  authority.
+- **Tests**: [`tests/test_ontology.py`](tests/test_ontology.py) — **28**
+  (determinism/order-independence, fail-closed taxonomy, bounds,
+  declaration-before-use, import resolution, additive-only, scope isolation).
+  Suite **1983 → 2011 passed**.
+- **Shared conformance** (`../conformance`): a new **`ontology`** category
+  (`vectors/ontology-{fixtures,suite,lock}.v1.json`, `tools/gen-ontology-vectors.py`,
+  an independent stdlib reimplementation in `certifier/reference_host.py`, and the
+  certifier's `ontology` comparison field) — **10/10** in-process.
+- **Rust host** (`../pro/src/ontology.rs`): the same semantics, dispatched by
+  `host.rs` and wired into `scripts/certify.sh` — **10/10** cross-runtime.
+
+`mypy` 139 → **141** files; `cbp-check` READY; basedpyright **0/0/0**. Nothing
+executes, provisions, or signs; **M2** (the pinned entailment closure and the
+composite **semantic subnet**) is the next below-gate unit.
 
 ## Latest session (UI conformance + pinned refs; below-gate complete under L2)
 
@@ -547,7 +590,7 @@ The validator is TCB: pin, sign, content-address, and record it.
 cd core
 uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
-uv run mypy src                                       # -> 138 files, clean
+uv run mypy src                                       # -> 141 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
 uv run pytest -o addopts="" -p no:cacheprovider       # -> 2011 passed
 
@@ -566,11 +609,16 @@ python3 certifier/certify.py \
   --lock vectors/appointed.lock.v1.json \
   --contract-lock contracts/ABI.lock.v1.json \
   --artifacts-dir artifacts                           # appointed.v1: 8/8
+python3 certifier/certify.py \
+  --suite vectors/ontology-suite.v1.json \
+  --fixtures vectors/ontology-fixtures.v1.json \
+  --lock vectors/ontology.lock.v1.json \
+  --contract-lock contracts/ABI.lock.v1.json          # ontology.v1 (M1): 10/10
 #   (the WASM suite is certified by the Rust host, below)
 
 # pro (Rust host) ---------------------------------------------------------
 cd ../pro
-./scripts/certify.sh                                  # builds + certifies ALL FOUR suites (31/31 + 10/10 + 14/14 + 8/8) + unit tests
+./scripts/certify.sh                                  # builds + certifies ALL SIX suites (31/31 + 10/10 + 14/14 + 8/8 + ui 10/10 + ontology 10/10) + unit tests
 cargo test --release --features wasm                  # codec + artifact-signature + appointed tests: 6 passed
 
 # infra (private companion) -----------------------------------------------
@@ -630,7 +678,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
   commit hash written in prose — it drifts. Read the live tips instead:**
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
-- Core gates: `ruff` clean; `mypy` clean (138 files); `cbp-check` **READY (8/8)**;
+- Core gates: `ruff` clean; `mypy` clean (141 files); `cbp-check` **READY (8/8)**;
   convention + home-path guard passed; full suite **2011 passed** (~65 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
@@ -655,6 +703,13 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
   scoped Assurance Label (property, tier, evidence). The ordered, fail-closed gate
   is implemented by the Python reference host and the Rust host and passes **8/8**
   cross-runtime; `appointed.lock.v1.json` carries the allowlist trust root.
+- Ontology (**M1**, [`SPEC-0023`](specs/SPEC-0023-ontology-semantic-graphs.md)):
+  the semantic layer is a **pure projection** of existing contracts; `discover` is
+  exact matching over a class and its declared subclasses plus port-type
+  compatibility; a `shapes.v1` shape is a deterministic gate. Bespoke canonical
+  assertions (no blank nodes), a fixed nine-kind error taxonomy, and bounds;
+  **10/10** cross-runtime (Python reference host + Rust host). M2 adds the pinned
+  entailment closure and the composite semantic subnet.
 - ABI content address: `component-abi.v1` **revision 3**, `source_sha256`
   `d8e0325d53789d1af631bae7638a5b8947606a2da00698d40452471316a3386e`
   (see `../conformance/contracts/ABI.lock.v1.json`, which also hashes
@@ -692,7 +747,10 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
    (`cbp/provider_runtime.py`, `cbp/work_runtime.py`), and the work boot/bundle
    bridge (`cbp/work_boot.py`) are **implemented and green**, and the concrete
    **local-first `provider.v1` adapter** (`cbp/provider_local.py`) is
-   **delivered**.
+   **delivered**. **SPEC-0023** (`specs/SPEC-0023-ontology-semantic-graphs.md`,
+   draft) is the ratified **ontology / semantic-graph** design; its **M1 kernel is
+   delivered** (`contracts/ontology.py`, `cbp/ontology_runtime.py`; summary
+   [`docs/agent/ontology.md`](docs/agent/ontology.md)).
 5. `../conformance/AGENTS.md` and `../pro/AGENTS.md` — the shared contract and
    the Rust host.
 
@@ -742,8 +800,8 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > **all four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and
 > clean, then run `core/HANDOFF.md`'s verification block (expect: `cbp-check`
 > READY, **2011 passed**; shared **31/31** in-process + external + Rust; WASM
-> **10/10**; network **14/14**; appointed **8/8**; ui **10/10**; infra **137 passed + 2
-> skipped**; basedpyright **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL`
+> **10/10**; network **14/14**; appointed **8/8**; ui **10/10**; ontology **10/10**;
+> infra **137 passed + 2 skipped**; basedpyright **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL`
 > workaround before any pytest run.
 >
 > **Do not re-implement delivered work.** Complete and green: Layers 0–4 +
@@ -757,15 +815,18 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > verification** (`cbp/threshold.py`); **SPEC-0022 + the UI ABI**
 > (`conformance/contracts/ui-v1.wit`, `UI-ABI.md`, `ui.lock.v1.json`;
 > `contracts/ui.py`); and the private **Builder devShell** (`infra/builder/`) +
-> read-only **Vultr inventory tool** (`infra/tools/vultr_observe.py`).
+> read-only **Vultr inventory tool** (`infra/tools/vultr_observe.py`); and the
+> **SPEC-0023 M1 semantic kernel** (`contracts/ontology.py`,
+> `cbp/ontology_runtime.py`, 28 tests; conformance `ontology` 10/10;
+> `pro/src/ontology.rs`).
 >
 > **Next work, in order.**
-> (1) **Below-gate: implement the UI targets** (SPEC-0022) — a minimal `web` and
-> `cli` target that renders a `ui.v1` component to its medium (proving
-> target-agnosticism), then extract `cbp/web.py`'s read routes into a pinned UI
-> composition, additively (existing routes unchanged). Keep `component-abi.v1`
-> frozen; a UI component is an ordinary component implementing `ui.v1` (no new
-> node kind).
+> (1) **Below-gate: implement SPEC-0023 M2** — the pinned entailment closure
+> (positive Datalog + stratified negation, bounded, canonical-sorted) and the
+> composite **semantic subnet** (fragment children + a `closure` component,
+> DAG-only, external ports). M1 (projection + discovery + shapes) is delivered
+> cross-runtime; add `closure` vectors and the Rust runner. Keep the semantics
+> public and certified.
 > (1b) **Parked (operator-gated to resume):** Vultr provisioning (SPEC-0018 Phase 3
 > / the concrete provider wiring) — the read-only observe is green and the token
 > works, but **nothing is created**.
@@ -775,10 +836,9 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > public read-only mirror, multi-tenant/branding, source-of-truth migration,
 > hardening); re-sign the composition/umbrella locks with the operator key;
 > optional threshold signing.
-> (3) **Research (charters, no design freeze):**
-> [`docs/agent/brain-charter.md`](docs/agent/brain-charter.md) and
-> [`docs/agent/learning-charter.md`](docs/agent/learning-charter.md), each for a
-> dedicated session; the SPEC-0017 frontier afterward.
+> (3) **Research (dedicated session):**
+> [`docs/agent/learning-charter.md`](docs/agent/learning-charter.md), then the
+> SPEC-0017 frontier. (The Brain charter is realized by **SPEC-0023**.)
 >
 > Hard laws: whole-file replacement only via `tools/safe-replace.sh` (**never
 > in-place edits**), resolve every home path from `$HOME`, commit and push
@@ -1053,21 +1113,29 @@ blank-component → dynamic task-load protocol (bind timing), hardened at Layer 
   `web` v0 target. The typed **UI ABI** is authored and content-addressed
   (`conformance/contracts/ui-v1.wit` + `UI-ABI.md` + `ui.lock.v1.json`), and
   the core `ui.v1` manifest (`contracts/ui.py`) is implemented and green
-  (20 tests). The target bindings and assembly remain unimplemented.
+  (20 tests); the web/cli **targets**, the shared `ui` suite (**10/10**), and the
+  pinned UI ref are **delivered**.
+
+- **SPEC-0023** `draft` — **ontology / semantic graphs** (a SPEC-0010 refinement,
+  SPEC-0017 WS1 sibling). Design **ratified** (grilling decisions S1–S20): a
+  bespoke canonical assertion model (no blank nodes), composable fragments,
+  positive Datalog + stratified negation, pure projection, per-component SQLite.
+  **M1 delivered** cross-runtime (`contracts/ontology.py`,
+  `cbp/ontology_runtime.py`, 28 tests; conformance `ontology` category **10/10**;
+  `pro/src/ontology.rs` **10/10**). **M2** (pinned closure + composite semantic
+  subnet) and **M3** (authored facts) remain.
 
 ## Next
 
-**Below the gates (do now):** implement the **UI targets** per
-[`SPEC-0022`](specs/SPEC-0022-frontend-and-components.md) — a minimal `web` and
-`cli` target that renders a `ui.v1` component to its medium, then extract
-`cbp/web.py`'s read routes into a pinned UI composition **additively** (existing
-routes unchanged). The UI ABI is already authored/pinned
-(`conformance/contracts/ui-v1.wit` + `UI-ABI.md` + `ui.lock.v1.json`) and the core
-manifest is green (`contracts/ui.py`, 20 tests). `component-abi.v1` stays frozen;
-no new node kind.
+**Below the gates (do now):** implement **SPEC-0023 M2** — the pinned entailment
+[closure](specs/SPEC-0023-ontology-semantic-graphs.md) (positive Datalog +
+stratified negation, bounded, canonical-sorted) and the composite **semantic
+subnet** (fragment children + a `closure` component, DAG-only, external ports).
+M1 (projection + discovery + shapes) is delivered cross-runtime. Add the
+`closure` vectors and the Rust runner; keep the semantics public and certified.
 
-**Parked (below-gate, not started):** the concrete `provider.v1` manifest/task
-wiring in the private companion (host-specific). The read-only Vultr observe
+**Parked (below-gate):** the concrete `provider.v1` manifest/task wiring in the
+private companion (host-specific). The read-only Vultr observe
 (`infra/tools/vultr_observe.py`) is green; resuming **P1** (create a VPS) is
 operator-gated.
 
@@ -1078,10 +1146,10 @@ read-only mirror, multi-tenant/branding, source-of-truth migration, hardening);
 installing/re-signing the operator trust root (composition + umbrella locks);
 optional threshold-signing key acts; any public publish.
 
-**Research (dedicated sessions):**
-[`docs/agent/brain-charter.md`](docs/agent/brain-charter.md) and
+**Research (dedicated session):**
 [`docs/agent/learning-charter.md`](docs/agent/learning-charter.md), then the
-SPEC-0017 frontier.
+SPEC-0017 frontier. (The Brain charter is realized by
+[`SPEC-0023`](specs/SPEC-0023-ontology-semantic-graphs.md).)
 
 ## Open threads (blockers & honest gaps)
 

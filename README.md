@@ -32,6 +32,7 @@
 - [Architecture](#architecture)
 - [How it compares to other agent harnesses](#how-it-compares-to-other-agent-harnesses)
 - [The CBP subsystem](#the-cbp-subsystem)
+- [Ontological knowledge (the Brain)](#ontological-knowledge-the-brain)
 - [The bills loop (worked example)](#the-bills-loop-worked-example)
 - [Quick start](#quick-start)
 - [Use from Zed (ACP)](#use-from-zed-acp)
@@ -206,6 +207,40 @@ uv run agent-centric cbp --transport ipc
 ```
 
 Deep dive: [`docs/cbp.md`](docs/cbp.md).
+
+---
+
+## Ontological knowledge (the Brain)
+
+**Meaning, as a first-class, verifiable artifact.** The optional semantic layer
+turns the tree's declared structure into typed assertions — `{subject, predicate,
+object}` — that are **canonical, content-addressed, and never a second source of
+truth**. It answers one precise question: *can a parent hold the ontological
+subgraph of its children?*
+
+| Property | Guarantee |
+| --- | --- |
+| **Bespoke, dependency-free** | Canonical-JSON assertions, `urn:cbp:` terms, **no blank nodes** — no RDF/OWL stack. |
+| **Deterministic, cross-runtime** | Identical inputs ⇒ an identical content hash and query result on **Python *and* Rust**. |
+| **Fail-closed** | A fixed nine-kind error taxonomy (`undeclared-term`, `scope-escape`, …), declaration-before-use, and bounds. |
+| **Passive** | The graph is a *projection*: it records meaning and never decides (Law 10). |
+| **Fractal** | Composable ontology fragments; a parent's subgraph mirrors its subnet — the semantic graph is itself a CBP sub-graph. |
+
+> **Answer:** a parent holds the children's subgraph as a **derived, pinned,
+> recomputable closure** keyed by their content addresses — never as ownership,
+> duplication, or mutation of child state. The entailment *fixpoint* stays a
+> bounded pure computation, so the semantic graph and the process graph are
+> **never conflated**.
+
+**Delivered (M1):** `contracts/ontology.py` + `cbp/ontology_runtime.py` in this
+repo, an independent reference host and golden vectors in [`../conformance/`](../conformance),
+and a Rust runner in [`../pro/`](../pro) — certified **10/10 cross-runtime** and
+covered by **28** core tests. **M2** (the pinned entailment closure and the
+composite semantic subnet) is next.
+
+- Design and ratified decisions: [`specs/SPEC-0023-ontology-semantic-graphs.md`](specs/SPEC-0023-ontology-semantic-graphs.md)
+- Human/agent summary: [`docs/agent/ontology.md`](docs/agent/ontology.md)
+- Intent: [`specs/SPEC-0010-extensibility-knowledge-graphs-rsi.md`](specs/SPEC-0010-extensibility-knowledge-graphs-rsi.md)
 
 ---
 
