@@ -37,7 +37,8 @@ revealed here, only as needed:
 | [`spec-0002-phase1-adapter-design.md`](spec-0002-phase1-adapter-design.md) | SPEC-0002 Phase-1 remainder — adapter-first design + implementation progress record. |
 | [`brain-charter.md`](brain-charter.md) | The Brain (ontological knowledge base) — study charter; deferred, no design freeze. |
 | [`ontology.md`](ontology.md) | The ontology / semantic-graph design (SPEC-0023) — representation, composition, closure, storage; decisions ratified. |
-| [`learning-charter.md`](learning-charter.md) | Learning / RSI / RL / active inference — study charter; deferred to post-L3. |
+| [`learning-charter.md`](learning-charter.md) | Learning / RSI / RL / active inference — study charter; the session produced SPEC-0024 (post-L3 implementation). |
+| [`learning.md`](learning.md) | Learning / bounded-RSI design (SPEC-0024) — the proposal loop, pinned bounds, evidence, and the L3 gate; decisions ratified. |
 
 ## The constitution
 

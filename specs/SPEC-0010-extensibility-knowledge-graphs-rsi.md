@@ -13,6 +13,11 @@ owner: operator
 > The dedicated-session design for the semantic layer is drafted in
 > [`SPEC-0023`](SPEC-0023-ontology-semantic-graphs.md) (`ontology.v1`,
 > `semantic-graph.v1`, closed shapes, and the pinned entailment closure).
+>
+> The dedicated-session design for the learning / bounded-RSI frontier is
+> drafted in [`SPEC-0024`](SPEC-0024-learning-bounded-rsi.md) (the proposal
+> loop, pinned bounds, `learning.proposal/v1` / `learning.bounds/v1`, and the
+> post-L3 gate).
 
 **Operator direction (recorded).** The architecture will eventually include
 **knowledge graphs** with an **ontology mapped on top of semantic graphs**, and

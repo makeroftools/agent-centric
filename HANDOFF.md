@@ -13,7 +13,7 @@ gated. The suite is a release gate; a human holds the review gate. Never act
 above L2 without the operator editing [`.agentfactory.toml`](.agentfactory.toml).
 
 **All four repos on `main`, clean, pushed.** Verify with §"Verify everything"
-(authoritative): core **2074 passed**, `mypy` 144, `cbp-check` READY; conformance
+(authoritative): core **2075 passed**, `mypy` 144, `cbp-check` READY; conformance
 shared **31/31** + network **14/14** + appointed **8/8** + ui **10/10** + ontology
 **12/12**; pro **31/31 + 10/10 + 14/14 + 8/8 + 10/10 + 12/12**; infra **137 passed,
 2 skipped**;
@@ -57,7 +57,7 @@ basedpyright **0/0/0**.
 append-only log + a derived, disposable SQLite index/closure cache) and the
 one-way RDF export adapter are delivered and certified (`ontology` **12/12**
 cross-runtime); M1/M2 (projection, discovery, shapes, the pinned closure, and the
-composite semantic subnet) remain delivered. Core **2074 passed**. The concrete
+composite semantic subnet) remain delivered. Core **2075 passed**. The concrete
 `provider.v1` manifest/task wiring is delivered in the private `infra/` companion.
 **Every below-gate unit is now complete**; the remaining work is operator-gated.
 
@@ -149,6 +149,25 @@ synthetic known-good/known-bad `--self-test`, and an **advisory principal guard*
 entry/contract is exposed, never placed inside the composition under test.
 Operator-authored scenarios, the authoritative `isolation: enforced` green run on
 a distinct principal/host, and the L3 flip remain operator gates.
+
+## Latest session (Learning / bounded-RSI design — spec-only, below the gate under L2)
+
+A dedicated **research/spec session** turned the
+[`learning charter`](docs/agent/learning-charter.md) into a ratified design
+([`SPEC-0024`](specs/SPEC-0024-learning-bounded-rsi.md); grilling decisions
+L1–L16; open frontier empty; human summary
+[`docs/agent/learning.md`](docs/agent/learning.md)). It is **design-only**:
+the learning layer is a recorded `model`/policy component (no new node kind)
+that **proposes** through the existing `review.v1` queue and is promoted only
+via `propose → review → sign → lock`; a pinned, read-only
+`learning.bounds/v1` cannot self-widen; reward is the deterministic verifier's
+verdict over pinned inputs (never self-reported); replay runs the verifier on
+the pinned artifact; and **verifier self-improvement is post-L3**, gated by
+the `SPEC-0019` isolated holdout validator. **Implementation is post-L3 and
+operator-gated — nothing was built.** Additive pointers were wired into
+`SPEC-0010`, `AGENTS.md`, `docs/agent/README.md`, and the convention guard now
+records the spec; no module/ABI changed and all suite ratios are unchanged
+(core suite **2074 → 2075** passed, +1 convention guard).
 
 ## Latest session (Ontology M3 — authored facts + RDF export; below-gate complete under L2)
 
@@ -658,7 +677,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 141 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 2074 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 2075 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -745,7 +764,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (141 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **2074 passed** (~65 s).
+  convention + home-path guard passed; full suite **2075 passed** (~66 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -869,7 +888,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > `pro/AGENTS.md`, `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm
 > **all four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and
 > clean, then run `core/HANDOFF.md`'s verification block (expect: `cbp-check`
-> READY, **2074 passed**; shared **31/31** in-process + external + Rust; WASM
+> READY, **2075 passed**; shared **31/31** in-process + external + Rust; WASM
 > **10/10**; network **14/14**; appointed **8/8**; ui **10/10**; ontology **12/12**;
 > infra **137 passed + 2 skipped**; basedpyright **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL`
 > workaround before any pytest run.

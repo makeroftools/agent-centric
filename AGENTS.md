@@ -24,6 +24,11 @@ it does not restate. The constitution is [`PRINCIPLES.md`](PRINCIPLES.md):
    authored-fact store + one-way RDF export are delivered. Human summary:
    [`docs/agent/ontology.md`](docs/agent/ontology.md).
 
+8. [`specs/SPEC-0024-learning-bounded-rsi.md`](specs/SPEC-0024-learning-bounded-rsi.md)
+   — the ratified **learning / bounded-RSI** design (a SPEC-0010 refinement;
+   SPEC-0017 WS5). Design only; implementation is post-L3 and operator-gated.
+   Human summary: [`docs/agent/learning.md`](docs/agent/learning.md).
+
 ## Background (optional, non-normative)
 
 What is here is **enough to work**. The external **literature** that informed the

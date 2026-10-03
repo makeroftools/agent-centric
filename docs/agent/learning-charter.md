@@ -1,8 +1,12 @@
 # Learning, RSI, RL, and Active Inference — a study charter (deferred)
 
-> **Status: study charter. No design freeze.** This page records an intent, the
-> decisions already aligned, and the questions to answer. It is **not** a spec. The
-> eventual home is [`SPEC-0010`](../../specs/SPEC-0010-extensibility-knowledge-graphs-rsi.md)
+> **Status: study charter. No design freeze. The dedicated session has now
+> produced the design spec
+> [`SPEC-0024`](../../specs/SPEC-0024-learning-bounded-rsi.md) (decisions
+> ratified, L1–L16); the [`learning.md`](learning.md) page summarizes it.
+> Implementation is post-L3 and operator-gated.** This page records the
+> intent, the decisions already aligned, and the questions (now answered). Its
+> home is [`SPEC-0010`](../../specs/SPEC-0010-extensibility-knowledge-graphs-rsi.md)
 > (bounded RSI) with [`SPEC-0017`](../../specs/SPEC-0017-frontier-workstreams.md)
 > workstream 5 (bounded recursive self-improvement). Entry point:
 > [`AGENTS.md`](../../AGENTS.md).
@@ -63,6 +67,10 @@ These are settled by the current session and constrain any future spec:
    ([brain charter](brain-charter.md)), and does it generate `work.v1` recipes
    ([`SPEC-0021`](../../specs/SPEC-0021-components-as-dynamic-work.md))?
 
+**Answered.** This agenda is answered (or explicitly deferred) by
+[`SPEC-0024`](../../specs/SPEC-0024-learning-bounded-rsi.md) and its
+[`learning.md`](learning.md) summary.
+
 ## Boundaries / non-goals (for now)
 
 - **Out:** unbounded or autopoietic self-modification — permanently out.
@@ -83,5 +91,10 @@ These are settled by the current session and constrain any future spec:
 
 ## Next step
 
-A dedicated study session **after** the L3 gate is satisfied. Its output is a
-spec (and, if needed, a refinement of `SPEC-0010`), not an implementation.
+The dedicated session has produced
+[`SPEC-0024`](../../specs/SPEC-0024-learning-bounded-rsi.md) (design-only;
+decisions L1–L16). **Implementation is post-L3 and operator-gated:** it begins
+only after the isolated holdout validator
+([`SPEC-0019`](../../specs/SPEC-0019-isolated-holdout-validator.md)) is green
+on a principal/host distinct from the author and the operator flips
+`[levels.L3]`.
