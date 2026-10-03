@@ -13,7 +13,7 @@ L3, gated. The suite is a release gate; a human holds the review gate. Never act
 above L2 without the operator editing [`.agentfactory.toml`](.agentfactory.toml).
 
 **All four repos on `main`, clean, pushed.** Verify with §"Verify everything"
-(authoritative): core **1983 passed**, `mypy` 139, `cbp-check` READY; conformance
+(authoritative): core **2011 passed**, `mypy` 141, `cbp-check` READY; conformance
 shared **31/31** + network **14/14** + appointed **8/8** + ui **10/10**; pro
 **31/31 + 10/10 + 14/14 + 8/8 + 10/10**; infra **137 passed, 2 skipped**;
 basedpyright **0/0/0**.
@@ -549,7 +549,7 @@ uv sync --extra dev                                   # one-time
 uv run ruff check .                                   # -> clean
 uv run mypy src                                       # -> 138 files, clean
 uv run agent-centric cbp-check                        # -> READY (8/8)
-uv run pytest -o addopts="" -p no:cacheprovider       # -> 1983 passed
+uv run pytest -o addopts="" -p no:cacheprovider       # -> 2011 passed
 
 # conformance (shared contract) -------------------------------------------
 cd ../conformance
@@ -631,7 +631,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
   `git -C core log -1 --oneline`, `git -C ../conformance log -1 --oneline`,
   `git -C ../pro log -1 --oneline`, `git -C ../infra log -1 --oneline`.
 - Core gates: `ruff` clean; `mypy` clean (138 files); `cbp-check` **READY (8/8)**;
-  convention + home-path guard passed; full suite **1983 passed** (~65 s).
+  convention + home-path guard passed; full suite **2011 passed** (~65 s).
 - Conformance: shared ABI suite **31/31** on the Python reference host (both
   in-process and over the external protocol) **and** the Rust host; WASM
   execution suite **10/10** on the Rust host (a narrow task fixture, a full
@@ -741,7 +741,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > `pro/AGENTS.md`, `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm
 > **all four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and
 > clean, then run `core/HANDOFF.md`'s verification block (expect: `cbp-check`
-> READY, **1983 passed**; shared **31/31** in-process + external + Rust; WASM
+> READY, **2011 passed**; shared **31/31** in-process + external + Rust; WASM
 > **10/10**; network **14/14**; appointed **8/8**; ui **10/10**; infra **137 passed + 2
 > skipped**; basedpyright **0/0/0**). Apply the temp-git-repo `GIT_CONFIG_GLOBAL`
 > workaround before any pytest run.

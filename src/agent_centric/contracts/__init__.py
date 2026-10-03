@@ -52,6 +52,27 @@ from .model import (
     ModelProviderVersion,
     ModelResponse,
 )
+from .ontology import (
+    GRAPH_SCHEMA,
+    ONTOLOGY_SCHEMA,
+    QUERY_SCHEMA,
+    SHAPES_SCHEMA,
+    Assertion,
+    DiscoveryResult,
+    ErrorKind,
+    ImportRef,
+    Literal,
+    Ontology,
+    OntologyError,
+    OntologyTerm,
+    Query,
+    SemanticGraph,
+    Shape,
+    ShapeReport,
+    ShapeRequirement,
+    Term,
+    base_ontology,
+)
 from .parallel import ParallelComposition, ParallelVersion
 from .pipeline import PipelineVersion, SequentialComposition, StageSpec
 from .policy import Policy, PolicyDecision, PolicyVersion
@@ -328,4 +349,24 @@ __all__ = [
     "validate_ui",
     "assert_projection_granted",
     "assert_directive_declared",
+    # Ontology / semantic graph contract (ontology.v1; SPEC-0023 M1)
+    "ONTOLOGY_SCHEMA",
+    "GRAPH_SCHEMA",
+    "SHAPES_SCHEMA",
+    "QUERY_SCHEMA",
+    "ErrorKind",
+    "OntologyError",
+    "Term",
+    "Literal",
+    "Assertion",
+    "SemanticGraph",
+    "ImportRef",
+    "OntologyTerm",
+    "Ontology",
+    "ShapeRequirement",
+    "Shape",
+    "ShapeReport",
+    "Query",
+    "DiscoveryResult",
+    "base_ontology",
 ]
