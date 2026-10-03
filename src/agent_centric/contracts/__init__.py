@@ -16,6 +16,7 @@ from .bills_registry import (
     RegistryBill,
 )
 from .capability import Capability
+from .closure import Closure
 from .component import (
     ChildRef,
     ComponentKind,
@@ -53,9 +54,11 @@ from .model import (
     ModelResponse,
 )
 from .ontology import (
+    CLOSURE_SCHEMA,
     GRAPH_SCHEMA,
     ONTOLOGY_SCHEMA,
     QUERY_SCHEMA,
+    RULES_SCHEMA,
     SHAPES_SCHEMA,
     Assertion,
     DiscoveryResult,
@@ -65,13 +68,17 @@ from .ontology import (
     Ontology,
     OntologyError,
     OntologyTerm,
+    Pattern,
     Query,
+    Rule,
+    RuleAtom,
     SemanticGraph,
     Shape,
     ShapeReport,
     ShapeRequirement,
     Term,
     base_ontology,
+    base_rules,
 )
 from .parallel import ParallelComposition, ParallelVersion
 from .pipeline import PipelineVersion, SequentialComposition, StageSpec
@@ -354,6 +361,12 @@ __all__ = [
     "GRAPH_SCHEMA",
     "SHAPES_SCHEMA",
     "QUERY_SCHEMA",
+    "RULES_SCHEMA",
+    "CLOSURE_SCHEMA",
+    "Pattern",
+    "Rule",
+    "RuleAtom",
+    "Closure",
     "ErrorKind",
     "OntologyError",
     "Term",
@@ -369,4 +382,5 @@ __all__ = [
     "Query",
     "DiscoveryResult",
     "base_ontology",
+    "base_rules",
 ]

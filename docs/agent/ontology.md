@@ -67,9 +67,11 @@ Three graphs stay distinct — **process** (`network.v1`), **design**
 
 1. **M1 — vocabulary + closed shapes + capability discovery & composition**
    (pure projection; no entailment; atomic kernel). Certified as a new
-   `ontology` conformance category.
+   `ontology` conformance category. **Delivered.**
 2. **M2 — pinned entailment closure** (Datalog + stratified negation) and the
    composite **semantic subnet** so parent-subgraphs compose and execute.
+   **Delivered** (`contracts/closure.py`, `compute_closure`, `SemanticSubnet`;
+   the `ontology` category's `closure` case, cross-runtime **11/11**).
 3. **M3 (deferred) — authored/instance facts; a standard export adapter.**
 
 ## Storage

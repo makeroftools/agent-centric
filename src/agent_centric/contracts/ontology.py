@@ -28,12 +28,16 @@ ONTOLOGY_SCHEMA = "ontology.v1"
 GRAPH_SCHEMA = "semantic-graph.v1"
 SHAPES_SCHEMA = "shapes.v1"
 QUERY_SCHEMA = "ontology.query.v1"
+RULES_SCHEMA = "ontology.rules.v1"
+CLOSURE_SCHEMA = "closure.v1"
 
 CORE_NAMESPACE = "urn:cbp:core/"
 
 # Bounds (SPEC-0023 S16): fail-closed before any unbounded materialization.
 MAX_FRAGMENT_TERMS = 10_000
 MAX_CLOSURE_ASSERTIONS = 100_000
+MAX_RULE_COUNT = 1_000
+MAX_RULE_BODY = 64
 
 KIND_CLASS = "class"
 KIND_PROPERTY = "property"
@@ -312,6 +316,185 @@ class OntologyTerm:
         }
 
 
+# ---------------------------------------------------------------------------
+# Rules (the pinned entailment program, M2)
+# ---------------------------------------------------------------------------
+
+
+_PATTERN_KINDS = ("var", "term", "lit")
+
+
+@dataclass(frozen=True)
+class Pattern:
+    """A rule-term pattern: a variable, a named term, or a typed literal."""
+
+    kind: str
+    name: str = ""
+    datatype: str = ""
+    value: Any = None
+
+    def __post_init__(self) -> None:
+        if self.kind not in _PATTERN_KINDS:
+            raise OntologyError(
+                ErrorKind.MALFORMED_DOCUMENT, f"unknown pattern kind {self.kind!r}"
+            )
+        if self.kind in ("var", "term") and not self.name:
+            raise OntologyError(ErrorKind.MALFORMED_DOCUMENT, "pattern name is empty")
+        if self.kind == "lit" and self.datatype not in _TYPE_NAMES:
+            raise OntologyError(
+                ErrorKind.MALFORMED_DOCUMENT,
+                f"unknown literal datatype {self.datatype!r}",
+            )
+
+    @classmethod
+    def var(cls, name: str) -> Pattern:
+        return cls("var", name=name)
+
+    @classmethod
+    def any(cls) -> Pattern:
+        return cls("var", name="_")
+
+    @classmethod
+    def term(cls, name: str) -> Pattern:
+        return cls("term", name=name)
+
+    @classmethod
+    def lit(cls, datatype: str, value: Any) -> Pattern:
+        return cls("lit", datatype=datatype, value=value)
+
+    def variables(self) -> tuple[str, ...]:
+        if self.kind == "var" and self.name != "_":
+            return (self.name,)
+        return ()
+
+    def to_dict(self) -> dict[str, Any]:
+        if self.kind == "var":
+            return {"var": self.name}
+        if self.kind == "term":
+            return {"term": self.name}
+        return {"lit": {"t": self.datatype, "v": self.value}}
+
+    @classmethod
+    def from_dict(cls, data: Any) -> Pattern:
+        if not isinstance(data, dict):
+            raise OntologyError(ErrorKind.MALFORMED_DOCUMENT, "pattern must be a mapping")
+        if "var" in data:
+            return cls.var(str(data["var"]))
+        if "term" in data:
+            return cls.term(str(data["term"]))
+        if "lit" in data:
+            inner = data["lit"]
+            if not isinstance(inner, dict):
+                raise OntologyError(
+                    ErrorKind.MALFORMED_DOCUMENT, "literal pattern must be a mapping"
+                )
+            return cls.lit(str(inner["t"]), inner.get("v"))
+        raise OntologyError(ErrorKind.MALFORMED_DOCUMENT, "unknown pattern")
+
+
+@dataclass(frozen=True)
+class RuleAtom:
+    """A single Datalog atom over ``{s, p, o}``, possibly negated."""
+
+    s: Pattern
+    p: str
+    o: Pattern
+    negated: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.p:
+            raise OntologyError(ErrorKind.MALFORMED_DOCUMENT, "atom predicate is empty")
+        if self.s.kind == "lit":
+            raise OntologyError(
+                ErrorKind.MALFORMED_DOCUMENT, "atom subject cannot be a literal"
+            )
+
+    def variables(self) -> tuple[str, ...]:
+        return self.s.variables() + self.o.variables()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "s": self.s.to_dict(),
+            "p": self.p,
+            "o": self.o.to_dict(),
+            "negated": self.negated,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Any) -> RuleAtom:
+        if not isinstance(data, dict):
+            raise OntologyError(ErrorKind.MALFORMED_DOCUMENT, "atom must be a mapping")
+        return cls(
+            s=Pattern.from_dict(data["s"]),
+            p=str(data["p"]),
+            o=Pattern.from_dict(data["o"]),
+            negated=bool(data.get("negated", False)),
+        )
+
+
+@dataclass(frozen=True)
+class Rule:
+    """A pinned Datalog rule: ``head :- body`` (positive + stratified negation)."""
+
+    id: str
+    head: RuleAtom
+    body: tuple[RuleAtom, ...]
+    schema: str = RULES_SCHEMA
+
+    def __post_init__(self) -> None:
+        if self.schema != RULES_SCHEMA:
+            raise OntologyError(
+                ErrorKind.MALFORMED_DOCUMENT, f"unsupported rule schema {self.schema!r}"
+            )
+        if not self.id:
+            raise OntologyError(ErrorKind.MALFORMED_DOCUMENT, "rule id is empty")
+        if self.head.negated:
+            raise OntologyError(
+                ErrorKind.MALFORMED_DOCUMENT, "rule head cannot be negated"
+            )
+        if not self.body:
+            raise OntologyError(ErrorKind.MALFORMED_DOCUMENT, "rule body is empty")
+        if len(self.body) > MAX_RULE_BODY:
+            raise OntologyError(
+                ErrorKind.MALFORMED_DOCUMENT,
+                f"rule body has {len(self.body)} atoms, exceeding {MAX_RULE_BODY}",
+            )
+        positive = {
+            name for atom in self.body if not atom.negated for name in atom.variables()
+        }
+        for name in self.head.variables():
+            if name not in positive:
+                raise OntologyError(
+                    ErrorKind.MALFORMED_DOCUMENT,
+                    f"unbound head variable {name!r} (not range-restricted)",
+                )
+
+    def variables(self) -> tuple[str, ...]:
+        return self.head.variables()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema": self.schema,
+            "id": self.id,
+            "head": self.head.to_dict(),
+            "body": [atom.to_dict() for atom in self.body],
+        }
+
+    @classmethod
+    def from_dict(cls, data: Any) -> Rule:
+        if not isinstance(data, dict):
+            raise OntologyError(ErrorKind.MALFORMED_DOCUMENT, "rule must be a mapping")
+        raw_body = data.get("body", [])
+        if not isinstance(raw_body, list):
+            raise OntologyError(ErrorKind.MALFORMED_DOCUMENT, "rule body must be a list")
+        return cls(
+            id=str(data["id"]),
+            head=RuleAtom.from_dict(data["head"]),
+            body=tuple(RuleAtom.from_dict(atom) for atom in raw_body),
+            schema=str(data.get("schema", RULES_SCHEMA)),
+        )
+
+
 @dataclass(frozen=True)
 class Ontology:
     """A composable ``ontology.v1`` fragment (minimal TBox, additive-only)."""
@@ -320,6 +503,7 @@ class Ontology:
     version: str
     imports: tuple[ImportRef, ...] = ()
     terms: tuple[OntologyTerm, ...] = ()
+    rules: tuple[Rule, ...] = ()
     schema: str = ONTOLOGY_SCHEMA
 
     def __post_init__(self) -> None:
@@ -341,6 +525,14 @@ class Ontology:
         imported = [imp.id for imp in self.imports]
         if len(imported) != len(set(imported)):
             raise OntologyError(ErrorKind.MALFORMED_DOCUMENT, "duplicate import id")
+        if len(self.rules) > MAX_RULE_COUNT:
+            raise OntologyError(
+                ErrorKind.FRAGMENT_OVERFLOW,
+                f"ontology has {len(self.rules)} rules, exceeding {MAX_RULE_COUNT}",
+            )
+        rule_ids = [rule.id for rule in self.rules]
+        if len(rule_ids) != len(set(rule_ids)):
+            raise OntologyError(ErrorKind.MALFORMED_DOCUMENT, "duplicate rule id")
         # Acyclic subClassOf over the declared classes (fail-closed on a cycle).
         self._assert_acyclic()
         # Canonical ordering for a stable content address.
@@ -351,6 +543,9 @@ class Ontology:
         )
         object.__setattr__(
             self, "terms", tuple(sorted(self.terms, key=lambda term: term.name))
+        )
+        object.__setattr__(
+            self, "rules", tuple(sorted(self.rules, key=lambda rule: rule.id))
         )
 
     def _assert_acyclic(self) -> None:
@@ -464,17 +659,33 @@ class Ontology:
                     ErrorKind.NON_ADDITIVE_CHANGE,
                     f"property {old.name!r} lost domain/range",
                 )
+        current_rules = {rule.id: rule for rule in self.rules}
+        for old_rule in previous.rules:
+            new_rule = current_rules.get(old_rule.id)
+            if new_rule is None:
+                raise OntologyError(
+                    ErrorKind.NON_ADDITIVE_CHANGE,
+                    f"rule {old_rule.id!r} was removed",
+                )
+            if new_rule.to_dict() != old_rule.to_dict():
+                raise OntologyError(
+                    ErrorKind.NON_ADDITIVE_CHANGE,
+                    f"rule {old_rule.id!r} changed",
+                )
 
     # -- canonical form ------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        document: dict[str, Any] = {
             "schema": self.schema,
             "id": self.id,
             "version": self.version,
             "imports": [imp.to_dict() for imp in self.imports],
             "terms": [term.to_dict() for term in self.terms],
         }
+        if self.rules:
+            document["rules"] = [rule.to_dict() for rule in self.rules]
+        return document
 
     def canonical_bytes(self) -> bytes:
         return _canonical_bytes(self.to_dict())
@@ -488,9 +699,14 @@ class Ontology:
             raise OntologyError(ErrorKind.MALFORMED_DOCUMENT, "ontology must be a mapping")
         raw_imports = data.get("imports", [])
         raw_terms = data.get("terms", [])
-        if not isinstance(raw_imports, list) or not isinstance(raw_terms, list):
+        raw_rules = data.get("rules", [])
+        if (
+            not isinstance(raw_imports, list)
+            or not isinstance(raw_terms, list)
+            or not isinstance(raw_rules, list)
+        ):
             raise OntologyError(
-                ErrorKind.MALFORMED_DOCUMENT, "imports/terms must be lists"
+                ErrorKind.MALFORMED_DOCUMENT, "imports/terms/rules must be lists"
             )
         return cls(
             id=str(data["id"]),
@@ -513,6 +729,7 @@ class Ontology:
                 )
                 for item in raw_terms
             ),
+            rules=tuple(Rule.from_dict(rule) for rule in raw_rules),
             schema=str(data.get("schema", ONTOLOGY_SCHEMA)),
         )
 
@@ -756,11 +973,16 @@ OUTPUT = CORE + "output"
 PORT_TYPE = CORE + "portType"
 DIRECTION = CORE + "direction"
 FEEDS = CORE + "feeds"
+SUB_CLASS_OF = CORE + "subClassOf"
+DOMAIN = CORE + "domain"
+RANGE = CORE + "range"
 
 CLASS_COMPONENT = CORE + "Component"
 CLASS_ATOMIC = CORE + "AtomicComponent"
 CLASS_COMPOSITE = CORE + "CompositeComponent"
 CLASS_MODEL = CORE + "ModelComponent"
+CLASS_SOURCE = CORE + "SourceComponent"
+CLASS_SINK = CORE + "SinkComponent"
 CLASS_CAPABILITY = CORE + "Capability"
 CLASS_PORT = CORE + "Port"
 CLASS_INPUT_PORT = CORE + "InputPort"
@@ -773,11 +995,55 @@ _KIND_CLASS_TERM = {
 }
 
 
+def base_rules() -> tuple[Rule, ...]:
+    """The pinned M2 entailment program (positive Datalog + stratified negation).
+
+    - ``subClassOf`` transitivity (recursive);
+    - type subsumption along the class hierarchy;
+    - a closed-world classification: a component with no declared input is a
+      ``SourceComponent``; with no declared output, a ``SinkComponent``.
+    """
+    x = Pattern.var("x")
+    y = Pattern.var("y")
+    z = Pattern.var("z")
+    d = Pattern.var("d")
+    c = Pattern.var("c")
+    return (
+        Rule(
+            id=CORE + "rule/subclass-transitive",
+            head=RuleAtom(x, SUB_CLASS_OF, z),
+            body=(RuleAtom(x, SUB_CLASS_OF, y), RuleAtom(y, SUB_CLASS_OF, z)),
+        ),
+        Rule(
+            id=CORE + "rule/type-subsumption",
+            head=RuleAtom(x, TYPE, c),
+            body=(RuleAtom(x, TYPE, d), RuleAtom(d, SUB_CLASS_OF, c)),
+        ),
+        Rule(
+            id=CORE + "rule/source",
+            head=RuleAtom(x, TYPE, Pattern.term(CLASS_SOURCE)),
+            body=(
+                RuleAtom(x, TYPE, Pattern.term(CLASS_COMPONENT)),
+                RuleAtom(x, INPUT, Pattern.any(), negated=True),
+            ),
+        ),
+        Rule(
+            id=CORE + "rule/sink",
+            head=RuleAtom(x, TYPE, Pattern.term(CLASS_SINK)),
+            body=(
+                RuleAtom(x, TYPE, Pattern.term(CLASS_COMPONENT)),
+                RuleAtom(x, OUTPUT, Pattern.any(), negated=True),
+            ),
+        ),
+    )
+
+
 def base_ontology() -> Ontology:
-    """The pinned M1 base vocabulary (``urn:cbp:core`` fragment v1).
+    """The pinned base vocabulary (``urn:cbp:core`` fragment v1) + M2 rules.
 
     Minimal TBox: component/capability/port classes and the compatibility
-    relations, with acyclic ``subClassOf`` and property ``domain``/``range``.
+    relations, with acyclic ``subClassOf`` and property ``domain``/``range``;
+    plus the pinned entailment program (rule ids are ``urn:cbp:core/rule/...``).
     """
     return Ontology(
         id=CORE + "core",
@@ -792,6 +1058,12 @@ def base_ontology() -> Ontology:
             ),
             OntologyTerm(
                 kind=KIND_CLASS, name=CLASS_MODEL, sub_class_of=(CLASS_COMPONENT,)
+            ),
+            OntologyTerm(
+                kind=KIND_CLASS, name=CLASS_SOURCE, sub_class_of=(CLASS_COMPONENT,)
+            ),
+            OntologyTerm(
+                kind=KIND_CLASS, name=CLASS_SINK, sub_class_of=(CLASS_COMPONENT,)
             ),
             OntologyTerm(kind=KIND_CLASS, name=CLASS_CAPABILITY),
             OntologyTerm(kind=KIND_CLASS, name=CLASS_PORT),
@@ -810,5 +1082,9 @@ def base_ontology() -> Ontology:
             OntologyTerm(kind=KIND_PROPERTY, name=PORT_TYPE, domain=(CLASS_PORT,)),
             OntologyTerm(kind=KIND_PROPERTY, name=DIRECTION, domain=(CLASS_PORT,)),
             OntologyTerm(kind=KIND_PROPERTY, name=FEEDS),
+            OntologyTerm(kind=KIND_PROPERTY, name=SUB_CLASS_OF),
+            OntologyTerm(kind=KIND_PROPERTY, name=DOMAIN),
+            OntologyTerm(kind=KIND_PROPERTY, name=RANGE),
         ),
+        rules=base_rules(),
     )

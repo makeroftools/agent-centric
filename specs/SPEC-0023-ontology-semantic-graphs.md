@@ -286,11 +286,11 @@ violation), and `scope-escape` (query/roll-up outside the named scope).
 | --- | --- |
 | Three-graph separation; ontology-as-contract; shapes-as-gates; non-conflation | **roadmap** |
 | `ontology.v1` / `semantic-graph.v1` / `shapes.v1` / `closure.v1` contracts | **roadmap** |
-| Bespoke canonical assertion model (no blank nodes, `urn:cbp:`) + minimal TBox | **roadmap (M1)** |
-| Pure-projection semantic graph over existing contracts | **roadmap (M1)** |
-| Capability discovery & composition + `ontology` conformance category | **roadmap (M1)** |
-| Decidable closure (Datalog + stratified negation) + closed-shape gates | **roadmap (M2)** |
-| Composite **semantic subnet** + parent-held derived closure | **roadmap (M2)** |
+| Bespoke canonical assertion model (no blank nodes, `urn:cbp:`) + minimal TBox | **delivered (M1)** |
+| Pure-projection semantic graph over existing contracts | **delivered (M1)** |
+| Capability discovery & composition + `ontology` conformance category | **delivered (M1)** |
+| Decidable closure (Datalog + stratified negation) + closed-shape gates | **delivered (M2)** |
+| Composite **semantic subnet** + parent-held derived closure | **delivered (M2)** |
 | Authored/instance facts; standard export adapter | **deferred (M3)** |
 | Non-deterministic linking / full OWL DL / non-additive mutation | **out** |
 | Parent owning or mutating child ABox | **out** |

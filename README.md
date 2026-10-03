@@ -12,7 +12,7 @@
 [![Python](https://img.shields.io/badge/python-3.13%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 ![Ruff](https://img.shields.io/badge/lint-ruff-261230)
 ![mypy](https://img.shields.io/badge/types-mypy%20strict-2A6DB2)
-[![Tests](https://img.shields.io/badge/tests-2011%20passing-3fb950)](https://github.com/makeroftools/agent-centric/actions/workflows/gates.yml)
+[![Tests](https://img.shields.io/badge/tests-2043%20passing-3fb950)](https://github.com/makeroftools/agent-centric/actions/workflows/gates.yml)
 ![cbp-check](https://img.shields.io/badge/cbp--check-8%2F8%20READY-38bdf8)
 [![License](https://img.shields.io/badge/license-MPL--2.0-blue)](LICENSE)
 ![Mode](https://img.shields.io/badge/mode-L2%20light-factory-a78bfa)
@@ -232,11 +232,13 @@ subgraph of its children?*
 > bounded pure computation, so the semantic graph and the process graph are
 > **never conflated**.
 
-**Delivered (M1):** `contracts/ontology.py` + `cbp/ontology_runtime.py` in this
-repo, an independent reference host and golden vectors in [`../conformance/`](../conformance),
-and a Rust runner in [`../pro/`](../pro) — certified **10/10 cross-runtime** and
-covered by **28** core tests. **M2** (the pinned entailment closure and the
-composite semantic subnet) is next.
+**Delivered (M1 + M2):** `contracts/ontology.py`, `contracts/closure.py`, and
+`cbp/ontology_runtime.py` in this repo, an independent reference host and golden
+vectors in [`../conformance/`](../conformance), and a Rust runner in
+[`../pro/`](../pro) — certified **11/11 cross-runtime** and covered by **28 + 32**
+core tests. The pinned entailment closure (positive Datalog + stratified
+negation) and the composite **semantic subnet** are delivered. **M3**
+(authored/instance facts; a standard export adapter) is next.
 
 - Design and ratified decisions: [`specs/SPEC-0023-ontology-semantic-graphs.md`](specs/SPEC-0023-ontology-semantic-graphs.md)
 - Human/agent summary: [`docs/agent/ontology.md`](docs/agent/ontology.md)
