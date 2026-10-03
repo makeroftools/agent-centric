@@ -8,8 +8,8 @@
 
 ## Mission-critical handoff (current state — read this first)
 
-**Active level: L2 (light-factory)** — operator-raised from L1 this session; target
-L3, gated. The suite is a release gate; a human holds the review gate. Never act
+**Active level: L2 (light-factory)** — operator-raised from L1; target L3,
+gated. The suite is a release gate; a human holds the review gate. Never act
 above L2 without the operator editing [`.agentfactory.toml`](.agentfactory.toml).
 
 **All four repos on `main`, clean, pushed.** Verify with §"Verify everything"
@@ -87,7 +87,7 @@ git repo); the work lives in four sibling repos:
 
 | repo | visibility | role |
 | --- | --- | --- |
-| [`core/`](AGENTS.md) | public | Python **reflection** + the frozen specs (`specs/SPEC-0011`–`0022`). |
+| [`core/`](AGENTS.md) | public | Python **reflection** + the frozen specs (`specs/SPEC-0011`–`0023`). |
 | [`../conformance/`](../conformance/AGENTS.md) | public | The shared contract: WIT ABI + conformance vectors + certifier. |
 | [`../pro/`](../pro/AGENTS.md) | private | The Rust host (optimization edition). |
 | [`../infra/`](../infra/HANDOFF.md) | private | SPEC-0018 instantiation: service-host provisioning + CD. |
@@ -817,10 +817,10 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
    bridge (`cbp/work_boot.py`) are **implemented and green**, and the concrete
    **local-first `provider.v1` adapter** (`cbp/provider_local.py`) is
    **delivered**. **SPEC-0023** (`specs/SPEC-0023-ontology-semantic-graphs.md`,
-   draft) is the ratified **ontology / semantic-graph** design; its **M1 kernel and
-   M2 closure/subnet are delivered** (`contracts/ontology.py`,
-   `contracts/closure.py`, `cbp/ontology_runtime.py`; summary
-   [`docs/agent/ontology.md`](docs/agent/ontology.md)).
+   draft) is the ratified **ontology / semantic-graph** design; its **M1–M3 are
+   delivered** (`contracts/ontology.py`, `contracts/closure.py`,
+   `cbp/ontology_runtime.py`, `cbp/ontology_store.py`, `cbp/rdf_export.py`;
+   summary [`docs/agent/ontology.md`](docs/agent/ontology.md)).
 5. `../conformance/AGENTS.md` and `../pro/AGENTS.md` — the shared contract and
    the Rust host.
 
@@ -865,7 +865,7 @@ Re-run the ritual at least once per working session; CI enforces it via the suit
 > local-first, fail-closed). Open at the workspace root `cbp/`. Read
 > `core/AGENTS.md` -> `core/PRINCIPLES.md` -> `core/.agentfactory.toml` (active
 > **L2**; target L3, operator-gated) -> `core/HANDOFF.md`, then
-> `core/specs/SPEC-0011`–`0022`, `core/ROADMAP.md`, `conformance/AGENTS.md`,
+> `core/specs/SPEC-0011`–`0023`, `core/ROADMAP.md`, `conformance/AGENTS.md`,
 > `pro/AGENTS.md`, `infra/HANDOFF.md`, and `infra/holdout/runbook.md`. Confirm
 > **all four** repos (`core`, `conformance`, `pro`, `infra`) are on `main` and
 > clean, then run `core/HANDOFF.md`'s verification block (expect: `cbp-check`
